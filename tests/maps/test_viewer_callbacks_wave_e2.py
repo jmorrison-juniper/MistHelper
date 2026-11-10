@@ -20,6 +20,7 @@ import importlib.machinery  # Stub-spec construction
 import sys  # sys.modules manipulation for stub install
 import types  # ModuleType + SimpleNamespace for mistapi stubs
 from collections.abc import Iterator  # Typing for fixture generator
+from contextlib import contextmanager  # Restore Dash after each temporary stub.
 from typing import Any  # Permissive typing for mistapi/dash stubs
 
 import pytest  # Test fixture API
@@ -42,24 +43,31 @@ def _build_dash_stub() -> types.ModuleType:
     return dash_stub
 
 
-sys.modules["dash"] = _build_dash_stub()  # Install stub before launcher imports run
+@contextmanager
+def _dash_stubbed() -> Iterator[types.ModuleType]:
+    """Provide Dash names during imports and restore the exact prior module state."""
+    had_dash = "dash" in sys.modules  # Preserve module presence independently of its value.
+    original = sys.modules.get("dash")  # Keep the module object that collection found.
+    stub = _build_dash_stub()  # Supply callback names without a Dash installation.
+    sys.modules["dash"] = stub  # Make the stub available to launcher imports.
+    try:
+        yield stub  # Keep the stub active for the import or test body.
+    finally:
+        if had_dash:
+            sys.modules["dash"] = original  # Restore the exact object that was present.
+        else:
+            sys.modules.pop("dash", None)  # Restore the initially absent module state.
 
-from src.interfaces.visualization.maps.launcher import MapViewerCallbacks, MapViewerState  # noqa: E402
+
+with _dash_stubbed():
+    from src.interfaces.visualization.maps.launcher import MapViewerCallbacks, MapViewerState
 
 
 @pytest.fixture(autouse=True)
 def _dash_stub() -> Iterator[types.ModuleType]:
-    """Per-test: install fresh stub, restore original on teardown."""
-    original = sys.modules.get("dash")  # Snapshot for restoration
-    stub = _build_dash_stub()  # Fresh stub for this test
-    sys.modules["dash"] = stub  # Install for this test
-    try:
+    """Install a fresh Dash stub for each test and restore the prior module state."""
+    with _dash_stubbed() as stub:
         yield stub
-    finally:
-        if original is None:
-            sys.modules.pop("dash", None)
-        else:
-            sys.modules["dash"] = original  # Restore prior stub
 
 
 class _FakeCallbackManager:
@@ -170,18 +178,44 @@ def _make_state(**overrides: Any) -> MapViewerState:
 
 def test_state_accepts_new_wave_e2_fields() -> None:
     """MapViewerState exposes the wave E2 fields with sensible defaults."""
-    state = _make_state()
-    assert state.serializer is not None  # _FakeSerializer provided
+    serializer = _FakeSerializer()  # Keep the expected object for an identity check.
+    figure_builder = types.SimpleNamespace(  # Keep the expected builder for an identity check.
+        add_walls=lambda *a, **k: None,
+        add_wayfinding=lambda *a, **k: None,
+        add_zones=lambda *a, **k: None,
+    )
+    state = _make_state(serializer=serializer, figure_builder=figure_builder)  # Inject the exact expected objects.
+    assert state.serializer is serializer  # The state must preserve the supplied serializer.
     assert state.all_sites == [{"id": "site-1", "name": "S1"}]
     assert state.all_maps == [{"id": "map-1", "name": "M1"}]
     assert state.available_sites == [{"id": "site-1", "name": "S1"}]
-    assert state.figure_builder is not None
+    assert state.figure_builder is figure_builder  # The state must preserve the supplied builder.
     # heatmap_renderer defaults to None when omitted
     state2 = MapViewerState(callback_manager=_FakeCallbackManager())
     assert state2.serializer is None
     assert state2.all_sites == []
     assert state2.all_maps == []
     assert state2.available_sites == []
+
+
+@pytest.mark.parametrize("dash_was_loaded", [True, False])
+def test_dash_stub_restores_loaded_and_absent_module_states(
+    dash_was_loaded: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The temporary Dash stub preserves both possible starting module states."""
+    original = _build_dash_stub()  # Use a unique module object for the loaded-state case.
+    if dash_was_loaded:
+        monkeypatch.setitem(sys.modules, "dash", original)  # Simulate Dash loaded before collection.
+    else:
+        monkeypatch.delitem(sys.modules, "dash", raising=False)  # Simulate Dash absent before collection.
+
+    with _dash_stubbed() as stub:
+        assert sys.modules["dash"] is stub  # Verify the launcher sees the temporary module.
+
+    if dash_was_loaded:
+        assert sys.modules["dash"] is original  # Verify exact object identity after restoration.
+    else:
+        assert "dash" not in sys.modules  # Verify the absent state after restoration.
 
 
 # ---------------------------------------------------------------------------
