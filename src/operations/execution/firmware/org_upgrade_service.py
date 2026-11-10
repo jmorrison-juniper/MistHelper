@@ -110,6 +110,8 @@ class _OrgUpgradeResponse:
         error = None
         try:
             cls._check_http(response, raw_status, raw_data, cancel)
+            if not response_data_valid and not (cancel and raw_data is None):
+                raise ValueError("The decoded upgrade response does not match the response body.")
             upgrade_id = cls._response_id(data, upgrade_id, cancel)
             cls._check_sites(data)
         except ValueError as problem:

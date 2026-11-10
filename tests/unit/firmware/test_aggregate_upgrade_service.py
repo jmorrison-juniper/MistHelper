@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
@@ -11,6 +12,8 @@ from typing import Any
 
 import pytest
 
+from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade
+from src.interfaces.portals.upgrade_portal.upgrade.org_cancel_outcomes import OrgCancelOutcomes
 from src.operations.execution.firmware import org_upgrade_service, upgrade_service
 from src.operations.execution.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
 from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult, OrgUpgradeService
@@ -263,25 +266,39 @@ def test_partial_submission_keeps_each_child_and_blocks_replay() -> None:
 
 
 @pytest.mark.parametrize(
-    ("response_data", "raw_data"),
+    ("response_data", "raw_data", "status_code", "expected_status"),
     [
         pytest.param(
             [{"id": "job-one", "targets": {"upgraded": ["001122334455"]}}],
             "",
+            400,
+            "submission_unknown",
             id="unretained-error-body-list",
         ),
-        pytest.param({}, "{", id="malformed-error-body-json"),
+        pytest.param({}, "{", 400, "submission_unknown", id="malformed-error-body-json"),
         pytest.param(
             {},
             '{"id":"job-one","targets":{"upgraded":["001122334455"]}}',
+            400,
+            "submission_unknown",
             id="raw-body-evidence-not-retained",
         ),
+        pytest.param(
+            {"id": SITE_ONE},
+            '{"id":"' + SITE_TWO + '"}',
+            200,
+            "submission_unknown",
+            id="success-with-mismatched-identity",
+        ),
+        pytest.param({}, "{}", 400, "rejected", id="retained-refusal"),
     ],
 )
 def test_real_org_normalizer_keeps_unretained_refusal_body_uncertain(
     monkeypatch: pytest.MonkeyPatch,
     response_data: object,
     raw_data: str,
+    status_code: int,
+    expected_status: str,
 ) -> None:
     """A discarded, malformed, or mismatched body cannot prove a refusal."""
     mac = "001122334455"  # Select one access point for the offline request.
@@ -291,7 +308,7 @@ def test_real_org_normalizer_keeps_unretained_refusal_body_uncertain(
         """Return one malformed or unretained response without opening a socket."""
         del session, org_id, body  # The response fixture covers the only decision under test.
         calls.append("upgradeOrgDevices")  # Record the one mocked endpoint call.
-        return SimpleNamespace(status_code=400, data=response_data, raw_data=raw_data)
+        return SimpleNamespace(status_code=status_code, data=response_data, raw_data=raw_data)
 
     monkeypatch.setattr(org_upgrade_service.org_devices, "upgradeOrgDevices", submit_response)
     service = AggregateUpgradeService(OrgUpgradeService, DeviceServiceStandIn())
@@ -305,12 +322,24 @@ def test_real_org_normalizer_keeps_unretained_refusal_body_uncertain(
     )
     record = service.build(request)  # Build the organization child without a cloud request.
 
-    service.submit(SAFE_SESSION, record, CasStore(record), permit_lock)  # Exercise the normalizer and aggregate path.
+    store = CasStore(record)
+    service.submit(SAFE_SESSION, record, store, permit_lock)  # Exercise the normalizer and aggregate path.
 
-    child = record["children"][0]  # Read the only organization child.
+    saved = store.read_run(record["run_id"])
+    assert saved is not None
+    reloaded = json.loads(json.dumps(saved))
+    child = reloaded["children"][0]  # Read the only organization child after a durable JSON round trip.
     assert calls == ["upgradeOrgDevices"]  # Keep the test offline and prove one request.
-    assert child["status"] == "submission_unknown"  # Discarded response evidence cannot prove refusal.
-    assert child["raw_status"] == 400  # Preserve the exact response status.
+    assert child["status"] == expected_status  # Discarded response evidence cannot prove refusal.
+    assert child["raw_status"] == status_code  # Preserve the exact response status.
+    assert child["response_data_valid"] is (expected_status == "rejected")
+    assert child["upgrade_id"] is None
+    assert org_upgrade._operation_is_settled(reloaded) is (expected_status == "rejected")
+    assert service._cancellation_result(SAFE_SESSION, child)["status"] == "unavailable"
+    assert calls == ["upgradeOrgDevices"]  # Never read or cancel an unverified cloud identity.
+    child["cancellation"] = {"status": "unavailable"}
+    row = OrgCancelOutcomes.rows(reloaded)[0]
+    assert row["already_writing"] == ([] if expected_status == "rejected" else [mac])
 
 
 @pytest.mark.parametrize(
@@ -345,6 +374,7 @@ def test_real_org_normalizer_keeps_unretained_refusal_body_uncertain(
         pytest.param(400, {}, b"{}", "submission_unknown", id="raw-body-not-text"),
         pytest.param(400, {}, "{}", "rejected", id="retained-empty-object"),
         pytest.param(400, {"error": "refused"}, '{"error":"refused"}', "rejected", id="retained-error-object"),
+        pytest.param(200, {"id": "job-one"}, '{"id":"job-two"}', "submission_unknown", id="success-id-mismatch"),
     ],
 )
 def test_real_device_normalizer_keeps_conflicting_refusal_and_429_uncertain(
@@ -390,12 +420,24 @@ def test_real_device_normalizer_keeps_conflicting_refusal_and_429_uncertain(
     )
     record = service.build(request)  # Build the one-child plan without a cloud request.
 
-    service.submit(SAFE_SESSION, record, CasStore(record), permit_lock)  # Run the real normalizer and classifier.
+    store = CasStore(record)
+    service.submit(SAFE_SESSION, record, store, permit_lock)  # Run the real normalizer and classifier.
 
-    child = record["children"][0]  # Read the only site child.
+    saved = store.read_run(record["run_id"])
+    assert saved is not None
+    reloaded = json.loads(json.dumps(saved))
+    child = reloaded["children"][0]  # Read the only site child after a durable JSON round trip.
     assert calls == ["upgradeSiteDevices"]  # Keep the test offline and prove one request.
     assert child["status"] == expected_status  # Only a retained refusal body can settle the child.
     assert child["raw_status"] == status_code  # Preserve the exact response status.
+    assert org_upgrade._operation_is_settled(reloaded) is (expected_status == "rejected")
+    child["cancellation"] = {"status": "unavailable"}
+    row = OrgCancelOutcomes.rows(reloaded)[0]
+    assert row["already_writing"] == ([] if expected_status == "rejected" else [mac])
+    if status_code == 200:
+        assert child["upgrade_id"] is None
+        assert service._cancellation_result(SAFE_SESSION, child)["status"] == "unavailable"
+        assert devices.calls == [("submit", "upgradeSiteDevices")]
     if expected_status == "submission_unknown":
         with pytest.raises(ValueError, match="no untouched child"):
             service.submit(SAFE_SESSION, record, CasStore(record), permit_lock)

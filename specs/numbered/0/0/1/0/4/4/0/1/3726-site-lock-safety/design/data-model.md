@@ -20,6 +20,7 @@ An aggregate operation holds the selected child submissions, durable outcome evi
 | `status` | Accepted, rejected, not submitted, running, final, or uncertain state | `rejected` proves no cloud job only when `raw_status` is documented and no conflicting identity or accepted target exists. |
 | `raw_status` | HTTP response status, when available | Only integer status 400, 401, 403, or 404 can prove refusal. Other values remain uncertain. |
 | `upgrade_id` | Cloud identity used to read or cancel an accepted job | Any retained job identity conflicts with a refusal status. |
+| `response_data_valid` | Durable proof that the normalizer retained a verified response object | Require exact `true` before a rejected child can settle. A missing value leaves legacy refusals uncertain. |
 | `error` | Safe operator-facing reason | Do not include credentials or secret response content. |
 
 ## Outcome transitions
@@ -27,13 +28,14 @@ An aggregate operation holds the selected child submissions, durable outcome evi
 | Evidence | Child status | Can settle? | Can release a site? |
 |---|---|---:|---:|
 | Accepted response with a required identity | `accepted` | No | No |
-| Documented refusal status without conflicting evidence | `rejected` | Yes | Only after other children and any watch settle |
+| Documented refusal status with body-verification proof and no conflicting evidence | `rejected` | Yes | Only after other children and any watch settle |
 | Refusal status with a job identity or accepted target | `submission_unknown` | No | Keep the lock and block retry |
 | Proven local stop before a cloud write | `not_submitted` | Yes | Only after other children and any watch settle |
 | Transport error or timeout | `submission_unknown` | No | No |
 | 408, 429, 499, 5xx, or unlisted response | `submission_unknown` | No | No |
 | Malformed success or missing required identity | `submission_unknown` | No | No |
-| Rejected legacy record with missing or unlisted status | `rejected`, treated as uncertain | No | No |
+| Rejected legacy record without body-verification proof, or with missing or unlisted status | `rejected`, treated as uncertain | No | No |
+| Decoded success identity that disagrees with raw JSON | `submission_unknown`, with no tracking identity | No | No |
 
 ## Lock-release invariant
 
