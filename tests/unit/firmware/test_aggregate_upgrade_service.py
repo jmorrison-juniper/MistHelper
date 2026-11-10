@@ -314,16 +314,45 @@ def test_real_org_normalizer_keeps_unretained_refusal_body_uncertain(
 
 
 @pytest.mark.parametrize(
-    ("status_code", "response_data"),
+    ("status_code", "response_data", "raw_data", "expected_status"),
     [
-        pytest.param(400, {"targets": {"upgraded": ["001122334466"]}}, id="refusal-with-accepted-target"),
-        pytest.param(429, {}, id="rate-limit"),
+        pytest.param(
+            400,
+            {"targets": {"upgraded": ["001122334466"]}},
+            "",
+            "submission_unknown",
+            id="refusal-with-accepted-target",
+        ),
+        pytest.param(429, {}, "", "submission_unknown", id="rate-limit"),
+        pytest.param(
+            400,
+            [{"id": "job-one", "targets": {"upgraded": ["001122334466"]}}],
+            "",
+            "submission_unknown",
+            id="unretained-error-body-list",
+        ),
+        pytest.param(400, {}, "{", "submission_unknown", id="malformed-error-body-json"),
+        pytest.param(
+            400,
+            {},
+            '{"id":"job-one","targets":{"upgraded":["001122334466"]}}',
+            "submission_unknown",
+            id="raw-body-evidence-not-retained",
+        ),
+        pytest.param(400, None, "", "submission_unknown", id="missing-error-body"),
+        pytest.param(400, {1: "invalid key"}, "", "submission_unknown", id="non-string-body-key"),
+        pytest.param(400, {}, "[]", "submission_unknown", id="raw-body-list"),
+        pytest.param(400, {}, b"{}", "submission_unknown", id="raw-body-not-text"),
+        pytest.param(400, {}, "{}", "rejected", id="retained-empty-object"),
+        pytest.param(400, {"error": "refused"}, '{"error":"refused"}', "rejected", id="retained-error-object"),
     ],
 )
 def test_real_device_normalizer_keeps_conflicting_refusal_and_429_uncertain(
     monkeypatch: pytest.MonkeyPatch,
     status_code: int,
-    response_data: dict[str, Any],
+    response_data: object,
+    raw_data: object,
+    expected_status: str,
 ) -> None:
     """The actual device normalizer preserves accepted-target evidence and HTTP 429 uncertainty."""
     mac = "001122334466"  # Select one switch for the offline request.
@@ -336,7 +365,7 @@ def test_real_device_normalizer_keeps_conflicting_refusal_and_429_uncertain(
         def endpoint(*args: Any, **kwargs: Any) -> Any:
             """Return the configured status and body."""
             del args, kwargs  # The endpoint arguments do not affect this response fixture.
-            return SimpleNamespace(status_code=status_code, data=response_data)
+            return SimpleNamespace(status_code=status_code, data=response_data, raw_data=raw_data)
 
         return endpoint
 
@@ -365,8 +394,12 @@ def test_real_device_normalizer_keeps_conflicting_refusal_and_429_uncertain(
 
     child = record["children"][0]  # Read the only site child.
     assert calls == ["upgradeSiteDevices"]  # Keep the test offline and prove one request.
-    assert child["status"] == "submission_unknown"  # Conflicting targets and HTTP 429 remain uncertain.
+    assert child["status"] == expected_status  # Only a retained refusal body can settle the child.
     assert child["raw_status"] == status_code  # Preserve the exact response status.
+    if expected_status == "submission_unknown":
+        with pytest.raises(ValueError, match="no untouched child"):
+            service.submit(SAFE_SESSION, record, CasStore(record), permit_lock)
+        assert calls == ["upgradeSiteDevices"]  # An uncertain reply must not send another firmware request.
 
 
 def test_mixed_status_and_cancellation_keep_all_results() -> None:

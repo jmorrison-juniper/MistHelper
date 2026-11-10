@@ -25,6 +25,7 @@ from mistapi import APISession
 from mistapi.api.v1.orgs import devices as org_devices
 from requests.adapters import HTTPAdapter
 
+from src.foundation.support.submission_certainty import SubmissionCertainty
 from src.operations.execution.firmware.org_upgrade_body import OrgUpgradeBody
 
 logger = logging.getLogger(__name__)
@@ -103,7 +104,9 @@ class _OrgUpgradeResponse:
         raw_status = code if type(code) is int and 100 <= code <= 599 else 0
         raw_data: object = getattr(response, "data", None)
         data = cls._copy_data(raw_data)
-        response_data_valid = cls._response_data_is_valid(response, raw_data, data)
+        response_data_valid = SubmissionCertainty.response_data_is_valid(
+            response, raw_data if isinstance(raw_data, Mapping) else None
+        )
         error = None
         try:
             cls._check_http(response, raw_status, raw_data, cancel)
@@ -119,22 +122,6 @@ class _OrgUpgradeResponse:
         if not isinstance(raw_data, Mapping) or any(not isinstance(key, str) for key in raw_data):
             return {}
         return deepcopy(dict(raw_data))
-
-    @staticmethod
-    def _response_data_is_valid(response: object, raw_data: object, data: Mapping[str, object]) -> bool:
-        """Check that the retained response object has no discarded body evidence."""
-        if not isinstance(raw_data, Mapping) or any(not isinstance(key, str) for key in raw_data):
-            return False
-        raw_text: object = getattr(response, "raw_data", "")
-        if raw_text in ("", None):
-            return True
-        if not isinstance(raw_text, str):
-            return False
-        try:
-            parsed = json.loads(raw_text)
-        except json.JSONDecodeError:
-            return False
-        return isinstance(parsed, Mapping) and all(isinstance(key, str) for key in parsed) and dict(parsed) == data
 
     @staticmethod
     def _response_id(data: Mapping[str, object], expected: str | None, cancel: bool) -> str | None:
