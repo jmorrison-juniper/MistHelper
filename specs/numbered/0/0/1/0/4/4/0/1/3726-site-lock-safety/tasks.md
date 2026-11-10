@@ -31,6 +31,7 @@
 - [X] T002b [US1] Persist body-verification proof through JSON save and reload. Test legacy refusal locks, cancellation lists, summary counts, and mismatched success identities offline.
 - [X] T002c [US1] Test invalid organization target lists, persisted missing or false progress proof, and valid later status reads through real normalizers.
 - [X] T002d [US1] Require progress counts, device states, and version-read eligibility to agree after reload for upgraded and failed targets.
+- [X] T002e [US1] Exercise installed SDK response parsing for empty HTTP 400 bodies through both aggregate routes. Preserve explicit JSON objects and empty cancellation responses.
 - [X] T003 [P] [US1] Add lock-retention tests for ambiguous replies and conflicting legacy rejected records, and prove that a known not-submitted child can settle, in `tests/unit/upgrade_portal/test_org_upgrade_lock_release.py`.
 - [X] T004 [P] [US1] Test that a returned HTTP 503 keeps the uncertainty marker and blocks a repeated submission in `tests/contract/upgrade_portal/test_org_upgrade_routes.py`.
 

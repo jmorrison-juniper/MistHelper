@@ -44,7 +44,7 @@ class SubmissionCertainty:  # Share one refusal rule across every firmware consu
             return False
         raw_text: object = getattr(response, "raw_data", "")
         if raw_text in ("", None):
-            return True
+            return bool(data)  # An empty object can be the SDK initializer after a failed JSON parse.
         if not isinstance(raw_text, str):
             return False
         try:
