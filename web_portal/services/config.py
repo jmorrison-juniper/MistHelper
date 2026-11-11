@@ -22,7 +22,7 @@ import logging
 import os
 import re
 import uuid
-
+from typing import Any
 
 from flask import Flask, abort, jsonify, request
 
@@ -85,20 +85,20 @@ class PortalConfigLoader:
         PUBLIC_ACCESS_SETTING: "",
     }
 
-    def load_config(self) -> dict:
+    def load_config(self) -> dict[str, Any]:
         """Read all portal ENV variables and return validated config."""
         raw = self._read_env_values()
         validated = self._validate_values(raw)
         return validated
 
-    def _read_env_values(self) -> dict:
+    def _read_env_values(self) -> dict[str, str]:
         """Read raw values from environment with defaults."""
-        values = {}
+        values: dict[str, str] = {}
         for key, default in self.ENV_DEFAULTS.items():
             values[key] = os.environ.get(key, default)
         return values
 
-    def _validate_values(self, raw: dict) -> dict:
+    def _validate_values(self, raw: dict[str, str]) -> dict[str, Any]:
         """Validate and transform raw ENV values into typed config."""
         config = {
             "title": raw["PORTAL_TITLE"],
@@ -132,12 +132,12 @@ class PortalConfigLoader:
         return 8055
 
     @staticmethod
-    def parse_networks(ip_string: str, setting_name: str) -> list:
+    def parse_networks(ip_string: str, setting_name: str) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
         """Parse a comma-separated list of addresses or CIDR ranges."""
         if not ip_string.strip():
             return []  # An empty setting yields an empty list, which the caller reads as "not configured".
         logger.info("Parsing the %s setting", setting_name)
-        networks = []
+        networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
         for position, entry in enumerate(ip_string.split(","), start=1):
             entry = entry.strip()  # Trim the spaces that an operator leaves around a comma.
             if not entry:
@@ -173,9 +173,14 @@ class SecurityMiddleware:
 
     def __init__(self) -> None:
         """Start with no trusted proxy, so a forged header carries no trust."""
-        self._trusted_proxies: list = []
+        self._trusted_proxies: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
 
-    def apply(self, app: Flask, allowed_ips: list, trusted_proxies: list | None = None) -> None:
+    def apply(
+        self,
+        app: Flask,
+        allowed_ips: list[ipaddress.IPv4Network | ipaddress.IPv6Network],
+        trusted_proxies: list[ipaddress.IPv4Network | ipaddress.IPv6Network] | None = None,
+    ) -> None:
         """Register all security hooks on the Flask app."""
         logger.info("Applying the portal security controls to the Flask application")
         # Resolve the trusted proxies first, because the allowlist hook reads them.
@@ -191,7 +196,9 @@ class SecurityMiddleware:
             len(self._trusted_proxies),
         )
 
-    def _resolve_effective_allowlist(self, allowed_ips: list) -> list:
+    def _resolve_effective_allowlist(
+        self, allowed_ips: list[ipaddress.IPv4Network | ipaddress.IPv6Network]
+    ) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
         """Return the networks that the portal serves after the fallback runs."""
         if allowed_ips:
             # The operator named the networks, so the portal obeys the setting.
@@ -218,7 +225,7 @@ class SecurityMiddleware:
         # slip such as "maybe" leaves the portal shut.
         return raw in AFFIRMATIVE_VALUES
 
-    def _build_fallback_allowlist(self) -> list:
+    def _build_fallback_allowlist(self) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
         """Return the closed network set that fits the current run mode."""
         in_container = EnvironmentUtils.is_running_in_container()
         # A container answers a published port from a private address, so a
@@ -235,11 +242,15 @@ class SecurityMiddleware:
             PUBLIC_ACCESS_SETTING,
         )
         # Every entry is a fixed constant, so the parser cannot raise an error.
-        networks = [ipaddress.ip_network(entry) for entry in sources]
+        networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = [
+            ipaddress.ip_network(entry) for entry in sources
+        ]
         logger.debug("Built a fallback allowlist of %d networks", len(networks))
         return networks
 
-    def _resolve_trusted_proxies(self, trusted_proxies: list | None) -> list:
+    def _resolve_trusted_proxies(
+        self, trusted_proxies: list[ipaddress.IPv4Network | ipaddress.IPv6Network] | None
+    ) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
         """Return the proxy networks that may set the forwarded header."""
         if trusted_proxies is not None:
             return trusted_proxies  # An explicit argument wins, because the caller already read the config.
@@ -251,7 +262,7 @@ class SecurityMiddleware:
         """Add security headers to every response."""
 
         @app.after_request
-        def add_security_headers(response):
+        def add_security_headers(response: Any) -> Any:
             response.headers["Content-Security-Policy"] = self.CSP_POLICY
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["X-Frame-Options"] = "DENY"
@@ -259,7 +270,9 @@ class SecurityMiddleware:
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
             return response
 
-    def _register_ip_allowlist(self, app: Flask, allowed_ips: list) -> None:
+    def _register_ip_allowlist(
+        self, app: Flask, allowed_ips: list[ipaddress.IPv4Network | ipaddress.IPv6Network]
+    ) -> None:
         """Block requests from IPs not in the allowlist."""
         if not allowed_ips:
             # The caller reaches this line only after a deliberate opt-out.
@@ -269,7 +282,7 @@ class SecurityMiddleware:
         logger.info("Registering the portal IP allowlist with %d networks", len(allowed_ips))
 
         @app.before_request
-        def check_ip_allowlist():
+        def check_ip_allowlist() -> None:
             peer_ip = self._get_peer_ip()  # The socket peer is the one address a caller cannot forge.
             client_ip = self._resolve_client_ip(peer_ip)  # Only a trusted proxy can name a different client.
             if not self._ip_matches_any(client_ip, allowed_ips):
@@ -302,7 +315,7 @@ class SecurityMiddleware:
         from flask_wtf.csrf import CSRFError
 
         @app.errorhandler(CSRFError)
-        def handle_csrf_error(error: CSRFError):
+        def handle_csrf_error(error: CSRFError) -> Any:
             logger.warning("Rejected %s %s: %s", request.method, request.path, error.description)  # Name the refusal.
             if not self._wants_json(app):
                 return error.get_response()  # An HTML form keeps the page it already expects.
@@ -343,7 +356,7 @@ class SecurityMiddleware:
         logger.debug("Trusted proxy %s reported client %s", peer_ip, client_ip)
         return client_ip
 
-    def _ip_matches_any(self, client_ip: str, networks: list) -> bool:
+    def _ip_matches_any(self, client_ip: str, networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network]) -> bool:
         """Check if an address falls inside any network in the list."""
         try:
             addr = ipaddress.ip_address(client_ip)  # Reject a malformed value before the range test.
@@ -371,15 +384,15 @@ class ThemeManager:
         """Initialize with path to themes directory and default name."""
         self._themes_dir = themes_dir
         self._default_theme = default_theme
-        self._themes = []
+        self._themes: list[dict[str, Any]] = []
 
-    def load_themes(self) -> list:
+    def load_themes(self) -> list[dict[str, Any]]:
         """Scan themes directory and build theme metadata list."""
         self._themes = self._scan_theme_files()
         self._apply_default_flag()
         return self._themes
 
-    def get_themes(self) -> list:
+    def get_themes(self) -> list[dict[str, Any]]:
         """Return cached list of theme metadata dictionaries."""
         if not self._themes:
             self.load_themes()
@@ -389,9 +402,9 @@ class ThemeManager:
         """Return the name of the default theme."""
         return self._default_theme
 
-    def _scan_theme_files(self) -> list:
+    def _scan_theme_files(self) -> list[dict[str, Any]]:
         """Read .css files from themes directory into metadata."""
-        themes = []
+        themes: list[dict[str, Any]] = []
         if not os.path.isdir(self._themes_dir):
             logger.warning("Themes directory not found: %s", self._themes_dir)
             return themes
