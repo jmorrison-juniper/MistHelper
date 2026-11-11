@@ -150,7 +150,12 @@ class TestBatchArtifactComposition:
         outside = tmp_path / "unrelated"  # An unrelated directory must remain untouched.
         outside.mkdir()  # Give the checked link a real target.
         linked = tmp_path / ("c" * 32)  # A generated label does not make a symlink safe.
-        linked.symlink_to(outside, target_is_directory=True)  # Refuse linked cleanup candidates.
+        try:
+            linked.symlink_to(outside, target_is_directory=True)  # Refuse linked cleanup candidates.
+        except OSError as error:
+            if getattr(error, "winerror", None) == 1314:
+                pytest.skip("This Windows account cannot create symlinks.")
+            raise
         service = artifacts.SessionArtifactService(SimpleNamespace(), None, tmp_path)  # Use offline storage.
         writer = service.prepare_batch((), {"mode": "combined"})  # Admission performs the orphan scan.
         process_check.assert_called_once_with(42, 0)  # Check only the verified ownership record.
@@ -173,7 +178,12 @@ class TestBatchArtifactComposition:
             service.MANIFEST_LIMIT = 1  # Apply a live limit after admission.
         elif failure == "symlink":
             (directory / "manifest.json").unlink()  # Replace only this test-owned manifest.
-            (directory / "manifest.json").symlink_to(outside)  # Refuse a link before replacement.
+            try:
+                (directory / "manifest.json").symlink_to(outside)  # Refuse a link before replacement.
+            except OSError as error:
+                if getattr(error, "winerror", None) == 1314:
+                    pytest.skip("This Windows account cannot create symlinks.")
+                raise
         else:
             (directory / ".manifest.tmp").mkdir()  # Force the staged metadata write to fail.
         with pytest.raises(StreamRequestError) as error:

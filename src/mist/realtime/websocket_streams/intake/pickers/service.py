@@ -27,6 +27,7 @@ class StreamPickerService(DevicePicker, ResourcePicker, WiredClientPicker, EdgeP
         self._org_id = org_id  # Organization-scope Mist Edge reads use this identifier.
         self._device_cache: dict[str, tuple[float, list[dict[str, object]]]] = {}  # Cache devices for 30 seconds.
         self._page_reader = PickerPageReader(apisession)  # Preserve one authenticated SDK cursor reader.
+        self.device_statuses = self.Status(self).read  # Status bypasses inventory cache at preview and dispatch.
 
     def clients(self, site_id: str, device_id: str) -> dict[str, object]:
         """Return read-only wired choices for one selected switch."""

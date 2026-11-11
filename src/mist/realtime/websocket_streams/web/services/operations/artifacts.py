@@ -16,7 +16,7 @@ from dataclasses import dataclass, field  # Keep batch storage state explicit.
 from datetime import UTC, datetime, timedelta  # Artifact expiry uses UTC ISO 8601.
 from io import BytesIO  # Bound archive construction to the output quota.
 from pathlib import Path  # Build safe portable artifact paths.
-from typing import Any  # The manager uses behavior typing.
+from typing import Any, cast  # Keep checked manifest values explicit at the storage boundary.
 
 from src.mist.realtime.websocket_streams.intake.fields.error import (
     StreamRequestError,
@@ -30,6 +30,12 @@ from src.mist.realtime.websocket_streams.live.transport.runtime.logging.redactio
 from src.mist.realtime.websocket_streams.live.transport.runtime.logging.structured_logger import (
     StructuredTransportLogger,
 )  # Use the shared bounded JSON logger.
+from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml import (
+    HardwareOutputError,
+    HardwareXmlDocument,
+    HardwareXmlPreset,
+    HardwareXmlSupport,
+)  # Keep raw hardware files outside the generic JSONL redaction pipeline.
 
 logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep artifact fields safe and bounded.
 
@@ -61,18 +67,23 @@ class BatchArtifactWriter:
     def __init__(self, service: SessionArtifactService, record: BatchArtifactRecord) -> None:
         """Store the service and one private record."""
         self._storage, self._record = service._storage, record  # Callbacks never accept a browser path.
-
-    @property
-    def artifact_id(self) -> str:
-        """Return the private artifact identifier for the plan."""
-        return self._record.artifact_id  # Only the service uses this path token.
+        self.artifact_id = record.artifact_id  # Only the service uses this private path token.
+        self.write_hardware = self.Hardware(self._storage, record)  # Keep raw files outside generic redaction.
 
     def write_result(
         self, target_key: str, identity: Mapping[str, object], kind: str, content: object, summary: str | None
-    ) -> None:
+    ) -> bool:
         """Persist one redacted result through the owning service."""
         payload = {"target": dict(identity), "kind": kind, "content": content, "summary": summary or None}
         self._storage.results.write(self._record, target_key, payload)  # Keep persistence under one owner.
+        if HardwareXmlPreset.is_selected(self._record.output) and kind == "outcome" and isinstance(content, Mapping):
+            with self._record.lock:
+                clean = self._storage.metadata.codec.outcome(content)
+                self._record.outcomes = [
+                    item for item in self._record.outcomes if item.get("target") != clean.get("target")
+                ] + [clean]
+                self._storage.metadata.write(self._record)
+        return True  # Let target transitions distinguish a saved outcome from a rejected write.
 
     def finish(self, outcomes: list[dict[str, object]]) -> None:
         """Persist target outcomes and close the artifact manifest."""
@@ -81,6 +92,118 @@ class BatchArtifactWriter:
     def discard(self) -> None:
         """Remove one artifact tree after an admission refusal."""
         self._storage.discard(self._record)  # Admission refusal removes the private tree.
+
+    class Hardware:
+        """Persist complete selected-format files without generic JSONL redaction."""
+
+        def __init__(self, storage: BatchArtifactStorage, record: BatchArtifactRecord) -> None:
+            """Bind the specialized writer to one admitted artifact record."""
+            self._storage, self._record = storage, record
+
+        def __call__(
+            self, target_key: str, identity: Mapping[str, object], document: HardwareXmlDocument, output_format: str
+        ) -> tuple[str, ...]:
+            """Validate, stage, and publish this target's requested output files."""
+            relative_names, contents = self._prepare(identity, document, output_format)
+            required_bytes = sum(map(len, contents))
+            with self._record.lock:
+                self._validate_target(target_key, required_bytes)
+                self.Publication(self._storage, self._record).commit(relative_names, contents, required_bytes)
+                self._snapshot(identity, output_format, relative_names)
+            return relative_names
+
+        def _snapshot(self, identity: Mapping[str, object], output_format: str, names: tuple[str, ...]) -> None:
+            """Persist each successful format before another command or process interruption."""
+            target = self._storage.metadata.codec.redact(dict(identity))
+            previous = next((item for item in self._record.outcomes if item.get("target") == target), {})
+            formats = dict(cast(Mapping[str, object], previous.get("formats", {})))
+            formats[output_format] = {"state": "completed", "reason_code": None}
+            result = {
+                "target": target,
+                "state": "running",
+                "formats": formats,
+                "files": list(cast(list[str], previous.get("files", []))) + list(names),
+            }
+            self._record.outcomes = [item for item in self._record.outcomes if item.get("target") != target] + [result]
+            self._storage.metadata.write(self._record)
+
+        def _prepare(
+            self, identity: Mapping[str, object], document: HardwareXmlDocument, output_format: str
+        ) -> tuple[tuple[str, ...], list[bytes]]:
+            """Serialize only validated formats and enforce per-file limits."""
+            if output_format not in {"xml", "json"}:
+                raise StreamRequestError("output_failed", "Save each native command response separately.")
+            try:
+                names = HardwareXmlSupport.ArtifactNames.safe_paths(identity, output_format)
+            except HardwareOutputError as error:
+                raise StreamRequestError("output_failed", "The hardware target cannot be named safely.") from error
+            content = (document.xml if output_format == "xml" else document.json).encode("utf-8")
+            contents = [content]
+            if not content or len(names) != 1 or len(content) > self._storage.owner.RECORD_LIMIT:
+                raise StreamRequestError("output_failed", "The hardware output exceeds its file constraints.")
+            return names, contents
+
+        def _validate_target(self, target_key: str, required_bytes: int) -> None:
+            """Check record state, target ownership, and aggregate quota."""
+            if self._record.status != "writing" or self._record.output.get("preset") != HardwareXmlPreset.NAME:
+                raise StreamRequestError("output_failed", "The hardware artifact is not writable.")
+            if target_key not in self._record.target_indexes:
+                raise StreamRequestError("output_failed", "The hardware target is not part of this preview.")
+            if self._record.bytes_written + required_bytes > self._storage.owner.OUTPUT_LIMIT:
+                self._record.partial = True
+                raise StreamRequestError("output_failed", "The batch output limit was reached.")
+
+        class Publication:
+            """Commit staged hardware files together and roll back partial publication."""
+
+            def __init__(self, storage: BatchArtifactStorage, record: BatchArtifactRecord) -> None:
+                """Keep filesystem operations bound to one private artifact tree."""
+                self._storage, self._record = storage, record
+
+            def commit(self, names: tuple[str, ...], contents: list[bytes], required_bytes: int) -> None:
+                """Publish every staged file or remove the entire partial result."""
+                staged: list[tuple[Path, Path, str]] = []
+                published: list[Path] = []
+                try:
+                    self._stage(names, contents, staged)
+                    for temporary, destination, relative_name in staged:
+                        os.replace(temporary, destination)
+                        published.append(destination)
+                        self._record.files.add(relative_name)
+                    self._record.bytes_written += required_bytes
+                except (OSError, StreamRequestError) as error:
+                    self._rollback(staged, published)
+                    self._record.partial = True
+                    logger.emit(logging.ERROR, "web.artifact.hardware.write.error", {"status": type(error).__name__})
+                    raise StreamRequestError(
+                        "output_failed", "The hardware output could not be saved atomically."
+                    ) from error
+
+            def _stage(
+                self,
+                names: tuple[str, ...],
+                contents: list[bytes],
+                staged: list[tuple[Path, Path, str]],
+            ) -> None:
+                """Create exclusive temporary files before publishing either format."""
+                for name, content in zip(names, contents, strict=True):
+                    relative = Path(name)
+                    destination = self._storage.files.safe_file(self._record, relative)
+                    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    if destination.exists():
+                        raise OSError("A target artifact already exists.")
+                    temporary = destination.with_name(f".{destination.name}.{secrets.token_hex(8)}.tmp")
+                    staged.append((temporary, destination, relative.as_posix()))
+                    with temporary.open("xb") as stream:
+                        stream.write(content)
+
+            def _rollback(self, staged: list[tuple[Path, Path, str]], published: list[Path]) -> None:
+                """Remove every temporary and committed file after a publication error."""
+                for temporary, _, name in staged:
+                    temporary.unlink(missing_ok=True)
+                    self._record.files.discard(name)
+                for destination in published:
+                    destination.unlink(missing_ok=True)
 
 
 class BatchArtifactStorage:
@@ -128,9 +251,11 @@ class BatchArtifactStorage:
             if record.status == "failed":
                 raise StreamRequestError("output_failed", "The batch output is incomplete.")
 
-    def discard(self, record: BatchArtifactRecord) -> None:
+    def discard(self, record: BatchArtifactRecord, preserve_durable: bool = False) -> None:
         """Remove one tree when session admission fails."""
         with record.lock:
+            if preserve_durable and HardwareXmlPreset.is_selected(record.output):
+                return
             if record.pins:
                 raise StreamRequestError("output_failed", "The batch output is still in use.")
             self.files.verify_directory(record)  # Validate ownership before deletion.
@@ -201,6 +326,8 @@ class BatchArtifactStorage:
             @classmethod
             def paths(cls, record: BatchArtifactRecord, target_key: str) -> tuple[Path, ...]:
                 """Return combined and grouped paths for one target result."""
+                if record.output.get("preset") == "ex-hardware-xml":
+                    return ()  # Hardware runs save only selected XML or JSON files and the manifest.
                 paths: list[Path] = []  # Count every requested layout against the quota.
                 mode = record.output.get("mode")  # The preview freezes the layout.
                 if mode in {"combined", "both"}:
@@ -313,12 +440,14 @@ class BatchArtifactStorage:
             """Encode only safe manifest fields and enforce the reserved quota."""
             payload = {
                 "status": record.status,
-                "partial": record.partial,
+                "partial": record.partial or record.status == "writing",
                 "sequence": record.sequence,
                 "owner_pid": record.owner_pid,
                 "files": sorted(record.files),
                 "targets": record.outcomes,
-                "expires_at": self.codec.expiry(None, 600),
+                "expires_at": None if HardwareXmlPreset.is_selected(record.output) else self.codec.expiry(None, 600),
+                "durable": HardwareXmlPreset.is_selected(record.output),
+                "run_id": record.artifact_id,
             }  # Keep the established on-disk expiry independent of service overrides.
             encoded = json.dumps(payload, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
             if len(encoded) > self.storage.owner.MANIFEST_LIMIT:
@@ -358,6 +487,8 @@ class BatchArtifactStorage:
                     "result_count",
                     "command_index",
                     "completion",
+                    "files",
+                    "formats",
                 }  # Never persist a private command or target key.
                 return {key: self.redact(value[key]) for key in allowed if key in value}  # Redact allowed values.
 
@@ -379,6 +510,20 @@ class BatchArtifactStorage:
         """Remove abandoned artifact trees without touching active workers."""
 
         files: BatchArtifactStorage.Files  # Deletion uses the shared safe filesystem boundary.
+
+        def expire(self, record: BatchArtifactRecord) -> bool:
+            """Release session retention without deleting durable hardware output."""
+            with record.lock:
+                if record.pins:
+                    return False
+                if HardwareXmlPreset.is_selected(record.output):
+                    return True
+                try:
+                    self.files.verify_directory(record)
+                    self.files.remove_tree(record.directory)
+                except StreamRequestError:
+                    return False
+            return True
 
         def cleanup_orphans(self, root: Path) -> None:
             """Remove trees only when their recorded local process is absent."""
@@ -402,6 +547,8 @@ class BatchArtifactStorage:
                 return None  # Preserve incomplete or linked metadata.
             try:
                 payload = json.loads(manifest.read_text(encoding="utf-8"))  # Read only the checked manifest.
+                if isinstance(payload, dict) and payload.get("durable") is True:
+                    return None  # Preserve hardware files after process restart.
                 return payload.get("owner_pid") if isinstance(payload, dict) else None  # Require an object.
             except (OSError, json.JSONDecodeError):
                 return None  # An unknown owner is not proof of an abandoned tree.
@@ -511,10 +658,16 @@ class BatchSessionBindings:
         with record.lock:
             return {
                 "status": record.status,
-                "expires_at": self.storage.metadata.codec.expiry(session, self.storage.owner.RETENTION_SECONDS),
+                "expires_at": (
+                    None
+                    if HardwareXmlPreset.is_selected(record.output)
+                    else self.storage.metadata.codec.expiry(session, self.storage.owner.RETENTION_SECONDS)
+                ),
                 "partial": record.partial or not record.complete,
                 "files": sorted(record.files),
                 "targets": [dict(item) for item in record.outcomes],
+                "durable": HardwareXmlPreset.is_selected(record.output),
+                "run_id": record.artifact_id,
             }  # Return no private directory or raw command.
 
     def cleanup_expired(self, session_id: str) -> bool:
@@ -523,14 +676,8 @@ class BatchSessionBindings:
         if writer is None:
             return True  # Preserve the manager's Single Site retention path.
         record = writer._record  # Pins belong to this exact private tree.
-        with record.lock:
-            if record.pins:
-                return False  # Retry cleanup after the response closes.
-            try:
-                self.storage.files.verify_directory(record)  # Verify ownership before deletion.
-                self.storage.files.remove_tree(record.directory)  # Remove only this tree.
-            except StreamRequestError:
-                return False  # Preserve retry behavior when removal fails.
+        if not self.storage.retention.expire(record):
+            return False
         with self.lock:
             self.batches.pop(session_id, None)  # Remove only the successfully deleted binding.
         return True  # The manager may now expire the parent.
@@ -566,7 +713,7 @@ class SessionArtifactService:
             with writer._record.lock:
                 if writer._record.pins:
                     raise StreamRequestError("cleanup_pending", "A batch download is still active.")
-                self._storage.discard(writer._record)  # Remove only the verified session-owned tree.
+                self._storage.discard(writer._record, preserve_durable=True)
             with self._bindings.lock:
                 self._bindings.batches.pop(session_id, None)  # Remove the successfully deleted binding.
         self._manager.delete(session_id)  # Let the manager refuse live or unknown sessions.

@@ -77,6 +77,7 @@ class FakeWebSocketServices:
         self.message_gap = False  # Let a browser journey expose a reconnect buffer gap.
         self.batch_target_calls: list[tuple[str | None, str, str]] = []  # Record scoped target reads.
         self.batch_preview_body: dict[str, object] | None = None  # Keep the last safe preview request.
+        self.batch_start_body: dict[str, object] | None = None  # Keep the admitted preview-only request.
         self.batch_progress: dict[str, dict[str, object]] = {}  # Store target progress by public parent.
         self.batch_targets_data: dict[str, list[dict[str, object]]] = {}  # Store a frozen target list.
         lifecycle = SimpleNamespace(
@@ -112,6 +113,7 @@ class FakeWebSocketServices:
             self.message_gap = False  # Start each browser journey without lost buffered messages.
             self.batch_target_calls.clear()  # Remove prior target discovery calls.
             self.batch_preview_body = None  # Remove the previous preview request.
+            self.batch_start_body = None  # Remove the previous batch admission request.
             self.batch_progress.clear()  # Remove prior parent progress.
             self.batch_targets_data.clear()  # Remove prior frozen target lists.
 
@@ -306,6 +308,33 @@ class FakeWebSocketServices:
     def preview_batch(self, body: object) -> dict[str, object]:
         """Return a complete frozen target preview for one browser journey."""
         self.batch_preview_body = body if isinstance(body, dict) else {}  # Retain the request for assertions.
+        if self.batch_preview_body.get("preset") == "ex-hardware-xml":
+            selected_format = self.batch_preview_body.get("format", "xml")
+            return {
+                "preview_id": "hardware-preview",
+                "expires_at": "2026-10-16T12:00:00Z",
+                "scope_revision": self.batch_preview_body.get("scope_revision", 0),
+                "preset": "ex-hardware-xml",
+                "format": selected_format,
+                "fixed_commands": [
+                    "show chassis hardware detail | display xml | no-more",
+                    "show chassis hardware detail | display json | no-more",
+                ],
+                "operation": {
+                    "kind": "shell",
+                    "key": "ex.createShellSession",
+                    "name": "EX hardware inventory",
+                    "safety": "shell",
+                },
+                "targets": [
+                    {"target_key": "hardware-1", "target_id": "device-1", "label": "EX Switch 1"},
+                    {"target_key": "hardware-2", "target_id": "device-2", "label": "EX Switch 2"},
+                ],
+                "target_count": 2,
+                "excluded": {},
+                "confirmation": {"required": True, "phrase": "RUN 2 TARGETS", "safety": "shell"},
+                "limits": {"target_count": 1000, "concurrency": 3, "output_bytes": 67108864},
+            }  # Keep the dedicated preset isolated from generic command controls.
         targets = [
             {
                 "target_key": f"target-{index}",
@@ -337,6 +366,7 @@ class FakeWebSocketServices:
     def start_batch(self, body: object) -> dict[str, object]:
         """Create one fake parent session and its queued target outcomes."""
         payload = body if isinstance(body, dict) else {}  # Keep the fake request shape bounded.
+        self.batch_start_body = dict(payload)  # Verify the start request carries only the preview reference.
         session_id = "batch1"  # Use one stable public parent id.
         session = BrowserSession(
             session_id, "channel", "site.stats.devices", "Multi Site: Device statistics", "json", "read"
@@ -896,3 +926,42 @@ def test_multi_site_preview_reviews_full_target_list_and_stops_batch(page: Any, 
     page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - stopped").wait_for(
         timeout=READY_TIMEOUT_MS
     )  # Confirm the stop result reaches the browser.
+
+
+def test_ex_hardware_preset_selects_formats_and_starts_preview_bound_batch(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The dedicated preset offers XML, JSON, and BOTH without a free-form command."""
+    open_page(page, websocket_portal)  # Load the local mocked Operations portal.
+    page.get_by_test_id("ws-multi-site-tab").click()  # Open the batch workflow.
+    page.get_by_test_id("ws-batch-ex-hardware").check()  # Select the named server-owned preset.
+    output_format = page.get_by_test_id("ws-batch-hardware-format")  # Read the dedicated format selector.
+    assert output_format.input_value() == "xml"  # Keep the original request's XML default.
+    assert page.get_by_test_id("ws-batch-hardware-scope").inner_text() == (
+        "All sites in the configured organization; EX switches only."
+    )  # Make the fixed server scope explicit.
+    page.get_by_test_id("ws-batch-preview").click()  # Resolve the selected format through the fake service.
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert fake_services.batch_preview_body == {
+        "preset": "ex-hardware-xml",
+        "format": "xml",
+        "scope_revision": 1,
+    }  # The browser sends no command, site, device, or organization values.
+    output_format.select_option("json")  # Select JSON from the same XML source response.
+    page.get_by_test_id("ws-batch-preview").click()  # Bind the JSON choice to a new snapshot.
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert fake_services.batch_preview_body["format"] == "json"  # Keep JSON in the preview, not the command body.
+    output_format.select_option("both")  # Request two files from the same one-command run.
+    page.get_by_test_id("ws-batch-preview").click()  # Bind BOTH to the final one-use snapshot.
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert fake_services.batch_preview_body["format"] == "both"  # Confirm the third supported output choice.
+    assert page.get_by_test_id("ws-batch-confirmation-phrase").inner_text() == "Type: RUN 2 TARGETS"
+    page.get_by_test_id("ws-batch-confirmation").fill("RUN 2 TARGETS")  # Confirm the shell-safe target count.
+    page.get_by_test_id("ws-batch-start").click()  # Admit only the reviewed snapshot.
+    page.get_by_test_id("ws-batch-progress").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert fake_services.batch_start_body == {
+        "preview_id": "hardware-preview",
+        "confirmation": "RUN 2 TARGETS",
+        "concurrency": 3,
+        "output": {"group_by": "site", "mode": "combined"},
+    }  # Start carries the reviewed reference, required phrase, and existing scheduler choices only.

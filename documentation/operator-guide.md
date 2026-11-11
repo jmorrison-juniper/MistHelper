@@ -345,6 +345,38 @@ Download the parent JSONL file for combined results. Download the ZIP file for
 the selected output layout. The portal redacts secrets before it saves results.
 Batch files follow the session retention policy.
 
+### Collect EX chassis hardware as XML or JSON
+
+In the WebSockets tab, select **Multi Site**, then choose **Collect EX hardware
+inventory**. The preset covers every site in the configured organization and
+online EX switches only. The preview displays each fixed read-only command and
+the exact typed confirmation phrase. It does not expose an editable command field.
+
+Choose **XML (.xml)**, **JSON (.json)**, or **XML and JSON**. XML is the
+default. XML runs `show chassis hardware detail | display xml | no-more`.
+JSON runs `show chassis hardware detail | display json | no-more`.
+BOTH runs the XML command, then the JSON command. Each selected command runs once.
+The collector waits for a stable CLI prompt before each command.
+JSON preserves native Junos output. The portal does not convert XML into JSON.
+
+Preview and confirm the organization-wide target list before starting. The
+portal uses the existing shell confirmation, bounded concurrency, timeout,
+and cancellation controls. When the run ends, download the archive for the
+selected format. The archive contains only successful per-device files and a
+manifest with each target and format outcome. The preview excludes offline and
+unknown-status devices with separate counts. Dispatch checks current Mist running status again.
+A device that becomes offline or unknown receives a skipped outcome, not a command failure.
+Malformed, truncated, oversized, or secret-bearing output does not produce a success file.
+A format failure does not remove another format's valid file.
+Credential checks preserve public namespace URLs and slash-separated hardware descriptions without changing native document text.
+
+The progress display gives the unique run directory under `data/websocket-streams/`.
+Its `hardware/` directory holds the native files, and `manifest.json` records partial outcomes.
+These files survive session expiry, session deletion, and portal restart.
+After session expiry, access the files through the mounted `data/` directory.
+The portal download requires a retained session.
+Automatic cleanup does not remove hardware runs. Review disk usage and archive retained runs through your storage process.
+
 ### Watch the network from a monitoring system
 
 Menu 241 starts a metrics gateway on port 8057. The gateway reads your
