@@ -27,12 +27,34 @@ from src.foundation.runtime.config.source_dependency_resolver import (
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 
 
+class APIFetchError(Exception):  # Raised when the Mist API returns an HTTP error.
+    """Raised when a Mist API response has a non-2xx HTTP status code."""
+
+    pass
+
+
 class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
     """Core API Fetch Utilities.
 
     Handles site and inventory fetching with pagination.
     Extracted from APIFetchUtils.
     """
+
+    @staticmethod
+    def _check_response_status(response: Any) -> None:  # Check response status and raise on HTTP error.
+        """Verify the response has a 2xx HTTP status code.
+
+        Args:
+            response: The Mist API response object
+
+        Raises:
+            APIFetchError: When the response status is not 2xx
+
+        SECURITY: Does not log response body; caller logs errors if needed.
+        """
+        status = getattr(response, "status", None)  # Extract the HTTP status code from the response.
+        if status is not None and not (200 <= status < 300):  # Check for non-2xx status codes.
+            raise APIFetchError(f"API returned HTTP {status}")  # Raise with the status code.
 
     @staticmethod
     def all_sites_with_limit(org_id: str) -> list[dict]:  # type: ignore[type-arg]
@@ -44,12 +66,16 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
         Returns:
             List of site dictionaries
 
+        Raises:
+            APIFetchError: When the API response has a non-2xx HTTP status code
+
         SECURITY: Read-only. No sensitive data logged.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         response = mistapi.api.v1.orgs.sites.listOrgSites(
             mh.apisession, org_id, limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
         )
+        APICoreFetchUtils._check_response_status(response)  # Check for HTTP errors before pagination.
         return mistapi.get_all(response=response, mist_session=mh.apisession)  # type: ignore[no-any-return]
 
     @staticmethod
@@ -62,12 +88,16 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
         Returns:
             List of inventory dictionaries (includes all VC physical members)
 
+        Raises:
+            APIFetchError: When the API response has a non-2xx HTTP status code
+
         SECURITY: Read-only. No secrets in inventory object fields.
         """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         response = mistapi.api.v1.orgs.inventory.getOrgInventory(
             mh.apisession, org_id, vc=True, limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
         )  # vc=True includes all physical VC member devices
+        APICoreFetchUtils._check_response_status(response)  # Check for HTTP errors before pagination.
         return mistapi.get_all(response=response, mist_session=mh.apisession)  # type: ignore[no-any-return]
 
     @staticmethod
