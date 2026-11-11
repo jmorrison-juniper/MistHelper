@@ -9,7 +9,7 @@ from collections.abc import (
 )
 from dataclasses import dataclass, field  # Request records use frozen slot dataclasses.
 from datetime import UTC, datetime  # Target outcomes use UTC ISO 8601 values.
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 from src.mist.realtime.websocket_streams.catalog.model import (
     ChannelDefinition,
@@ -79,40 +79,46 @@ class BatchExecutionPlan:
     commands: tuple[str, ...] = ()  # Shell command order stays exact and private.
     output: Mapping[str, object] | None = None  # The server validates the selected artifact layout.
     artifact_id: str | None = None  # One server-generated directory owns this batch output.
-    artifact_writer: Callable[[str, Mapping[str, object], str, object, str | None], None] | None = field(
+    artifact_writer: Callable[[str, Mapping[str, object], str, object, str | None], object] | None = field(
         default=None, repr=False, compare=False
     )  # Persist redacted results without exposing storage paths to the browser.
     artifact_finisher: Callable[[list[dict[str, object]]], None] | None = field(
         default=None, repr=False, compare=False
     )  # Finalize the manifest after every target stops.
+    hardware_writer: Callable[[str, Mapping[str, object], Any, str], tuple[str, ...]] | None = field(
+        default=None, repr=False, compare=False
+    )  # Save validated hardware formats outside the generic result redactor.
+    hardware_status: Callable[[Mapping[str, object]], str] | None = field(default=None, repr=False, compare=False)
     progress: BatchExecutionPlan._Progress = field(init=False, repr=False)  # One owner groups bounded target state.
 
     def __post_init__(self) -> None:
         """Create one progress owner for the immutable target plan."""
-        self.progress = self._Progress(
-            self.targets,
-            self.concurrency,
-            self.artifact_id,
-            self.artifact_writer,
-            self.artifact_finisher,
-        )  # Keep mutable lifecycle state out of the immutable request data.
+        self.progress = self._Progress(self)  # Keep mutable lifecycle state out of request data.
 
     class _Progress:
         """Group target transitions, cancellation, summaries, and artifact state."""
 
-        def __init__(
-            self,
-            targets: tuple[BatchTargetRequest, ...],
-            concurrency: int,
-            artifact_id: str | None,
-            writer: Callable[[str, Mapping[str, object], str, object, str | None], None] | None,
-            finisher: Callable[[list[dict[str, object]]], None] | None,
-        ) -> None:
+        def __init__(self, plan: BatchExecutionPlan) -> None:
             """Build the four independent progress owners."""
-            self.transitions = self._Transitions(targets)  # Keep target state changes atomic.
+            self.transitions = self._Transitions(plan.targets)  # Keep target state changes atomic.
             self.cancellation = self._Cancellation(self.transitions)  # Share the target lock for queued stops.
-            self.artifacts = self._Artifacts(artifact_id, writer, finisher, self.transitions)  # Own saved output state.
-            self.summary = self._Summary(self.transitions, self.artifacts, concurrency)  # Read one consistent snapshot.
+            self.artifacts = self._Artifacts(plan, self.transitions)  # Own saved output state.
+            self.summary = self._Summary(self.transitions, self.artifacts, plan.concurrency)
+            self.formats = self._Formats(self.transitions)
+
+        class _Formats:
+            """Publish per-format outcomes under the target transition lock."""
+
+            def __init__(self, transitions: BatchExecutionPlan._Progress._Transitions) -> None:
+                """Share the existing target state owner."""
+                self._transitions = transitions
+
+            def set(self, target_key: str, formats: Mapping[str, object]) -> None:
+                """Keep format outcomes visible in polling and the final manifest."""
+                with self._transitions.lock:
+                    target = next((item for item in self._transitions.rows if item["target_key"] == target_key), None)
+                    if target is not None:
+                        target["formats"] = dict(formats)
 
         class _Transitions:
             """Own target state and result-count changes."""
@@ -120,7 +126,7 @@ class BatchExecutionPlan:
             def __init__(self, targets: tuple[BatchTargetRequest, ...]) -> None:
                 """Create a stable outcome row for each frozen target."""
                 self.lock = threading.RLock()  # Serialize runner and polling thread updates.
-                self.rows = [
+                self.rows: list[dict[str, object]] = [
                     {
                         "target_key": target.target_key,
                         "target": dict(target.identity),
@@ -131,6 +137,7 @@ class BatchExecutionPlan:
                         "result_count": 0,
                         "command_index": None,
                         "completion": None,
+                        "files": [],
                     }
                     for target in targets
                 ]  # Preserve exact preview order and every field required by polling.
@@ -139,7 +146,7 @@ class BatchExecutionPlan:
                 self, target_key: str, state: str, reason_code: str | None = None, completion: str | None = None
             ) -> bool:
                 """Apply one legal state change and preserve the first terminal result."""
-                if state not in {"running", "completed", "stopped", "failed"}:
+                if state not in {"running", "completed", "stopped", "failed", "skipped"}:
                     return False  # Refuse unrecognized internal states.
                 with self.lock:  # Keep concurrent target callbacks atomic.
                     target = next(
@@ -155,7 +162,9 @@ class BatchExecutionPlan:
                     target["started_at" if state == "running" else "ended_at"] = self._timestamp()  # Mark transition.
                     return True  # Tell the caller whether it owns this final update.
 
-            def record_result(self, target_key: str, command_index: int | None = None) -> None:
+            def record_result(
+                self, target_key: str, command_index: int | None = None, files: tuple[str, ...] | None = None
+            ) -> None:
                 """Count one accepted output and retain a supplied command index."""
                 with self.lock:  # Serialize counts with terminal transitions.
                     target = next(
@@ -165,6 +174,8 @@ class BatchExecutionPlan:
                         target["result_count"] = cast(int, target["result_count"]) + 1  # Count accepted output.
                         if command_index is not None:
                             target["command_index"] = command_index  # Preserve an explicit shell command index.
+                        if files is not None:
+                            target["files"] = list(files)  # Keep successful artifact paths in the same outcome row.
 
             def set_command_index(self, target_key: str, command_index: int) -> None:
                 """Record the zero-based finite shell command index."""
@@ -208,16 +219,12 @@ class BatchExecutionPlan:
             """Own artifact callbacks and their public status."""
 
             def __init__(
-                self,
-                artifact_id: str | None,
-                writer: Callable[[str, Mapping[str, object], str, object, str | None], None] | None,
-                finisher: Callable[[list[dict[str, object]]], None] | None,
-                transitions: BatchExecutionPlan._Progress._Transitions,
+                self, plan: BatchExecutionPlan, transitions: BatchExecutionPlan._Progress._Transitions
             ) -> None:
                 """Store the server-owned artifact callbacks."""
-                self._artifact_id = artifact_id  # The identifier exists only for a prepared batch.
-                self._writer = writer  # The callback saves redacted records under its private tree.
-                self._finisher = finisher  # The callback closes the manifest after all targets stop.
+                self._artifact_id = plan.artifact_id  # The identifier exists only for a prepared batch.
+                self._writer = plan.artifact_writer  # The callback saves redacted records under its private tree.
+                self._finisher = plan.artifact_finisher  # The callback closes the manifest after targets stop.
                 self._transitions = transitions  # The final manifest copies a locked progress snapshot.
                 self.status = "writing"  # The public summary reports output readiness.
 
@@ -294,7 +301,7 @@ class BatchExecutionPlan:
                 with self._transitions.lock:  # Keep counts aligned with one target snapshot.
                     counts = {
                         state: sum(item["state"] == state for item in self._transitions.rows)
-                        for state in ("queued", "running", "completed", "stopped", "failed")
+                        for state in ("queued", "running", "completed", "stopped", "failed", "skipped")
                     }  # Count every admitted target exactly once.
                     return {
                         "status": self._status(counts),  # Report the aggregate target state.
@@ -302,6 +309,7 @@ class BatchExecutionPlan:
                         "concurrency": self._concurrency,  # Report the enforced worker limit.
                         "counts": counts,  # Return each stable target state count.
                         "artifact_status": self._artifacts.status,  # Keep output state separate from target state.
+                        "run_id": self._artifacts._artifact_id,
                     }  # Preserve the public batch summary contract.
 
             def target_page(self, after: int, limit: int) -> dict[str, object]:

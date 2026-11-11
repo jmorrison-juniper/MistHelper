@@ -38,6 +38,10 @@ from src.mist.realtime.websocket_streams.web.services.operations.artifacts impor
     BatchArtifactWriter,
     SessionArtifactService,
 )  # Store redacted batch output before admission.
+from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml import (
+    HardwareXmlPreset,
+    HardwareXmlSupport,
+)  # Fix the EX hardware command and preview format on the server.
 
 logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep session fields safe and bounded.
 
@@ -60,6 +64,8 @@ class BatchPreviewRecord:
     expires_mono: float  # Admission rejects expired previews.
     expires_at: str  # The browser sees a UTC deadline.
     confirmation: str | None  # Risky batches require one exact server phrase.
+    preset: str | None = None  # Dedicated presets remain bound to the preview.
+    output_format: str | None = None  # Format selection cannot change at batch start.
     consumed: bool = False  # Admission consumes the snapshot at most once.
 
 
@@ -291,7 +297,10 @@ class _BatchServiceComponents:
             """Require one complete picker response with valid exclusion counts."""
             if self.picker is None:
                 raise StreamRequestError("not_ready", self.reason or "The WebSocket engine is not ready.")
-            response = self.picker.targets(site_id, str(values["kind"]), str(values["key"]), {})
+            reader = (
+                self.picker.hardware_targets if values.get("preset") == HardwareXmlPreset.NAME else self.picker.targets
+            )
+            response = reader(site_id, str(values["kind"]), str(values["key"]), {})
             rows, counts = response.get("rows"), response.get("excluded", {})
             if response.get("complete") is not True or not isinstance(rows, list):
                 raise StreamRequestError("picker_incomplete", "Target discovery did not complete.")
@@ -473,6 +482,7 @@ class _BatchServiceComponents:
                 ("target_id", "id"),
                 ("device_id", "device_id"),
                 ("device_type", "family"),
+                ("status", "status"),
                 ("map_id", "map_id"),
                 ("client_mac", "mac"),
                 ("label", "label"),
@@ -527,6 +537,20 @@ class _BatchServiceComponents:
 
         class Admission:
             """Refuse foreign, expired, consumed, or incorrectly confirmed previews."""
+
+            @staticmethod
+            def bind(
+                payload: Mapping[str, object],
+                record: BatchPreviewRecord,
+                writer: BatchArtifactWriter,
+                artifacts: SessionArtifactService,
+            ) -> None:
+                """Bind admitted storage and consume the preview only after a public session exists."""
+                session_id = payload.get("session_id")
+                if not isinstance(session_id, str):
+                    raise StreamRequestError("output_failed", "The admitted batch has no public session identifier.")
+                artifacts.bind_batch(session_id, writer)
+                record.consumed = True
 
             @staticmethod
             def validate(
@@ -596,6 +620,8 @@ class _BatchServiceComponents:
                     "key": operation["key"],
                     "parameters": record.parameters,
                     "commands": record.commands,
+                    "preset": record.preset,
+                    "format": record.output_format,
                 }
                 snapshot = _BatchServiceComponents.Previews.Serializer.fingerprint_payload(
                     values, record.targets, record.org_id
@@ -657,18 +683,18 @@ class _BatchServiceComponents:
             ) -> dict[str, Any]:
                 """Return the checked operation and identity fields for a record."""
                 definition = cast(ChannelDefinition | UtilityDefinition, values["definition"])
-                safety = cast(str, details["safety"])
-                operation = {"kind": values["kind"], "key": values["key"], "name": definition.name, "safety": safety}
-                preview_id = secrets.token_urlsafe(24)
-                org_id = cast(str, details["org_id"])
-                scope_revision = cast(int, values["scope_revision"])
                 return {
-                    "preview_id": preview_id,
+                    "preview_id": secrets.token_urlsafe(24),
                     "owner_scope": self.owner_scope,
-                    "org_id": org_id,
-                    "operation": operation,
+                    "org_id": cast(str, details["org_id"]),
+                    "operation": {
+                        "kind": values["kind"],
+                        "key": values["key"],
+                        "name": "EX hardware inventory" if values.get("preset") else definition.name,
+                        "safety": cast(str, details["safety"]),
+                    },
                     "targets": targets,
-                    "scope_revision": scope_revision,
+                    "scope_revision": cast(int, values["scope_revision"]),
                 }
 
             def _state_fields(
@@ -693,6 +719,8 @@ class _BatchServiceComponents:
                     "expires_mono": now + _BatchServiceComponents.PREVIEW_SECONDS,
                     "expires_at": expires_at,
                     "confirmation": confirmation,
+                    "preset": values.get("preset"),
+                    "output_format": values.get("format"),
                 }
 
             @staticmethod
@@ -728,13 +756,15 @@ class _BatchServiceComponents:
                     "key": values["key"],
                     "parameters": values["parameters"],
                     "commands": list(cast(tuple[str, ...], values["commands"])),
+                    "preset": values.get("preset"),
+                    "format": values.get("format"),
                     "targets": identities,
                 }
 
             @staticmethod
             def preview_payload(record: BatchPreviewRecord, safety: str) -> dict[str, object]:
                 """Return the safe browser view of one stored preview."""
-                return {
+                payload: dict[str, object] = {
                     "preview_id": record.preview_id,
                     "expires_at": record.expires_at,
                     "scope_revision": record.scope_revision,
@@ -747,16 +777,31 @@ class _BatchServiceComponents:
                         "phrase": record.confirmation,
                         "safety": safety,
                     },
-                    "limits": {
-                        "target_count": _BatchServiceComponents.TARGET_LIMIT,
-                        "concurrency_min": 1,
-                        "concurrency_max": 5,
-                        "concurrency": 1 if record.operation["kind"] == "channel" else 3,
-                        "shell_command_bytes": 4096,
-                        "shell_total_bytes": 16384,
-                        "output_bytes": 64 * 1024 * 1024,
-                    },
+                    "limits": _BatchServiceComponents.Previews.Serializer._limits(record),
                 }
+                if record.preset is not None:
+                    _BatchServiceComponents.Previews.Serializer._preset(payload, record)
+                return payload
+
+            @staticmethod
+            def _limits(record: BatchPreviewRecord) -> dict[str, int]:
+                """Return the existing bounded batch controls for preview review."""
+                return {
+                    "target_count": _BatchServiceComponents.TARGET_LIMIT,
+                    "concurrency_min": 1,
+                    "concurrency_max": 5,
+                    "concurrency": 1 if record.operation["kind"] == "channel" else 3,
+                    "shell_command_bytes": 4096,
+                    "shell_total_bytes": 16384,
+                    "output_bytes": 64 * 1024 * 1024,
+                }
+
+            @staticmethod
+            def _preset(payload: dict[str, object], record: BatchPreviewRecord) -> None:
+                """Add only the validated format and fixed review command."""
+                payload.update({"preset": record.preset, "format": record.output_format})
+                if record.preset == HardwareXmlPreset.NAME:
+                    payload["fixed_commands"] = list(record.commands)
 
         class ParentRequest:
             """Create the one public request that owns a bounded batch plan."""
@@ -767,11 +812,25 @@ class _BatchServiceComponents:
                 concurrency: int | None,
                 output: dict[str, object],
                 writer: BatchArtifactWriter,
+                picker: Any | None = None,
             ) -> StartRequest:
                 """Build one checked parent request and its progress plan."""
+                plan = _BatchServiceComponents.Previews.ParentRequest._plan(record, concurrency, output, writer, picker)
+                title = f"Multi Site: {record.operation['name']} ({len(record.targets)} targets)"
+                return replace(record.targets[0].request, title=title, batch_plan=plan)
+
+            @staticmethod
+            def _plan(
+                record: BatchPreviewRecord,
+                concurrency: int | None,
+                output: dict[str, object],
+                writer: BatchArtifactWriter,
+                picker: Any | None,
+            ) -> BatchExecutionPlan:
+                """Bind frozen commands, selected output, and fresh status checks to execution."""
                 kind = str(record.operation["kind"])
                 effective = _BatchServiceComponents.Previews.ParentRequest._concurrency(kind, concurrency)
-                plan = BatchExecutionPlan(
+                return BatchExecutionPlan(
                     record.targets,
                     effective,
                     record.commands,
@@ -779,9 +838,13 @@ class _BatchServiceComponents:
                     writer.artifact_id,
                     writer.write_result,
                     writer.finish,
+                    writer.write_hardware,
+                    hardware_status=(
+                        picker.hardware_status
+                        if record.preset == HardwareXmlPreset.NAME and picker is not None
+                        else None
+                    ),
                 )
-                title = f"Multi Site: {record.operation['name']} ({len(record.targets)} targets)"
-                return replace(record.targets[0].request, title=title, batch_plan=plan)
 
             @staticmethod
             def _concurrency(kind: str, requested: int | None) -> int:
@@ -814,6 +877,7 @@ class WebSocketBatchService:
         self._artifacts = artifacts  # Required output uses a bounded session-owned store.
         self._owner_scope = secrets.token_urlsafe(24)  # Bind previews to this service instance.
         self._lock = threading.RLock()  # Serialize preview retention and later admission.
+        self._hardware_preset = HardwareXmlPreset()  # Keep specialized command and format validation server-owned.
         self._input = _BatchServiceComponents.Input(checker, picker, reason)
         self._targets = _BatchServiceComponents.Targets(picker, checker, reason)
         self._previews = _BatchServiceComponents.Previews.Store(checker, reason, self._owner_scope, self._lock)
@@ -822,10 +886,24 @@ class WebSocketBatchService:
     def preview(self, body: object) -> dict[str, object]:
         """Create a complete server-side target snapshot without starting work."""
         self._input.require_ready()  # Refuse before reading Mist or accepting a body.
-        values = self._input.selection(body)  # Validate operation, selectors, parameters, and commands.
+        hardware = (
+            self._hardware_preset.parse(body)
+            if isinstance(body, Mapping) and body.get("preset") == self._hardware_preset.NAME
+            else None
+        )  # Parse only the explicitly selected dedicated preset.
+        request = self._hardware_preset.batch_request(hardware) if hardware is not None else body
+        values = self._input.selection(request)  # Validate operation, selectors, parameters, and commands.
+        if hardware is not None:
+            values.update({"preset": self._hardware_preset.NAME, "format": hardware.output_format})
         targets = self._targets.resolve(values)  # Discover and validate every selected target.
+        if hardware is not None:
+            targets, hardware_excluded = HardwareXmlSupport.TargetSelector.unique_targets(targets)
+            excluded = dict(cast(Mapping[str, int], values.get("excluded", {})))
+            for name, count in hardware_excluded.items():
+                excluded[name] = excluded.get(name, 0) + count
+            values["excluded"] = excluded  # Surface defensive family filtering and VC deduplication to operators.
         if not targets:  # An empty preview must never appear startable.
-            raise StreamRequestError("bad_request", "The selection has no eligible targets.")
+            self._hardware_preset.empty_selection(values, hardware is not None)
         if len(targets) > self.TARGET_LIMIT:  # Refuse large selections before storing a preview.
             raise StreamRequestError("target_limit", "The selection exceeds the target limit.")
         return self._previews.save(values, targets)  # Store one immutable operation snapshot.
@@ -837,18 +915,20 @@ class WebSocketBatchService:
         with self._lock:
             record = self._previews.admission(preview_id, phrase)
             self._previews.validate_fingerprint(record)
+            if record.output_format is not None:
+                output.update(
+                    {"preset": HardwareXmlPreset.NAME, "format": record.output_format}
+                )  # Preserve the selected format in the immutable artifact plan.
             writer = self._artifacts.prepare_batch(record.targets, output)
-            parent = _BatchServiceComponents.Previews.ParentRequest.create(record, concurrency, output, writer)
+            parent = _BatchServiceComponents.Previews.ParentRequest.create(
+                record, concurrency, output, writer, self._input.picker
+            )
             try:
                 payload = cast(dict[str, object], self._manager.start(parent))
             except StreamRequestError:
                 writer.discard()  # A checked admission refusal created no parent session.
                 raise
-            session_id = payload.get("session_id")
-            if not isinstance(session_id, str):
-                raise StreamRequestError("output_failed", "The admitted batch has no public session identifier.")
-            self._artifacts.bind_batch(session_id, writer)
-            record.consumed = True  # Consume only after the manager admits the parent.
+            _BatchServiceComponents.Previews.Admission.bind(payload, record, writer, self._artifacts)
         return payload  # Preserve the established public session response.
 
     def summary(self, session_id: str) -> dict[str, object]:

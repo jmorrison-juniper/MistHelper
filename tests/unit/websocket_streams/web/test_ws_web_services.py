@@ -7,6 +7,7 @@ Why:
 
 from __future__ import annotations  # Keep annotations lazy for Flask imports.
 
+import os  # Inject a deterministic failure between BOTH file renames.
 import zipfile  # Check archive entry paths.
 from collections.abc import Iterator  # Type the fake download iterator.
 from datetime import UTC, datetime  # Artifact tests use one valid ended-session time.
@@ -48,6 +49,11 @@ from src.mist.realtime.websocket_streams.web.services.assembly.factory import (
 from src.mist.realtime.websocket_streams.web.services.operations.artifacts import (
     SessionArtifactService,
 )  # Keep batch test files outside the repository data tree.
+from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml import (
+    HardwareOutputError,
+    HardwareXmlPreset,
+    HardwareXmlSupport,
+)  # Exercise the fixed XML and derived JSON boundary.
 from src.mist.realtime.websocket_streams.web.services.operations.sessions import (
     WebSocketBatchService,
 )  # Test preview validation and snapshots.
@@ -170,33 +176,57 @@ class FakeBatchPicker:
     def __init__(self, device_target: bool = False) -> None:
         """Build one complete site list and its target rows."""
         self.device_target = device_target  # Tests choose site or device scope.
+        self.site_calls: list[tuple[str, str]] = []  # Verify preset discovery stays organization-wide.
+        self.target_calls: list[tuple[str | None, str, str]] = []  # Verify one target read per discovered site.
+        self.site_complete = True  # Tests can model incomplete paginated organization discovery.
+        self.target_complete = True  # Tests can model incomplete resource pagination.
+        self.target_rows: list[dict[str, object]] | None = None  # Allow precise EX and VC row fixtures.
         self.site_rows = [
             {"id": "22222222-2222-4222-8222-222222222222", "label": "North"},
             {"id": "33333333-3333-4333-8333-333333333333", "label": "South"},
         ]  # Use source identifiers that pass the production UUID rule.
 
-    def sites(self, _kind: str, _key: str) -> dict[str, object]:
-        """Return the complete organization site list."""
-        return {"rows": self.site_rows, "complete": True}  # No partial site result is possible.
+    def hardware_targets(self, site_id: str | None, kind: str, key: str, parents: dict[str, str]) -> dict[str, object]:
+        """Supply explicit running status only for hardware preview fixtures."""
+        result = self.targets(site_id, kind, key, parents)
+        for row in result["rows"]:
+            row.setdefault("status", "connected")
+        return result
 
-    def targets(self, site_id: str | None, _kind: str, _key: str, _parents: dict[str, str]) -> dict[str, object]:
+    def hardware_status(self, identity: object) -> str:
+        """Keep fake hardware targets online without external requests."""
+        return "connected"
+
+    def sites(self, kind: str, key: str) -> dict[str, object]:
+        """Return the complete organization site list."""
+        self.site_calls.append((kind, key))  # Keep the server-owned organization operation observable.
+        return {"rows": self.site_rows, "complete": self.site_complete}  # No partial site result is accepted.
+
+    def targets(self, site_id: str | None, kind: str, key: str, _parents: dict[str, str]) -> dict[str, object]:
         """Return one site or device row for the requested scope."""
+        self.target_calls.append((site_id, kind, key))  # Ensure every organization site is expanded.
         if self.device_target:
-            row = {
-                "id": "44444444-4444-4444-8444-444444444444",
-                "label": "Switch",
-                "family": "ex",
-                "site_id": site_id,
-                "target_type": "device",
-            }  # Keep the device identity and site association together.
+            rows = self.target_rows or [
+                {
+                    "id": "44444444-4444-4444-8444-444444444444",
+                    "device_id": "44444444-4444-4444-8444-444444444444",
+                    "label": "Switch",
+                    "family": "ex",
+                    "site_id": site_id,
+                    "target_type": "device",
+                }
+            ]  # Keep the device identity and site association together.
         else:
-            row = {
-                "id": site_id,
-                "label": "Site",
-                "site_id": site_id,
-                "target_type": "site",
-            }  # A site-only operation uses one target per site.
-        return {"rows": [row], "complete": True}  # Every requested page is complete.
+            rows = [
+                {
+                    "id": site_id,
+                    "label": "Site",
+                    "site_id": site_id,
+                    "target_type": "site",
+                }
+            ]  # A site-only operation uses one target per site.
+        normalized = [dict(row, site_id=site_id) for row in rows]  # Bind every candidate to the queried site.
+        return {"rows": normalized, "complete": self.target_complete}  # Every requested page is complete.
 
 
 class FakePickers:
@@ -479,6 +509,318 @@ def test_shell_batch_preview_requires_exact_finite_commands(tmp_path: Path) -> N
     assert error.value.code == "bad_request"  # Invalid commands fail before any session starts.
 
 
+def hardware_shell_definition() -> UtilityDefinition:
+    """Build the existing server-owned EX shell catalog entry."""
+    site_field = FieldSpec("site_id", "Site", FieldKind.UUID, required=True, picker="sites")
+    device_field = FieldSpec("device_id", "Device", FieldKind.UUID, required=True, picker="devices")
+    return UtilityDefinition(
+        "ex.createShellSession",
+        "ex",
+        "createShellSession",
+        "Remote shell",
+        "Open a shell.",
+        (),
+        Safety.SHELL,
+        "terminal",
+        (site_field, device_field),
+    )  # Keep the preset bound to the established shell utility.
+
+
+@pytest.mark.parametrize("selected_format", ["xml", "json", "both"])
+def test_ex_hardware_preset_binds_fixed_command_and_org_scope(tmp_path: Path, selected_format: str) -> None:
+    """The preset freezes one EX-only command over all sites and the chosen format."""
+    checker = FakeBatchChecker(hardware_shell_definition())  # Use the existing shell catalog safety.
+    picker = FakeBatchPicker(device_target=True)  # Return one EX device for every configured site.
+    service = make_batch_service(checker, picker, FakeManager(), tmp_path)  # Isolate all output.
+    payload = service.preview(
+        {"preset": "ex-hardware-xml", "format": selected_format, "scope_revision": 5}
+    )  # Preview the fixed server-owned preset without browser target data.
+    record = next(iter(service._previews.records.values()))  # Read the private snapshot for its fixed command.
+    assert payload["preset"] == "ex-hardware-xml"  # Identify the dedicated action in the preview.
+    assert payload["format"] == selected_format  # Bind the selected file format to this snapshot.
+    assert payload["target_count"] == 2  # Expand both configured organization sites.
+    assert picker.site_calls == [("shell", "ex.createShellSession")]  # Resolve sites through the EX shell catalog.
+    assert len(picker.target_calls) == 2  # Discover resources once for each complete site row.
+    formats = ("xml", "json") if selected_format == "both" else (selected_format,)
+    commands = tuple(f"show chassis hardware detail | display {value} | no-more" for value in formats)
+    assert record.commands == commands
+    assert record.output_format == selected_format  # Prevent format changes after preview.
+    assert payload["confirmation"]["phrase"] == "RUN 2 TARGETS"  # Preserve shell admission confirmation.
+    assert payload["fixed_commands"] == list(commands)
+    assert "commands" not in payload  # Show only the fixed operator-reviewed command.
+
+
+def test_ex_hardware_preset_defaults_to_xml_and_rejects_browser_command(tmp_path: Path) -> None:
+    """The initial format is XML and a browser cannot replace the fixed command."""
+    checker = FakeBatchChecker(hardware_shell_definition())  # Keep the shell catalog definition fixed.
+    picker = FakeBatchPicker(device_target=True)  # Supply complete organization targets.
+    service = make_batch_service(checker, picker, FakeManager(), tmp_path)  # Isolate preview state.
+    payload = service.preview({"preset": "ex-hardware-xml", "scope_revision": 0})  # Omit format deliberately.
+    assert payload["format"] == "xml"  # Preserve the initial XML-only request.
+    with pytest.raises(StreamRequestError) as error:  # Refuse arbitrary shell text.
+        service.preview(
+            {
+                "preset": "ex-hardware-xml",
+                "format": "xml",
+                "command": "show configuration",
+                "scope_revision": 1,
+            }
+        )  # Do not let the browser supply device commands.
+    assert error.value.code == "bad_request"  # Keep request-shape refusal stable.
+
+
+def test_ex_hardware_preset_rejects_unknown_output_format(tmp_path: Path) -> None:
+    """Only XML, JSON, or BOTH can enter the hardware preview snapshot."""
+    service = make_batch_service(
+        FakeBatchChecker(hardware_shell_definition()),
+        FakeBatchPicker(device_target=True),
+        FakeManager(),
+        tmp_path,
+    )  # Build a ready shell batch service.
+    with pytest.raises(StreamRequestError) as error:  # Reject unrecognized file extensions.
+        service.preview(
+            {"preset": "ex-hardware-xml", "format": "yaml", "scope_revision": 2}
+        )  # Validate the format before discovery.
+    assert error.value.code == "bad_request"  # Keep invalid formats out of preview storage.
+
+
+def test_ex_hardware_preview_deduplicates_virtual_chassis_and_excludes_non_ex(tmp_path: Path) -> None:
+    """Keep one logical EX device even when inventory repeats its member records."""
+    picker = FakeBatchPicker(device_target=True)
+    picker.site_rows = [{"id": "22222222-2222-4222-8222-222222222222", "label": "North"}]
+    picker.target_rows = [
+        {
+            "id": "44444444-4444-4444-8444-444444444444",
+            "device_id": "55555555-5555-4555-8555-555555555555",
+            "label": "EX Virtual Chassis",
+            "family": "ex",
+            "target_type": "device",
+        },
+        {
+            "id": "66666666-6666-4666-8666-666666666666",
+            "device_id": "55555555-5555-4555-8555-555555555555",
+            "label": "EX Virtual Chassis member",
+            "family": "ex",
+            "target_type": "device",
+        },
+        {
+            "id": "77777777-7777-4777-8777-777777777777",
+            "device_id": "77777777-7777-4777-8777-777777777777",
+            "label": "SRX",
+            "family": "srx",
+            "target_type": "device",
+        },
+    ]  # Repeat the stable chassis identity and include one ineligible family.
+    service = make_batch_service(FakeBatchChecker(hardware_shell_definition()), picker, FakeManager(), tmp_path)
+    preview = service.preview({"preset": "ex-hardware-xml", "scope_revision": 1})
+    assert preview["target_count"] == 1
+    assert preview["targets"][0]["device_id"] == "55555555-5555-4555-8555-555555555555"
+    assert preview["excluded"]["duplicate_device"] == 1
+    assert preview["excluded"]["incompatible_family"] == 1
+
+
+@pytest.mark.parametrize("incomplete", ["site", "target"])
+def test_ex_hardware_preview_refuses_incomplete_paginated_discovery(tmp_path: Path, incomplete: str) -> None:
+    """Never start an organization run from a partial inventory page set."""
+    picker = FakeBatchPicker(device_target=True)
+    setattr(picker, f"{incomplete}_complete", False)
+    service = make_batch_service(FakeBatchChecker(hardware_shell_definition()), picker, FakeManager(), tmp_path)
+    with pytest.raises(StreamRequestError) as error:
+        service.preview({"preset": "ex-hardware-xml", "scope_revision": 2})
+    assert error.value.code == "picker_incomplete"
+
+
+def test_hardware_output_removes_shell_framing_and_preserves_nested_xml() -> None:
+    """Split bytes and a Junos routing-engine marker preserve the original XML."""
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\r\n'
+        '<rpc-reply xmlns="urn:juniper:xml:ns:netconf-base:1.0" xmlns:j="urn:juniper:xml:ns:junos:chassis">'
+        "<chassis-inventory><chassis><name>EX-UTF8-ë</name>"
+        '<j:chassis-module serial-number="007"><name>FPC 0</name></j:chassis-module>'
+        '<j:chassis-module serial-number="008"><name>FPC 1</name></j:chassis-module>'
+        "</chassis></chassis-inventory></rpc-reply>"
+    )  # Keep repeated namespace-qualified inventory elements and string values.
+    framed = (
+        "login banner\r\n" f"{HardwareXmlPreset.COMMAND}\r\n" + xml + "\r\n\r\n{master:0}\r\nswitch@site> "
+    ).encode("utf-8")
+    split = framed.index("ë".encode()) + 1
+    result = HardwareXmlSupport.Decoder.decode_output(
+        framed[:split] + framed[split:], "switch@site>", HardwareXmlPreset.COMMAND
+    )
+    assert result.xml == xml  # Save the original device XML, not its terminal framing.
+    assert result.json == ""  # An XML command must not manufacture JSON.
+
+
+@pytest.mark.parametrize(
+    "xml",
+    [
+        "<rpc-reply><chassis-inventory></rpc-reply>",
+        "<!DOCTYPE rpc-reply [<!ENTITY x SYSTEM 'file:///secret'>]><rpc-reply><chassis-inventory>&x;</chassis-inventory></rpc-reply>",
+        "<rpc-reply><chassis-inventory/></rpc-reply> trailing",
+    ],
+)
+def test_hardware_output_rejects_malformed_entities_and_trailing_content(xml: str) -> None:
+    """Never create successful-looking files from incomplete or unsafe XML."""
+    framed = (xml + "\nswitch@site>").encode("utf-8")
+    with pytest.raises(HardwareOutputError):
+        HardwareXmlSupport.Decoder.decode_output(framed, "switch@site>", HardwareXmlPreset.COMMAND)
+
+
+@pytest.mark.parametrize("payload", [b"", b'{"chassis-inventory": bad json}'])
+def test_native_json_rejects_empty_body_and_malformed_response(payload: bytes) -> None:
+    """Reject missing or malformed native JSON before artifact publication."""
+    with pytest.raises(HardwareOutputError):
+        HardwareXmlSupport.Decoder.decode_output(
+            payload + b"\r\nswitch@site>", "switch@site>", HardwareXmlPreset.COMMANDS["json"]
+        )
+
+
+def test_hardware_output_rejects_invalid_utf8_and_missing_inventory() -> None:
+    """Require a strict complete XML document containing chassis inventory."""
+    with pytest.raises(HardwareOutputError):
+        HardwareXmlSupport.Decoder.decode_output(
+            b"<rpc-reply>\xff</rpc-reply>\nswitch@site>", "switch@site>", HardwareXmlPreset.COMMAND
+        )
+    with pytest.raises(HardwareOutputError):
+        HardwareXmlSupport.Decoder.decode_output(
+            b"<rpc-reply><ok/></rpc-reply>\nswitch@site>", "switch@site>", HardwareXmlPreset.COMMAND
+        )
+
+
+@pytest.mark.parametrize(
+    "output_format, expected_extensions",
+    [("xml", [".xml"]), ("json", [".json"]), ("both", [".json", ".xml"])],
+)
+def test_hardware_artifact_modes_archive_only_selected_files(
+    tmp_path: Path, output_format: str, expected_extensions: list[str]
+) -> None:
+    """Write distinct safe files and include them in the existing archive and manifest."""
+    xml = "<rpc-reply><chassis-inventory><chassis><name>EX-1</name></chassis></chassis-inventory></rpc-reply>"
+    document = HardwareXmlSupport.Decoder.decode_output(
+        (xml + "\nswitch@site>").encode(), "switch@site>", HardwareXmlPreset.COMMAND
+    )
+    native_json = '{\r\n  "chassis-inventory": [{"chassis": [{"name": [{"data": "EX-1"}]}]}]\r\n}'
+    json_document = HardwareXmlSupport.Decoder.decode_output(
+        (native_json + "\n{master:0}\nswitch@site>").encode(),
+        "switch@site>",
+        HardwareXmlPreset.COMMANDS["json"],
+    )
+    manager = SimpleNamespace(session=lambda _session_id: SimpleNamespace(live=False))  # Keep archive access local.
+    artifacts = SessionArtifactService(manager, None, tmp_path)  # Use only pytest's private temporary directory.
+    target = SimpleNamespace(
+        target_key='["org","site","device"]',
+        identity={"target_id": "device-1", "label": "../EX Switch"},
+    )  # Exercise the stable target-id fallback and unsafe hostname normalization.
+    writer = artifacts.prepare_batch(
+        (target,),
+        {"preset": "ex-hardware-xml", "format": output_format, "mode": "combined"},
+    )  # Prevent generic JSONL output for this dedicated artifact layout.
+    files = ()
+    for selected in (("xml", "json") if output_format == "both" else (output_format,)):
+        selected_document = document if selected == "xml" else json_document
+        files += writer.write_hardware(target.target_key, target.identity, selected_document, selected)
+    writer.finish([{"target": dict(target.identity), "state": "completed", "files": list(files)}])
+    artifacts.bind_batch("hardware-session", writer)  # Bind only after the output is complete.
+    manifest = artifacts.manifest("hardware-session")
+    assert sorted(Path(name).suffix for name in manifest["files"]) == expected_extensions
+    assert manifest["targets"][0]["files"] == list(files)  # Keep per-device filenames in the outcome record.
+    assert all(".." not in Path(name).parts for name in files)  # Keep hostname traversal out of paths.
+    archive_name, archive_bytes = artifacts.zip_download("hardware-session")
+    with zipfile.ZipFile(BytesIO(archive_bytes)) as archive:
+        names = archive.namelist()
+        output_names = [name for name in names if name.startswith("hardware/")]
+        assert sorted(Path(name).suffix for name in output_names) == expected_extensions
+        assert "manifest.json" in names
+        for name in output_names:
+            if name.endswith(".xml"):
+                assert archive.read(name).decode("utf-8") == xml  # Keep XML as the complete raw device document.
+            if name.endswith(".json"):
+                assert archive.read(name).decode("utf-8") == native_json
+    assert archive_name.endswith(".zip")
+
+
+def test_hardware_artifact_names_are_case_insensitive_unique_and_require_device_id() -> None:
+    """Use a stable identity suffix when names collide or are unsafe."""
+    first = HardwareXmlSupport.ArtifactNames.safe_paths({"label": "EX/Switch", "device_id": "ID:One"}, "xml")
+    second = HardwareXmlSupport.ArtifactNames.safe_paths({"label": "ex\\switch", "device_id": "ID:Two"}, "xml")
+    assert first[0] != second[0]  # Distinct stable IDs prevent case-insensitive hostname collisions.
+    assert "/" not in Path(first[0]).name and "\\" not in Path(first[0]).name
+    with pytest.raises(HardwareOutputError):
+        HardwareXmlSupport.ArtifactNames.safe_paths({"label": "Unnamed"}, "xml")
+
+
+def test_hardware_both_mode_keeps_xml_if_native_json_cannot_publish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep the successful XML file when the independent JSON publication fails."""
+    xml = "<rpc-reply><chassis-inventory/></rpc-reply>"
+    document = HardwareXmlSupport.Decoder.decode_output(
+        (xml + "\nswitch@site>").encode(), "switch@site>", HardwareXmlPreset.COMMAND
+    )
+    target = SimpleNamespace(
+        target_key="target",
+        identity={"device_id": "device-1", "label": "EX-1"},
+    )
+    artifacts = SessionArtifactService(SimpleNamespace(), None, tmp_path)
+    writer = artifacts.prepare_batch(
+        (target,),
+        {"preset": HardwareXmlPreset.NAME, "format": "both", "mode": "combined"},
+    )
+    xml_files = writer.write_hardware(target.target_key, target.identity, document, "xml")
+    native_json = '{"chassis-inventory":[{"chassis":[{"name":[{"data":"EX-1"}]}]}]}'
+    json_document = HardwareXmlSupport.Decoder.decode_output(
+        (native_json + "\nswitch@site>").encode(), "switch@site>", HardwareXmlPreset.COMMANDS["json"]
+    )
+    replace_file = os.replace
+    renames = 0
+
+    def fail_second_rename(source: str | os.PathLike[str], destination: str | os.PathLike[str]) -> None:
+        """Publish the first format, then simulate an atomic-publish failure."""
+        nonlocal renames
+        renames += 1
+        if renames == 1:
+            raise OSError("simulated rename failure")
+        replace_file(source, destination)
+
+    monkeypatch.setattr(os, "replace", fail_second_rename)
+    with pytest.raises(StreamRequestError):
+        writer.write_hardware(target.target_key, target.identity, json_document, "json")
+    assert writer._record.files == set(xml_files)
+    assert (tmp_path / writer.artifact_id / xml_files[0]).read_text() == xml
+    assert list((tmp_path / writer.artifact_id / "hardware").glob("*.json")) == []
+
+
+@pytest.mark.parametrize("quota", ["file", "run"])
+def test_hardware_output_quotas_reject_without_publishing_success_files(tmp_path: Path, quota: str) -> None:
+    """Apply the existing file and whole-run quotas to selected raw formats."""
+    xml = "<rpc-reply><chassis-inventory/></rpc-reply>"
+    document = HardwareXmlSupport.Decoder.decode_output(
+        (xml + "\nswitch@site>").encode(), "switch@site>", HardwareXmlPreset.COMMAND
+    )
+    target = SimpleNamespace(target_key="target", identity={"device_id": "device-1", "label": "EX-1"})
+    artifacts = SessionArtifactService(SimpleNamespace(), None, tmp_path)
+    writer = artifacts.prepare_batch(
+        (target,),
+        {"preset": HardwareXmlPreset.NAME, "format": "xml", "mode": "combined"},
+    )
+    if quota == "file":
+        artifacts.RECORD_LIMIT = 4
+    else:
+        artifacts.OUTPUT_LIMIT = 1
+    with pytest.raises(StreamRequestError):
+        writer.write_hardware(target.target_key, target.identity, document, "xml")
+    assert not list((tmp_path / writer.artifact_id / "hardware").glob("*.xml"))
+
+
+def test_hardware_output_fails_closed_when_secret_redaction_would_change_xml() -> None:
+    """Never redact and save mutated device XML containing a recognized credential."""
+    xml = "<rpc-reply><chassis-inventory><note>api_token=private-value</note></chassis-inventory></rpc-reply>"
+    with pytest.raises(HardwareOutputError):
+        HardwareXmlSupport.Decoder.decode_output(
+            (xml + "\nswitch@site>").encode(), "switch@site>", HardwareXmlPreset.COMMAND
+        )
+
+
 def test_batch_start_admits_a_preview_once(tmp_path: Path) -> None:
     """Batch start admits one checked parent and consumes its preview."""
     site_field = FieldSpec("site_id", "Site", FieldKind.UUID, required=True, picker="sites")
@@ -556,7 +898,11 @@ def test_batch_artifacts_enforce_output_quota_and_symlink_boundary(tmp_path: Pat
     linked_writer = service.prepare_batch((target,), {"mode": "combined", "group_by": "site"})
     outside = tmp_path / "outside"  # The link target must remain untouched.
     outside.mkdir()
-    (tmp_path / linked_writer.artifact_id / "results").symlink_to(outside, target_is_directory=True)
+    try:
+        (tmp_path / linked_writer.artifact_id / "results").symlink_to(outside, target_is_directory=True)
+    except OSError as error:
+        linked_writer.discard()  # Keep the no-link path clean when Windows has no symlink privilege.
+        pytest.skip(f"Symlink creation is unavailable on this host: {error}")
     with pytest.raises(StreamRequestError) as link_error:
         linked_writer.write_result("target", target.identity, "message", "output", None)
     assert link_error.value.code == "output_failed"  # Refuse a linked output directory.

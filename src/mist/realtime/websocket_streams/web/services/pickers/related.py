@@ -3,6 +3,7 @@
 from __future__ import annotations  # Keep collaborator annotations lazy.
 
 import logging  # Structured events use repository handlers.
+from collections.abc import Mapping  # Status checks use frozen server-owned target identity.
 from typing import Any, cast  # Picker collaborators use behavior types.
 
 from src.mist.realtime.websocket_streams.catalog.model import (
@@ -62,6 +63,26 @@ class BatchTargetPickerService:
         result = BatchTargetResolver(self._picker, self._catalog).discover(site_id, kind, key, parents)
         logger.emit(logging.DEBUG, "web.batch.targets.finish", {"count": result["total_count"]})  # Log count only.
         return result  # Return complete rows or let discovery raise a checked error.
+
+    def hardware_targets(self, site_id: str | None, kind: str, key: str, parents: dict[str, str]) -> dict[str, object]:
+        """Attach current running status before the dedicated hardware preview filters EX devices."""
+        result = self.targets(site_id, kind, key, parents)
+        if self._picker is None:
+            raise StreamRequestError("not_ready", "The device status reader is unavailable.")
+        statuses = self._picker.device_statuses(site_id)
+        for row in cast(list[dict[str, object]], result["rows"]):
+            row["status"] = statuses.get(str(row.get("id")), "unknown")
+        return result
+
+    def hardware_status(self, identity: Mapping[str, object]) -> str:
+        """Check status again immediately before opening one hardware shell."""
+        if self._picker is None:
+            return "unknown"
+        try:
+            statuses = self._picker.device_statuses(str(identity.get("site_id") or ""))
+        except StreamRequestError:
+            return "unknown"
+        return str(statuses.get(str(identity.get("device_id") or ""), "unknown"))
 
     def sites(self, kind: str, key: str) -> dict[str, object]:
         """Return complete organization sites for a site-scoped catalog operation."""
