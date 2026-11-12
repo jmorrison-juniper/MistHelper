@@ -822,13 +822,15 @@ jobs:
           print("Preparing the Ubuntu package mirrors.")
           mirrors = Path("/etc/apt/apt-mirrors.txt")
           original = mirrors.read_bytes()
+          mirror_lines = original.splitlines()
+          print(f"Inspected {len(mirror_lines)} Ubuntu mirror lines.")
           azure = b"http://azure.archive.ubuntu.com/ubuntu/"
           official = {
               b"https://archive.ubuntu.com/ubuntu/": 0,
               b"https://security.ubuntu.com/ubuntu/": 0,
           }
           azure_count = 0
-          for line in original.splitlines():
+          for line in mirror_lines:
               fields = line.partition(b"#")[0].split()
               if fields and fields[0] == azure:
                   azure_count += 1
