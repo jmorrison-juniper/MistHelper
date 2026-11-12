@@ -82,7 +82,7 @@ jobs:
       issues: write
       # The job reads the linked issues of each merged pull request.
       pull-requests: read
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-close-linked-issues.yml@e8e093d205428b5503887267b6a9751fa7354be7 # v0.6.3
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-close-linked-issues.yml@79a5e45970e876f1656d69520d9635cea1aa25ef # v0.6.4
     with:
       # Four runs a day read each merged pull request four times.
       lookback-hours: '24'
