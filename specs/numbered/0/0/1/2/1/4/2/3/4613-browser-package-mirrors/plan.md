@@ -32,7 +32,9 @@ An unfamiliar configuration or an existing backup must fail without a rewrite.
 - Separate incremental remediation: consolidate existing workflow setup during a later owner-approved CI maintenance change.
 - Only the unique release-note fragment enters the established process folder.
 - No Mist Cloud requests, product outputs, service changes, dependency changes, or production operations occur.
-- Revised FR-007 permits merge consideration, not execution. Separate explicit user authorization remains required. Retries and auto-merge remain prohibited.
+- Revised FR-007 authorizes one manual squash merge of the first published head containing this revision.
+  Required checks and CodeQL must pass on that exact head. The branch must be current with main, and the serial slot must be available.
+  Do not retry CI, enable auto-merge, bypass a check, or merge a changed head.
 - No additional agents are necessary because the research and implementation are one continuous trace.
 
 ## Project Structure
@@ -66,7 +68,8 @@ Before delivery, apply this patch to the complete #4208 workflow in memory and c
 The coordinator assigned the serial slot to #4613 after #4604 reached its browser job limit.
 Verify current main and validate the final commit before publication.
 The original publication instruction prohibited merge and auto-merge.
-The user later authorized evidence review and a specification revision before merge consideration.
-Revised FR-007 records the current conditions. This revision does not authorize a merge, CI retry, or auto-merge.
+The user later authorized evidence review, a specification revision, and one conditional manual squash merge.
+Revised FR-007 limits this authorization to the first published head containing this revision.
+Require exact-head checks, a current branch, and the serial slot before any merge. Do not retry CI or enable auto-merge.
 The specification links the hosted measurements and their limits.
 Main advanced after the evaluated head. A current candidate and its exact-head checks remain required before any later authorized merge.

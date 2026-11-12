@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-06
 
-**Status**: Implemented. Evidence reviewed. Merge not authorized.
+**Status**: Implemented. Evidence reviewed. One manual squash merge is authorized under FR-007.
 
 **Input**: Investigate and address #4613 without changing the browser job budget, test selection, assertions, required statuses, or CI policy.
 
@@ -35,7 +35,7 @@ A maintainer needs the complete browser suite and its existing failure rules aft
 1. **Given** the repair, **When** the workflow runs, **Then** the same browser installer, package sources, test directories, and assertions remain.
 2. **Given** a failed or incomplete shard, **When** the aggregator runs, **Then** the required result remains failed.
 3. **Given** PR #4208, **When** its owner reconciles the workflow, **Then** its WAN evidence upload remains unchanged.
-4. **Given** successful hosted evidence, **When** a maintainer considers a manual merge, **Then** current-base checks and separate user authorization remain required.
+4. **Given** the exact published candidate passes all required checks and CodeQL, the branch is current with main, and the serial slot is available, **When** the user considers a merge, **Then** one manual squash merge is authorized.
 
 ### Edge Cases
 
@@ -54,9 +54,8 @@ A maintainer needs the complete browser suite and its existing failure rules aft
 - **FR-004**: Preserve the 20-minute job limit, full shard selection, assertions, required names, services, and failure handling.
 - **FR-005**: Prove successful setup, repeat behavior, invalid inputs, backup failure, and rejected workflow mutations without external requests.
 - **FR-006**: Preserve PR #4208's separate WAN upload change without importing its product changes into this branch.
-- **FR-007**: Do not retry CI or enable auto-merge. Consider a manual merge only after evidence review and this authorized specification revision.
-  Require a current branch, successful required checks and CodeQL on the exact candidate, and the repository's serial validation slot.
-  Require separate explicit user authorization before executing a merge. This revision does not grant that authorization or change CI policy.
+- **FR-007**: Do not retry CI, enable auto-merge, or bypass a check. The user authorizes one manual squash merge of the first published head containing this revision, only after all required checks and CodeQL pass on that exact head, the branch is current with main, and the repository's serial validation slot is available.
+  Do not merge if any condition is false. This authorization does not apply to a changed head or change CI policy.
 
 ## Success Criteria *(mandatory)*
 
@@ -76,11 +75,13 @@ A maintainer needs the complete browser suite and its existing failure rules aft
 
 ## Evidence review and authorization
 
-The user selected: "Review the evidence and revise the specification before considering a merge".
-This authorizes this revision, not a merge, an automatic merge, a CI retry, or a check bypass.
+The user authorizes one manual squash merge of this PR after the required checks pass on the exact published head that contains this revision.
+The branch must be current with main, and the repository's serial validation slot must be available.
+Do not retry CI, enable auto-merge, bypass a check, or merge a changed head.
+No merge occurs in this revision.
 The branch remains owned by this session. PR #4208's workflow handover and upload-preservation requirement remain unchanged.
 
 [The hosted evidence](design/research.md#hosted-validation-and-revision-review) supports SC-004 for two evaluated heads.
 One successful run on each head does not guarantee future transfer speed.
-The earlier absolute merge prohibition remains the historical instruction. Revised FR-007 permits consideration only under its stated conditions.
-If main advances or this revision changes the candidate, earlier successful checks do not establish readiness for that new candidate.
+The earlier merge prohibition is narrowed only by the limited authorization in revised FR-007.
+If main advances or the branch changes, earlier checks do not establish readiness for the new candidate, and this authorization does not apply.

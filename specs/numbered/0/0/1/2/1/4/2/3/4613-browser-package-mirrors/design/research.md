@@ -85,8 +85,9 @@ The required-check query reported 15 passed and zero failed. CodeQL, all E2E sha
 These observations satisfy SC-004 for the evaluated heads. They do not prove future transfer speed or repair the separate #3736 silent interval.
 The Azure failure cause remains unknown. No workflow retry produced these measurements.
 
-The user authorized evidence review and specification revision before merge consideration.
-Revised FR-007 preserves the retry and auto-merge prohibitions and requires separate explicit merge authorization.
+The user authorized one manual squash merge of the first published head containing this revision.
+All required checks and CodeQL must pass on that exact head. The branch must be current with main, and the serial slot must be available.
+Retries, auto-merge, check bypasses, and merges of changed heads remain prohibited.
 The runtime budget, selected cases, assertions, required statuses, and CI policy remain unchanged.
 No workflow or test source changes are part of this revision. PR #4208's upload intent remains unchanged.
 

@@ -32,7 +32,8 @@
 ## Notes
 
 The authorized revision preserves every original runtime and validation criterion.
-FR-007 now permits merge consideration after evidence review, but requires separate explicit user authorization before execution.
-Retries, auto-merge, and check bypasses remain prohibited.
+FR-007 authorizes one manual squash merge of the first published head containing this revision after required checks and CodeQL pass on that exact head.
+The branch must be current with main, and the serial slot must be available.
+Retries, auto-merge, check bypasses, and merges of changed heads remain prohibited.
 The [hosted evidence](../research.md#hosted-validation-and-revision-review) measures two evaluated heads, not a future candidate or guaranteed network speed.
 All checklist items remain satisfied. No clarification marker remains.
