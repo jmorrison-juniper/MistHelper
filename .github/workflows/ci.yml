@@ -822,16 +822,28 @@ jobs:
           print("Preparing the Ubuntu package mirrors.")
           mirrors = Path("/etc/apt/apt-mirrors.txt")
           original = mirrors.read_bytes()
-          azure = b"http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n"
-          if (
-              original.splitlines(keepends=True).count(azure) != 1
-              or b"https://archive.ubuntu.com/ubuntu/\tpriority:2" not in original.splitlines()
-              or b"https://security.ubuntu.com/ubuntu/\tpriority:3" not in original.splitlines()
-          ):
+          azure = b"http://azure.archive.ubuntu.com/ubuntu/"
+          expected = {
+              azure: b"priority:1",
+              b"https://archive.ubuntu.com/ubuntu/": b"priority:2",
+              b"https://security.ubuntu.com/ubuntu/": b"priority:3",
+          }
+          found = {mirror: 0 for mirror in expected}
+          for line in original.splitlines():
+              fields = line.partition(b"#")[0].split()
+              if fields and fields[0] in expected:
+                  if len(fields) != 2 or fields[1] != expected[fields[0]]:
+                      raise SystemExit("Unexpected Ubuntu mirror configuration. No file was changed.")
+                  found[fields[0]] += 1
+          if any(count != 1 for count in found.values()):
               raise SystemExit("Unexpected Ubuntu mirror configuration. No file was changed.")
           with mirrors.with_suffix(".txt.issue-4613.bak").open("xb") as backup:
               backup.write(original)
-          remaining = b"".join(line for line in original.splitlines(keepends=True) if line != azure)
+          remaining = b"".join(
+              line
+              for line in original.splitlines(keepends=True)
+              if line.partition(b"#")[0].split()[:1] != [azure]
+          )
           mirrors.write_bytes(remaining)
           if mirrors.read_bytes() != remaining:
               raise SystemExit("Ubuntu mirror verification failed. The original backup remains available.")
@@ -881,6 +893,14 @@ jobs:
           path: |
             test-artifacts/issue-4229-*.png
             test-artifacts/issue-4229-browser/
+          if-no-files-found: error
+      - name: Upload WAN Performance browser evidence
+        # Issue #4200: retain synthetic captures without credentials or live data.
+        if: ${{ !cancelled() && matrix.shard == 'web-portal' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: wan-performance-browser-evidence
+          path: test-artifacts/wan-performance/*.png
           if-no-files-found: error
       - name: Upload shard diagnostics
         # Issue #4250: a failed or cancelled shard keeps its pytest output, its
