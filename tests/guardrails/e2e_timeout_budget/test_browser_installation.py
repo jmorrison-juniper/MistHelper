@@ -82,20 +82,21 @@ def test_setup_removes_only_the_slow_route_and_preserves_a_backup(tmp_path: Path
     assert mirrors.with_suffix(".txt.issue-4613.bak").read_bytes() == original
     assert "Preserved the remaining Ubuntu package mirrors." in result.stdout
     repeated = BrowserInstallation.execute(tmp_path)
-    assert repeated.returncode != 0
+    assert repeated.returncode == 0, repeated.stderr
+    assert "No file was changed." in repeated.stdout
     assert mirrors.with_suffix(".txt.issue-4613.bak").read_bytes() == original
     assert mirrors.read_bytes() == original.split(b"\n", 1)[1]
 
 
 def test_setup_accepts_layout_variations_and_preserves_other_bytes(tmp_path: Path) -> None:
-    """Accept reordered mirrors and spacing changes without rewriting other entries."""
+    """Accept priority changes and missing priority metadata without changing other bytes."""
     mirrors = tmp_path / "apt-mirrors.txt"
-    azure = b"  http://azure.archive.ubuntu.com/ubuntu/   priority:1 \r\n"
+    azure = b"  http://azure.archive.ubuntu.com/ubuntu/ \r\n"
     original = (
         b"# runner comment\r\n"
-        b"https://security.ubuntu.com/ubuntu/ priority:3\r\n"
+        b"https://security.ubuntu.com/ubuntu/ priority:99\r\n"
         + azure
-        + b"https://archive.ubuntu.com/ubuntu/\tpriority:2\r\n"
+        + b"https://archive.ubuntu.com/ubuntu/\tpriority:7\r\n"
         + b"https://example.invalid/ubuntu/\tpriority:4\r\n"
     )
     mirrors.write_bytes(original)
@@ -105,19 +106,36 @@ def test_setup_accepts_layout_variations_and_preserves_other_bytes(tmp_path: Pat
     assert mirrors.with_suffix(".txt.issue-4613.bak").read_bytes() == original
 
 
+def test_missing_azure_mirror_is_a_safe_no_op(tmp_path: Path) -> None:
+    """Leave official mirrors unchanged and create no backup when Azure is already absent."""
+    mirrors = tmp_path / "apt-mirrors.txt"
+    original = (
+        b"https://security.ubuntu.com/ubuntu/ priority:99\r\n"
+        b"https://archive.ubuntu.com/ubuntu/\tpriority:7\r\n"
+        b"https://example.invalid/ubuntu/\tpriority:4\r\n"
+    )
+    mirrors.write_bytes(original)
+    result = BrowserInstallation.execute(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "No file was changed." in result.stdout
+    assert mirrors.read_bytes() == original
+    assert not mirrors.with_suffix(".txt.issue-4613.bak").exists()
+
+
 @pytest.mark.parametrize(
     "content",
     [
         None,
         b"",
-        MIRRORS.split(b"\n", 1)[1],
-        MIRRORS + MIRRORS,
-        MIRRORS.replace(b"https://", b"http://"),
-        MIRRORS.replace(b"priority:1", b"priority:9"),
+        MIRRORS.replace(b"https://archive.ubuntu.com/ubuntu/", b"https://example.invalid/ubuntu/"),
+        MIRRORS.replace(b"https://security.ubuntu.com/ubuntu/", b"https://example.invalid/ubuntu/"),
+        MIRRORS + b"https://archive.ubuntu.com/ubuntu/ priority:8\n",
+        MIRRORS + b"https://security.ubuntu.com/ubuntu/ priority:8\n",
+        MIRRORS + b"http://azure.archive.ubuntu.com/ubuntu/ priority:8\n",
     ],
 )
-def test_an_unknown_mirror_configuration_fails_without_a_write(tmp_path: Path, content: bytes | None) -> None:
-    """Refuse absent, empty, changed, duplicated, and insecure runner inputs."""
+def test_invalid_mirror_configuration_fails_without_a_write(tmp_path: Path, content: bytes | None) -> None:
+    """Refuse absent or duplicate official mirrors and duplicate Azure routes."""
     mirrors = tmp_path / "apt-mirrors.txt"
     if content is not None:
         mirrors.write_bytes(content)

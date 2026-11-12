@@ -823,31 +823,33 @@ jobs:
           mirrors = Path("/etc/apt/apt-mirrors.txt")
           original = mirrors.read_bytes()
           azure = b"http://azure.archive.ubuntu.com/ubuntu/"
-          expected = {
-              azure: b"priority:1",
-              b"https://archive.ubuntu.com/ubuntu/": b"priority:2",
-              b"https://security.ubuntu.com/ubuntu/": b"priority:3",
+          official = {
+              b"https://archive.ubuntu.com/ubuntu/": 0,
+              b"https://security.ubuntu.com/ubuntu/": 0,
           }
-          found = {mirror: 0 for mirror in expected}
+          azure_count = 0
           for line in original.splitlines():
               fields = line.partition(b"#")[0].split()
-              if fields and fields[0] in expected:
-                  if len(fields) != 2 or fields[1] != expected[fields[0]]:
-                      raise SystemExit("Unexpected Ubuntu mirror configuration. No file was changed.")
-                  found[fields[0]] += 1
-          if any(count != 1 for count in found.values()):
+              if fields and fields[0] == azure:
+                  azure_count += 1
+              elif fields and fields[0] in official:
+                  official[fields[0]] += 1
+          if azure_count > 1 or any(count != 1 for count in official.values()):
               raise SystemExit("Unexpected Ubuntu mirror configuration. No file was changed.")
-          with mirrors.with_suffix(".txt.issue-4613.bak").open("xb") as backup:
-              backup.write(original)
-          remaining = b"".join(
-              line
-              for line in original.splitlines(keepends=True)
-              if line.partition(b"#")[0].split()[:1] != [azure]
-          )
-          mirrors.write_bytes(remaining)
-          if mirrors.read_bytes() != remaining:
-              raise SystemExit("Ubuntu mirror verification failed. The original backup remains available.")
-          print("Preserved the remaining Ubuntu package mirrors.")
+          if azure_count == 0:
+              print("Ubuntu package mirrors are already prepared. No file was changed.")
+          else:
+              with mirrors.with_suffix(".txt.issue-4613.bak").open("xb") as backup:
+                  backup.write(original)
+              remaining = b"".join(
+                  line
+                  for line in original.splitlines(keepends=True)
+                  if line.partition(b"#")[0].split()[:1] != [azure]
+              )
+              mirrors.write_bytes(remaining)
+              if mirrors.read_bytes() != remaining:
+                  raise SystemExit("Ubuntu mirror verification failed. The original backup remains available.")
+              print("Preserved the remaining Ubuntu package mirrors.")
           PY
       - name: Download the browser
         # Issue #2241: the playwright package ships no browser. Without this step
