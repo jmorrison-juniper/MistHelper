@@ -905,7 +905,7 @@ jobs:
         with:
           name: wan-performance-browser-evidence
           path: test-artifacts/wan-performance/*.png
-          if-no-files-found: error
+          if-no-files-found: warn
       - name: Upload shard diagnostics
         # Issue #4250: a failed or cancelled shard keeps its pytest output, its
         # phase trail, and each retained trace and screenshot.

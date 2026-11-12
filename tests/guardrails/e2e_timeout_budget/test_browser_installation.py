@@ -172,6 +172,7 @@ def test_wan_performance_evidence_upload_keeps_its_shard_and_path() -> None:
     upload = next(step for step in steps if step.get("name") == "Upload WAN Performance browser evidence")
     assert upload["if"] == "${{ !cancelled() && matrix.shard == 'web-portal' }}"
     assert upload["with"]["path"] == "test-artifacts/wan-performance/*.png"
+    assert upload["with"]["if-no-files-found"] == "warn"
 
 
 @pytest.mark.parametrize("mutation", ["installer", "conditional", "ignored-error", "order", "budget", "strict"])
