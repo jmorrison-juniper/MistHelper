@@ -563,6 +563,10 @@ class BatchArtifactStorage:
                 return False  # Only proven process absence permits deletion.
             except PermissionError:
                 return True  # Preserve trees when process access is denied.
+            except OSError as error:
+                if getattr(error, "winerror", None) == 87:
+                    return False  # Windows reports an absent process as ERROR_INVALID_PARAMETER.
+                raise  # Keep every other process failure visible to the caller.
 
     @dataclass
     class Streams:
