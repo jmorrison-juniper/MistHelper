@@ -477,6 +477,18 @@ def test_process_all_msps_iterates_privileges(monkeypatch: pytest.MonkeyPatch) -
     assert dispatch_mock.call_count == 2  # WHY: two iterations.
 
 
+def test_process_all_msps_skips_repeated_msp_grant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two grants on one MSP export that MSP one time only (issue #4766)."""
+    grants = [{"msp_id": "a", "scope": "msp"}, {"msp_id": "b"}, {"msp_id": "a", "scope": "org"}]  # WHY: MSP a twice.
+    _install_fake_mh(monkeypatch, msp_privileges=grants)  # WHY: three grants, two MSPs.
+    exporter = MSPInventoryExporter()  # WHY: instance.
+    dispatch_mock = MagicMock()  # WHY: capture dispatches.
+    monkeypatch.setattr(exporter, "_process_msp", dispatch_mock)  # WHY: intercept dispatch.
+    exporter._process_all_msps()  # WHY: run loop.
+    dispatched_ids = [call.args[0]["msp_id"] for call in dispatch_mock.call_args_list]  # WHY: MSPs in order.
+    assert dispatched_ids == ["a", "b"]  # WHY: the repeated grant on MSP a is skipped.
+
+
 def test_fetch_msp_orgs_returns_empty_when_no_apisession(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -605,6 +617,36 @@ def test_fetch_org_inventory_normalises_response(monkeypatch: pytest.MonkeyPatch
     response = types.SimpleNamespace(data={"mac": "aa"})  # WHY: single dict to be wrapped.
     monkeypatch.setattr(org_inventory_api, "getOrgInventory", MagicMock(return_value=response))  # WHY: patch actual.
     assert exporter._fetch_org_inventory("org-1", "Org") == [{"mac": "aa"}]  # WHY: single-dict wrapped.
+
+
+def test_fetch_org_inventory_reads_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The installed mistapi.get_all follows the next page past 1000 devices (issue #4766)."""
+    mh = _install_fake_mh(monkeypatch)  # WHY: fake MistHelper.
+    _restore_real_mistapi(monkeypatch)  # WHY: undo sys.modules pollution from sibling module-scope patch.dict blocks.
+    first_page = [{"serial": f"AP{index}", "type": "ap"} for index in range(1000)]  # WHY: a full first page.
+    second_page = [{"serial": "SW1", "type": "switch"}, {"serial": "GW1", "type": "gateway"}]  # WHY: later devices.
+    first = types.SimpleNamespace(data=first_page, next="/api/v1/orgs/org-1/inventory?page=2")  # WHY: has next.
+    last = types.SimpleNamespace(data=second_page, next=None)  # WHY: final page.
+    inventory_mock = MagicMock(return_value=first)  # WHY: first API page.
+    monkeypatch.setattr(org_inventory_api, "getOrgInventory", inventory_mock)  # WHY: patch actual attr.
+    next_mock = MagicMock(return_value=last)  # WHY: the second page from the next link.
+    monkeypatch.setattr(sys.modules["mistapi.__pagination"], "get_next", next_mock)  # WHY: real get_all loop.
+    devices = MSPInventoryExporter()._fetch_org_inventory("org-1", "Org")  # WHY: run.
+    assert len(devices) == 1002  # WHY: both pages are present.
+    assert {device["type"] for device in devices[-2:]} == {"switch", "gateway"}  # WHY: page 2 not lost.
+    next_mock.assert_called_once_with(mh.apisession, first)  # WHY: one next-page request.
+
+
+def test_fetch_org_inventory_requests_virtual_chassis_members(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The inventory request passes vc=True and the maximum page size (issue #4766)."""
+    mh = _install_fake_mh(monkeypatch)  # WHY: fake MistHelper.
+    _restore_real_mistapi(monkeypatch)  # WHY: undo sys.modules pollution from sibling module-scope patch.dict blocks.
+    response = types.SimpleNamespace(data=[{"serial": "SW1-member1"}], next=None)  # WHY: one page.
+    inventory_mock = MagicMock(return_value=response)  # WHY: capture the request arguments.
+    monkeypatch.setattr(org_inventory_api, "getOrgInventory", inventory_mock)  # WHY: patch actual attr.
+    devices = MSPInventoryExporter()._fetch_org_inventory("org-1", "Org")  # WHY: run.
+    assert devices == [{"serial": "SW1-member1"}]  # WHY: the page passes through.
+    inventory_mock.assert_called_once_with(mh.apisession, "org-1", vc=True, limit=1000)  # WHY: VC members.
 
 
 def test_build_site_lookup_returns_id_to_name_map(monkeypatch: pytest.MonkeyPatch) -> None:

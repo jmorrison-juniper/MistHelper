@@ -161,10 +161,22 @@ class MSPInventoryExporter:
         print("")
 
     def _process_all_msps(self) -> None:
-        """Process all MSPs to collect device inventory."""
+        """Process each MSP one time to collect device inventory.
+
+        A user can hold more than one grant on the same MSP, and each grant is a separate
+        entry in ``msp_privileges``. Skip a repeated MSP ID so the export does not write
+        each device of that MSP two times (issue #4766).
+        """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        for msp_info in mh.msp_privileges:
-            self._process_msp(msp_info)
+        seen_msp_ids: set[str] = set()  # MSP IDs already exported in this run
+        for msp_info in mh.msp_privileges:  # One entry for each MSP grant of the user
+            msp_id = msp_info.get("msp_id")  # Identity used to find a repeated grant
+            if msp_id in seen_msp_ids:  # A second grant on an MSP that this run already exported
+                logger.info("Skipping repeated MSP grant for MSP %s", msp_id)  # Record the skip for the operator
+                continue  # Do not export the same orgs again
+            seen_msp_ids.add(msp_id)  # Remember this MSP so a later grant on it is skipped
+            self._process_msp(msp_info)  # Export every org under this MSP
+        logger.debug("Processed %d unique MSPs", len(seen_msp_ids))  # Summarize the MSP loop result
 
     def _finalize_export(self) -> None:
         """Finalize export by writing results or reporting no data."""
@@ -239,19 +251,30 @@ class MSPInventoryExporter:
             logging.error("MSP inventory export error for %s: %s", msp_name, e)
 
     def _fetch_org_inventory(self, org_id: str, org_name: str) -> list:  # type: ignore[type-arg]
-        """Fetch all devices from org inventory. Returns empty list on failure."""
+        """Fetch every device from the org inventory. Return an empty list on failure.
+
+        Read each page through ``mistapi.get_all``, because one page holds 1000 devices or
+        fewer. Pass ``vc=True`` so each Virtual Chassis member appears as its own row (issue #4766).
+        """
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         if mh.apisession is None:  # No authenticated session available
             print(f"      {org_name}: API session not initialized")  # Tell the user
             return []  # Nothing to fetch
+        import mistapi  # Lazy import of the pagination helper
         import mistapi.api.v1.orgs.inventory as org_inventory_api  # Lazy import of the inventory endpoint
 
-        response = org_inventory_api.getOrgInventory(mh.apisession, org_id, limit=1000)  # Fetch the org inventory
-
+        logger.info("Fetching the inventory of org %s", org_id)  # Log before the API call
+        response = org_inventory_api.getOrgInventory(
+            mh.apisession, org_id, vc=True, limit=1000
+        )  # First page, with each Virtual Chassis member listed
         if not response or not hasattr(response, "data"):  # No usable payload came back
             print(f"      {org_name}: No inventory data")  # Tell the user
             return []  # No devices to return
-        return self._normalize_inventory_data(response.data)  # Coerce the payload to a list of device dicts
+        if not isinstance(response.data, list):  # A single record has no next page
+            return self._normalize_inventory_data(response.data)  # Coerce the payload to a list of device dicts
+        devices = mistapi.get_all(response=response, mist_session=mh.apisession)  # Follow each next page
+        logger.debug("Fetched %d inventory devices for org %s", len(devices), org_id)  # Log the result count
+        return devices  # Every device of the org
 
     @staticmethod
     def _normalize_inventory_data(devices_data: Any) -> list:  # type: ignore[type-arg]  # Coerce inventory to a list
