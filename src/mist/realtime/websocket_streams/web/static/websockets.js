@@ -92,6 +92,7 @@
     var batchState = {
         operations: [],  // Catalog-backed operation references for the Multi Site selector.
         operation: null,  // The current catalog entry and its kind.
+        preset: null,  // A dedicated preset replaces generic browser-owned operation fields.
         sites: [],  // Complete organization site rows for the current operation.
         targets: [],  // Complete operation-scoped target rows for the current site selection.
         targetField: null,  // The deepest catalog target field, when the operation has one.
@@ -103,6 +104,7 @@
         progressTimer: null,  // One timer refreshes the parent and frozen targets.
         progressPending: false  // Keep progress reads in order.
     };
+    var activeBatchPreset = null;  // Preserve archive controls when a batch is restored after navigation.
 
     function byId(id) {
         return document.getElementById(id);  // Find one fixed page element.
@@ -169,6 +171,8 @@
     }
 
     function wireBatchEvents() {
+        byId('wsBatchHardwarePreset').addEventListener('change', changeBatchHardwarePreset);  // Select a fixed EX action.
+        byId('wsBatchHardwareFormat').addEventListener('change', invalidateBatchPreview);  // Bind format to the snapshot.
         byId('wsBatchOperation').addEventListener('change', selectBatchOperation);  // Select one catalog operation.
         byId('wsBatchSiteMode').addEventListener('change', changeBatchSiteMode);  // Select all sites or a subset.
         byId('wsBatchSiteOptions').addEventListener('change', changeBatchSiteSelection);  // Reload site-scoped targets.
@@ -183,6 +187,16 @@
         byId('wsBatchConfirmation').addEventListener('input', updateBatchStart);  // Require the exact preview phrase.
         byId('wsBatchStart').addEventListener('click', startBatch);  // Admit only the reviewed server preview.
         byId('wsBatchStop').addEventListener('click', stopBatch);  // Stop the public parent session.
+    }
+
+    function changeBatchHardwarePreset() {
+        var selected = byId('wsBatchHardwarePreset').checked;  // Read the dedicated preset control.
+        batchState.preset = selected ? 'ex-hardware-xml' : null;  // Keep the accepted preset name fixed.
+        show(byId('wsBatchHardwareFormatGroup'), selected);  // Show output choices only for this preset.
+        show(byId('wsBatchCatalogOperation'), !selected);  // Hide arbitrary command and operation fields.
+        show(byId('wsBatchGenericTargets'), !selected);  // Hide site and target selectors for all-org scope.
+        show(byId('wsBatchGenericOutput'), !selected);  // Hide generic JSONL layout choices.
+        invalidateBatchPreview();  // A changed action invalidates every earlier preview.
     }
 
     function wireScopeTabs() {
@@ -570,6 +584,13 @@
     }
 
     function batchPreviewRequest() {
+        if (batchState.preset === 'ex-hardware-xml') {
+            return {
+                preset: 'ex-hardware-xml',
+                format: byId('wsBatchHardwareFormat').value,
+                scope_revision: batchState.revision
+            };  // Submit no command, organization, site, or device values.
+        }
         var operation = batchState.operation;  // The current server-catalog identity.
         if (!operation) throw new Error('Choose a catalog operation.');  // No preview can exist without a key.
         var selection = {};  // Add only selectors required by catalog metadata.
@@ -625,11 +646,22 @@
         var summary = byId('wsBatchReviewSummary');  // Show the exact operation and execution scope.
         clearNode(summary);  // Remove an older target snapshot.
         var operation = preview.operation || {};  // Read the safe server catalog description.
-        summary.appendChild(make('div', '', 'Operation: ' + (operation.name || operation.key || 'Unknown')));  // Identify the resolved catalog action.
+        var operationName = preview.preset === 'ex-hardware-xml'
+            ? 'EX hardware inventory' : (operation.name || operation.key || 'Unknown');
+        summary.appendChild(make('div', '', 'Operation: ' + operationName));  // Identify the resolved catalog action.
         summary.appendChild(make('div', '', preview.target_count + ' target(s)'));  // Report exact server count.
         summary.appendChild(make('div', 'text-muted', 'Preview expires ' + preview.expires_at));  // Explain snapshot age.
-        summary.appendChild(make('div', '', 'Output: ' + byId('wsBatchLayout').selectedOptions[0].textContent));  // Show the selected saved layout.
-        summary.appendChild(make('div', '', 'Group by: ' + byId('wsBatchGroupBy').selectedOptions[0].textContent));  // Show the saved group key.
+        if (preview.preset === 'ex-hardware-xml') {
+            var formatNames = { xml: 'XML (.xml)', json: 'JSON (.json)', both: 'XML and JSON (.xml + .json)' };
+            summary.appendChild(make('div', '', 'Output: ' + (formatNames[preview.format] || 'Unknown')));
+            summary.appendChild(make('div', '', 'Scope: All sites in the configured organization; EX switches only.'));
+            (preview.fixed_commands || []).forEach(function(command) {
+                summary.appendChild(make('div', 'font-monospace small', 'Command: ' + command));
+            });
+        } else {
+            summary.appendChild(make('div', '', 'Output: ' + byId('wsBatchLayout').selectedOptions[0].textContent));  // Show the selected saved layout.
+            summary.appendChild(make('div', '', 'Group by: ' + byId('wsBatchGroupBy').selectedOptions[0].textContent));  // Show the saved group key.
+        }
         summary.appendChild(make('div', '', 'Concurrency: ' + byId('wsBatchConcurrency').value));  // Show the admitted worker limit.
         summary.appendChild(make('div', '', 'Safety: ' + (operation.safety || 'read')));  // Keep the catalog risk visible.
         var limits = preview.limits || {};  // Read the server's checked resource bounds.
@@ -641,8 +673,10 @@
                 'Shell limits: ' + limits.shell_command_bytes + ' bytes per command, ' + limits.shell_total_bytes + ' bytes total.'
             ));  // Show the finite command bounds.
         }
-        appendBatchParameters(summary);  // Review parameter values without displaying secret-like fields.
-        appendBatchCommands(summary, operation);  // Review the exact local command list for shell batches.
+        if (preview.preset !== 'ex-hardware-xml') {
+            appendBatchParameters(summary);  // Review parameter values without displaying secret-like fields.
+            appendBatchCommands(summary, operation);  // Review the exact local command list for shell batches.
+        }
         appendBatchExclusions(summary, preview.excluded);  // Explain candidates that the catalog excluded.
         var targets = byId('wsBatchReviewTargets');  // Show every resolved target before admission.
         clearNode(targets);  // Replace the prior target list.
@@ -653,6 +687,11 @@
         });
         show(byId('wsBatchReview'), true);  // Require visible review before start.
         var confirmation = preview.confirmation || {};  // Read the server safety requirement.
+        if (confirmation.required) {
+            var phrase = make('div', 'font-monospace', 'Type: ' + confirmation.phrase);
+            phrase.dataset.testid = 'ws-batch-confirmation-phrase';
+            summary.appendChild(phrase);
+        }
         show(byId('wsBatchConfirmationGroup'), !!confirmation.required);  // Only risky batches need a phrase.
         byId('wsBatchConfirmation').value = '';  // No earlier confirmation applies to this preview.
         byId('wsBatchStart').dataset.confirmation = confirmation.phrase || '';  // Keep exact text for comparison.
@@ -721,8 +760,12 @@
             }
             batchState.preview = null;  // The one-use preview has started a public parent session.
             batchState.sessionId = payload.session_id;  // Progress requests use the server-issued parent id.
+            activeBatchPreset = preview.preset || null;  // Keep the correct download affordance for this run.
             show(byId('wsBatchReview'), false);  // Do not show an old snapshot as an active preview.
             show(byId('wsBatchProgress'), true);  // Show the admitted batch state.
+            show(byId('wsBatchDownload'), activeBatchPreset !== 'ex-hardware-xml');  // Hardware runs use the archive.
+            byId('wsBatchZipDownload').textContent = activeBatchPreset === 'ex-hardware-xml'
+                ? 'Download archive' : 'Download ZIP';  // Name the selected artifact delivery.
             byId('wsBatchDownload').href = '/api/websockets/sessions/' +
                 encodeURIComponent(batchState.sessionId) + '/download';  // Use the established parent download.
             byId('wsBatchZipDownload').href = '/api/websockets/batches/' +
@@ -780,9 +823,12 @@
 
     function renderBatchProgress(batch) {
         var counts = batch.counts || {};  // The server owns each target state count.
-        var summary = ['queued', 'running', 'completed', 'stopped', 'failed'].map(function(stateName) {
+        var summary = ['queued', 'running', 'completed', 'stopped', 'failed', 'skipped'].map(function(stateName) {
             return stateName + ': ' + Number(counts[stateName] || 0);  // Show every terminal and active count.
         }).join(' | ');
+        if (activeBatchPreset === 'ex-hardware-xml' && batch.run_id) {
+            summary += ' | Saved run: data/websocket-streams/' + batch.run_id;
+        }
         setText('wsBatchProgressTitle', 'Batch progress - ' + (batch.status || 'unknown'));  // Show parent state.
         setText('wsBatchProgressCounts', summary + ' | output: ' + (batch.artifact_status || 'unknown'));  // Show storage state.
         var complete = ['completed', 'failed', 'partial', 'stopped'].indexOf(batch.status) >= 0;
@@ -802,6 +848,13 @@
             var row = make('div', 'd-flex justify-content-between gap-2 border-top py-1');  // One target state.
             row.appendChild(make('span', 'text-truncate', label || 'Target'));  // Keep long labels within the panel.
             row.appendChild(make('span', 'text-nowrap', item.state || 'queued'));  // Show current server state.
+            if (item.formats) {
+                var formats = Object.keys(item.formats).map(function(name) {
+                    var result = item.formats[name];
+                    return name.toUpperCase() + ': ' + result.state + (result.reason_code ? ' (' + result.reason_code + ')' : '');
+                }).join(' | ');
+                row.appendChild(make('span', 'small', formats));
+            }
             container.appendChild(row);  // Add the target in frozen preview order.
         });
     }
@@ -1565,7 +1618,12 @@
         state.selectedSession = session;  // The message panel shows this session.
         if (session.mode === 'multi_site') {
             batchState.sessionId = session.session_id;  // Restore progress when the session list selects a batch.
+            activeBatchPreset = session.batch && session.batch.preset === 'ex-hardware-xml'
+                ? 'ex-hardware-xml' : null;  // Retain the specialized archive mode across session selection.
             show(byId('wsBatchProgress'), true);  // Keep batch controls available after a page reload.
+            show(byId('wsBatchDownload'), activeBatchPreset !== 'ex-hardware-xml');  // Hardware uses only its archive.
+            byId('wsBatchZipDownload').textContent = activeBatchPreset === 'ex-hardware-xml'
+                ? 'Download archive' : 'Download ZIP';  // Restore the correct download label.
             byId('wsBatchDownload').href = '/api/websockets/sessions/' +
                 encodeURIComponent(session.session_id) + '/download';  // Restore combined result access.
             byId('wsBatchZipDownload').href = '/api/websockets/batches/' +

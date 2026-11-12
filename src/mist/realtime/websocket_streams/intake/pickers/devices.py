@@ -27,6 +27,35 @@ logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep picker l
 class DevicePicker(PickerRuntime):
     """List devices and describe one cached device."""
 
+    class Status:
+        """Read current running status separately from the configuration cache."""
+
+        def __init__(self, source: DevicePicker) -> None:
+            """Keep the authenticated SDK session and complete page reader."""
+            self._source = source
+
+        def read(self, site_id: str) -> dict[str, str]:
+            """Read current running status without using the inventory cache."""
+            logger.emit(logging.INFO, "intake_device_status_started", {"action": "stats"})
+            try:
+                import mistapi
+
+                response = mistapi.api.v1.sites.stats.listSiteDevicesStats(
+                    self._source._apisession, site_id=site_id, type="all", limit=runtime_settings.DEFAULT_API_PAGE_LIMIT
+                )
+                statuses = {
+                    str(record["id"]): str(record.get("status") or "unknown")
+                    for record in self._source._page_reader.read(response)
+                    if record.get("id")
+                }
+            except Exception as error:
+                logger.emit(logging.ERROR, "intake_device_status_failed", {"detail": type(error).__name__})
+                raise StreamRequestError(
+                    "picker_service_failed", "The portal could not read current device status."
+                ) from error
+            logger.emit(logging.DEBUG, "intake_device_status_finished", {"count": len(statuses)})
+            return statuses
+
     def devices(self, site_id: str) -> dict[str, object]:
         """Return device rows for one site."""
         logger.emit(logging.INFO, "intake_device_picker_started", {"action": "list"})  # Log no site identifier.

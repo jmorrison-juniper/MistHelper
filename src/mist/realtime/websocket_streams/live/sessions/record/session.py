@@ -90,29 +90,28 @@ class SessionPayloadSupport(SessionAttributes):
 
     def _payload_values(self, output: str, safety: str) -> dict[str, object]:
         """Return the stable public payload values."""
-        payload: dict[str, object] = {
-            "session_id": self.session_id,
-            "kind": self.request.kind,
-            "key": self.request.key,
-            "title": self.request.title,
-            "output": output,
-            "safety": safety,
-            "state": self.state.value,
-            "live": self.live,
-            "reason": self.reason,
-            "input_ready": self.input_ready,
-            "terminal": self.terminal is not None,
-            "started_at": self.started_at,
-            "ended_at": self.ended_at,
-            "counters": self.counters.to_payload(),
-            "rate_per_second": self._rate_per_second(),
-            "last_seq": self.buffer.last_seq,
-        }  # Preserve every existing list and read payload field.
-        plan = self.request.batch_plan  # Single Site sessions keep their exact established payload.
+        keys = (
+            "session_id kind key title output safety state live reason input_ready terminal "
+            "started_at ended_at counters rate_per_second last_seq"
+        )
+        values = (
+            (self.session_id, self.request.kind, self.request.key, self.request.title)
+            + (output, safety, self.state.value, self.live)
+            + (self.reason, self.input_ready, self.terminal is not None, self.started_at)
+            + (self.ended_at, self.counters.to_payload(), self._rate_per_second(), self.buffer.last_seq)
+        )
+        payload: dict[str, object] = dict(zip(keys.split(), values, strict=True))
+        plan = self.request.batch_plan
         if plan is not None:
-            payload["mode"] = "multi_site"  # Identify the additive parent session mode.
-            payload["batch"] = plan.progress.summary.summary()  # Include current target progress only for batches.
-        return payload  # Add batch fields only for a Multi Site parent.
+            payload["mode"] = "multi_site"
+            summary = plan.progress.summary.summary()
+            if plan.output is not None:
+                for name in ("preset", "format"):
+                    value = plan.output.get(name)
+                    if isinstance(value, str):
+                        summary[name] = value
+            payload["batch"] = summary
+        return payload
 
     @staticmethod
     def _log_state(event: str, status: str, level: int) -> None:

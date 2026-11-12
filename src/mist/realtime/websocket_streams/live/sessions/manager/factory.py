@@ -75,6 +75,11 @@ from src.mist.realtime.websocket_streams.live.transport.runtime.logging.redactio
 from src.mist.realtime.websocket_streams.live.transport.runtime.logging.structured_logger import (
     StructuredTransportLogger,
 )  # T072.
+from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml import (
+    HardwareOutputError,
+    HardwareXmlPreset,
+    HardwareXmlSupport,
+)  # Parse only complete fixed-preset output and keep terminal transcripts private.
 
 
 class RunnerFactory:
@@ -285,7 +290,7 @@ class BatchRunner:
     INITIAL_SECONDS = 30.0  # Initial shell output must arrive before this deadline.
     COMMAND_SECONDS = 30.0  # Each shell command has a finite response deadline.
     QUIET_SECONDS = 2.0  # A prompt must remain quiet for this interval.
-    PROMPT = re.compile(r"([^\r\n]{1,160}[>#%])")  # Match one bounded terminal prompt line.
+    PROMPT = re.compile(r"([A-Za-z0-9_.:@/-]{1,160}[>#%])")  # Reject banners, XML tags, and partial command echoes.
     ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")  # Remove terminal color and control sequences.
 
     class Part:
@@ -299,6 +304,19 @@ class BatchRunner:
 
     class Registry(Part):
         """Track active children, terminal state, and the parent result."""
+
+        def eligible(self, target: BatchTargetRequest, sink: BatchRunner.TargetSink) -> bool:
+            """Skip non-online hardware targets before a shell runner can open."""
+            plan = self._plan()
+            if not HardwareXmlPreset.is_selected(plan.output):
+                return True
+            status = plan.hardware_status(target.identity) if plan.hardware_status is not None else "unknown"
+            if status == "connected":
+                return True
+            sink._record_outcome(
+                "skipped", "offline" if status == "disconnected" else "unknown_status", "not_attempted"
+            )
+            return False
 
         def terminal(self) -> TerminalState:
             """Build bounded private terminal state for one shell target."""
@@ -347,43 +365,53 @@ class BatchRunner:
             terminal: TerminalState,
         ) -> None:
             """Collect the initial prompt and the exact approved command sequence."""
-            cursor, prompt = self._initial_prompt(terminal)  # Require a verified prompt before the first command.
-            if prompt is None:  # Do not send commands to an unknown shell state.
-                child_sink.fail("completion_unproven", "unproven")  # Preserve the target's safe failure reason.
-                return  # Stop this target before command dispatch.
-            for index, command in enumerate(self._plan().commands):  # Preserve the confirmed command order.
-                if self._stopping.is_set():  # Observe cancellation between commands.
-                    child_sink.stopped()  # Preserve the parent stop outcome.
-                    return  # Do not send later approved commands.
-                self._plan().progress.transitions.set_command_index(target.target_key, index)  # Record safe progress.
-                self._owner._targets._send_shell_command(runner, command, index)  # Send only after operator approval.
-                cursor, complete = self._command_prompt(terminal, cursor, prompt, index)  # Prove command completion.
-                if not complete:  # Keep later commands behind a verified boundary.
-                    child_sink.fail("completion_unproven", "unproven")  # Preserve partial output and safe status.
-                    return  # Do not send later commands after an unproven result.
-            child_sink.completed()  # Mark the target collected after every command boundary.
+            cursor, prompt = self._initial_prompt(terminal)
+            cancelled = self._stopping.is_set() or self._plan().progress.cancellation.is_cancelled()
+            if prompt is None or cancelled:
+                return child_sink.stopped() if cancelled else child_sink.fail("completion_unproven", "unproven")
+            if not self._commands(runner, child_sink, target, (terminal, cursor, prompt)):
+                return
+            if any(value["state"] != "completed" for value in child_sink.format_outcomes.values()):
+                return child_sink.fail("format_failed", "collected")
+            child_sink.completed()
+
+        def _commands(
+            self,
+            runner: StreamRunner,
+            child_sink: BatchRunner.TargetSink,
+            target: BatchTargetRequest,
+            context: tuple[TerminalState, int, str],
+        ) -> bool:
+            """Dispatch each command only after the previous prompt proves completion."""
+            terminal, cursor, prompt = context
+            for index, command in enumerate(self._plan().commands):
+                if self._stopping.is_set():
+                    child_sink.stopped()
+                    return False
+                self._plan().progress.transitions.set_command_index(target.target_key, index)
+                if child_sink.format_outcomes:
+                    child_sink.begin_hardware(command)
+                self._owner._targets._send_shell_command(runner, command, index)
+                cursor, complete = self._command_prompt(terminal, cursor, prompt, index)
+                cancelled = self._stopping.is_set() or self._plan().progress.cancellation.is_cancelled()
+                if cancelled or not complete:
+                    child_sink.stopped() if cancelled else child_sink.fail("completion_unproven", "unproven")
+                    return False
+                if child_sink.format_outcomes:
+                    child_sink.save_hardware(prompt, command)
+            return True
 
         def _initial_prompt(self, terminal: TerminalState) -> tuple[int, str | None]:
             """Wait for initial output and capture one normalized prompt."""
-            deadline = time.monotonic() + BatchRunner.INITIAL_SECONDS  # Bound the first device response.
-            cursor = 0  # Read the retained terminal stream from its first byte.
-            output = bytearray()  # Retain initial bytes until prompt recognition.
-            prompt = None  # No prompt is valid until the collector observes one.
             self._owner._logger.emit(logging.INFO, "batch_shell_initial_collection_started", {})  # Log before reads.
             try:  # Log page-read failures while preserving their exception.
-                while time.monotonic() < deadline and not self._stopping.is_set():  # Respect time and cancellation.
-                    page = terminal.history.read(cursor, 0.1)  # Read one bounded output slice.
-                    cursor = page.next_position  # Advance to the next unread byte.
-                    output.extend(page.data)  # Retain bytes until prompt normalization.
-                    prompt = self._prompt(bytes(output))  # Check the latest accumulated terminal output.
-                    if prompt is not None or page.closed:  # Stop after a prompt or a closed stream.
-                        break  # No more initial output can improve this result.
+                cursor, prompt, output_bytes = self._owner._prompt.initial(terminal)
             except Exception as error:  # Log collection failures and preserve the original exception.
                 error_fields = {"error_type": type(error).__name__}  # Keep the error context free of terminal data.
                 self._owner._logger.emit(logging.ERROR, "batch_shell_initial_collection_error", error_fields)  # Log.
                 raise  # Preserve the original failure for the target runner.
             status = "recognized" if prompt is not None else "unproven"  # Keep the result state bounded.
-            result = {"output_bytes": len(output), "status": status}  # Keep the result free of terminal content.
+            result = {"output_bytes": output_bytes, "status": status}  # Keep terminal content private.
             self._owner._logger.emit(logging.DEBUG, "batch_shell_initial_collection_completed", result)  # Report state.
             return cursor, prompt  # Return the verified prompt or the unproven result.
 
@@ -394,7 +422,7 @@ class BatchRunner:
             fields = {"command_index": command_index}  # Identify the command without exposing its text.
             self._owner._logger.emit(logging.INFO, "batch_shell_output_collection_started", fields)  # Log before reads.
             try:  # Preserve output errors after writing a safe error record.
-                cursor, complete, output_bytes = self._read_command_output(
+                cursor, complete, output_bytes = self._owner._prompt._read_command_output(
                     terminal, cursor, prompt  # Read through the verified prompt boundary.
                 )
             except Exception as error:  # Record failure without shell output or secrets.
@@ -411,6 +439,26 @@ class BatchRunner:
                 result,  # Include only safe collection metadata.
             )
             return cursor, complete  # Return the cursor and proof state.
+
+    class Prompt(Part):
+        """Recognize stable CLI readiness and command completion boundaries."""
+
+        def initial(self, terminal: TerminalState) -> tuple[int, str | None, int]:
+            """Wait for a complete prompt and a quiet interval rather than the first banner."""
+            deadline = time.monotonic() + BatchRunner.INITIAL_SECONDS
+            cursor, output, prompt = 0, bytearray(), None
+            quiet_since = time.monotonic()
+            while time.monotonic() < deadline and not self._stopping.is_set():
+                page = terminal.history.read(cursor, 0.1)
+                cursor = page.next_position
+                output.extend(page.data)
+                quiet_since = time.monotonic() if page.data else quiet_since
+                prompt = self._prompt(bytes(output))
+                if page.closed:
+                    return cursor, None, len(output)
+                if prompt is not None and time.monotonic() - quiet_since >= BatchRunner.QUIET_SECONDS:
+                    return cursor, prompt, len(output)
+            return cursor, None, len(output)
 
         def _read_command_output(self, terminal: TerminalState, cursor: int, prompt: str) -> tuple[int, bool, int]:
             """Read one command until its latest prompt remains quiet."""
@@ -470,6 +518,8 @@ class BatchRunner:
             child_sink = BatchRunner.TargetSink(self._owner._sink, plan, target, terminal)
             runner: StreamRunner | None = None
             try:
+                if not registry.eligible(target, child_sink):
+                    return
                 runner = self._owner._build(replace(target.request, batch_plan=None), child_sink)
                 child_sink.bind_runner(runner)
                 if not registry.register(target.target_key, runner):
@@ -546,6 +596,7 @@ class BatchRunner:
         self._thread: threading.Thread | None = None  # Keep one parent scheduler thread.
         self._registry = self.Registry(self)  # Own active children and the parent result.
         self._shell = self.Shell(self)  # Own finite shell collection.
+        self._prompt = self.Prompt(self)  # Separate terminal framing from command scheduling.
         self._targets = self.Targets(self)  # Own private target execution.
 
     def start(self) -> None:
@@ -595,6 +646,14 @@ class BatchRunner:
             self.finished = threading.Event()
             self._runner: StreamRunner | None = None
             self._redactor = LineSecretRedactor()  # Delay terminal lines until split secrets can be checked.
+            self._hardware_capture = bytearray()  # Reassemble shell chunks before strict UTF-8 decoding.
+            self._hardware_overflow = False  # Refuse results that exceed the bounded private capture.
+            self.output_files: tuple[str, ...] = ()  # Publish only filenames successfully staged for this target.
+            self.format_outcomes = {
+                output_format: {"state": "not_attempted", "reason_code": None}
+                for output_format, command in HardwareXmlPreset.COMMANDS.items()
+                if HardwareXmlPreset.is_selected(plan.output) and command in plan.commands
+            }
 
         def bind_runner(self, runner: StreamRunner) -> None:
             """Keep the child runner available for an output failure stop."""
@@ -608,6 +667,13 @@ class BatchRunner:
             """Release initial shell input after the first output."""
             if self.terminal is not None and self.terminal.input is not None:
                 self.terminal.input.release()
+
+        def begin_hardware(self, command: str) -> None:
+            """Start a separate bounded capture after CLI readiness and before command dispatch."""
+            self._hardware_capture.clear()
+            self._hardware_overflow = False
+            output_format = next(name for name, value in HardwareXmlPreset.COMMANDS.items() if value == command)
+            self.format_outcomes[output_format] = {"state": "running", "reason_code": None}
 
     class Outcomes(SinkBase):
         """Record one terminal outcome for one target."""
@@ -626,6 +692,11 @@ class BatchRunner:
 
         def _record_outcome(self, state: str, reason_code: str | None, completion: str | None) -> None:
             """Persist and publish one target outcome after a valid terminal transition."""
+            if self.format_outcomes:
+                for value in self.format_outcomes.values():
+                    if value["state"] == "running":
+                        value.update({"state": "failed", "reason_code": reason_code or "completion_unproven"})
+                self._plan.progress.formats.set(self._target.target_key, self.format_outcomes)
             if not self._plan.progress.transitions.transition(self._target.target_key, state, reason_code, completion):
                 self.finished.set()  # Preserve the first terminal result.
                 return
@@ -634,6 +705,8 @@ class BatchRunner:
                 "state": state,
                 "reason_code": reason_code,
                 "completion": completion,
+                "files": list(getattr(self, "output_files", ())),
+                "formats": dict(self.format_outcomes),
             }  # Keep every terminal result tied to its frozen target identity.
             self._persist_outcome(outcome)  # Persist under the same artifact quota as result data.
             self._parent.add_message(
@@ -659,6 +732,9 @@ class BatchRunner:
 
         def add_message(self, kind: str, content: object, **metadata: str | None) -> None:
             """Add one result with complete target identity."""
+            output = self._plan.output
+            if output is not None and output.get("preset") == HardwareXmlPreset.NAME and kind == "terminal":
+                return  # Hardware transcripts contain framing and inventory data, so never publish or redact them.
             if kind == "terminal" and isinstance(content, str):  # Terminal text needs line-boundary redaction.
                 content = self._redactor.feed(content, False)  # Keep split secrets buffered until the next chunk.
                 if not content:  # Empty redactor output has no safe result to publish.
@@ -691,13 +767,45 @@ class BatchRunner:
             """Retain exact private shell bytes and emit readable target output."""
             if self.terminal is not None:  # Shell targets retain exact bytes outside the public message buffer.
                 self.terminal.history.append(data)  # Preserve the raw terminal transcript for artifact review.
+            if self._plan.output is not None and self._plan.output.get("preset") == HardwareXmlPreset.NAME:
+                available = HardwareXmlSupport.Rules.MAX_TERMINAL_BYTES - len(self._hardware_capture)
+                if len(data) > available:
+                    self._hardware_overflow = True  # Preserve only a bounded sample and reject an over-limit reply.
+                    self._hardware_capture.extend(data[: max(available, 0)])
+                else:
+                    self._hardware_capture.extend(data)  # Reassemble UTF-8 only after every transport chunk arrives.
+                return  # Do not emit generic terminal messages or JSONL transcripts for the preset.
             self.add_message(
                 "terminal", data.decode("utf-8", errors="replace")
             )  # Decode only for the bounded, redacted message stream.
 
+        def save_hardware(self, prompt: str, command: str) -> bool:
+            """Validate and save one native format without discarding earlier successful formats."""
+            output_format = next(name for name, value in HardwareXmlPreset.COMMANDS.items() if value == command)
+            try:
+                if self._hardware_overflow:
+                    raise HardwareOutputError("The terminal response exceeds its bounded capture size.")
+                document = HardwareXmlSupport.Decoder.decode_output(bytes(self._hardware_capture), prompt, command)
+                hardware_writer = self._plan.hardware_writer
+                if hardware_writer is None:
+                    raise StreamRequestError("output_failed", "Hardware output storage is unavailable.")
+                self.output_files += hardware_writer(
+                    self._target.target_key, self._target.identity, document, output_format
+                )
+            except HardwareOutputError:
+                self.format_outcomes[output_format] = {"state": "failed", "reason_code": "invalid_output"}
+                return False
+            except StreamRequestError:
+                self.format_outcomes[output_format] = {"state": "failed", "reason_code": "output_failed"}
+                return False
+            self.format_outcomes[output_format] = {"state": "completed", "reason_code": None}
+            self._plan.progress.transitions.record_result(self._target.target_key, files=self.output_files)
+            return True
+
         def finish(self, state: SessionState, reason: str) -> None:
             """Record one child outcome without ending the public batch."""
-            pending = self._redactor.feed("", True)  # Flush only terminal text that passed secret checks.
+            is_hardware = self._plan.output is not None and self._plan.output.get("preset") == HardwareXmlPreset.NAME
+            pending = "" if is_hardware else self._redactor.feed("", True)
             if pending:  # A trailing line can remain after the final transport chunk.
                 self._write_message("terminal", pending, None)  # Save the checked remainder before the outcome.
             terminal = (

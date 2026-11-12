@@ -70,6 +70,10 @@ from src.mist.realtime.websocket_streams.live.transport.endpoint import (
     ConnectFailure,
     TransportProfile,
 )  # Factory tests avoid real Mist sockets.
+from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml import (
+    HardwareXmlPreset,
+    HardwareXmlSupport,
+)  # Exercise private chunk capture for the fixed inventory action.
 from tests.unit.websocket_streams.live.transport.fake_mist_cloud.api import (
     FakeApiSession,
 )  # Factory tests need SDK-shaped session data.
@@ -200,7 +204,7 @@ class TestStreamSessionManager:
         assert transitions.transition("one", "failed", "late_failure") is False  # Reject a later duplicate outcome.
         assert transitions.transition("two", "failed", "target_failed") is True  # Preserve one target failure.
         summary = plan.progress.summary.summary()  # Read the aggregate target state.
-        assert summary["counts"] == {"queued": 0, "running": 0, "completed": 1, "stopped": 0, "failed": 1}
+        assert summary["counts"] == {"queued": 0, "running": 0, "completed": 1, "stopped": 0, "failed": 1, "skipped": 0}
         assert summary["status"] == "partial"  # Mixed target outcomes remain visible.
         assert plan.progress.summary.target_page(0, 2)["targets"][0]["completion"] == "collected"
 
@@ -245,11 +249,112 @@ class TestStreamSessionManager:
         assert "split-secret" not in result  # Keep raw credentials out of saved and displayed results.
         assert "[REDACTED]" in result  # Preserve evidence that the content was filtered.
 
+    def test_hardware_batch_reassembles_utf8_chunks_without_terminal_publication(self) -> None:
+        """Only validated selected files become visible; terminal chunks remain private."""
+        target = BatchTargetRequest(
+            "target",
+            {"target_id": "device-1", "label": "EX-1"},
+            self._shell_request(),
+        )  # Bind one stable EX identity to the checked shell target.
+        saved: list[tuple[object, str]] = []  # Observe the private artifact callback.
+
+        def save_hardware(_key: str, _identity: object, document: object, output_format: str) -> tuple[str, ...]:
+            """Record only the validated document handed to artifact storage."""
+            saved.append((document, output_format))  # Keep the test local and credential-free.
+            return ("hardware/ex-1--device-1-123456789abc.xml",)
+
+        plan = BatchExecutionPlan(
+            (target,),
+            1,
+            commands=(HardwareXmlPreset.COMMAND,),
+            output={"preset": HardwareXmlPreset.NAME, "format": "both"},
+            artifact_id="artifact",
+            hardware_writer=save_hardware,
+        )  # Use the same callback path as the real private artifact writer.
+        parent = FakeSink()  # Confirm no shell transcript reaches the public parent.
+        sink = BatchRunner.TargetSink(parent, plan, target, None)
+        xml = "<rpc-reply><chassis-inventory><chassis><name>EX-1-ë</name></chassis></chassis-inventory></rpc-reply>"
+        transcript = ("switch@site>\r\n" + HardwareXmlPreset.COMMAND + "\r\n" + xml + "\r\nswitch@site>").encode(
+            "utf-8"
+        )
+        split = transcript.index("ë".encode()) + 1
+        sink.add_bytes(transcript[:split])  # End one transport chunk between the UTF-8 bytes.
+        sink.add_bytes(transcript[split:])  # Reassemble before strict decoding.
+        assert parent.messages == []  # The preset never emits transcript or JSONL messages.
+        sink.save_hardware("switch@site>", HardwareXmlPreset.COMMAND)
+        sink.completed()
+        assert saved[0][1] == "xml"  # Save the response from this command only.
+        assert saved[0][0].xml == xml  # Save only the original XML document.
+        assert [message["kind"] for message in parent.messages] == ["outcome"]
+
+    def test_hardware_batch_malformed_native_json_never_reaches_the_writer(self) -> None:
+        """Report an invalid native response without saving a successful-looking file."""
+        target = BatchTargetRequest("target", {"target_id": "device-1"}, self._shell_request())
+        writer = Mock()
+        command = HardwareXmlPreset.COMMANDS["json"]
+        plan = BatchExecutionPlan(
+            (target,),
+            1,
+            commands=(command,),
+            output={"preset": HardwareXmlPreset.NAME, "format": "json"},
+            hardware_writer=writer,
+        )
+        sink = BatchRunner.TargetSink(FakeSink(), plan, target, None)
+        sink.add_bytes(b'{"chassis-inventory": bad json}\r\nswitch@site>')
+        assert sink.save_hardware("switch@site>", command) is False
+        writer.assert_not_called()
+        assert sink.output_files == ()
+        assert sink.format_outcomes["json"] == {"state": "failed", "reason_code": "invalid_output"}
+
+    def test_hardware_batch_capture_overflow_fails_closed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Bound private terminal accumulation before parsing or artifact writes."""
+        monkeypatch.setattr(HardwareXmlSupport.Rules, "MAX_TERMINAL_BYTES", 8)
+        target = BatchTargetRequest("target", {"target_id": "device-1"}, self._shell_request())
+        plan = BatchExecutionPlan(
+            (target,),
+            1,
+            commands=(HardwareXmlPreset.COMMAND,),
+            output={"preset": HardwareXmlPreset.NAME, "format": "xml"},
+            artifact_id="artifact",
+            hardware_writer=lambda *_args: ("hardware/unused.xml",),
+        )
+        sink = BatchRunner.TargetSink(FakeSink(), plan, target, None)
+        sink.add_bytes(b"0123456789")
+        assert sink._hardware_overflow is True
+        assert sink.save_hardware("switch@site>", HardwareXmlPreset.COMMAND) is False
+
+    def test_hardware_batch_cancellation_is_not_reported_as_invalid_xml(self) -> None:
+        """A cancelled finite shell read records a cancelled outcome before parsing."""
+        target = BatchTargetRequest("target", {"target_id": "device-1"}, self._shell_request())
+        plan = BatchExecutionPlan(
+            (target,),
+            1,
+            commands=(HardwareXmlPreset.COMMAND,),
+            output={"preset": HardwareXmlPreset.NAME, "format": "xml"},
+        )
+        parent_request = replace(target.request, batch_plan=plan)
+        parent_sink = FakeSink()
+        batch = BatchRunner(
+            parent_request,
+            parent_sink,
+            FakeFactory().build,
+            StreamSettings.from_environment(),
+            SharedTransport(1),
+        )
+        batch._stopping.set()  # Interrupt before any device bytes can be parsed or persisted.
+        sink = BatchRunner.TargetSink(parent_sink, plan, target, None)
+        terminal = TerminalState(ByteHistory(), TerminalInput(), 30.0, "2030-01-01T00:00:00Z")
+        batch._shell.collect(FakeRunner(), sink, target, terminal)
+        row = plan.progress.summary.target_page(0, 1)["targets"][0]
+        assert row["state"] == "stopped"
+        assert row["reason_code"] == "cancelled"
+
     def test_batch_shell_quiet_interval_restarts_after_new_output(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Require two quiet seconds after the latest matching prompt."""
         clock = FakeClock()  # Control the elapsed time without sleeping.
         pages = [
             (0.1, b"router#"),
+            (2.1, b""),
             (0.1, b"\r\nroute\r\nrouter#"),
             (1.5, b""),
             (0.1, b"\r\nmore\r\nrouter#"),
@@ -280,7 +385,7 @@ class TestStreamSessionManager:
         terminal = TerminalState(history, TerminalInput(), 30.0, "2030-01-01T00:00:00Z")  # Build private state.
         prompt_cursor, prompt = batch._shell._initial_prompt(terminal)  # Capture the first verified prompt.
         assert prompt == "router#"  # Normalize the prompt before command dispatch.
-        assert BatchRunner.Shell._prompt(b"router#\r\nmore output") is None  # Reject an earlier prompt match.
+        assert BatchRunner.Prompt._prompt(b"router#\r\nmore output") is None  # Reject an earlier prompt match.
         cursor, complete = batch._shell._command_prompt(
             terminal, prompt_cursor, prompt, 0  # Continue from the verified initial cursor.
         )
@@ -555,6 +660,34 @@ class TestStreamSessionManager:
         assert requests[0].path == "/shell/fail"  # The fake cloud recorded the failed open.
         assert session.reason == expected  # The selected session receives the mapped reason.
         assert "fake-token" not in session.reason  # The reason must not expose secrets.
+
+    @pytest.mark.parametrize("status_code", [403, 503])
+    def test_hardware_batch_setup_4xx_and_5xx_remain_per_target_failures(self, status_code: int) -> None:
+        """A shell setup refusal or server error is retained as a per-target failure."""
+        with FakeMistCloud() as cloud:
+            cloud.fail_handshake("/shell/fail", HandshakeFault("refuse", status_code=status_code))
+            api = FakeApiSession(cloud)
+            api.add_override("/shell", status_code=200, data={"url": f"{cloud.base_ws_url}/shell/fail"})
+            manager = self._real_manager(api, cloud)
+            target_request = self._shell_request()
+            target = BatchTargetRequest(
+                "target-1",
+                {"site_id": "site-a", "device_id": "dev-a", "target_id": "dev-a", "label": "EX-1"},
+                target_request,
+            )
+            plan = BatchExecutionPlan(
+                (target,),
+                1,
+                commands=(HardwareXmlPreset.COMMAND,),
+                output={"preset": HardwareXmlPreset.NAME, "format": "xml"},
+                artifact_id="test-artifact",
+                hardware_status=lambda _identity: "connected",
+            )
+            parent_request = replace(target_request, title="hardware batch", batch_plan=plan)
+            payload = manager.start(parent_request)
+            session = self._wait_for_state(manager, str(payload["session_id"]), {SessionState.FAILED}, timeout=5.0)
+        assert session.payload()["batch"]["counts"]["failed"] == 1
+        assert session.payload()["batch"]["counts"]["completed"] == 0
 
     def test_reaper_stops_idle_and_prunes_old_ended(self) -> None:
         """Stop idle sessions, keep 5 ended sessions at most, and remove them after 10 minutes."""
