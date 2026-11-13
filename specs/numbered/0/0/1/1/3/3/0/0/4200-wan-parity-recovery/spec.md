@@ -99,7 +99,7 @@ Users need consistent authorization, offline isolation, errors, and bounded refr
 - **FR-005**: Define status transitions, flap counting, availability, primary/secondary roles, failover, and ranking before implementation.
 - **FR-006**: Define loss, latency, jitter, timestamps, mean, maximum, p95, sampling, and missing-data rules before implementation. Keep each poll as a raw sample with full identity and a UTC timestamp. Derive hourly display values from raw samples without replacing them.
 - **FR-007**: Define SLE score meaning, classifiers, impact fields, entity mappings, and time scope before implementation.
-- **FR-008**: Define region, site, circuit, hourly aggregation, short windows, calendar boundaries, weighting, and coverage. Derive hourly display values from samples. Do not replace raw samples with hourly values.
+- **FR-008**: Define region, site, circuit, hourly aggregation, short windows, calendar boundaries, weighting, and coverage. Keep the existing hourly display as a latest-sample projection, not a statistical aggregate or coverage claim. Keep raw samples separate.
 - **FR-009**: Define 13-month history, backfill, retention, capacity, completeness, and absent-history behavior without a second database. Keep this contract open until evidence proves those properties. Do not claim 13-month history without proof. Preserve existing rows and do not expire samples before a retention policy is approved.
 - **FR-010**: Define executive, engineering, and SLE views from verified audience requirements.
 - **FR-011**: Reuse existing portal authorization, API sessions, configured storage, and shared request limits.
@@ -147,4 +147,5 @@ This specification authorizes no new transport or live request.
 - A fresh plan does not authorize merge, deployment, production requests, or automatic implementation of blocked contracts.
 - Each scalar poll uses its UTC collection time as its sample timestamp. Time-series responses retain their API timestamps.
 - New per-poll sample storage is additive. Existing hourly records remain available, and hourly values derive from samples.
+- The existing hourly display continues to show the latest observation in its hour. It does not claim an hourly mean, maximum, p95, or complete coverage.
 - Retention, capacity, historical completeness, and backfill remain unverified. No 13-month history guarantee is claimed.
