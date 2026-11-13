@@ -79,6 +79,42 @@ def test_raw_samples_append_distinct_observations_within_one_hour(history):
     assert hourly[0].collected_at_utc == second.collected_at_utc
 
 
+def test_sqlite_api_sample_replay_keeps_one_original_sample(history):
+    """Keep an unchanged API observation once when later polls return its timestamp."""
+    record = live_record()
+    first = replace(live_sample(record), timestamp_source="api")
+    replay = replace(first, collected_at_utc=first.collected_at_utc + timedelta(minutes=5))
+
+    history.upsert((), (first, replay))
+    history.upsert((), (replay,))
+
+    start = record.hour_start_utc
+    end = start + timedelta(hours=1)
+    assert history.read_samples(record.identity, start, end) == (first,)
+
+
+def test_sqlite_rejects_changed_api_sample_without_replacing_prior_rows(history):
+    """Reject changed source data at a stable sample key and roll back hourly updates."""
+    record = live_record()
+    first = replace(live_sample(record), timestamp_source="api")
+    original_hour = first.to_hourly()
+    updated_hour = replace(original_hour, collected_at_utc=original_hour.collected_at_utc + timedelta(minutes=5))
+    changed = replace(
+        first,
+        collected_at_utc=first.collected_at_utc + timedelta(minutes=5),
+        raw_fields={"loss": 1.0},
+    )
+    history.upsert((original_hour,), (first,))
+
+    with pytest.raises(ValueError, match="conflicts with stored source data"):
+        history.upsert((updated_hour,), (changed,))
+
+    start = record.hour_start_utc
+    end = start + timedelta(hours=1)
+    assert history.read_samples(record.identity, start, end) == (first,)
+    assert history.read(record.identity, start, end) == (original_hour,)
+
+
 def test_half_open_query_and_identity_isolation(history):
     """Exclude another identity and the upper time boundary."""
     record = live_record()
@@ -198,6 +234,7 @@ def test_arango_appends_raw_samples_to_the_same_transaction():
         "wan_performance_hours": hours,
         "wan_performance_samples": samples,
     }[name]
+    samples.get.return_value = None
     record = live_record()
     first, second = live_sample(record), live_sample(record, 5)
 
@@ -208,6 +245,35 @@ def test_arango_appends_raw_samples_to_the_same_transaction():
     assert samples.insert.call_args_list[0].args[0]["_key"] != samples.insert.call_args_list[1].args[0]["_key"]
     assert samples.insert.call_args_list[0].kwargs == {}
     transaction.commit_transaction.assert_called_once_with()
+
+
+def test_arango_api_sample_replay_is_idempotent_and_rejects_changes():
+    """Preserve the first Arango payload and abort changed source data."""
+    from src.interfaces.wan_performance.integration.record_codec import SampleRecordCodec
+
+    database = MagicMock()
+    transaction = database.begin_transaction.return_value
+    hours, samples = MagicMock(), MagicMock()
+    transaction.collection.side_effect = lambda name: {
+        "wan_performance_hours": hours,
+        "wan_performance_samples": samples,
+    }[name]
+    record = live_record()
+    first = replace(live_sample(record), timestamp_source="api")
+    replay = replace(first, collected_at_utc=first.collected_at_utc + timedelta(minutes=5))
+    changed = replace(replay, raw_fields={"loss": 1.0})
+    stored_payload = SampleRecordCodec.encode(first)
+    samples.get.side_effect = [None, {"payload": stored_payload}, {"payload": stored_payload}]
+    history = ArangoHistory(database)
+
+    history.upsert((), (first,))
+    history.upsert((), (replay,))
+    with pytest.raises(ValueError, match="conflicts with stored source data"):
+        history.upsert((), (changed,))
+
+    assert samples.insert.call_count == 1
+    assert transaction.commit_transaction.call_count == 2
+    transaction.abort_transaction.assert_called_once_with()
 
 
 def test_arango_connect_uses_existing_database_and_finite_timeout():

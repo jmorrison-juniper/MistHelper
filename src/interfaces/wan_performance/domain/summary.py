@@ -44,9 +44,9 @@ class LinkEventSummary:
     complete_hours: int
     known_hours: int
     expected_hours: int
-    up_minutes: float
-    down_minutes: float
-    flap_count: float
+    up_minutes: float | None
+    down_minutes: float | None
+    flap_count: float | None
     observed_up_percent: float | None
 
 
@@ -321,10 +321,10 @@ class LinkEventSummaries:
             return None
         complete = LinkEventSummaries._complete(matching)
         known = LinkEventSummaries._known(complete)
-        up = LinkEventSummaries._sum(known, "up_minutes")
-        down = LinkEventSummaries._sum(known, "down_minutes")
-        flaps = LinkEventSummaries._flaps(complete)
-        observed = LinkEventSummaries._observed_percent(up, down)
+        up = LinkEventSummaries._sum(known, "up_minutes") if known else None
+        down = LinkEventSummaries._sum(known, "down_minutes") if known else None
+        flaps = LinkEventSummaries._flaps(complete) if complete else None
+        observed = LinkEventSummaries._observed_percent(up, down) if up is not None and down is not None else None
         return LinkEventSummary(len(complete), len(known), period.expected_hours, up, down, flaps, observed)
 
     @staticmethod
@@ -335,7 +335,11 @@ class LinkEventSummaries:
     @staticmethod
     def _complete(records: tuple[HourlyMeasurement, ...]) -> tuple[HourlyMeasurement, ...]:
         """Keep hours with a completed event search, including known zero-event hours."""
-        return tuple(record for record in records if record.metrics["flap_count"].value is not None)
+        return tuple(
+            record
+            for record in records
+            if (flaps := record.metrics.get("flap_count")) is not None and flaps.value is not None
+        )
 
     @classmethod
     def _known(cls, records: tuple[HourlyMeasurement, ...]) -> tuple[HourlyMeasurement, ...]:

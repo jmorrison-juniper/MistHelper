@@ -107,7 +107,7 @@ It does not prove a metric exists or that returned fields have the required mean
 | SDK surface | Verified signature facts | Remaining evidence |
 | --- | --- | --- |
 | sites.insights.getSiteGatewayMetrics | Symbol absent | Source port-history call is not portable as written |
-| sites.insights.getSiteInsightMetricsForGateway | Requires site ID, device ID, and metrics; interval is a string | Supported metric catalog, units, identity, and sample shape |
+| sites.insights.getSiteInsightMetricsForGateway | Requires site ID, device ID, and metrics; interval is a string | Supported metric catalog, units, and identity |
 | sites.insights.getSiteInsightMetricsForDevice | Requires site ID, metric, device MAC; no peer_mac or peer_port_id arguments | Do not forward source peer filters; prove a supported alternative or remain blocked |
 | orgs.stats.searchOrgPeerPathStats | Supports org, gateway MAC, site, type, bounds/duration, limit, and search_after; no peer-port filter | Timestamp semantics and historical completeness |
 | orgs.stats.searchOrgSwOrGwPorts | Supports org, device type, gateway MAC, port ID, limit, and search_after | Snapshot coverage and scoped identity |
@@ -118,6 +118,7 @@ The inspected SLE functions are `getSiteSleSummary`, `getSiteSleHistogram`, `get
 `getSiteSleImpactSummary`, `listSiteSleImpactedGateways`, and `listSiteSleImpactedInterfaces`.
 Do not pass source generic aggregation arguments into functions that do not declare them.
 Recheck against the locked environment before implementation.
+The gateway insight response shape and timestamp rules are recorded in [the parity contract](parity.md#verified-gateway-insight-fields).
 
 ## Organization-stat response schemas
 

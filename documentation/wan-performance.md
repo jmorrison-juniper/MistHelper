@@ -161,6 +161,8 @@ When no matching event exists, the current cached port state represents the full
 Flap count equals the number of matched transition events.
 Period summaries sum known up/down minutes and event counts, and show complete event hours against expected hours.
 The up percentage uses known minutes only.
+Ordinary poll hours without completed flap evidence do not enter event summaries.
+Missing duration or flap evidence stays unknown, and a known zero remains zero.
 Port and peer snapshots also retain an explicit boolean `up` observation.
 Their sampled-state summaries still report known states and changes between adjacent observed hours.
 Gaps break sampled-state transitions.
@@ -210,6 +212,8 @@ Port and peer snapshot hours retain the last collected observation.
 Gateway hours retain the validated hourly insight samples and catalog units.
 This is a migration design decision, not proof of a full-hour average.
 The actual collection timestamp remains in every record.
+Gateway history resolves one tenant-scoped gateway from gateway, circuit, or peer rows.
+It refuses history when selected rows identify more than one gateway or a different organization.
 Rates use `rx_bps` and `tx_bps`, never cumulative byte counters.
 Peer path keys include the remote site, remote port, and VPN type.
 Their derived key is not a claimed source tunnel identifier.
@@ -237,9 +241,12 @@ The port-stat request uses `searchOrgSwOrGwPorts` with the selected gateway and 
 The API schema defines scalar `loss`, `jitter`, and `latency` fields but does not define their units.
 The application retains each scalar as a raw poll sample and does not assign a unit.
 The selected application store retains port rate, utilization, raw quality, congestion, and event-derived records without replacing the current snapshot.
-Each live poll is stored separately with its full identity and UTC sample time.
+Each distinct raw sample is stored with its full identity and UTC sample time.
 SQLite stores raw samples in `wan_performance_samples`, and ArangoDB uses the matching collection.
 Hourly records keep their existing replacement behavior, and repeated polls in one hour remain distinct samples.
+An unchanged API sample replay is a no-op that preserves its first collection time.
+Changed source data at the same identity and sample time aborts the transaction without replacing the prior sample.
+Poll samples with distinct collection times remain distinct.
 The application sets no sample expiry and makes no retention or backfill guarantee.
 Natural-key upserts replace an existing row for the same port and UTC hour.
 The record derives utilization from the cached Mbps speed and six aligned rate samples.

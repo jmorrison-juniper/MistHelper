@@ -494,3 +494,125 @@ def test_status_history_displays_sampled_state_not_availability(client, live_ser
     assert "sampled state, not measured availability" in text
     assert re.search(r"1 up and 0 down\s+observations of 1 known states", text)
     assert re.search(r"across\s+\d+\s+expected hours", text)
+
+
+def test_live_link_event_view_renders_missing_evidence_as_unknown(client, live_service):
+    """Render missing event evidence without adding None values or claiming zero."""
+    from dataclasses import replace
+
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
+    from src.interfaces.wan_performance.domain.measurement import MetricMeasurement
+
+    record = SnapshotRecords.build(live_service.store.cached.return_value)[0]
+    live_service.history.read.return_value = (
+        replace(
+            record,
+            metrics={
+                "up_minutes": MetricMeasurement(None, "min", missing_reason="The event search is incomplete."),
+                "down_minutes": MetricMeasurement(None, "min", missing_reason="The event search is incomplete."),
+                "flap_count": MetricMeasurement(None, "count", missing_reason="The event search is incomplete."),
+            },
+        ),
+    )
+
+    response = client.get("/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff")
+
+    assert response.status_code == 200
+    text = response.get_data(as_text=True)
+    assert 'data-testid="wan-live-link-event-summary"' in text
+    assert "Known state duration: Unknown." in text
+    assert "Up: Unknown minutes." in text
+    assert "Down: Unknown minutes." in text
+    assert "Matching transitions: Unknown." in text
+
+
+def test_gateway_history_remains_visible_after_ordinary_refresh(client, live_service, tmp_path):
+    """Keep scoped gateway history visible after the cache receives ordinary port rows."""
+    import sqlite3
+    from datetime import UTC, datetime, timedelta
+
+    from src.interfaces.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+    from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
+
+    path = tmp_path / "application.db"
+    sqlite3.connect(path).close()
+    live_service.history = SQLiteHistory(path)
+    instant = datetime.now(UTC)
+    hour = instant.replace(minute=0, second=0, microsecond=0)
+    gateway_snapshot = {
+        "org_id": "org-one",
+        "provenance": "live",
+        "collected_at_utc": instant.isoformat(),
+        "ports": [],
+        "peers": [],
+        "insights": {
+            "gateway": {
+                "org_id": "org-one",
+                "site_id": "site-one",
+                "mac": "aabbccddeeff",
+                "id": "00000000-0000-0000-0000-000000000001",
+            },
+            "samples": [
+                {"metric": name, "value": value, "unit": "bit/s", "hour_start_utc": hour.isoformat()}
+                for name, value in (("rx_bps", 0), ("tx_bps", 10))
+            ],
+        },
+    }
+    ordinary_snapshot = {
+        "org_id": "org-one",
+        "provenance": "live",
+        "collected_at_utc": (instant + timedelta(minutes=1)).isoformat(),
+        "ports": [
+            {
+                "org_id": "org-one",
+                "site_id": "site-one",
+                "mac": "aabbccddeeff",
+                "port_id": "ge-0/0/0",
+            }
+        ],
+        "peers": [],
+        "insights": {"samples": []},
+    }
+    live_service.store.publish.side_effect = lambda org_id, snapshot: setattr(
+        live_service.store.cached, "return_value", snapshot
+    )
+    target = GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff")
+    with patch(
+        "src.interfaces.wan_performance.collection.live_service.SnapshotClient.collect",
+        side_effect=(gateway_snapshot, ordinary_snapshot),
+    ) as collect:
+        live_service.refresh(target)
+        live_service.refresh()
+
+    response = client.get("/wan-performance/live/gateway/aabbccddeeff?site_id=site-one")
+
+    assert collect.call_count == 2
+    assert response.status_code == 200
+    text = response.get_data(as_text=True)
+    assert f"daily: {hour:%Y-%m-%d}" in text
+    assert "mean 0.0" in text
+
+
+def test_gateway_history_rejects_ambiguous_or_foreign_gateway_identity(live_service):
+    """Refuse gateway history when selected records cross gateway or organization scope."""
+    from dataclasses import replace
+
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
+    from src.interfaces.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+    from src.interfaces.wan_performance.presentation.live_routes import LiveHistory
+
+    record = SnapshotRecords.build(live_service.store.cached.return_value)[0]
+    gateways = (
+        GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff"),
+        GatewayIdentity(SiteIdentity("org-one", "site-two"), "112233445566"),
+    )
+    ambiguous = tuple(replace(record, identity=gateway) for gateway in gateways)
+    periods, error = LiveHistory.read(live_service, ambiguous, "gateway")
+    assert periods == ()
+    assert error == "Select records for exactly one full gateway identity to read history."
+
+    foreign = (replace(record, identity=GatewayIdentity(SiteIdentity("org-two", "site-one"), "aabbccddeeff")),)
+    periods, error = LiveHistory.read(live_service, foreign, "gateway")
+    assert periods == ()
+    assert error == "Select records for exactly one full gateway identity to read history."
+    live_service.history.read.assert_not_called()

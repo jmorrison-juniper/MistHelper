@@ -219,6 +219,71 @@ def test_event_availability_and_congestion_summaries_preserve_incomplete_hours()
     assert daily.congestion_durations[1].complete_hours == 0
 
 
+def test_mixed_event_and_ordinary_hours_ignore_absent_event_metrics():
+    """Exclude ordinary poll hours from event summaries without losing known evidence."""
+    dashboard = OfflinePreviewFactory.build()
+    first = dashboard.measurements[0]
+    event_hour = replace(
+        first,
+        metrics={
+            "up_minutes": MetricMeasurement(60.0, "min"),
+            "down_minutes": MetricMeasurement(0.0, "min"),
+            "flap_count": MetricMeasurement(0.0, "count"),
+        },
+        provenance="live",
+    )
+    ordinary_hour = replace(
+        first,
+        hour_start_utc=first.hour_start_utc + timedelta(hours=1),
+        collected_at_utc=first.collected_at_utc + timedelta(hours=1),
+        metrics={"rx_bps": MetricMeasurement(100, "bit/s")},
+        provenance="live",
+    )
+
+    daily = next(
+        summary
+        for summary in CalendarSummaries.build((event_hour, ordinary_hour), first.identity)
+        if summary.period.kind == "daily"
+    )
+
+    assert daily.link_event_summary == LinkEventSummary(1, 1, 24, 60, 0, 0, 100)
+
+
+def test_missing_event_evidence_does_not_report_zero_flaps_or_minutes():
+    """Keep absent event results unknown instead of reporting healthy zero values."""
+    dashboard = OfflinePreviewFactory.build()
+    first = dashboard.measurements[0]
+    missing = MetricMeasurement(None, "count", missing_reason="The event search is incomplete.")
+    record = replace(
+        first,
+        metrics={
+            "up_minutes": MetricMeasurement(None, "min", missing_reason="The event search is incomplete."),
+            "down_minutes": MetricMeasurement(None, "min", missing_reason="The event search is incomplete."),
+            "flap_count": missing,
+        },
+        provenance="live",
+    )
+
+    daily = next(
+        summary for summary in CalendarSummaries.build((record,), first.identity) if summary.period.kind == "daily"
+    )
+
+    assert daily.link_event_summary == LinkEventSummary(0, 0, 24, None, None, None, None)
+
+
+def test_known_zero_flaps_do_not_infer_known_duration_minutes():
+    """Keep a verified zero-flap result while duration evidence remains unknown."""
+    dashboard = OfflinePreviewFactory.build()
+    first = dashboard.measurements[0]
+    record = replace(first, metrics={"flap_count": MetricMeasurement(0.0, "count")}, provenance="live")
+
+    daily = next(
+        summary for summary in CalendarSummaries.build((record,), first.identity) if summary.period.kind == "daily"
+    )
+
+    assert daily.link_event_summary == LinkEventSummary(1, 0, 24, None, None, 0, None)
+
+
 def test_summary_does_not_turn_missing_metrics_into_zero() -> None:
     """Preserve absent values without claiming a healthy measurement."""
     dashboard = OfflinePreviewFactory.build()

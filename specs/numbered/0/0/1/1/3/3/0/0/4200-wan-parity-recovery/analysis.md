@@ -155,9 +155,9 @@ Do not create a duplicate issue for the same recovery scope.
 Update task status only when its full evidence or implementation objective is satisfied.
 Future issue updates must identify completed tasks, open gates, exact revisions, and validation results.
 
-## Fresh-main candidate validation
+## Candidate validation before PR #4358 merged
 
-The candidate uses base `816f42bac74aebfb936ac9fc9b72fe1ec2030c09`.
+This historical candidate used base `816f42bac74aebfb936ac9fc9b72fe1ec2030c09`.
 Its implementation commit is `40278aa1948cda154f7372c1b0dd893b3865c9f5`.
 Keep issue #4200 open, and leave the existing draft PR #4208 unchanged.
 No workflow, dependency pin, test-quality baseline, `MistHelper.py`, operation registry, or primary-key map changed.
@@ -178,6 +178,102 @@ The current-main workflow fixes remain unchanged, including the WAN browser uplo
 
 The test inventory replaces eight prior unit modules with 13 focused unit-test modules and two browser-test modules.
 All tests used offline or mocked data. No live Mist call, production credential, or production database write occurred.
-These checks do not complete the feature. All 47 tasks remain open.
+These checks do not complete the feature. Of 47 tasks, 12 have direct local proof, eight remain buildable, and 27 remain blocked.
+The table below gives the status and evidence for each task.
 Source temporal, weighting, and p95 semantics remain unverified.
 The existing 13-month history, backfill, retention capacity, and completeness also remain unverified.
+
+### Fresh-main revalidation
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Regression tests | `rtk .venv/bin/python -m pytest -q tests/unit/wan_performance/test_history_repository.py tests/unit/wan_performance/test_calendar_summaries.py tests/unit/wan_performance/test_gateway_insights.py tests/e2e/web_portal/test_wan_performance_live.py` | 160 passed. Two existing pytest warnings remain. |
+| Mist SDK | `rtk .venv/bin/python -m pytest -q tests/integration/test_mistapi_sdk_compatibility.py` | Eight passed. The guard checked 585 calls and found zero known signature failures. |
+| Static checks | `ruff check`, `black --check`, `mypy`, `compileall`, Radon, and Bandit on the WAN package | All passed. Mypy checked 24 source files. |
+| Markdown | `ste-linter --min-score 80` and `markdown-link-check --root .` on the nine changed Markdown files | Scores ranged from 84 to 97. The link scan found zero broken links. |
+| Test-quality preflight | `rtk .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | One passed. The guard read and validated all four required inputs. |
+| Task audit | `rtk .venv/bin/speckit-task-audit --root .` | The repository-wide scan failed on its existing backlog: 3,572 unchecked markers and 36 malformed markers. It listed this feature with 35 unchecked tasks. |
+
+## Current candidate task audit
+
+The current candidate starts from main `2a6a5844698aeb180fea353e0243034890774565`.
+Its starting head was `07b7751fb9e6c0e8d285d2adb9b0273bc5aae4fc`.
+The 47 task IDs below were checked against current code, tests, and evidence.
+`Complete` means the task deliverable has direct local proof.
+`Buildable` means evidence or implementation work remains, with no established external blocker.
+`Blocked` names the exact evidence or owner decision that prevents safe completion.
+
+| Task | Audit | Proof or remaining work |
+| --- | --- | --- |
+| T001 | Complete | `design/research.md` now records pinned source, fresh-main base, candidate start, branch ownership, and absent copying rights. |
+| T002 | Blocked | Preserved commit `d77a900f9ec4db7149f90f324f1ade7772a6243d` contains only the current T001-T047 file. The owner-provided historical T001-T087 records are unavailable. |
+| T003 | Buildable | `design/contracts/parity.md` says its P01-P20 rows are a seed, not an exhaustive inventory. Extend the static inventory without copying protected material. |
+| T004 | Complete | `design/contracts/parity.md` records gateway and organization-stat schemas, timestamps, SDK limits, admission, paging, lease, and cache bounds. |
+| T005 | Complete | `test_live_service.py` and `test_request_admission.py` cover organization scope, admission, and failed writes. The focused feature suite passed. |
+| T006 | Complete | `live_service.py` and `history_repository.py` preserve authorization, configured-store selection, and fail-closed admission. Their regression tests passed. |
+| T007 | Buildable | The overview row is only a seed. Inventory each source control and destination selector in `design/contracts/parity.md`. |
+| T008 | Buildable | The gateway row is only a seed. Inventory identity, panels, and each port and peer transition. |
+| T009 | Buildable | The port row is only a seed. Inventory controls, metrics, and states for every encoded route. |
+| T010 | Buildable | The peer row is only a seed. Inventory tunnel, quality, and state fields from permitted static evidence. |
+| T011 | Complete | `test_wan_performance_offline.py` covers direct routes, encoded paths, scope, and four-journey navigation. |
+| T012 | Blocked E1 | Journey changes must follow the incomplete source inventory. Do not claim source parity from destination tests. |
+| T013 | Blocked E3 | Source capacity, region membership, role history, and complete-hour semantics remain unverified. |
+| T014 | Blocked E3 | Destination tests preserve unknown capacity, but source capacity units and boundaries are not established. |
+| T015 | Blocked E7 | The exact source interval, coverage, and duration rules are unavailable. |
+| T016 | Blocked E7 | Local gap tests pass, but source duration boundaries and continuous-versus-cumulative semantics remain unknown. |
+| T017 | Blocked E4 | Source event definitions, ordering, duplicate policy, flap rule, and availability denominator remain unverified. |
+| T018 | Complete | `test_snapshot_records.py` covers complete and incomplete event states. The full selected suite passed. |
+| T019 | Blocked E3/E4 | Ranking scope, tie rules, roles, and failover classification lack verified source contracts. |
+| T020 | Blocked E3/E4 | Do not calculate primary/secondary or failover results before source role and event rules are known. |
+| T021 | Blocked E3/E4 | Current browser tests cover threshold and sampled-state displays. Source ranking and failover expectations remain unavailable. |
+| T022 | Blocked E3/E4 | Do not wire unverified role, ranking, or availability calculations into presentation pages. |
+| T023 | Blocked E5 | Peer statistics have scalar values and no metric timestamp. Source averaging, maximum, and p95 rules remain unknown. |
+| T024 | Blocked E5 | Poll samples are tested and retained, but they do not prove source quality history or raw-sample percentiles. |
+| T025 | Blocked E6 | SLE score meanings, supported metrics, classifier values, and impact fields are not verified. |
+| T026 | Blocked E6 | Do not add SLE calls or drilldowns without verified score and entity contracts. |
+| T027 | Blocked E3/E7 | Region membership, circuit weights, canonical source hours, and source coverage rules remain unknown. |
+| T028 | Blocked E3/E7 | Local 3h, 12h, 24h, and calendar tests pass. Source aggregation and coverage acceptance remain blocked. |
+| T029 | Blocked E7 | Existing 13-month data, backfill, retention, capacity, and completeness have no proof. |
+| T030 | Blocked E7 | Both stores pass append-only replay tests. No retention or backfill policy is approved. |
+| T031 | Buildable | Source goals name audiences, but the control and summary inventory is incomplete. Keep goals separate from completed source behavior. |
+| T032 | Blocked E1/E3/E6 | Audience filters and exports depend on incomplete source controls, dimensions, and SLE mappings. |
+| T033 | Complete | `design/research.md` records absent written rights and permits descriptive static comparison only. Runtime and visual parity remain blocked. |
+| T034 | Buildable | Add a descriptive layout inventory from permitted static evidence. Protected captures and pixel comparison remain blocked by E2. |
+| T035 | Buildable | Current offline browser tests check selectors and layout. Keyboard and overlap assertions remain absent. |
+| T036 | Blocked E2 | No written rights or approved runtime capture method exists for protected visual comparison. |
+| T037 | Blocked E8 | Static bounds exist, but shared concurrency, retry, stale-state, and optional Redis ownership need evidence. |
+| T038 | Complete | `test_background_refresh.py`, `test_refresh_store.py`, and `test_request_admission.py` cover limits, expiry, repeated requests, and outages. |
+| T039 | Blocked E8 | No verified new refresh-policy failure permits changes to the worker or lease store. |
+| T040 | Complete | `test_wan_performance_live.py` covers stale, missing, invalid-scope, store, session, and API failure states. |
+| T041 | Complete | The quickstart regression command ran mocked live and synthetic journeys with no production credentials. It passed 408 tests. |
+| T042 | Complete | The same 408-test run covered portal smoke, converter routes, websocket routes, and synthetic isolation. No service or port changed. |
+| T043 | Blocked T003 | Source-to-task and source-to-test coverage cannot be complete until the source inventory is exhaustive. |
+| T044 | Blocked | The Spec Kit prerequisite and consistency command requires `pwsh`, which is unavailable. Manual link and writing checks do not replace it. |
+| T045 | Blocked by assignment scope | Local gates can run. Hosted exact-head CI is not authorized before parent review. |
+| T046 | Complete | `documentation/wan-performance.md` and `changelog.d/pr-4208.md` now describe replay, unknown event coverage, gateway scope, and issues #4793-#4795. |
+| T047 | Blocked by assignment scope | Parent review must precede PR metadata or acceptance changes. No PR template or hosted state was changed. |
+
+### Frozen-head defect regressions
+
+The parent reproduced #4793 with the actual SQLite repository and a temporary database.
+The second refresh raised `sqlite3.IntegrityError: UNIQUE constraint failed: wan_performance_samples.identity, wan_performance_samples.sampled_at`.
+`test_sqlite_api_sample_replay_keeps_one_original_sample` now proves an unchanged replay is a no-op.
+`test_sqlite_rejects_changed_api_sample_without_replacing_prior_rows` proves changed data aborts the hourly and sample transaction.
+`test_arango_api_sample_replay_is_idempotent_and_rejects_changes` proves both Arango replay outcomes through the transactional repository boundary.
+
+The parent reproduced #4794 with actual domain modules.
+`CalendarSummaries.build` raised `KeyError('flap_count')` when an event hour and an ordinary poll hour shared one circuit.
+The current summary excludes records without known flap evidence and keeps missing duration and flap values unknown.
+Mixed, missing, and known-zero cases pass in `test_calendar_summaries.py`.
+
+The parent reproduced #4795 with actual domain modules and a mock repository.
+Gateway history returned one summary and made one read before ordinary refresh, then returned no summary and made no read afterward.
+The current route resolves one full gateway identity from circuit or peer rows, with organization and site scope.
+`test_gateway_history_remains_visible_after_ordinary_refresh` and `test_gateway_history_rejects_ambiguous_or_foreign_gateway_identity` pass.
+
+### Current local validation
+
+The quickstart command passed 408 tests with two existing pytest deprecation warnings.
+The earlier focused run passed 159 tests before the ambiguity regression was added.
+Re-run focused tests and all applicable style, type, link, STE, and test-quality gates after the final edits.
+Do not treat these local results as hosted CI or source acceptance.

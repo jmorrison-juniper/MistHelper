@@ -19,7 +19,7 @@ from src.interfaces.wan_performance.domain.measurement import (
     MeasurementIdentity,
     SampleMeasurement,
 )
-from src.interfaces.wan_performance.integration.record_codec import RecordCodec, SampleRecordCodec
+from src.interfaces.wan_performance.integration.record_codec import RecordCodec, SampleRecordCodec, SampleReplayPolicy
 
 logger = logging.getLogger(__name__)
 HOURS_COLLECTION = "wan_performance_hours"
@@ -58,6 +58,7 @@ class ArangoHistory:
             }
             for record in records
         ]
+        unique_samples = SampleReplayPolicy.unique(samples)
         sample_documents = [
             {
                 "_key": hashlib.sha256(json.dumps(sample.natural_key).encode()).hexdigest(),
@@ -65,25 +66,38 @@ class ArangoHistory:
                 "sampled_at": sample.sampled_at_utc.isoformat(),
                 "payload": SampleRecordCodec.encode(sample),
             }
-            for sample in samples
+            for sample in unique_samples
         ]
         logger.info(
-            "Write %d hourly records and %d raw samples to the configured ArangoDB store.",
+            "Write %d hourly records and check %d raw sample replays in the configured ArangoDB store.",
             len(documents),
             len(sample_documents),
         )
         transaction = self.database.begin_transaction(write=[HOURS_COLLECTION, SAMPLES_COLLECTION])
         try:
+            sample_collection = transaction.collection(SAMPLES_COLLECTION)
+            samples_to_insert = []
+            for document, sample in zip(sample_documents, unique_samples, strict=True):  # Match keys to source samples.
+                existing = sample_collection.get(document["_key"])  # Read the stored document before a replay decision.
+                if existing is None:
+                    samples_to_insert.append(document)  # Keep a new source sample for the append step.
+                    continue
+                if not isinstance(existing, dict):  # Reject jobs that cannot prove payload equality.
+                    raise TypeError("ArangoDB returned a non-document result for a WAN sample.")
+                payload = existing.get("payload")  # Compare source data while excluding collection time.
+                if not isinstance(payload, str):
+                    raise ValueError("Stored WAN sample payload must be a string.")  # Fail closed on invalid evidence.
+                SampleReplayPolicy.validate_existing(payload, sample)  # Reject changed data at the same natural key.
             for document in documents:
                 transaction.collection(HOURS_COLLECTION).insert(document, overwrite=True, overwrite_mode="replace")
-            for document in sample_documents:
-                transaction.collection(SAMPLES_COLLECTION).insert(document)
+            for document in samples_to_insert:
+                sample_collection.insert(document)
             transaction.commit_transaction()
-        except (ArangoError, OSError) as error:
+        except (ArangoError, OSError, ValueError, TypeError, KeyError) as error:
             transaction.abort_transaction()
             logger.exception("WAN ArangoDB history transaction failed: %s.", error)
             raise
-        logger.debug("Committed %d hourly records and %d raw samples.", len(documents), len(sample_documents))
+        logger.debug("Committed %d hourly records and checked %d raw samples.", len(documents), len(sample_documents))
 
     def read(self, identity: MeasurementIdentity, start: datetime, end: datetime) -> tuple[HourlyMeasurement, ...]:
         """Read a thirteen-month half-open UTC window through the public AQL interface."""

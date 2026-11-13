@@ -11,15 +11,15 @@ If existing behavior passes, record that evidence instead of adding an unnecessa
 
 ## Phase 1 - Setup and preservation
 
-- [ ] T001 Record current source, destination, main, ownership, and copying-rights baselines in design/research.md.
+- [X] T001 Record current source, destination, main, ownership, and copying-rights baselines in design/research.md.
 - [ ] T002 Reconcile owner-provided historical T001-T087 records into an old-to-new mapping in analysis.md without changing historical states.
 - [ ] T003 Complete the exhaustive inventory in design/contracts/parity.md from pinned docs, active pages, and tests, using D01-D15 in design/contracts/discovery.md.
-- [ ] T004 Complete SDK field, timestamp, limitation, and refresh prerequisites in design/contracts/parity.md, using the static signature findings in design/contracts/discovery.md.
+- [X] T004 Complete SDK field, timestamp, limitation, and refresh prerequisites in design/contracts/parity.md, using the static signature findings in design/contracts/discovery.md.
 
 ## Phase 2 - Foundation
 
-- [ ] T005 Write failing authorization, origin isolation, scoped storage, and admission tests in tests/unit/wan_performance/test_live_service.py.
-- [ ] T006 Repair only T005 failures in src/interfaces/wan_performance/collection/live_service.py and src/interfaces/wan_performance/integration/history_repository.py after the foundation portion of E8 passes.
+- [X] T005 Write failing authorization, origin isolation, scoped storage, and admission tests in tests/unit/wan_performance/test_live_service.py.
+- [X] T006 Repair only T005 failures in src/interfaces/wan_performance/collection/live_service.py and src/interfaces/wan_performance/integration/history_repository.py after the foundation portion of E8 passes.
 
 Goal: preserve host safety before extending metrics.
 Independent test: denied and synthetic requests perform no live collection or live writes.
@@ -30,7 +30,7 @@ Independent test: denied and synthetic requests perform no live collection or li
 - [ ] T008 [US1] Map every gateway identity, panel, port, and peer transition in design/contracts/parity.md.
 - [ ] T009 [US1] Map every encoded port route, control, metric, and state in design/contracts/parity.md.
 - [ ] T010 [US1] Map every peer route, tunnel field, quality metric, and state in design/contracts/parity.md.
-- [ ] T011 [US1] Add failing four-journey navigation, query, scope, and direct-link assertions in tests/e2e/web_portal/test_wan_performance_offline.py.
+- [X] T011 [US1] Add failing four-journey navigation, query, scope, and direct-link assertions in tests/e2e/web_portal/test_wan_performance_offline.py.
 - [ ] T012 [US1] Repair verified journey differences in src/interfaces/wan_performance/presentation/ after T007-T011 and E1 pass.
 
 Goal: prove equivalent user actions rather than page-load success.
@@ -43,7 +43,7 @@ Independent test: complete all source-mapped transitions with correct identity a
 - [ ] T015 [US2] Define interval coverage, gaps, continuous runs, cumulative duration, and configurable thresholds in design/contracts/parity.md.
 - [ ] T016 [US2] Test duration boundaries and missing intervals in tests/unit/wan_performance/test_calendar_summaries.py before repairing src/interfaces/wan_performance/domain/summary.py after the interval portion of E7 passes.
 - [ ] T017 [US2] Verify event types, transition ordering, duplicate handling, flap counting, and availability denominator in design/contracts/parity.md.
-- [ ] T018 [US2] Test status and availability with complete and incomplete events in tests/unit/wan_performance/test_snapshot_records.py before repairing src/interfaces/wan_performance/collection/snapshot_records.py after E4 passes.
+- [X] T018 [US2] Test status and availability with complete and incomplete events in tests/unit/wan_performance/test_snapshot_records.py before repairing src/interfaces/wan_performance/collection/snapshot_records.py after E4 passes.
 - [ ] T019 [US2] Verify ranking scope, ties, top-N limits, primary/secondary comparison, and failover classification in design/contracts/parity.md.
 - [ ] T020 [US2] Test ranking and failover scenarios in tests/unit/wan_performance/test_domain.py before repairing src/interfaces/wan_performance/domain/summary.py after E3-E4 pass. Unknown role or region prevents role or region aggregation.
 - [ ] T021 [US2] Add failing circuit, threshold, failure, and availability browser assertions in tests/e2e/web_portal/test_wan_performance_live.py.
@@ -76,7 +76,7 @@ Independent test: each approved scope and window matches independent results wit
 
 ## Phase 7 - US1: Appearance acceptance
 
-- [ ] T033 [US1] Record written rights or the explicit runtime-comparison blocker and approved evidence method in design/research.md.
+- [X] T033 [US1] Record written rights or the explicit runtime-comparison blocker and approved evidence method in design/research.md.
 - [ ] T034 [US1] Inventory layout, typography, colors, chart semantics, table behavior, and responsive differences in design/contracts/parity.md.
 - [ ] T035 [US1] Add failing layout, keyboard, overlap, and selector assertions in tests/e2e/web_portal/test_wan_performance_offline.py.
 - [ ] T036 [US1] Repair approved visual differences in web_portal/static/css/wan_performance.css and src/interfaces/wan_performance/presentation/templates/wan_performance/ after T033-T035 pass.
@@ -87,11 +87,11 @@ Independent test: every required visual row has approved evidence or a named blo
 ## Phase 8 - US5: Safety, refresh, and failures
 
 - [ ] T037 [US5] Verify shared refresh bounds, concurrency, retry budgets, stale states, and optional Redis ownership in design/contracts/parity.md.
-- [ ] T038 [US5] Test request limits, repeated users, expiry, and outage errors in tests/unit/wan_performance/test_background_refresh.py and tests/unit/wan_performance/test_refresh_store.py.
+- [X] T038 [US5] Test request limits, repeated users, expiry, and outage errors in tests/unit/wan_performance/test_background_refresh.py and tests/unit/wan_performance/test_refresh_store.py.
 - [ ] T039 [US5] Repair verified refresh failures in src/interfaces/wan_performance/background_refresh.py and src/interfaces/wan_performance/integration/refresh_store.py after E8 and T038 pass.
-- [ ] T040 [US5] Add browser denied-access, missing-data, stale-data, invalid-scope, storage-error, and API-error assertions in tests/e2e/web_portal/test_wan_performance_live.py.
-- [ ] T041 [US5] Run complete synthetic and mocked live journeys with external requests blocked and retained redacted evidence using design/quickstart.md.
-- [ ] T042 [US5] Verify unchanged host navigation, existing portal journeys, no extra services, and synthetic isolation in design/quickstart.md.
+- [X] T040 [US5] Add browser denied-access, missing-data, stale-data, invalid-scope, storage-error, and API-error assertions in tests/e2e/web_portal/test_wan_performance_live.py.
+- [X] T041 [US5] Run complete synthetic and mocked live journeys with external requests blocked and retained redacted evidence using design/quickstart.md.
+- [X] T042 [US5] Verify unchanged host navigation, existing portal journeys, no extra services, and synthetic isolation in design/quickstart.md.
 
 Goal: complete safe workflows within the existing application.
 Independent test: negative cases stop safely and unrelated portal journeys still pass.
@@ -101,7 +101,7 @@ Independent test: negative cases stop safely and unrelated portal journeys still
 - [ ] T043 Verify every FR/SC and every source inventory row has task, test, evidence, and decision coverage in analysis.md.
 - [ ] T044 Run Spec Kit consistency, task format, link, structure, and STE checks and record exact results in analysis.md.
 - [ ] T045 Run applicable local gates and exact-head CI after ownership reconciliation using design/quickstart.md.
-- [ ] T046 Update documentation/wan-performance.md and changelog.d/pr-4208.md with verified behavior and unresolved blockers.
+- [X] T046 Update documentation/wan-performance.md and changelog.d/pr-4208.md with verified behavior and unresolved blockers.
 - [ ] T047 Prepare owner acceptance evidence in analysis.md and the existing PR template without enabling auto-merge or closing issue #4200.
 
 ## Dependencies and execution order

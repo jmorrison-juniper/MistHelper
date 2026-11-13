@@ -920,3 +920,79 @@ def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_p
         )
     assert store.acquire.return_value.check.call_count == 8
     store.publish.assert_called_once_with("org-one", snapshot)
+
+
+def test_repeated_selected_port_refresh_deduplicates_api_sample_times(tmp_path):
+    """Persist API timestamps once across repeat refreshes and keep poll samples distinct."""
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock, patch
+
+    from src.interfaces.wan_performance.collection.live_service import LiveService
+    from src.interfaces.wan_performance.domain.identity import CircuitIdentity
+    from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
+
+    path = tmp_path / "application.db"
+    sqlite3.connect(path).close()
+    repository = SQLiteHistory(path)
+    device, metadata, series = responses("10m")
+    target = CircuitIdentity(TARGET, "ge-0/0/1")
+    store = MagicMock()
+    store.cached.return_value = {
+        "org_id": "org-one",
+        "provenance": "live",
+        "collected_at_utc": datetime.now(UTC).isoformat(),
+        "ports": [
+            {
+                "org_id": "org-one",
+                "site_id": "site-one",
+                "mac": TARGET.gateway_id,
+                "port_id": target.port_name,
+                "speed": 100,
+                "up": True,
+            }
+        ],
+        "peers": [],
+    }
+    source_end = datetime.fromtimestamp(series.data["end"], UTC)
+    collection_times = (source_end + timedelta(minutes=1), source_end + timedelta(minutes=2))
+
+    class SnapshotClock(datetime):
+        """Keep SDK timestamp parsing intact while fixing the requested window."""
+
+        @classmethod
+        def now(cls, tz=None):
+            return source_end
+
+    with (
+        patch("src.interfaces.wan_performance.collection.snapshot_client.datetime", SnapshotClock),
+        patch(
+            "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
+            return_value=SimpleNamespace(status_code=200, data=[device]),
+        ),
+        patch(
+            "src.interfaces.wan_performance.collection.snapshot_client.listInsightMetrics",
+            return_value=SimpleNamespace(status_code=200, data=metadata),
+        ),
+        patch(
+            "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
+            return_value=series,
+        ) as metric_request,
+        patch("src.interfaces.wan_performance.collection.live_service.datetime") as poll_clock,
+    ):
+        poll_clock.now.side_effect = collection_times
+        service = LiveService(MagicMock(), "org-one", store, repository)
+        service.refresh_port(target)
+        service.refresh_port(target)
+
+    start = datetime.fromtimestamp(series.data["start"], UTC)
+    samples = repository.read_samples(target, start, collection_times[-1] + timedelta(seconds=1))
+    api_samples = tuple(sample for sample in samples if sample.timestamp_source == "api")
+    poll_samples = tuple(sample for sample in samples if sample.timestamp_source == "poll")
+
+    assert metric_request.call_count == 4
+    assert len(api_samples) == 6
+    assert len({sample.sampled_at_utc for sample in api_samples}) == 6
+    assert all(sample.collected_at_utc == collection_times[0] for sample in api_samples)
+    assert len(poll_samples) == 2
+    assert {sample.sampled_at_utc for sample in poll_samples} == set(collection_times)

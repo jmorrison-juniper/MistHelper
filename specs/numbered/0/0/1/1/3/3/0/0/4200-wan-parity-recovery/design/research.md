@@ -57,6 +57,25 @@ Those mechanisms do not prove historical completeness, retention, or safe multiw
 
 No product changes, live Mist requests, store connections, source execution, or protected captures accompanied this discovery.
 
+## Fresh-main reconstruction baseline
+
+The source reference remains `jmorrison-juniper/MistWANPerformance` at `2d1c2199fa1e31c129ef1e051c5389349a207785`.
+The destination candidate started from main commit `2a6a5844698aeb180fea353e0243034890774565`.
+Its initial local candidate head was `07b7751fb9e6c0e8d285d2adb9b0273bc5aae4fc`.
+The preserved original PR branch remains at `fbb23f8a2348e6840caf479dc10d8841635ea91e`.
+The original owner preserved local head `d77a900f9ec4db7149f90f324f1ade7772a6243d`.
+That branch has 13 merge conflicts, including 11 add/add conflicts.
+This reconstruction does not edit the original branch or worktree.
+
+PR #4358 merged at `2a6a5844698aeb180fea353e0243034890774565`.
+PR #4208 remains the existing draft and is the only open PR for this feature.
+This assignment owns only the local candidate and does not change PR metadata, shared workflows, dependency pins, or host files.
+
+The source repository has no license field, and no written copying rights were supplied.
+Use pinned, read-only descriptions and independently authored tests as the evidence method.
+Do not run the source or copy its code, images, screenshots, or fixtures.
+This method does not prove runtime or visual parity.
+
 ## Current destination observations
 
 The local product matches remote PR head `1a408c9511d8b32662d201068f2f54196f643450`.

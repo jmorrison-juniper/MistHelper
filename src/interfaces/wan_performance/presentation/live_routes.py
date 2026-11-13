@@ -21,7 +21,7 @@ from src.interfaces.wan_performance.domain.identity import (
     PeerPathIdentity,
     SiteIdentity,
 )
-from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement
+from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MeasurementIdentity
 from src.interfaces.wan_performance.domain.summary import CalendarSummaries, PeriodSummary
 from src.interfaces.wan_performance.integration.history_repository import HistoryRepository, HistorySelection
 from src.interfaces.wan_performance.integration.refresh_store import RefreshStore
@@ -41,20 +41,45 @@ class LiveHistory:
         """Read bounded persisted observations only for a selected detail identity."""
         if kind not in {"gateway", "port", "peer"}:
             return (), None
-        if kind == "gateway":
-            records = tuple(record for record in records if isinstance(record.identity, GatewayIdentity))
-        if len(records) != 1:
-            return (), "Select one port or peer path to read history."
+        identity = LiveHistory._select_identity(service, records, kind)
+        if identity is None:
+            message = (
+                "Select records for exactly one full gateway identity to read history."
+                if kind == "gateway"
+                else "Select one port or peer path to read history."
+            )
+            return (), message
         if service.history is None:
             return (), "History is unavailable. The selected application store is not available."
         try:
             end = datetime.now(UTC)
             start, end = CalendarWindow.thirteen_months_ending(end)
-            history = service.history.read(records[0].identity, start, end)
-            return CalendarSummaries.build(history, records[0].identity), None
+            history = service.history.read(identity, start, end)
+            return CalendarSummaries.build(history, identity), None
         except STORE_ERRORS:
             logger.exception("WAN history is unavailable for the selected identity.")
             return (), "History is unavailable. The selected application store did not return valid records."
+
+    @staticmethod
+    def _select_identity(
+        service: LiveService, records: tuple[HourlyMeasurement, ...], kind: str
+    ) -> MeasurementIdentity | None:
+        """Resolve one tenant-scoped gateway from gateway, circuit, or peer rows."""
+        if kind != "gateway":
+            if len(records) != 1:
+                return None
+            selected = records[0].identity
+            gateway = selected if isinstance(selected, GatewayIdentity) else selected.gateway
+            return selected if gateway.site.org_id == service.org_id else None
+        gateways = {
+            record.identity if isinstance(record.identity, GatewayIdentity) else record.identity.gateway
+            for record in records
+            if isinstance(record.identity, (GatewayIdentity, CircuitIdentity, PeerPathIdentity))
+        }
+        if len(gateways) != 1:
+            return None
+        gateway = next(iter(gateways))
+        return gateway if gateway.site.org_id == service.org_id else None
 
 
 class LivePages:

@@ -66,6 +66,26 @@ Store each selected peer scalar at poll time and keep `last_seen` separate.
 Reject duplicate rows for one full peer identity because the schema gives no metric timestamp.
 These contracts support current scalar samples, not source time series, complete history, or backfill.
 
+### Verified gateway insight fields
+
+The installed SDK exposes `getSiteInsightMetricsForGateway(mist_session, site_id, device_id, metrics, ...)`.
+Request `rx_bps` and `tx_bps` in separate calls.
+The OpenAPI response field `response_device_metrics.results` contains string or integer values.
+The `rt` field contains string timestamps aligned by array index with `results`.
+The schema does not require `rt`, so a missing or misaligned timestamp cannot become a historical sample.
+Preserve the API timestamp as sample time and keep collection time as separate poll metadata.
+Do not infer sample values, units, or coverage when the response omits required evidence.
+
+### Existing refresh and isolation prerequisites
+
+The existing live service reads the server-selected organization and admitted API session.
+The request ledger accounts for each send against the authentication fingerprint and organization.
+Its configured ceiling is 5,000 requests per hour, and a configured Redis outage fails closed.
+Each snapshot endpoint reads at most five pages of 100 rows and marks partial coverage.
+The refresh lease lasts 300 seconds, and the snapshot cache expires after 3,600 seconds.
+These limits describe the current integration and do not prove complete inventory or justify a new retry policy.
+Keep synthetic previews separate from collection, live storage, and live status.
+
 ## Browser acceptance
 
 Complete overview to gateway to port to gateway to peer to overview.

@@ -140,11 +140,15 @@
                 <h4>Link-event availability</h4>
                 <p>{{ summary.link_event_summary.complete_hours }} complete event windows of
                     {{ summary.link_event_summary.expected_hours }} expected hours.
+                    {% if summary.link_event_summary.up_minutes is not none and summary.link_event_summary.down_minutes is not none %}
                     Known state covers {{ summary.link_event_summary.up_minutes + summary.link_event_summary.down_minutes }} minutes
                     in {{ summary.link_event_summary.known_hours }} hours.
-                    Up: {{ summary.link_event_summary.up_minutes }} minutes.
-                    Down: {{ summary.link_event_summary.down_minutes }} minutes.
-                    Matching transitions: {{ summary.link_event_summary.flap_count }}.
+                    {% else %}
+                    Known state duration: Unknown. No complete duration hours exist.
+                    {% endif %}
+                    Up: {{ summary.link_event_summary.up_minutes if summary.link_event_summary.up_minutes is not none else "Unknown" }} minutes.
+                    Down: {{ summary.link_event_summary.down_minutes if summary.link_event_summary.down_minutes is not none else "Unknown" }} minutes.
+                    Matching transitions: {{ summary.link_event_summary.flap_count if summary.link_event_summary.flap_count is not none else "Unknown" }}.
                     Up percentage of known minutes:
                     {{ summary.link_event_summary.observed_up_percent if summary.link_event_summary.observed_up_percent is not none else "Unknown" }}.</p>
                 <p>Time before the first event remains unknown.

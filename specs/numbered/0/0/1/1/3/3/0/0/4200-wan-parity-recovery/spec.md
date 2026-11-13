@@ -97,7 +97,7 @@ Users need consistent authorization, offline isolation, errors, and bounded refr
 - **FR-003**: Preserve the four journeys, identifiers, filters, links, and visual hierarchy through reviewed destination equivalents.
 - **FR-004**: Define utilization, capacity, congestion, configurable thresholds, and continuous versus cumulative duration before implementation.
 - **FR-005**: Define status transitions, flap counting, availability, primary/secondary roles, failover, and ranking before implementation.
-- **FR-006**: Define loss, latency, jitter, timestamps, mean, maximum, p95, sampling, and missing-data rules before implementation. Keep each poll as a raw sample with full identity and a UTC timestamp. Derive hourly display values from raw samples without replacing them.
+- **FR-006**: Define loss, latency, jitter, timestamps, mean, maximum, p95, sampling, and missing-data rules before implementation. Store each sample by full identity and source timestamp. Treat an unchanged replay as a no-op, keep its first collection time, and reject changed source data without replacing the sample. Keep scalar poll observations distinct when their timestamps differ.
 - **FR-007**: Define SLE score meaning, classifiers, impact fields, entity mappings, and time scope before implementation.
 - **FR-008**: Define region, site, circuit, hourly aggregation, short windows, calendar boundaries, weighting, and coverage. Keep the existing hourly projection rules unchanged. Keep raw samples separate, and do not claim complete coverage.
 - **FR-009**: Define 13-month history, backfill, retention, capacity, completeness, and absent-history behavior without a second database. Keep this contract open until evidence proves those properties. Do not claim 13-month history without proof. Preserve existing rows and do not expire samples before a retention policy is approved.
@@ -120,7 +120,7 @@ This specification authorizes no new transport or live request.
 
 - **Comparison row**: Source revision, journey, element, classification, destination, contract, test, evidence, and decision.
 - **Observation**: Scoped identity, measurement, unit, timestamp, origin, and coverage.
-- **Raw sample**: Full identity, metric, unit, UTC sample timestamp, timestamp source, origin, and coverage. Each poll creates a distinct sample.
+- **Raw sample**: Full identity, metric, unit, UTC sample timestamp, collection time, timestamp source, origin, and coverage. Distinct poll timestamps remain distinct samples. Replays use full identity and sample time. Keep unchanged source data once, and reject changed data at an existing key.
 - **Circuit membership**: Region, site, gateway, port, role, capacity, and effective interval.
 - **Reporting window**: UTC boundaries, grain, sample coverage, and calculation policy.
 - **Acceptance decision**: Reviewer, evidence revision, result, deviation, and approval.

@@ -13,7 +13,7 @@ from src.interfaces.wan_performance.domain.measurement import (
     MeasurementIdentity,
     SampleMeasurement,
 )
-from src.interfaces.wan_performance.integration.record_codec import RecordCodec, SampleRecordCodec
+from src.interfaces.wan_performance.integration.record_codec import RecordCodec, SampleRecordCodec, SampleReplayPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -31,24 +31,25 @@ class SQLiteHistory:
 
     def upsert(self, records: tuple[HourlyMeasurement, ...], samples: tuple[SampleMeasurement, ...] = ()) -> None:
         """Validate both batches before atomic hourly updates and sample appends."""
-        rows = [
-            (
-                json.dumps(record.identity.natural_key),
-                record.hour_start_utc.isoformat(),
-                RecordCodec.encode(record),
-            )
-            for record in records
-        ]
-        sample_rows = [
-            (
-                json.dumps(sample.identity.natural_key),
-                sample.sampled_at_utc.isoformat(),
-                SampleRecordCodec.encode(sample),
-            )
-            for sample in samples
-        ]
-        logger.info("Write %d hourly records and %d raw samples to SQLite.", len(rows), len(sample_rows))
         try:
+            rows = [
+                (
+                    json.dumps(record.identity.natural_key),
+                    record.hour_start_utc.isoformat(),
+                    RecordCodec.encode(record),
+                )
+                for record in records
+            ]
+            unique_samples = SampleReplayPolicy.unique(samples)
+            sample_rows = [
+                (
+                    json.dumps(sample.identity.natural_key),
+                    sample.sampled_at_utc.isoformat(),
+                    SampleRecordCodec.encode(sample),
+                )
+                for sample in unique_samples
+            ]
+            logger.info("Write %d hourly records and check %d raw sample replays.", len(rows), len(sample_rows))
             with closing(self._connect()) as connection, connection:
                 connection.execute("BEGIN IMMEDIATE")
                 connection.execute(
@@ -60,6 +61,16 @@ class SQLiteHistory:
                     "(identity TEXT NOT NULL, sampled_at TEXT NOT NULL, payload TEXT NOT NULL, "
                     "PRIMARY KEY(identity, sampled_at))"
                 )
+                samples_to_insert = []
+                for sample, row in zip(unique_samples, sample_rows, strict=True):
+                    existing = connection.execute(
+                        "SELECT payload FROM wan_performance_samples WHERE identity=? AND sampled_at=?",
+                        row[:2],
+                    ).fetchone()
+                    if existing is None:
+                        samples_to_insert.append(row)
+                    else:
+                        SampleReplayPolicy.validate_existing(existing[0], sample)
                 connection.executemany(
                     "INSERT INTO wan_performance_hours VALUES (?, ?, ?) "
                     "ON CONFLICT(identity,hour) DO UPDATE SET payload=excluded.payload",
@@ -67,12 +78,12 @@ class SQLiteHistory:
                 )
                 connection.executemany(
                     "INSERT INTO wan_performance_samples VALUES (?, ?, ?)",
-                    sample_rows,
+                    samples_to_insert,
                 )
-        except sqlite3.Error:
+        except (sqlite3.Error, ValueError, TypeError, KeyError):
             logger.exception("WAN SQLite history write failed.")
             raise
-        logger.debug("Committed %d hourly records and %d raw samples.", len(rows), len(sample_rows))
+        logger.debug("Committed %d hourly records and checked %d raw samples.", len(rows), len(sample_rows))
 
     def read(self, identity: MeasurementIdentity, start: datetime, end: datetime) -> tuple[HourlyMeasurement, ...]:
         """Read one identity in a half-open UTC window, bounded to thirteen months."""

@@ -192,3 +192,37 @@ class SampleRecordCodec:
             ):
                 raise ValueError("Stored raw fields must contain named numeric values or None.")
         return value
+
+
+class SampleReplayPolicy:
+    """Keep immutable source samples idempotent without masking changed data."""
+
+    @classmethod
+    def unique(cls, samples: tuple[SampleMeasurement, ...]) -> tuple[SampleMeasurement, ...]:
+        """Remove identical natural-key replays from one pending batch."""
+        selected: dict[tuple[str, ...], SampleMeasurement] = {}
+        for sample in samples:
+            previous = selected.get(sample.natural_key)
+            if previous is None:
+                selected[sample.natural_key] = sample
+            else:
+                cls._require_same_source_data(previous, sample)
+        return tuple(selected.values())
+
+    @classmethod
+    def validate_existing(cls, payload: str, sample: SampleMeasurement) -> None:
+        """Accept unchanged stored data and reject a changed source payload."""
+        cls._require_same_source_data(SampleRecordCodec.decode(payload), sample)
+
+    @classmethod
+    def _require_same_source_data(cls, previous: SampleMeasurement, current: SampleMeasurement) -> None:
+        """Ignore only collection time because an API sample may recur on later polls."""
+        if cls._source_payload(previous) != cls._source_payload(current):
+            raise ValueError("WAN sample replay conflicts with stored source data for the same natural key.")
+
+    @staticmethod
+    def _source_payload(sample: SampleMeasurement) -> str:
+        """Compare every persisted source field except its later collection time."""
+        payload = sample.to_dict()
+        payload.pop("collected_at_utc")
+        return json.dumps(payload, sort_keys=True, allow_nan=False)
