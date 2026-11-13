@@ -14,7 +14,7 @@ The future implementation tasks remain unchecked.
 
 ## Technical Context
 
-**Language/Version**: Python 3.13 or later. Current worktree interpreter: 3.13.13.
+**Language/Version**: Python 3.15 or later. Current worktree interpreter: 3.15.2.
 
 **Primary Dependencies**: Existing Flask portal, CSRF protection, `mistapi` 0.64.1, and existing portal theme services.
 

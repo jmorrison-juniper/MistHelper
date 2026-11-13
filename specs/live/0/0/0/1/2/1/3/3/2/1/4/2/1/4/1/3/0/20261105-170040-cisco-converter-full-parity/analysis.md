@@ -207,3 +207,33 @@ This validation confirms the existing converter baseline and documentation links
 It does not prove full converter parity or authorize implementation or cloud use.
 Legal review, verified API payloads and mappings, integration ownership, cloud-owner
 approval, operator authorization, storage and recovery design, and full-parity tests remain open.
+
+## Local Reconciliation on 2026-11-13
+
+The local reconciliation uses main commit `d50172f33f8fdbae14b769851e4f34a4a812de6c`.
+The original two PR commits apply without conflicts.
+Their patches match the original PR commits in `git range-diff`.
+The plan now states the Python 3.15 minimum from the current constitution and `pyproject.toml`.
+The older validation entries above describe their recorded revisions, not current validation.
+
+The converter model change since the prior base changes a type annotation only.
+Portal configuration changes add type annotations.
+The data browser changes its JSON error handling.
+The converter routes, shared portal registration, navigation, and OpenAPI file did not change.
+These comparisons do not approve private storage or operator identity.
+
+The current offline checkpoint in [issue #4634](https://github.com/jmorrison-juniper/MistHelper/issues/4634)
+does not complete T003.
+The scope of `deleteOrgServicePolicy` remains undecided.
+The 21 listed write operations remain candidates, not an exhaustive authorization.
+Each unverified or unlisted operation remains blocked.
+
+The current converter baseline and structure command examined 74 tests.
+It passed with two pytest deprecation warnings.
+The STE check read ten documents and skipped none.
+Each score was at least 93.
+The Markdown link check read ten tracked files and found zero broken links.
+The native PowerShell prerequisite check could not run because `pwsh` is unavailable.
+All 33 implementation tasks and all product acceptance criteria remain incomplete.
+Issue #4224 remains open.
+This plan does not authorize implementation, release, or a live write.
