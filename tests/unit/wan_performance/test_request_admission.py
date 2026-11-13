@@ -17,6 +17,16 @@ def request():
     return prepared
 
 
+def site_request() -> PreparedRequest:
+    """Build a site-scoped test request without a tenant in its URL."""
+    prepared = PreparedRequest()  # Keep the request local and offline.
+    prepared.prepare(  # Exercise the site endpoint that lacks an organization path segment.
+        method="GET", url="https://api.invalid/api/v1/sites/site-one/stats/devices"
+    )
+    prepared.headers["Authorization"] = "Token independent-test-placeholder"  # Use a non-production credential.
+    return prepared  # Return the request shape that needs selected tenant context.
+
+
 def test_transport_admits_every_send_and_hashes_credential():
     """Count each actual attempt rather than each logical SDK call."""
     redis = MagicMock()
@@ -201,3 +211,45 @@ def test_actual_sdk_normal_and_paginated_calls_reach_admitted_transport(executio
     assert result == [{"id": "first"}, {"id": "second"}]
     assert send.call_count == client.eval.call_count == 2
     assert {call.args[3] for call in client.eval.call_args_list} == {"misthelper:api:v1:org:org-one"}
+
+
+def test_site_request_uses_the_selected_organization_context() -> None:
+    """Apply the selected organization ceiling to a site-scoped SDK request."""
+    from types import SimpleNamespace  # Model the active application context without global state.
+
+    from src.foundation.runtime.config.source_dependency_resolver import (
+        SourceDependencyResolver,  # Read the active organization from its source owner.
+    )
+
+    client = MagicMock()  # Keep quota admission separate from Redis.
+    client.eval.return_value = 1  # Admit the local quota reservation.
+    context = SimpleNamespace(org_id="org-selected")  # Model the active application context.
+    with patch.object(  # Supply the selected organization at the request boundary.
+        SourceDependencyResolver, "_active_context", return_value=context
+    ):
+        RequestLedger(client).admit(site_request())  # Exercise the shared transport admission path.
+
+    call = client.eval.call_args  # Capture the quota reservation arguments.
+    assert call.args[1] == 2  # Count both credential and selected-organization buckets.
+    assert call.args[3] == "misthelper:api:v1:org:org-selected"  # Preserve tenant accounting.
+
+
+def test_site_request_without_organization_context_fails_closed() -> None:
+    """Refuse an unscoped site request before reserving shared quota."""
+    from types import SimpleNamespace  # Model the active application context without global state.
+
+    from src.foundation.runtime.config.source_dependency_resolver import (
+        SourceDependencyResolver,  # Read the active organization from its source owner.
+    )
+
+    client = MagicMock()  # Keep quota admission separate from Redis.
+    context = SimpleNamespace(org_id=None)  # Model an application context without a selected tenant.
+    with patch.object(  # Supply the missing organization at the request boundary.
+        SourceDependencyResolver, "_active_context", return_value=context
+    ):
+        with pytest.raises(  # Require explicit failure before quota or network activity.
+            ConnectionError, match="selected organization"
+        ):
+            RequestLedger(client).admit(site_request())  # Reject the request before Redis or HTTP.
+
+    client.eval.assert_not_called()  # Do not record a request with unknown tenant scope.
