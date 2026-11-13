@@ -1,10 +1,10 @@
-"""Cross-org WAN/gateway config migration manager extracted from MistHelper menu 176/177.
+"""Cross-org WAN/gateway config migration manager used by MistHelper menu 58 and 187.
 
 Provides :class:`OrgConfigMigrationManager`, the class that owns the export and
-import workflows for cross-org migration bundles. The exporter (menu 176)
+import workflows for cross-org migration bundles. The exporter (menu 58)
 serializes six config types (networks, services, VPNs, gateway templates,
 device profiles, service policies) into a timestamped JSON bundle. The
-importer (menu 177) loads a bundle into a destination org with conflict
+importer (menu 187) loads a bundle into a destination org with conflict
 detection (name-match plus IP/subnet overlap) and dependency-ordered
 creation with cross-reference ID remapping.
 
@@ -31,8 +31,8 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     """Export and import org-level WAN/gateway configuration for cross-org migration.
 
-    Menu 176: Export 6 config types to a timestamped JSON bundle.
-    Menu 177: Import a bundle into the current org with conflict detection.
+    Menu 58: Export 6 config types to a timestamped JSON bundle.
+    Menu 187: Import a bundle into the current org with conflict detection.
     """
 
     STRIP_FIELDS = frozenset(  # Fields to strip before import
@@ -101,17 +101,17 @@ class OrgConfigMigrationManager:  # Org config migration manager.
     # ------------------------------------------------------------------
 
     def export_config(self) -> None:  # Export the org config.
-        """Menu 176: Export org WAN/gateway config to a JSON bundle."""
-        logger.info("Menu 176: Starting org config export")  # Log operation start for traceability
+        """Menu 58: Export org WAN/gateway config to a JSON bundle."""
+        logger.info("Menu 58: Starting org config export")  # Log operation start for traceability
         self.org_id = self.org_id_fn()  # Resolve current org ID from cache or user prompt
         org_name = self._get_org_name()  # Fetch human-readable org name for bundle metadata
-        logger.warning("\n  Exporting WAN/Gateway config from org: %s", org_name)  # User feedback
+        logger.warning("\n  Exporting WAN/Gateway config.")  # Avoid the returned org name in manager logs.
 
         results = self._fetch_all_types()  # Fetch all 6 config types from the API
         bundle = self._build_export_bundle(results, org_name)  # Wrap results with metadata
-        filepath = self._save_bundle_to_file(bundle, org_name)  # Write bundle to data/ directory
-        self._display_export_summary(bundle, filepath)  # Show summary table to user
-        logger.info("Menu 176: Export complete, saved to %s", filepath)  # Log completion
+        self._save_bundle_to_file(bundle, org_name)  # Write the bundle without retaining its private path.
+        self._display_export_summary(bundle)  # Show summary table without the generated filename.
+        logger.info("Menu 58: Export complete.")  # Avoid the generated filename in manager logs.
 
     def _fetch_all_types(self) -> dict[str, list]:  # type: ignore[type-arg]
         """Fetch all 6 config types and return as a keyed dictionary."""
@@ -122,8 +122,8 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         return results  # Return complete results dict
 
     def import_config(self) -> None:  # Import the org config.
-        """Menu 177: Import a JSON bundle into the current org."""
-        logger.info("Menu 177: Starting org config import")  # Log operation start for traceability
+        """Menu 187: Import a JSON bundle into the current org."""
+        logger.info("Menu 187: Starting org config import")  # Log operation start for traceability
         self.org_id = self.org_id_fn()  # Resolve destination org ID from cache or user prompt
         filepath = self._select_import_file()  # Let user pick from available export bundles
         if not filepath:  # User cancelled or no files found
@@ -141,24 +141,36 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         self._fetch_existing_objects()  # Cache destination org objects for conflict detection
         results = self._execute_import(bundle, dry_run)  # Run the dependency-ordered import
         self._display_import_report(results)  # Show final summary of what happened
-        logger.info("Menu 177: Import complete, %s objects processed", len(results))  # Log completion
+        logger.info("Menu 187: Import complete, %s objects processed", len(results))  # Log completion
 
     # ------------------------------------------------------------------
     # Export helpers
     # ------------------------------------------------------------------
 
     def _get_org_name(self) -> str:  # Resolve the org name.
-        """Fetch organization name from the API."""
+        """Accept validated organization metadata without logging response contents."""
         logger.info("Fetching org name for org %s", self.org_id)  # Log before API call
         try:
             response = mistapi.api.v1.orgs.orgs.getOrg(self.session, self.org_id)  # Query Mist API for org details
-            if hasattr(response, "data") and response.data:  # Verify response has data attribute
-                name = response.data.get("name", "Unknown")  # Extract org name from response
-                logger.debug("Org name resolved: %s", name)  # Log resolved name
-                return name  # type: ignore[no-any-return] # Return org name string
-        except Exception as error:  # Catch network/auth errors gracefully
-            logging.warning("Could not fetch org name: %s", error)  # Log warning with error details
-        return "Unknown"  # Fallback when API call fails
+        except (OSError, RuntimeError) as error:  # Retain nonfatal SDK transport and rate-limit failures.
+            logger.error("Org name request failed for org %s (%s)", self.org_id, type(error).__name__)
+            return "Unknown"  # Exception text can contain sensitive response contents.
+        status = getattr(response, "status_code", None)  # Missing status must not imply success.
+        if not isinstance(status, int) or not 200 <= status < 300:  # Refused metadata cannot identify an export.
+            safe_status = status if isinstance(status, int) and not isinstance(status, bool) else "unavailable"
+            logger.warning("Org name request failed for org %s: HTTP %s", self.org_id, safe_status)
+            return "Unknown"  # Preserve the explicit unknown label after refusal.
+        logger.debug("Org name request completed for org %s: HTTP %s", self.org_id, status)
+        data = getattr(response, "data", None)  # Read metadata only after successful HTTP validation.
+        if not isinstance(data, dict) or "error" in data:  # Error objects are not organization metadata.
+            logger.warning("Org name metadata is invalid for org %s", self.org_id)
+            return "Unknown"  # Do not inspect or log an invalid body.
+        name = data.get("name")  # A valid object can still lack a usable name.
+        if not isinstance(name, str) or not name.strip():  # Export labels require nonblank text.
+            logger.warning("Org name is unavailable for org %s", self.org_id)
+            return "Unknown"  # Keep missing names explicit without exposing metadata.
+        logger.debug("Org name resolved for org %s", self.org_id)  # Report completion without the name.
+        return name  # Preserve the exact successful label.
 
     def _resolve_api_fn(self, dotted_path: str):  # Resolve an API function.
         """Resolve a dotted string like 'mistapi.api.v1.orgs.networks.listOrgNetworks' to a callable."""
@@ -169,7 +181,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         return current  # Return the final callable function
 
     def _fetch_config_type(self, config_type: dict) -> list:  # type: ignore[type-arg]
-        """Fetch all objects of a single config type from the API."""
+        """Fetch one config type and log failures without exception text."""
         display_name = config_type["display_name"]  # Human-readable name for logging
         logger.info("Fetching %s from org %s", display_name, self.org_id)  # Log before API call
         try:
@@ -181,8 +193,12 @@ class OrgConfigMigrationManager:  # Org config migration manager.
             logger.debug("Fetched %s %s objects", len(items), display_name)  # Log result count
             return items  # Return list of config objects
         except Exception as error:  # Catch API errors without crashing the entire export
-            logging.error("  X %s: Error - %s", display_name, error)  # User feedback showing failure
-            logging.error("Failed to fetch %s: %s", display_name, error)  # Log error with context
+            logger.error(
+                "  X %s: Request failed for org %s (%s)",  # Use a fixed message that cannot expose exception text.
+                display_name,  # Identify the failed configuration type.
+                self.org_id,  # Identify the organization that the request used.
+                type(error).__name__,  # Preserve the failure category without the message.
+            )  # Preserve endpoint context and failure type without arbitrary exception text.
             return []  # Return empty list so other types can still proceed
 
     def _extract_response_data(self, response) -> list:  # type: ignore[type-arg, no-untyped-def]
@@ -214,21 +230,20 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")  # UTC timestamp for uniqueness
         filename = f"OrgConfig_Export_{safe_name}_{timestamp}.json"  # Construct descriptive filename
         filepath = os.path.join("data", filename)  # Use os.path.join for cross-platform paths
-        logger.info("Saving export bundle to %s", filepath)  # Log before file write
+        logger.info("Saving export bundle in data/")  # Avoid the returned org name in the generated filename.
         with open(filepath, "w", encoding="utf-8") as output_file:  # Open file with UTF-8 encoding
             json.dump(bundle, output_file, indent=2, default=str)  # Write indented JSON for readability
         logger.debug("Export bundle saved, %s bytes", os.path.getsize(filepath))  # Log file size after write
-        return filepath  # Return path for summary display
+        return filepath  # Return the path to the caller without logging it.
 
-    def _display_export_summary(self, bundle: dict, filepath: str) -> None:  # type: ignore[type-arg]
+    def _display_export_summary(self, bundle: dict) -> None:  # type: ignore[type-arg]
         """Print a summary table of the export results."""
         counts = bundle["metadata"]["object_counts"]  # Extract per-type counts from metadata
         total = sum(counts.values())  # Calculate total objects across all types
         logger.warning(
-            "\n  Export Summary - saved to %s\n  %s",
-            filepath,
+            "\n  Export Summary - saved in data/\n  %s",
             "-" * 40,
-        )  # Show output file location + separator
+        )  # Show the output directory without the generated filename.
         for config_type in self.CONFIG_TYPES:  # Iterate types in registry order
             key = config_type["key"]  # Get the bundle key for this type
             logger.warning("    %-25s %5d", config_type["display_name"], counts.get(key, 0))  # Aligned count column
@@ -246,7 +261,7 @@ class OrgConfigMigrationManager:  # Org config migration manager.
         if not files:  # No export bundles exist yet
             logger.warning(
                 "\n  No export bundles found in data/ directory."
-                "\n  Run Menu 176 first to export config from a source org."
+                "\n  Run Menu 58 first to export config from a source org."
             )  # User feedback + guidance
             return ""  # Signal no selection made
 
