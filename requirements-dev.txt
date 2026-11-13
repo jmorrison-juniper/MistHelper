@@ -178,7 +178,7 @@ logistro==2.0.1
     #   kaleido
 mando==0.7.1
     # via radon
-markdown-it-py==4.2.0
+markdown-it-py==4.3.0
     # via rich
 markupsafe==3.0.4
     # via
@@ -220,7 +220,7 @@ numpy==2.5.4
     #   contourpy
     #   matplotlib
     #   misthelper
-openai==3.48.0
+openai==3.50.0
     # via misthelper
 packageurl-python==0.17.6
     # via cyclonedx-python-lib
@@ -403,7 +403,7 @@ secretstorage==3.5.0 ; sys_platform == 'linux'
     # via keyring
 setuptools==84.2.1
     # via dash
-simplejson==4.2.0
+simplejson==4.3.0
     # via choreographer
 six==1.17.0
     # via mando
