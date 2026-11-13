@@ -107,6 +107,7 @@ class OrgCancelSeeds:
         gateway["targets"] = [OrgControlSeeds.target(SECOND_GATEWAY_MAC, SECOND_SITE_ID, "gateway", "E2E gateway 2")]
         gateway["upgrade_id"] = None  # The cloud created no job.
         gateway["raw_status"] = 400  # A client error proves the refusal.
+        gateway["response_data_valid"] = True  # Retain proof that the refusal response body was valid.
         gateway["error"] = "The cloud answered status 400."  # The reason that the progress page shows.
         return gateway  # The cancel has no job to stop for this child job.
 
