@@ -46,22 +46,6 @@
 
 - [x] T008 Confirm `git diff --check` passes for `uv.lock`, `requirements.txt`, and `requirements-dev.txt`.
 
----
-
-## Phase 5: Merge and Deployment
-
-**Purpose**: Merge the verified dependency update and complete the authorized deployment.
-
-- [ ] T009 Commit the verified dependency exports and specification files with a Conventional Commit message.
-- [ ] T010 Rebase the feature branch on `origin/main` and rerun the dependency checks.
-- [ ] T011 Push the feature branch and open a pull request from the repository template that closes issue #4785.
-- [ ] T012 Wait for required CI and CodeQL checks, then obtain required human review.
-- [ ] T013 Merge the pull request in the serial merge slot after all required checks and reviews pass.
-- [ ] T014 Verify the post-merge image build and confirm its revision label matches the merge commit.
-- [ ] T015 Deploy the image to the approved production target and verify service health. Stop if target or access details are missing.
-
----
-
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -70,7 +54,6 @@
 - **Foundational**: T002 depends on T001.
 - **User Story 1**: T003 depends on T002. T004 and T005 depend on T003.
 - **Polish**: T008 depends on T006 and T007.
-- **Merge and Deployment**: T009 depends on T008. T010 depends on T009. T011 depends on T010. T012 depends on T011. T013 depends on T012. T014 depends on T013. T015 depends on T014 and the production target details.
 
 ### User Story Dependencies
 
@@ -96,4 +79,3 @@ Complete User Story 1. Run the export guards and dependency audit before commit.
 ### Incremental Delivery
 
 Update the lock first, regenerate both exports, then run the focused checks.
-Commit and merge only after local checks pass. Deploy only after the post-merge image matches the merge commit and the production target is confirmed.
