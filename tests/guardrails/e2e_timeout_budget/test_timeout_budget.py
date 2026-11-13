@@ -11,6 +11,9 @@ How this guard works:
     process through `os._exit(1)`. The synthetic project loads the two repair
     hooks from the real `tests/e2e/conftest.py`, so this guard proves the
     shipped code and not a copy. Each synthetic test uses `time.sleep` only.
+    Timing assertions start before the test loop, so they include all item
+    setup, calls, and teardown, but not collection or interpreter startup.
+    The reported wall clock cost still includes the whole subprocess.
 
 Why the guard pins the thread method:
     The plugin selects the signal method where `signal.SIGALRM` exists, and the
@@ -69,10 +72,16 @@ def pytest_collection_modifyitems(config, items):
         item.add_marker(mark)
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtestloop(session):
+    root = session.config.rootpath
+    (root / "execution-start.marker").write_text(str(time.monotonic()), encoding="ascii")
+
+
 @pytest.fixture(scope="session", autouse=True)
 def slow_session_teardown(request):
-    yield
     root = request.config.rootpath
+    yield
     (root / "teardown-start.marker").write_text("started", encoding="ascii")
     print("SESSION TEARDOWN START", flush=True)
     time.sleep({teardown_sleep})
@@ -110,6 +119,7 @@ class PytestRunResult:
     output: str  # The combined standard output and standard error.
     elapsed_seconds: float  # The wall clock cost of the run.
     trail_path: Path  # The phase trail that the run wrote.
+    execution_seconds: float  # The child test and teardown cost, without interpreter startup.
 
     def has_summary(self) -> bool:
         """Report whether pytest printed its report.
@@ -185,6 +195,7 @@ class PytestRunRecorder:
         header = f"e2e_timeout_budget guard: measured {len(self.results)} pytest runs in {total:.2f} seconds"
         details = [
             f"  run {result.label}: exit {result.return_code}, {result.elapsed_seconds:.2f} seconds, "
+            f"execution: {result.execution_seconds:.2f} seconds, "
             f"summary printed: {result.has_summary()}"
             for result in self.results  # Report the measured cost of each scenario.
         ]
@@ -272,10 +283,16 @@ def run_project(root: Path, label: str, teardown_budget: float | None) -> Pytest
         timeout=RUN_LIMIT_SECONDS,
         check=False,
     )
-    elapsed = time.monotonic() - started  # Record the measured seconds of the run.
+    finished = time.monotonic()  # Include process termination in both measured intervals.
+    elapsed = finished - started  # Keep the complete wall clock cost in the measured summary.
+    execution_start = root / "execution-start.marker"  # The loop hook records time before item timers and setup.
+    assert execution_start.is_file(), f"The run {label} wrote no execution start at {execution_start}."
+    child_started = float(execution_start.read_text(encoding="ascii"))  # Read the shared monotonic clock.
+    assert started <= child_started <= finished, f"The run {label} wrote an invalid execution start."
+    execution = finished - child_started  # Exclude imports, but retain all tests, teardown, and process exit.
     logger.debug("Scenario %s ended with code %d in %.2f seconds", label, completed.returncode, elapsed)
     output = completed.stdout + completed.stderr  # Keep both streams, because the dump uses stderr.
-    return PytestRunResult(label, completed.returncode, output, elapsed, trail_path)
+    return PytestRunResult(label, completed.returncode, output, elapsed, trail_path, execution)
 
 
 def _base_environment() -> dict[str, str]:
@@ -366,6 +383,7 @@ def test_guard_reports_what_it_measured(shared_budget_run: PytestRunResult, run_
     assert len(run_recorder.results) >= 1, "The guard measured no pytest run, so it proved nothing."
     assert "measured" in lines[0] and "seconds" in lines[0], f"The summary line is wrong: {lines[0]!r}."
     assert shared_budget_run.elapsed_seconds > 0.0, "The guard measured no seconds for the red case."
+    assert 0.0 < shared_budget_run.execution_seconds <= shared_budget_run.elapsed_seconds, "Invalid execution duration."
 
 
 def test_shared_budget_loses_the_report(shared_budget_run: PytestRunResult) -> None:
@@ -375,7 +393,7 @@ def test_shared_budget_loses_the_report(shared_budget_run: PytestRunResult) -> N
     assert not shared_budget_run.has_summary(), "The red case printed a summary, so it did not reproduce #3517."
     assert shared_budget_run.teardown_started(), "The red case never reached the session teardown."
     assert not shared_budget_run.teardown_finished(), "The red case completed the session teardown."
-    assert shared_budget_run.elapsed_seconds < TEARDOWN_SLEEP_SECONDS, "The red case outlived the teardown."
+    assert shared_budget_run.execution_seconds < TEARDOWN_SLEEP_SECONDS, "The red case outlived the teardown."
 
 
 def test_separate_budget_keeps_the_report(separate_budget_run: PytestRunResult) -> None:
@@ -385,7 +403,7 @@ def test_separate_budget_keeps_the_report(separate_budget_run: PytestRunResult) 
     assert separate_budget_run.has_summary(), "The repaired case printed no summary, so the repair failed."
     assert "test_two_fails" in separate_budget_run.output, "The report does not name the failed test."
     assert separate_budget_run.teardown_finished(), "The session teardown did not run to its end."
-    assert separate_budget_run.elapsed_seconds > TEARDOWN_SLEEP_SECONDS, "The teardown did not run in full."
+    assert separate_budget_run.execution_seconds > TEARDOWN_SLEEP_SECONDS, "The teardown did not run in full."
 
 
 def test_teardown_budget_still_ends_an_overrun(
@@ -396,8 +414,8 @@ def test_teardown_budget_still_ends_an_overrun(
     assert tight_budget_run.return_code == 1, f"The overrun exited {tight_budget_run.return_code}, not 1."
     assert tight_budget_run.teardown_started(), "The overrun never reached the session teardown."
     assert not tight_budget_run.teardown_finished(), "The overrun completed the session teardown."
-    assert tight_budget_run.elapsed_seconds < TEARDOWN_SLEEP_SECONDS + LAST_TEST_SLEEP_SECONDS, "No bound fired."
-    gap = tight_budget_run.elapsed_seconds - shared_budget_run.elapsed_seconds  # Prove the budgets differ.
+    assert tight_budget_run.execution_seconds < TEARDOWN_SLEEP_SECONDS + LAST_TEST_SLEEP_SECONDS, "No bound fired."
+    gap = tight_budget_run.execution_seconds - shared_budget_run.execution_seconds  # Compare protected work only.
     assert gap > 1.0, f"The overrun ran {gap:.2f} seconds longer than the red case, so the budget is not separate."
 
 
@@ -411,3 +429,37 @@ def test_phase_trail_survives_the_stop(shared_budget_run: PytestRunResult) -> No
     assert "test_two_fails" in str(failed[0]["node_id"]), f"The failed record names {failed[0]['node_id']!r}."
     assert set(records[0]) == {"node_id", "phase", "outcome", "duration_seconds", "timestamp_utc"}
     assert str(failed[0]["timestamp_utc"]).endswith("+00:00"), "The timestamp is not UTC ISO 8601."
+
+
+def test_startup_does_not_consume_execution_budget(tmp_path: Path, run_recorder: PytestRunRecorder) -> None:
+    """A slow session start must not consume the bound for test execution."""
+    root = build_project(tmp_path, with_repair=False)  # Keep the original shared-budget failure.
+    conftest = root / "conftest.py"  # Delay a phase before pytest arms any item timer.
+    source = conftest.read_text(encoding="ascii")  # Retain the real hooks and the synthetic fixtures.
+    source += f"\ndef pytest_sessionstart(session):\n    time.sleep({TEST_BUDGET_SECONDS})\n"
+    conftest.write_text(source, encoding="ascii")  # Add startup cost without changing protected work.
+    result = run_recorder.add(run_project(root, "slow_startup", None))  # Record both measured intervals.
+    assert result.return_code == 1, "The delayed startup must still reproduce the shared-budget failure."
+    assert not result.has_summary(), "The shared budget must stop the process before its report."
+    assert result.teardown_started(), "The delayed startup prevented the session teardown."
+    assert not result.teardown_finished(), "The shared budget did not stop the session teardown."
+    assert result.elapsed_seconds > TEARDOWN_SLEEP_SECONDS, "The control did not exceed the old wall-clock bound."
+    assert result.execution_seconds < TEARDOWN_SLEEP_SECONDS, "Startup consumed the execution bound."
+
+
+def test_setup_still_consumes_execution_budget(tmp_path: Path, run_recorder: PytestRunRecorder) -> None:
+    """Slow fixture setup must remain inside both the item timer and the measured interval."""
+    root = build_project(tmp_path, with_repair=False)  # Keep the per-item timeout active during setup.
+    conftest = root / "conftest.py"  # Delay setup before the session fixture executes its first statement.
+    source = conftest.read_text(encoding="ascii")  # Retain all other synthetic phases.
+    source = source.replace(  # Make setup exceed the item budget before the fixture can yield.
+        "def slow_session_teardown(request):\n",
+        f"def slow_session_teardown(request):\n    time.sleep({TEARDOWN_SLEEP_SECONDS})\n",
+    )
+    conftest.write_text(source, encoding="ascii")  # Keep the delay in this control project only.
+    result = run_recorder.add(run_project(root, "slow_setup", None))  # A misplaced marker makes this run fail.
+    assert result.return_code == 1, "The item timer did not stop the slow fixture setup."
+    assert not result.has_summary(), "The setup timeout did not stop the process before its report."
+    assert not result.teardown_started(), "The setup control reached teardown before its timeout."
+    assert not result.teardown_finished(), "The setup control completed the session teardown."
+    assert TEST_BUDGET_SECONDS <= result.execution_seconds < TEARDOWN_SLEEP_SECONDS, "Setup escaped the measured bound."
