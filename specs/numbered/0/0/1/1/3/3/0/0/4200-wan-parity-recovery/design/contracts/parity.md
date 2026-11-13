@@ -208,7 +208,7 @@ They do not authorize a new request rate or prove source scheduling parity.
 
 | Behavior | Current MistHelper policy | Evidence |
 | --- | --- | --- |
-| Worker ownership | One organization key uses atomic `NX` acquisition and a 600-second lease. Renew and release scripts compare the owner token. | `test_background_refresh.py::test_workers_share_one_organization_lease`, `test_worker_does_not_release_a_lease_after_ownership_changes` |
+| Worker ownership | One organization key uses atomic `NX` acquisition and a 600-second lease. Renew and release scripts compare the owner token. | `test_background_refresh.py::test_worker_threads_follow_shared_organization_lease_protocol`, `test_worker_does_not_release_a_lease_after_ownership_changes` |
 | Contention retry | A worker retries a denied lease after 10 seconds. A successful owner refreshes every 300 seconds. | `test_worker_retries_lease_acquisition_after_the_configured_wait`; constants in `background_refresh.py` |
 | Refresh failure | The worker logs the failure and continues its bounded schedule. The test stops it after one failed refresh. | `test_worker_refresh_failure_stops_cleanly` |
 | Optional worker | The portal starts the worker only when shared request admission and history are available. No local-lock fallback starts API collection. | `test_portal_starts_worker_with_shared_admission_and_history`, `test_portal_skips_worker_when_shared_admission_is_disabled` |
