@@ -1,8 +1,7 @@
-"""Normalize live WAN snapshots without inventing metric coverage."""
+"""Map documented snapshots to observation-hour records, never full-hour coverage."""
 
-import hashlib
-import json
 import logging
+import math
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from types import MappingProxyType
@@ -11,313 +10,443 @@ from typing import Any
 from src.interfaces.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
-    IdentityValidator,
     PeerPathIdentity,
-    SiteIdentity,
 )
-from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
+from src.interfaces.wan_performance.domain.measurement import (
+    HourlyMeasurement,
+    MetricMeasurement,
+    SampleMeasurement,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class SnapshotRates:
-    """Validate WAN rates while preserving missing and zero values."""
-
-    @staticmethod
-    def parse(value: object, unit: str) -> MetricMeasurement:
-        """Return a finite non-negative rate or an explained missing value."""
-        if value is None:  # Source omissions do not mean zero.
-            return MetricMeasurement(
-                None, unit, missing_reason="The API snapshot has no value."
-            )  # Keep absence explicit.
-        if isinstance(value, str):  # Some API responses encode numbers as text.
-            try:  # Convert only valid numeric text.
-                value = float(value)  # Keep the original API unit.
-            except ValueError as error:  # Invalid text cannot be a measurement.
-                raise ValueError("WAN metric value must be numeric.") from error  # Report malformed source data.
-        if isinstance(value, bool) or not isinstance(value, (int, float)):  # Reject booleans and objects.
-            raise ValueError("WAN metric value must be numeric.")  # Refuse invalid data.
-        if value < 0:  # Rates cannot be negative.
-            raise ValueError("WAN metric value must not be negative.")  # Preserve only valid rates.
-        return MetricMeasurement(value, unit, sample_count=1)  # Mark one point-in-time sample.
-
-    @staticmethod
-    def parse_sample(sample: Mapping[str, Any]) -> MetricMeasurement:
-        """Validate one insight sample and retain its source coverage fields."""
-        value = sample.get("value")  # Read the source sample value.
-        unit = sample.get("unit")  # Read the catalog or source unit.
-        if not isinstance(unit, str):  # Require source unit metadata.
-            raise ValueError("WAN insight sample requires a unit.")  # Refuse ambiguous metrics.
-        missing_reason = sample.get("missing_reason")  # Preserve any source explanation.
-        if value is None and not isinstance(missing_reason, str):  # Explain missing samples.
-            missing_reason = "The API snapshot has no value."  # Use a clear missing-value reason.
-        if isinstance(value, str):  # Accept numeric text from the API.
-            value = float(value)  # Let the domain validator reject non-finite text.
-        raw_values = sample.get("raw_values")  # Read optional source values.
-        return MetricMeasurement(  # Validate the full measurement before returning.
-            value,  # Preserve the latest source value.
-            unit,  # Preserve the source unit.
-            sample.get("sample_count"),  # Preserve the reported count.
-            sample.get("coverage_fraction"),  # Preserve known coverage only.
-            missing_reason,  # Explain absent data.
-            tuple(raw_values) if raw_values is not None else None,  # Freeze retained samples.
-        )
-
-
 class PeerSnapshotMetrics:
-    """Read documented VPN peer metrics without inventing values."""
+    """Map peer scalar fields only where the schema defines their units."""
 
-    FIELDS: Mapping[str, tuple[str, float | None]] = MappingProxyType(  # Keep the source field schema immutable.
-        {  # Units match the documented peer fields.
-            "latency": ("ms", None),  # Preserve latency in milliseconds.
-            "jitter": ("ms", None),  # Preserve jitter in milliseconds.
-            "loss": ("%", 100),  # Bound loss as a percentage.
-            "mos": ("score", 5),  # Bound the MOS score.
-        }
-    )
+    FIELDS: Mapping[str, str] = MappingProxyType({"loss": "%", "latency": "ms", "jitter": "ms"})
 
     @classmethod
     def parse(cls, row: Mapping[str, object]) -> Mapping[str, MetricMeasurement]:
-        """Return immutable peer metrics with explicit missing reasons."""
-        logger.info("Validate WAN peer snapshot metrics.")  # Mark validation before processing source values.
-        metrics = {name: cls._metric(name, row.get(name)) for name in cls.FIELDS}  # Validate every documented metric.
-        logger.debug("Validated %d WAN peer snapshot metrics.", len(metrics))  # Record the validation result count.
-        return MappingProxyType(metrics)  # Prevent mutation by later consumers.
+        """Return stable peer metrics without inventing fields or units."""
+        logger.info("Validate VPN peer snapshot metrics.")
+        metrics = {name: cls._metric(name, row) for name in ("loss", "latency", "jitter", "mos")}
+        logger.debug("Validated %d VPN peer snapshot metrics.", len(metrics))
+        return MappingProxyType(metrics)
 
     @classmethod
-    def _metric(cls, name: str, value: object) -> MetricMeasurement:
-        """Validate one peer metric against its unit and documented range."""
-        unit, maximum = cls.FIELDS[name]  # Read the trusted schema entry.
-        if value is None:  # Missing values remain unknown.
-            return MetricMeasurement(None, unit, missing_reason="The API snapshot has no value.")  # Explain absence.
-        if isinstance(value, bool) or not isinstance(value, (int, float)):  # Reject booleans and text.
-            raise ValueError(f"Invalid {name} in WAN peer snapshot.")  # Refuse malformed data.
-        metric = MetricMeasurement(value, unit)  # Reject non-finite numbers through domain validation.
-        if value < 0 or (maximum is not None and value > maximum):  # Enforce metric-specific bounds.
-            raise ValueError(f"Invalid {name} in WAN peer snapshot.")  # Do not normalize bad values.
-        return metric  # Preserve the validated source value.
+    def _metric(cls, name: str, row: Mapping[str, object]) -> MetricMeasurement:
+        """Retain scalar metrics only when the schema defines their units."""
+        value = row.get(name)
+        unit = cls.FIELDS.get(name)
+        if unit is None:
+            reason = (
+                "The API snapshot has no value."
+                if value is None
+                else "The VPN peer stats schema does not define this field's unit."
+            )
+            return MetricMeasurement(None, "unknown", missing_reason=reason)
+        if value is None:
+            return MetricMeasurement(None, unit, missing_reason="The API snapshot has no value.")
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise ValueError(f"VPN peer source field {name} must be a non-negative finite number.")
+        return MetricMeasurement(value, unit, sample_count=1)
 
-
-class PortSnapshotMetrics:
-    """Normalize directional rates and use only reported link capacity."""
+    @staticmethod
+    def raw_fields(row: Mapping[str, object]) -> dict[str, float | int | None]:
+        """Retain all documented peer scalars and last-seen time without normalization."""
+        fields: dict[str, float | int | None] = {}
+        for name in ("loss", "latency", "jitter", "mos", "last_seen"):
+            value = row.get(name)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            ):
+                raise ValueError(f"VPN peer source field {name} must be a finite number or None.")
+            fields[name] = value
+        return fields
 
     @classmethod
-    def parse(cls, row: Mapping[str, object]) -> dict[str, MetricMeasurement]:
-        """Return rate and utilization metrics for one current port row."""
-        logger.info("Validate WAN port snapshot rates.")  # Mark validation before transforming source data.
-        rates = {name: cls._rate(name, row.get(name)) for name in ("rx_bps", "tx_bps")}  # Read directional rates.
-        metrics = dict(rates)  # Keep rate measurements separate from utilization.
-        for name, rate in rates.items():  # Derive utilization only from valid source capacity.
-            label = name.removesuffix("_bps") + "_utilization_percent"  # Name each direction clearly.
-            metrics[label] = cls._utilization(rate, row.get("speed"))  # Keep missing capacity explicit.
-        logger.debug("Validated %d WAN port snapshot metrics.", len(metrics))  # Record the result count.
-        return metrics  # Preserve validated numeric and missing values.
-
-    @staticmethod
-    def _rate(name: str, value: object) -> MetricMeasurement:
-        """Keep invalid optional rates unknown without discarding adjacent data."""
-        try:  # Validate one rate without affecting the other direction.
-            return SnapshotRates.parse(value, "bit/s")  # Preserve the API rate unit.
-        except (ValueError, OverflowError) as error:  # Invalid optional data remains unknown.
-            logger.error("Invalid WAN port rate %s: %s", name, error)  # Report the source field failure.
-            return MetricMeasurement(None, "bit/s", missing_reason="Invalid API port rate.")  # Preserve the valid row.
-
-    @staticmethod
-    def _utilization(rate: MetricMeasurement, speed: object) -> MetricMeasurement:
-        """Calculate point-in-time utilization from reported Mbps capacity."""
-        reason = "Utilization requires a valid rate and positive integer speed in Mbps."  # Explain missing capacity.
-        if rate.value is None:  # A missing rate cannot produce utilization.
-            return MetricMeasurement(None, "%", missing_reason=reason)  # Keep derived data unknown.
-        if isinstance(speed, bool) or not isinstance(speed, int) or speed <= 0:  # Require valid capacity.
-            return MetricMeasurement(None, "%", missing_reason=reason)  # Do not infer link speed.
-        return MetricMeasurement(rate.value / speed / 1_000_000 * 100, "%", sample_count=1)  # Keep snapshot scope.
+    def sample(
+        cls, row: dict[str, Any], org_id: str, sampled_at: datetime, collected_at: datetime, partial: bool
+    ) -> SampleMeasurement:
+        """Build a poll-time sample from the verified peer identity and scalar fields."""
+        state = row.get("up")
+        return SampleMeasurement(
+            PeerPathIdentity.from_stats_row(row, org_id),
+            sampled_at,
+            collected_at,
+            cls.parse(row),
+            cls.raw_fields(row),
+            "poll",
+            partial,
+            "live",
+            state if isinstance(state, bool) else None,
+        )
 
 
 class SnapshotRecords:
-    """Convert live port and peer rows into natural-keyed observations."""
+    """Keep latest observations separate from inferred duration or availability."""
 
     @classmethod
-    def build(cls, snapshot: Mapping[str, Any]) -> tuple[HourlyMeasurement, ...]:
-        """Validate a live snapshot and normalize each supported row."""
-        if not isinstance(snapshot, Mapping) or snapshot.get("provenance") != "live":  # Reject non-live inputs.
-            raise ValueError("WAN snapshots must have live provenance.")  # Keep cached source class explicit.
-        org_id = IdentityValidator.identifier(snapshot.get("org_id"), "org_id")  # Validate tenant scope.
-        instant = cls._collected_at(snapshot.get("collected_at_utc"))  # Validate source observation time.
-        ports = tuple(cls._port(row, org_id, instant) for row in cls._rows(snapshot, "ports"))  # Normalize ports.
-        peers = tuple(cls._peer(row, org_id, instant) for row in cls._rows(snapshot, "peers"))  # Normalize peers.
-        insights = cls._insights(snapshot.get("insights", {}), org_id, instant)  # Normalize optional insights.
-        logger.debug("Normalized %d live WAN observations.", len(ports) + len(peers) + len(insights))  # Record results.
-        return ports + peers + insights  # Preserve stable port, peer, and insight ordering.
-
-    @staticmethod
-    def _rows(snapshot: Mapping[str, Any], name: str) -> list[Mapping[str, Any]]:
-        """Require a list of object rows for each collection."""
-        rows = snapshot.get(name, [])  # Allow an absent optional collection.
-        if not isinstance(rows, list) or any(not isinstance(row, Mapping) for row in rows):  # Reject bad envelopes.
-            raise ValueError(f"WAN snapshot {name} must be an array of objects.")  # Report the broken contract.
-        return rows  # Keep validated source rows.
-
-    @staticmethod
-    def _collected_at(value: object) -> datetime:
-        """Require an explicit UTC collection time."""
-        if not isinstance(value, str):  # Require an ISO timestamp from the collector.
-            raise ValueError("collected_at_utc must be an ISO 8601 timestamp.")  # Reject missing time.
-        instant = datetime.fromisoformat(value.replace("Z", "+00:00"))  # Parse a standard UTC suffix.
-        if instant.tzinfo is None or instant.utcoffset() != UTC.utcoffset(instant):  # Require UTC explicitly.
-            raise ValueError("collected_at_utc must use UTC.")  # Reject local times.
-        return instant.astimezone(UTC)  # Normalize to the canonical timezone.
-
-    @staticmethod
-    def _gateway(row: Mapping[str, Any], org_id: str) -> GatewayIdentity:
-        """Validate tenant membership and source gateway values."""
-        if row.get("org_id") != org_id:  # Never accept a cross-tenant row.
-            raise ValueError("WAN row organization does not match the selected organization.")  # Fail closed.
-        site_id = IdentityValidator.identifier(row.get("site_id"), "site_id")  # Validate the parent site.
-        gateway_id = IdentityValidator.identifier(row.get("mac"), "gateway MAC")  # Validate the source gateway.
-        return GatewayIdentity(SiteIdentity(org_id, site_id), gateway_id)  # Retain exact source identities.
+    def build(cls, snapshot: dict[str, Any]) -> tuple[HourlyMeasurement, ...]:
+        """Validate tenant identity and retain the actual collection timestamp."""
+        if snapshot.get("provenance") != "live":
+            raise ValueError("WAN snapshots must have live provenance.")
+        instant = datetime.fromisoformat(snapshot["collected_at_utc"])
+        logger.info("Normalize WAN snapshots into observation-hour records.")
+        ports = tuple(cls._port(row, snapshot["org_id"], instant) for row in snapshot["ports"])
+        peers = tuple(cls._peer(row, snapshot["org_id"], instant) for row in snapshot["peers"])
+        insights = cls._insights(snapshot.get("insights", {}), snapshot["org_id"], instant)
+        logger.debug("Normalized %d WAN observation records.", len(ports) + len(peers) + len(insights))
+        return ports + peers + insights
 
     @classmethod
-    def _port(cls, row: Mapping[str, Any], org_id: str, instant: datetime) -> HourlyMeasurement:
-        """Normalize a current port row without creating interval coverage."""
-        gateway = cls._gateway(row, org_id)  # Validate tenant and gateway scope first.
-        port_id = IdentityValidator.port_name(row.get("port_id"), "port_id")  # Validate source interface notation.
-        identity = CircuitIdentity(gateway, port_id)  # Keep the natural circuit identity.
-        hour = instant.replace(minute=0, second=0, microsecond=0)  # Assign the observation hour only.
-        metrics = PortSnapshotMetrics.parse(row)  # Validate rates and capacity.
-        return HourlyMeasurement(identity, hour, instant, metrics, "live", cls._state(row.get("up")))  # Preserve state.
-
-    @classmethod
-    def _peer(cls, row: Mapping[str, Any], org_id: str, instant: datetime) -> HourlyMeasurement:
-        """Normalize one peer row with all source path values."""
-        peer_site_id = IdentityValidator.identifier(row.get("peer_site_id"), "peer_site_id")  # Require remote site.
-        peer_type = IdentityValidator.identifier(row.get("type"), "type")  # Require source path type.
-        gateway = cls._gateway(row, org_id)  # Validate tenant and gateway scope first.
-        local_port_id = IdentityValidator.port_name(row.get("port_id"), "port_id")  # Validate local interface name.
-        peer_port_id = IdentityValidator.port_name(row.get("peer_port_id"), "peer_port_id")  # Validate remote name.
-        peer_mac = IdentityValidator.peer_mac(row.get("peer_mac"))  # Validate the remote device identity.
-        fields = (peer_site_id, peer_port_id, peer_type)  # Keep every validated path field.
-        path_hash = hashlib.sha256(
-            json.dumps(fields, separators=(",", ":")).encode()
-        ).hexdigest()  # Key all path fields.
-        identity = PeerPathIdentity(  # Build a scoped peer identity.
-            gateway,  # Preserve the local gateway.
-            local_port_id,  # Preserve the local port.
-            peer_port_id,  # Preserve the remote port.
-            peer_mac,  # Preserve the remote MAC.
-            path_hash,  # Distinguish the remaining source tunnel fields.
+    def build_samples(cls, snapshot: dict[str, Any]) -> tuple[SampleMeasurement, ...]:
+        """Keep every source observation outside the one-record-per-hour projection."""
+        if snapshot.get("provenance") != "live":
+            raise ValueError("WAN samples must have live provenance.")
+        instant = datetime.fromisoformat(snapshot["collected_at_utc"])
+        org_id = snapshot["org_id"]
+        logger.info("Build timestamped raw samples from the WAN poll.")
+        ports = tuple(
+            PortSnapshotMetrics.sample(row, org_id, instant, instant, snapshot.get("ports_partial", False))
+            for row in snapshot["ports"]
         )
-        hour = instant.replace(minute=0, second=0, microsecond=0)  # Assign the observation hour only.
+        peers = tuple(
+            PeerSnapshotMetrics.sample(row, org_id, instant, instant, snapshot.get("peers_partial", False))
+            for row in snapshot["peers"]
+        )
+        insights = SnapshotRates.samples(snapshot.get("insights", {}), org_id, instant)
+        samples = ports + peers + insights
+        logger.debug("Built %d timestamped raw WAN samples.", len(samples))
+        return samples
+
+    @classmethod
+    def _insights(cls, insight: dict[str, Any], org_id: str, instant: datetime) -> tuple[HourlyMeasurement, ...]:
+        """Keep catalog units and source hourly timestamps in gateway history."""
+        if not insight.get("samples"):
+            return ()
+        gateway = GatewayIdentity.from_stats_row(insight["gateway"], org_id)
+        identity = CircuitIdentity(gateway, insight["port_id"]) if insight.get("port_id") is not None else gateway
+        samples = insight["samples"]
+        expected = {"rx_bps", "tx_bps"}
+        if isinstance(identity, CircuitIdentity):
+            expected.update(
+                {
+                    "avg_loss_pct",
+                    "avg_jitter_ms",
+                    "avg_latency_ms",
+                    "utilization_pct",
+                    "congestion_minutes_over_70_pct",
+                    "congestion_minutes_over_80_pct",
+                    "congestion_minutes_over_90_pct",
+                    "up_minutes",
+                    "down_minutes",
+                    "flap_count",
+                }
+            )
+        if len(samples) != len(expected) or {sample["metric"] for sample in samples} != expected:
+            raise ValueError("Gateway insights require the requested hourly metric samples.")
+        hours = {sample["hour_start_utc"] for sample in samples}
+        if len(hours) != 1:
+            raise ValueError("Gateway insight metrics must use the same UTC hour.")
+        metrics = {sample["metric"]: SnapshotRates.parse_sample(sample) for sample in samples}
+        return (HourlyMeasurement(identity, datetime.fromisoformat(hours.pop()), instant, metrics, "live"),)
+
+    @classmethod
+    def _port(cls, row: dict[str, Any], org_id: str, instant: datetime) -> HourlyMeasurement:
+        """Store only bit rates, not cumulative counters or unverified speed units."""
+        identity = CircuitIdentity(GatewayIdentity.from_stats_row(row, org_id), row["port_id"])
+        metrics = PortSnapshotMetrics.parse(row)
         return HourlyMeasurement(
-            identity, hour, instant, PeerSnapshotMetrics.parse(row), "live", cls._state(row.get("up"))
-        )  # Keep a point observation.
-
-    @staticmethod
-    def _state(value: object) -> bool | None:
-        """Preserve only explicit boolean link state."""
-        return value if isinstance(value, bool) else None  # Do not interpret truthy source values.
-
-    @classmethod
-    def _insights(cls, data: object, org_id: str, instant: datetime) -> tuple[HourlyMeasurement, ...]:
-        """Normalize one gateway insight sample set when present."""
-        if not isinstance(data, Mapping) or not data.get("samples"):  # Empty insight data is an allowed partial result.
-            return ()  # Do not invent insight observations.
-        gateway = cls._gateway(data.get("gateway", {}), org_id)  # Validate the scoped gateway.
-        port_id = data.get("port_id")  # Read optional circuit scope.
-        identity = CircuitIdentity(gateway, port_id) if port_id is not None else gateway  # Keep explicit scope.
-        samples = data.get("samples")  # Read normalized insight samples.
-        if not isinstance(samples, list) or any(not isinstance(sample, Mapping) for sample in samples):  # Check shape.
-            raise ValueError("WAN insight samples must be an array of objects.")  # Reject malformed samples.
-        return (InsightRecordBuilder.build(identity, samples, instant),)  # Emit one validated measurement per hour.
-
-
-class InsightRecordBuilder:
-    """Build one normalized gateway insight record from aligned samples."""
+            identity,
+            instant.replace(minute=0, second=0, microsecond=0),
+            instant,
+            metrics,
+            "live",
+            row.get("up") if isinstance(row.get("up"), bool) else None,
+        )
 
     @classmethod
-    def build(
-        cls, identity: GatewayIdentity | CircuitIdentity, samples: list[Mapping[str, Any]], instant: datetime
-    ) -> HourlyMeasurement:
-        """Validate one shared hour and unique metric names."""
-        names = cls._metric_names(samples)  # Require unique named metrics.
-        hour = cls._hour(samples)  # Require one shared UTC hour.
-        metrics = cls._metrics(names, samples)  # Validate each measured rate.
-        return HourlyMeasurement(identity, hour, instant, metrics, "live")  # Preserve only explicit source coverage.
+    def _peer(cls, row: dict[str, Any], org_id: str, instant: datetime) -> HourlyMeasurement:
+        """Use the full peer path fields for a stable derived identity."""
+        identity = PeerPathIdentity.from_stats_row(row, org_id)
+        return HourlyMeasurement(
+            identity,
+            instant.replace(minute=0, second=0, microsecond=0),
+            instant,
+            PeerSnapshotMetrics.parse(row),
+            "live",
+            row.get("up") if isinstance(row.get("up"), bool) else None,
+        )
+
+
+class SnapshotRates:
+    """Validate WAN metric values with explicit source or catalog units."""
 
     @staticmethod
-    def _metric_names(samples: list[Mapping[str, Any]]) -> list[str]:
-        """Require one non-empty name for every unique metric."""
-        names = [sample.get("metric") for sample in samples]  # Read requested metric names.
-        valid_names = [name for name in names if isinstance(name, str) and name]  # Keep valid names only.
-        if len(valid_names) != len(samples) or len(set(valid_names)) != len(valid_names):  # Require unique keys.
-            raise ValueError("WAN insight metrics must have unique names.")  # Reject ambiguous metrics.
-        return valid_names  # Keep validated names in source order.
+    def parse(value: object, unit: str) -> MetricMeasurement:
+        """Preserve zero while rejecting invalid or negative metric values."""
+        if value is None:
+            return MetricMeasurement(None, unit, missing_reason="The API snapshot has no value.")
+        if isinstance(value, str):
+            value = float(value)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+            raise ValueError("WAN metric value must be a non-negative finite number.")
+        return MetricMeasurement(value, unit, sample_count=1)
 
     @staticmethod
-    def _hour(samples: list[Mapping[str, Any]]) -> datetime:
-        """Require one explicit UTC hour across all samples."""
-        hour_value = samples[0].get("hour_start_utc") if samples else None  # Read one source interval.
-        if not isinstance(hour_value, str) or any(
-            sample.get("hour_start_utc") != hour_value for sample in samples
-        ):  # Require one shared interval key.
-            raise ValueError("WAN insight metrics must use the same UTC hour.")  # Reject misaligned samples.
-        hour = datetime.fromisoformat(hour_value.replace("Z", "+00:00"))  # Parse the source interval.
-        if hour.tzinfo is None or hour.utcoffset() != UTC.utcoffset(hour):  # Require explicit UTC.
-            raise ValueError("WAN insight metrics must use the same UTC hour.")  # Reject local times.
-        return hour.astimezone(UTC)  # Normalize the source interval.
+    def parse_sample(sample: dict[str, Any]) -> MetricMeasurement:
+        """Retain raw samples and explicit coverage for live insight measurements."""
+        value = sample["value"]
+        if isinstance(value, str):
+            value = float(value)
+        missing_reason = sample.get("missing_reason")
+        if value is None:
+            if not isinstance(missing_reason, str) or not missing_reason.strip():
+                missing_reason = "The API snapshot has no value."
+        elif missing_reason is not None:
+            raise ValueError("Present insight values cannot have a missing reason.")
+        raw_values = sample.get("raw_values")
+        if raw_values is not None:
+            raw_values = tuple(raw_values)
+        return MetricMeasurement(
+            value,
+            sample["unit"],
+            sample.get("sample_count"),
+            sample.get("coverage_fraction"),
+            missing_reason,
+            raw_values,
+        )
+
+    @classmethod
+    def samples(cls, insight: dict[str, Any], org_id: str, collected_at: datetime) -> tuple[SampleMeasurement, ...]:
+        """Preserve API-timestamped rates and separately retain scalar port stats."""
+        if not insight.get("samples") and insight.get("quality_fields") is None:
+            return ()
+        gateway = GatewayIdentity.from_stats_row(insight["gateway"], org_id)
+        port_name = insight.get("port_id")
+        identity = CircuitIdentity(gateway, port_name) if isinstance(port_name, str) else gateway
+        rate_samples = cls._rate_samples(insight.get("samples", []), identity, collected_at)
+        quality_sample = cls._quality_sample(insight, identity, collected_at)
+        return rate_samples + ((quality_sample,) if quality_sample is not None else ())
+
+    @classmethod
+    def _rate_samples(
+        cls, sources: list[dict[str, Any]], identity: GatewayIdentity | CircuitIdentity, collected_at: datetime
+    ) -> tuple[SampleMeasurement, ...]:
+        """Pair each rate value with its own API timestamp and verified unit."""
+        grouped: dict[datetime, dict[str, MetricMeasurement]] = {}
+        for source in sources:
+            metric_name = source.get("metric")
+            if metric_name not in {"rx_bps", "tx_bps"}:
+                continue
+            for point in source.get("points", []):
+                timestamp = datetime.fromisoformat(point["timestamp"])
+                grouped.setdefault(timestamp, {})[metric_name] = cls.parse(point["value"], source["unit"])
+        missing = MetricMeasurement(None, "bit/s", missing_reason="The API insight has no value for this sample.")
+        return tuple(
+            SampleMeasurement(
+                identity,
+                timestamp,
+                collected_at,
+                {name: metrics.get(name, missing) for name in ("rx_bps", "tx_bps")},
+                {},
+                "api",
+                False,
+                "live",
+            )
+            for timestamp, metrics in sorted(grouped.items())
+        )
+
+    @classmethod
+    def _quality_sample(
+        cls, insight: dict[str, Any], identity: GatewayIdentity | CircuitIdentity, collected_at: datetime
+    ) -> SampleMeasurement | None:
+        """Store unnormalized port scalars at poll time, not an assumed source time."""
+        fields = insight.get("quality_fields")
+        if fields is None:
+            return None
+        metric_sources = {
+            "loss": "avg_loss_pct",
+            "jitter": "avg_jitter_ms",
+            "latency": "avg_latency_ms",
+        }
+        metrics = {
+            metric_name: MetricMeasurement(
+                None,
+                "unknown",
+                missing_reason=(
+                    "The API snapshot has no value."
+                    if fields.get(source_name) is None
+                    else "The gateway port stats schema does not define this field's unit."
+                ),
+            )
+            for source_name, metric_name in metric_sources.items()
+        }
+        state = fields.get("up")
+        return SampleMeasurement(
+            identity,
+            collected_at,
+            collected_at,
+            metrics,
+            {name: fields[name] for name in ("loss", "jitter", "latency")},
+            "poll",
+            insight.get("quality_partial", False),
+            "live",
+            state if isinstance(state, bool) else None,
+        )
+
+
+class PortSnapshotMetrics:
+    """Use documented gateway Mbps capacity for directional snapshot utilization."""
+
+    @classmethod
+    def parse(cls, row: dict[str, Any]) -> dict[str, MetricMeasurement]:
+        """Keep optional invalid rates unknown without inventing observed duration."""
+        logger.info("Validate directional port snapshot rates and utilization.")
+        metrics = {name: cls._rate(name, row.get(name)) for name in ("rx_bps", "tx_bps")}
+        utilization = {
+            name.removesuffix("_bps") + "_utilization_percent": cls._utilization(metric, row.get("speed"))
+            for name, metric in metrics.items()
+        }
+        quality = {
+            metric: MetricMeasurement(
+                None,
+                "unknown",
+                missing_reason=(
+                    "The API snapshot has no value."
+                    if row.get(source_name) is None
+                    else "The gateway port stats schema does not define this field's unit."
+                ),
+            )
+            for source_name, metric in (
+                ("loss", "avg_loss_pct"),
+                ("jitter", "avg_jitter_ms"),
+                ("latency", "avg_latency_ms"),
+            )
+        }
+        logger.debug("Validated %d directional port snapshot metrics.", len(metrics) + len(utilization) + len(quality))
+        return {**metrics, **utilization, **quality}
 
     @staticmethod
-    def _metrics(names: list[str], samples: list[Mapping[str, Any]]) -> dict[str, MetricMeasurement]:
-        """Parse each metric under its validated source name."""
-        return {
-            name: SnapshotRates.parse_sample(sample) for name, sample in zip(names, samples, strict=True)
-        }  # Keep exact metric and sample alignment.
+    def raw_fields(row: dict[str, Any]) -> dict[str, float | int | None]:
+        """Retain gateway port quality scalars without assigning undocumented units."""
+        fields: dict[str, float | int | None] = {}
+        for name in ("loss", "jitter", "latency"):
+            value = row.get(name)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            ):
+                raise ValueError(f"Gateway port source field {name} must be a finite number or None.")
+            fields[name] = value
+        return fields
+
+    @classmethod
+    def sample(
+        cls, row: dict[str, Any], org_id: str, sampled_at: datetime, collected_at: datetime, partial: bool
+    ) -> SampleMeasurement:
+        """Build one raw gateway port observation with verified identity and poll time."""
+        state = row.get("up")
+        return SampleMeasurement(
+            CircuitIdentity(GatewayIdentity.from_stats_row(row, org_id), row["port_id"]),
+            sampled_at,
+            collected_at,
+            cls.parse(row),
+            cls.raw_fields(row),
+            "poll",
+            partial,
+            "live",
+            state if isinstance(state, bool) else None,
+        )
+
+    @staticmethod
+    def _rate(name: str, value: object) -> MetricMeasurement:
+        """Report invalid optional rates instead of discarding valid adjacent observations."""
+        try:
+            return SnapshotRates.parse(value, "bit/s")
+        except (ValueError, OverflowError):
+            logger.error("Invalid port snapshot rate %s. The observation remains unknown.", name)
+            return MetricMeasurement(None, "bit/s", missing_reason="Invalid API port rate.")
+
+    @staticmethod
+    def _utilization(rate: MetricMeasurement, speed: object) -> MetricMeasurement:
+        """Convert Mbps to bit/s without treating an observation as full-hour coverage."""
+        missing = "Utilization requires a valid rate and positive integer link speed in Mbps."
+        if rate.value is None:
+            return MetricMeasurement(None, "%", missing_reason=missing)
+        if isinstance(speed, bool) or not isinstance(speed, int) or speed <= 0:
+            if speed is not None:
+                logger.error("Invalid port link speed. Snapshot utilization remains unknown.")
+            return MetricMeasurement(None, "%", missing_reason=missing)
+        try:
+            return MetricMeasurement(rate.value / speed / 1_000_000 * 100, "%", sample_count=1)
+        except (ValueError, OverflowError):
+            logger.error("Port utilization is not a finite representable value.")
+            return MetricMeasurement(None, "%", missing_reason=missing)
 
 
 class SnapshotStates:
-    """Keep current WAN status separate from numeric observations."""
+    """Keep current port and VPN state metadata outside historical numeric aggregates."""
 
     @classmethod
     def build(
-        cls, snapshot: Mapping[str, Any], records: tuple[HourlyMeasurement, ...]
+        cls, snapshot: dict[str, Any], records: tuple[HourlyMeasurement, ...]
     ) -> dict[tuple[str, ...], dict[str, str]]:
-        """Join current status fields to their matching port and peer identities."""
-        rows = SnapshotRecords._rows(snapshot, "ports") + SnapshotRecords._rows(snapshot, "peers")  # Keep row order.
-        states: dict[tuple[str, ...], dict[str, str]] = {}  # Build a separate status map.
-        for row, record in zip(rows, records, strict=False):  # Pair only current rows with their records.
-            values = {"Current link state": cls._boolean(row.get("up"), "Up", "Down")}  # Preserve link state.
-            if isinstance(record.identity, PeerPathIdentity):  # Add peer-only status details.
-                values["Redundant path"] = cls._boolean(
-                    row.get("is_active"), "Active", "Standby"
-                )  # Preserve active state.
-                values["Gateway-reported uptime (s)"] = cls._seconds(row.get("uptime"))  # Preserve reported uptime.
-                values["Last observed (UTC)"] = cls._last_seen(
-                    row.get("last_seen")
-                )  # Preserve source observation time.
-            states[record.natural_key] = values  # Match state to the full natural key.
-        return states  # Keep status separate from metric history.
+        """Join validated source rows to their complete observation identities."""
+        logger.info("Validate current WAN snapshot state metadata.")
+        rows = snapshot["ports"] + snapshot["peers"]
+        states = {}
+        for row, record in zip(rows, records[: len(rows)], strict=True):
+            values = {"Current link state": cls._boolean(row.get("up"), "Up", "Down")}
+            if isinstance(record.identity, PeerPathIdentity):
+                values["Redundant path"] = cls._boolean(row.get("is_active"), "Active", "Standby")
+                values["Gateway-reported uptime (s)"] = cls._seconds(row.get("uptime"))
+                values["Last observed (UTC)"] = cls._last_seen(row.get("last_seen"))
+            states[record.natural_key] = values
+        logger.debug("Validated current state metadata for %d WAN observations.", len(states))
+        return states
 
     @staticmethod
     def _boolean(value: object, true_label: str, false_label: str) -> str:
-        """Render only explicit booleans as known status."""
-        if isinstance(value, bool):  # Accept true and false source values.
-            return true_label if value else false_label  # Preserve the exact state.
-        return "Unknown"  # Never infer state from truthy values.
+        """Preserve actual booleans rather than interpreting truthy values."""
+        if isinstance(value, bool):
+            return true_label if value else false_label
+        if value is not None:
+            logger.error("Invalid WAN state value for %s/%s.", true_label, false_label)
+        return "Unknown"
 
     @staticmethod
     def _seconds(value: object) -> str:
-        """Render a non-negative reported uptime without inference."""
-        if value is None:  # Preserve an absent counter as unknown.
-            return "Unknown"  # Do not claim uptime.
-        if isinstance(value, bool) or not isinstance(value, int) or value < 0:  # Reject invalid counters.
-            return "Unknown"  # Do not infer a healthy state.
-        return str(value)  # Preserve zero and positive source values.
+        """Preserve reported integer uptime, including zero, without inferring availability."""
+        if value is None:
+            return "Unknown"
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            logger.error("Invalid gateway-reported VPN uptime. Current uptime remains unknown.")
+            return "Unknown"
+        return str(value)
 
     @staticmethod
     def _last_seen(value: object) -> str:
-        """Render an epoch timestamp as explicit UTC or unknown."""
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:  # Reject invalid epochs.
-            return "Unknown"  # Keep bad timestamps unknown.
-        try:  # Guard the supported timestamp range.
-            return datetime.fromtimestamp(value, UTC).isoformat()  # Preserve the source instant in UTC.
-        except (OSError, OverflowError, ValueError):  # Reject timestamps outside the platform range.
-            return "Unknown"  # Do not fabricate a timestamp.
+        """Convert the documented epoch-second observation timestamp into explicit UTC."""
+        if value is None:
+            return "Unknown"
+        try:
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+                raise ValueError("The observation timestamp must use non-negative epoch seconds.")
+            return datetime.fromtimestamp(value, UTC).isoformat()
+        except (ValueError, OverflowError, OSError):
+            logger.error("Invalid VPN observation timestamp. The last observation time remains unknown.")
+            return "Unknown"
+
+    @staticmethod
+    def gateways(records: tuple[HourlyMeasurement, ...]) -> tuple[GatewayIdentity, ...]:
+        """List every distinct gateway returned by the bounded cached pages."""
+        logger.info("Select distinct gateway identities from cached WAN observations.")
+        identities = {
+            record.identity if isinstance(record.identity, GatewayIdentity) else record.identity.gateway
+            for record in records
+        }
+        result = tuple(sorted(identities, key=lambda identity: identity.natural_key))
+        logger.debug("Selected %d distinct cached gateway identities.", len(result))
+        return result

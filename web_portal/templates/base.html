@@ -79,6 +79,13 @@
                            href="{{ url_for('licensing_comparison.comparison_page') }}" data-testid="nav-licensing-comparison">Licensing Comparison</a>
                     </li>
                     {% endif %}
+                    {% if config.get("WAN_PERFORMANCE_NAV_ENABLED", false) %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path.startswith('/wan-performance') %}active{% endif %}"
+                           href="{{ url_for('wan_performance.live.overview') }}"
+                           data-testid="nav-wan-performance">WAN Performance</a>
+                    </li>
+                    {% endif %}
                 </ul>
 
                 <!-- Theme Switcher -->

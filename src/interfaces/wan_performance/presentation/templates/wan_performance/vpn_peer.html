@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "wan_performance/_dashboard_components.html" import chart_grid, gauge_grid, kpi_grid, table_panel %}
+{% block title %}VPN Peer - {{ config.PORTAL.title }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/wan_performance.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="container-fluid wan-performance" data-testid="wan-peer">
+    {% include "wan_performance/_data_state.html" %}
+    <nav class="wan-breadcrumbs" aria-label="Breadcrumb">
+        <a href="{{ url_for('wan_performance.overview') }}">Overview</a><span>&gt;</span><strong>VPN Peer Details</strong>
+    </nav>
+    <header class="wan-page-heading">
+        <div>
+            <h1>VPN Peer: Remote Peer</h1>
+            <p>Local Site: {{ dashboard.site_name }} · Remote Site: {{ dashboard.remote_site_name }}</p>
+        </div>
+        <strong class="text-success">Up</strong>
+    </header>
+
+    {{ kpi_grid(dashboard.pages["peer"].kpis, "wan-peer-kpis") }}
+    {{ gauge_grid(dashboard.pages["peer"].gauges, "wan-peer-gauges") }}
+    {{ chart_grid(dashboard.pages["peer"].charts, "wan-peer-charts") }}
+    <div class="wan-detail-layout">
+        {{ table_panel(dashboard.pages["peer"].tables[0], "wan-peer-details") }}
+        {{ table_panel(dashboard.pages["peer"].tables[1], "wan-peer-statistics") }}
+    </div>
+    <p><a data-testid="wan-back-link"
+          href="{{ url_for('wan_performance.gateway', gateway_id=dashboard.peer_path.gateway.gateway_id, site_id=dashboard.peer_path.gateway.site.site_id) }}">Back to gateway</a></p>
+</section>
+{% endblock %}
