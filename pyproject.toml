@@ -119,8 +119,8 @@ dev = [
     "vulture==2.16",
     "pydocstyle[toml]==6.3.0",
     "interrogate==1.7.0",
-    # Full commit of devtools release v0.6.3, as in requirements-dev.txt.
-    "misthelper-devtools @ git+https://github.com/jmorrison-juniper/misthelper-devtools.git@e8e093d205428b5503887267b6a9751fa7354be7",
+    # Full commit of devtools release v0.6.4, as in requirements-dev.txt.
+    "misthelper-devtools @ git+https://github.com/jmorrison-juniper/misthelper-devtools.git@79a5e45970e876f1656d69520d9635cea1aa25ef",
     # Declared only here until the later slices of issue #3400 settle them.
     "coverage>=7.0.0",
     "libcst>=1.9.0,<2",         # AST-based codemod for #429 logging f-string sweep
