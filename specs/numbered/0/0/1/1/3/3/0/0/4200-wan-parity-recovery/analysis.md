@@ -369,6 +369,7 @@ The review found and corrected three stale statements about inventory completene
 | Mist SDK | `rtk .venv/bin/python -m pytest tests/integration/test_mistapi_sdk_compatibility.py` | Eight passed. The guard found zero known signature failures. |
 | Types | `rtk .venv/bin/python -m mypy src/interfaces/wan_performance src/foundation/support/refactors/initialize_mist_session.py --config-file pyproject.toml` | Passed with no issues in 25 source files. |
 | Style | `rtk .venv/bin/python -m ruff check` and `rtk .venv/bin/python -m black --check` with both changed test paths | Passed. |
+| Test quality | `rtk .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` | Scanned 15 test files with zero findings, two skips, zero parse errors, and zero new findings. |
 | Quality guidance | `rtk .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | One passed. The gate read and validated all four required inputs. |
 
 The broader `test_spec_route_contract.py` run had 39 passes and one unrelated failure.
