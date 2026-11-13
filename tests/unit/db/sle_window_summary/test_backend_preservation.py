@@ -18,7 +18,7 @@ from src.foundation.support.refactors.endpoint_primary_key_strategies import (
     SleWindowIdentity,
 )
 from src.foundation.support.refactors.sqlite_database_writer import SQLiteDatabaseWriter
-from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
+from tests.unit.config.foundation.persistence.storage.arango_indexes.fakes import ArangoIndexWriterHarness
 
 HISTOGRAM_OPERATION = "getSiteSleHistogram"
 IMPACT_OPERATION = "getSiteSleImpactSummary"

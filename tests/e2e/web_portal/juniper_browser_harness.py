@@ -50,7 +50,9 @@ from src.operations.exporting.juniper_rma.workflows.reference_reads import (  # 
     SoftwareVersionWorkflow,
 )
 from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: the row shape that the portal lists and runs.
-from tests.unit.juniper_rma.fixtures import read_replies as replies  # WHY: the synthetic replies of the live shape.
+from tests.unit.prod_readiness.operations.exporting.juniper_rma.fixtures import (
+    read_replies as replies,
+)  # WHY: the synthetic replies of the live shape.
 from tests.unit.juniper_rma.fixtures.fake_gateway import (  # WHY: the gateway double and its helpers.
     FakeCall,
     FakeGateway,

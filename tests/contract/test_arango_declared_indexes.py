@@ -18,7 +18,7 @@ from src.foundation.persistence.db.writers.arango_writer import ArangoDBWriter
 from src.foundation.persistence.db.writers.redis_writer import RedisJSONWriter
 from src.foundation.support.refactors.endpoint_primary_key_strategies import ENDPOINT_PRIMARY_KEY_STRATEGIES
 from tests.integration.test_arango_declared_indexes_live import IsolatedArangoIndexTarget, IsolatedIndexQueryProof
-from tests.unit.arango_indexes.fakes import ArangoIndexWriterHarness
+from tests.unit.config.foundation.persistence.storage.arango_indexes.fakes import ArangoIndexWriterHarness
 
 
 class SDKIndexTransport:
