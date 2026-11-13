@@ -24,6 +24,9 @@ details, traffic, WAN Insights, and CSV exports. See the
 Read [the operator guide](documentation/operator-guide.md) for what each part
 does.
 
+Menu 164 builds WAN VPNs from gateway profiles. It uses no profile data from a
+failed Mist response.
+
 Menu 280 exports the alert digest handover report. Use it to group recent alarms
 for a shift change.
 
