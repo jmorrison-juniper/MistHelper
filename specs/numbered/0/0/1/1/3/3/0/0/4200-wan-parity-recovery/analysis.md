@@ -355,6 +355,9 @@ It covered 24 requirements, 47 tasks, and 50 inventory rows.
 All 24 requirement rows map to tasks. All 50 inventory rows have evidence and a decision.
 No task lacks an evidence row. No critical issue remains in these artifacts.
 The review found and corrected three stale statements about inventory completeness, live site selection, and PowerShell availability.
+The candidate removes eight existing unit-test modules under `tests/unit/wan_dashboard/wan_performance` and adds thirteen modules under `tests/unit/wan_performance`.
+It also adds two browser test modules. The old `last_seen` window assertion is not retained because `last_seen` is peer observation time, not metric sample time.
+No source test or fixture was copied.
 
 | Gate | Command or evidence | Result |
 | --- | --- | --- |
