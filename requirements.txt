@@ -114,7 +114,7 @@ logistro==2.0.1
     # via
     #   choreographer
     #   kaleido
-markdown-it-py==4.2.0
+markdown-it-py==4.3.0
     # via rich
 markupsafe==3.0.4
     # via
@@ -141,7 +141,7 @@ numpy==2.5.4
     #   contourpy
     #   matplotlib
     #   misthelper
-openai==3.48.0
+openai==3.50.0
     # via misthelper
 packaging==26.3
     # via
@@ -240,7 +240,7 @@ secretstorage==3.5.0 ; sys_platform == 'linux'
     # via keyring
 setuptools==84.2.1
     # via dash
-simplejson==4.2.0
+simplejson==4.3.0
     # via choreographer
 sniffio==1.3.1
     # via openai
