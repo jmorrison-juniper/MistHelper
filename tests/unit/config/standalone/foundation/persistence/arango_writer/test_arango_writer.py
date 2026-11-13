@@ -10,9 +10,8 @@ from unittest.mock import MagicMock, patch  # WHY: python-arango is mocked to av
 import pytest  # WHY: fixtures + parametrize entry points
 
 from src.foundation.persistence.db import DatabaseConfig  # WHY: config fixture builds a DatabaseConfig instance
-
-from ._test_arango_writer_helpers import (  # WHY: shared helpers keep test complexity low.
-    ALL_EXPECTED_EDGES,
+from tests.unit.config.standalone.foundation.persistence.arango_writer._test_arango_writer_helpers import (
+    ALL_EXPECTED_EDGES,  # WHY: shared helpers keep graph checks focused.
     assert_all_edged_ops_include,
     assert_edge_cols_include,
     assert_edge_fields,
