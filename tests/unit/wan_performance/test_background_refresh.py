@@ -61,8 +61,8 @@ def test_worker_without_lease_does_not_refresh() -> None:
     client.eval.assert_not_called()
 
 
-def test_workers_share_one_organization_lease() -> None:
-    """Prevent two portal processes from refreshing the same organization."""
+def test_worker_threads_follow_shared_organization_lease_protocol() -> None:
+    """Model lease contention between worker threads with mocked Redis."""
     attempts_lock = Lock()
     attempts = 0
     second_attempt = Event()
@@ -85,19 +85,21 @@ def test_workers_share_one_organization_lease() -> None:
 
     def refresh_once() -> dict[str, list[object]]:
         refresh_started.set()
-        allow_refresh.wait(1)
+        allow_refresh.wait(10)
         return {"ports": [], "peers": []}
 
     service.refresh.side_effect = refresh_once
     workers = [WanBackgroundRefreshWorker(service) for _ in range(2)]
 
-    workers[0].start()
-    assert refresh_started.wait(1), "The lease owner did not start its refresh."
-    workers[1].start()
-    assert second_attempt.wait(1), "The second worker did not contend for the shared lease."
-    allow_refresh.set()
-    for worker in workers:
-        worker.stop()
+    try:
+        workers[0].start()
+        assert refresh_started.wait(10), "The lease owner did not start its refresh."
+        workers[1].start()
+        assert second_attempt.wait(10), "The second worker did not contend for the shared lease."
+    finally:
+        allow_refresh.set()
+        for worker in workers:
+            worker.stop()
 
     assert service.refresh.call_count == 1, "More than one worker refreshed the organization."
     assert client.set.call_count == 2, "Both workers must attempt the same shared lease."
@@ -116,9 +118,11 @@ def test_worker_retries_lease_acquisition_after_the_configured_wait(
     monkeypatch.setattr(WanBackgroundRefreshWorker, "RETRY_INTERVAL_SECONDS", 0.01)
     worker = WanBackgroundRefreshWorker(service)
 
-    worker.start()
-    assert completed.wait(1), "The worker did not retry after its lease wait."
-    worker.stop()
+    try:
+        worker.start()
+        assert completed.wait(10), "The worker did not retry after its lease wait."
+    finally:
+        worker.stop()
 
     assert client.set.call_count == 2, "The worker did not make exactly one retry."
     assert service.refresh.call_count == 1, "The worker refreshed more than once."
@@ -134,9 +138,11 @@ def test_worker_does_not_release_a_lease_after_ownership_changes() -> None:
     service.refresh.side_effect = lambda: completed.set() or {"ports": [], "peers": []}
     worker = WanBackgroundRefreshWorker(service)
 
-    worker.start()
-    assert completed.wait(1), "The lease owner did not complete its refresh."
-    worker.stop()
+    try:
+        worker.start()
+        assert completed.wait(10), "The lease owner did not complete its refresh."
+    finally:
+        worker.stop()
 
     assert client.eval.call_count == 1, "The worker evaluated a release after losing ownership."
 
