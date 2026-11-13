@@ -1927,3 +1927,113 @@ The link check found zero broken links.
 The separate WAN override test and its quickstart consumer remain unchanged.
 This exclusion bounds the batch and does not assert an ownership block.
 The held actions and analytics paths, fixtures, markers, and pytest settings remain unchanged.
+
+## T069 validation on fresh main, 2026-11-13
+
+The base commit is `816f42bac74aebfb936ac9fc9b72fe1ec2030c09`.
+The code candidate before this evidence-only commit is `4c1ab4dfa154367b4cac29fea6c6b48bf254328c`.
+
+The complete unit collection command is:
+
+```sh
+.venv/bin/python -B -m pytest -p no:cacheprovider --collect-only -q tests/unit
+```
+
+It collected 30,651 candidate node IDs.
+The fresh-main inventory held 30,645 node IDs.
+A rename-aware comparison found zero missing IDs and six added IDs.
+The six added IDs belong to the missing-root, empty-root, and forbidden-input controls in the two relocated guards.
+No current-main test IDs were removed or restored from an earlier deleted test.
+
+Pytest ran all 300 mapped test modules.
+The run reported 13,823 passed, 11 skipped, and zero failed.
+The two inventory modules then reported 15 passed after their weak call-count checks gained value assertions.
+The moved-root tests reported 129 passed.
+
+The two relocated source guards and the moved SQLite handle tests ran with:
+
+```sh
+.venv/bin/python -B -m pytest -p no:cacheprovider -s -q \
+  tests/unit/config/standalone/foundation/support/quality/imports/test_no_new_legacy_facade_imports.py \
+  tests/unit/config/standalone/foundation/support/quality/scope/test_no_export_legacy_callsites.py \
+  tests/unit/config/standalone/foundation/persistence/database/test_data_browser_sqlite_handles.py
+```
+
+The command reported 16 passed.
+The legacy facade guard examined 1,428 Python test files.
+The export callsite guard examined 2,573 Python source files.
+The negative controls proved that a forbidden import and a forbidden callsite fail each guard.
+Each guard also rejected a missing or empty scan root.
+
+The relocation and portal guards ran with:
+
+```sh
+.venv/bin/python -B -m pytest -p no:cacheprovider -q \
+  tests/guardrails/test_move_module_guidance.py \
+  tests/guardrails/test_portal_operation_coverage.py
+```
+
+The command reported 32 passed and one skipped.
+The complete E2E, contract, and integration collection used:
+
+```sh
+.venv/bin/python -B -m pytest -p no:cacheprovider --collect-only -q \
+  tests/e2e tests/contract tests/integration
+```
+
+It examined 3,513 items without a collection error.
+The synthetic Juniper browser command reported 18 passed:
+
+```sh
+.venv/bin/python -B -m pytest -p no:cacheprovider -q \
+  tests/e2e/web_portal/test_juniper_menus_browser.py
+```
+
+The moved-path audit examined 360 mapped files and 41 lines with file-relative path logic.
+It corrected the stale repository root in `test_data_browser_sqlite_handles.py`.
+The other file-relative paths resolved to the worktree root or to a local fixture as intended.
+The Juniper browser harness imports `fake_gateway.py` from its existing canonical fixture path.
+It does not move or copy that fixture.
+
+The full Ruff check reported `All checks passed`.
+The full Black check left 2,577 files unchanged.
+The exact style commands were:
+
+```sh
+.venv/bin/python -m ruff check .
+.venv/bin/python -m black --check .
+```
+
+The installed `misthelper-devtools` version was 0.6.4.
+The committed quality preflight used:
+
+```sh
+.venv/bin/python -B -m pytest -p no:cacheprovider -s -q \
+  tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+```
+
+It reported one passed.
+The changed-from gate and full gate each checked 1,253 files and 400 findings.
+Each gate skipped 52 files, found zero parse errors, and reported zero new findings.
+The exact gate commands were:
+
+```sh
+test-quality-analyzer --gate \
+  --config .github/test-quality-config.toml \
+  --baseline .github/test-quality-baseline.json \
+  --changed-from origin/main \
+  --full-gate-path .github/workflows/ci.yml \
+  --full-gate-path requirements-dev.txt
+test-quality-analyzer --gate \
+  --config .github/test-quality-config.toml \
+  --baseline .github/test-quality-baseline.json
+```
+
+The baseline holds 733 records on both main and the candidate.
+The move map changes 293 `file_path` values and 293 `related_source` values.
+Every other field remains identical, including rule IDs, explanations, severities, and line numbers.
+No finding was removed, suppressed, or reclassified.
+The dependency pins, `pyproject.toml`, and test-quality configuration remain unchanged.
+
+T069 closes the partial fresh-main validation only.
+This result does not claim full hierarchy acceptance or completion of the remaining tasks.

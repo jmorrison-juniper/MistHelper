@@ -109,7 +109,7 @@ Do not publish this candidate or start a hosted run.
 - [X] T067 [US1] Move the unclaimed firmware manager MSP test into mapped `firmware/upgraders/manager/site/`. Preserve test bytes and baseline semantics. Verify live ownership, focused tests, node-ID parity, group size, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
 
 - [X] T068 [US1] Rebuild the unclaimed move set from fresh main. Move 360 mapped files, add ten required package markers, and update only active references and baseline paths. Leave 23 paths at source because their target groups would exceed five children. Keep four `output_defaults` package files at source to preserve the remaining test's relative imports. Keep eight Juniper RMA JSON replies beside their shared fixture loader. Keep all 22 claimed paths unchanged. Keep production files and dependency pins unchanged.
-- [ ] T069 [US2] Compare the complete unit node-ID set with the fresh-main baseline. Run affected tests, relocation guards, configuration checks, and the test-quality gate. Record exact commands and results in `design/research.md`.
+- [X] T069 [US2] Compare the complete unit node-ID set with the fresh-main baseline. Run affected tests, relocation guards, configuration checks, and the test-quality gate. Record exact commands and results in `design/research.md`.
 
 ## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
 
