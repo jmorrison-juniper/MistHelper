@@ -21,5 +21,5 @@ NEXT5_TARGET_TO_MODULE = {
         "src.operations.execution.capture.org_pcap_wait_download_workflow.OrgPcapWaitDownloadWorkflow"
     ),
     "wifi_clients": "src.operations.exporting.export.wifi_clients_exporter.WifiClientsExporter",
-    "run_interactive_test": "src.mist.intelligence.troubleshooting.core.interactive_test_runner.InteractiveTestRunner",
+    "run_interactive_test": "src.foundation.support.menu_testing.interactive_test_runner.InteractiveTestRunner",
 }

@@ -84,12 +84,12 @@ class _LoggedErrorObserver(logging.Handler):
 class UnattendedInteractiveInputProvider:
     """Generate deterministic prompt answers for the unattended interactive suite."""
 
-    _ALL_KEYWORD_RULES = (
+    _ALL_KEYWORD_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
         (("zones", "rssizones"), "zones"),
         (("duration",), "60"),
         (("time range",), "7d"),
     )  # WHY: exact-keyword rules keep prompt matching data-driven and low-complexity.
-    _ANY_KEYWORD_RULES = (
+    _ANY_KEYWORD_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
         (("(y/n", "(y/", "yes/no"), "n"),
         (("index", "choice", "select"), "0"),
     )  # WHY: synonym groups cover existing prompt wording without extra branches.
@@ -173,7 +173,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
         sites_response = self.mistapi_module.api.v1.orgs.sites.listOrgSites(
             self.apisession, org_id, limit=1000
         )  # WHY: fetch full org site set so selector can resolve by id or name.
-        sites_data = self.mistapi_module.get_all(
+        sites_data: list[dict[str, Any]] = self.mistapi_module.get_all(
             response=sites_response, mist_session=self.apisession
         )  # WHY: resolve paginated site response into iterable list.
         logger.debug(
@@ -342,7 +342,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _skip_reason_for_option(self, option: str) -> str:
         """Return a non-empty skip reason for an option outside the interactive-safe set."""
-        reason = self.operation_registry.skip_reason(option)  # WHY: prefer the registry's specific reason.
+        reason: str = self.operation_registry.skip_reason(option)  # WHY: preserve the registry's text contract.
         if reason:  # WHY: a specific reason gives the operator the missing capability.
             return reason  # WHY: preserve the exact registry text for telemetry and logs.
         category = self.operation_registry.skip_category(option)  # WHY: derive a fallback reason from classification.
@@ -425,7 +425,7 @@ class InteractiveTestRunner:  # WHY: dependency container avoids global module s
 
     def _ensure_org_id(self) -> str:
         """Return cached org_id or resolve and persist a new one."""
-        org_id = self.org_id_getter()  # WHY: retrieve cached org_id from injected getter.
+        org_id: str = self.org_id_getter()  # WHY: retain the organization identifier contract.
         if not org_id:
             logger.info("No cached org_id present; resolving via config utils")  # WHY: log before resolution.
             org_id = self.config_utils.get_cached_or_prompted_org_id()  # WHY: resolve org_id via utils.
