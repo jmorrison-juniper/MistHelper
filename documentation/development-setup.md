@@ -243,18 +243,19 @@ Then confirm that the editor reports neither code for every affected file.
 A terminal result alone does not verify the editor result or clear all 534 findings from issue #4126.
 Do not change production imports or disable diagnostics to correct an editor root or interpreter selection.
 
-#### Live verification record
+#### Record the editor evidence
 
-On 2026-11-07T03:53:24.977Z, Microsoft Pylint extension 2026.6.0 ran in the PR worktree window.
-The selected interpreter was `<worktree>/.venv/bin/python`.
-The extension log showed the worktree `MistHelper.py` path and worktree `.venv` site-packages.
-The report covered 4 modules and recorded 0 fatal messages, 0 errors, 48 warnings, 20 refactors, 65 conventions, and 0 informational messages.
-The exact score was 9.429918559794256.
-The Pylint output recorded a `pylint/publishDiagnostics` notification.
-The Problems view used Pylance as its diagnostic source, and its E0401 and E0611 filters showed no matches.
-The Pylint report recorded zero errors, and a targeted command for E0401 and E0611 exited with code 0 and no output.
-The extension log set `pylint.cwd` to `${workspaceFolder}` and showed `workspace` as `/`.
-The log did not report the resolved working directory, so the configured value alone does not verify it.
+For each affected file, record its current path, the UTC observation time, and the diagnostic source.
+Record the selected interpreter, resolved working directory, and Pylint extension version.
+An empty Pylance filter does not verify Pylint diagnostics.
+A configured `${workspaceFolder}` value alone does not prove the resolved working directory.
+Keep an unavailable value marked as unverified, with its cause.
+Keep private environment contents and credentials out of the evidence.
+
+If Screen Recording or another native permission is unavailable, stop the live check and request the required permission.
+Do not bypass the permission or report a terminal check as live evidence.
+Keep issue #4126 open until every affected file has verified live editor evidence.
+This setup guide does not establish that acceptance.
 
 The [Pylint extension reference](https://github.com/microsoft/vscode-pylint#settings) describes these settings and their precedence.
 
