@@ -12,7 +12,7 @@ from src.operations.execution.firmware_policy.recovery.bundle import BundleFiles
 from src.operations.execution.firmware_policy.recovery.workflow import RestoreWorkflow
 from src.operations.execution.firmware_policy.sdk import PolicyApi, PolicyError
 from src.operations.execution.firmware_policy.workflow import PolicyWorkflow
-from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID, SettingsSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy.fakes import ORG_ID, SITE_ID, SettingsSession
 from web_portal.routes.firmware_policy.restore.inspection import HistoricalInspection, PreparedInspection
 
 

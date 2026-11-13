@@ -1,7 +1,8 @@
 """Wave 9 P2 coverage tests for src.operations.execution.ssh.config.env_loader.
 
 Targets the ``EnvSshConfigLoader`` branches that existing tests in
-``tests/unit/test_ssh_runner.py::TestLoadSSHConfigFromEnv`` don't reach:
+``tests/unit/prod_readiness/standalone/operations/execution/ssh/test_ssh_runner.py``
+don't reach:
 the manual-parser branch (when ``_DOTENV_AVAILABLE`` is patched to False),
 error-guard handlers around dotenv/manual reads, the ``_MAX_MANUAL_LINES``
 cap, the ``_unquote_value`` mismatched-quote passthrough, and the invalid

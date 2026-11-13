@@ -96,9 +96,9 @@ Use the existing Python 3.15+ development environment.
 Run these commands from the repository root:
 
 ```bash
-rtk proxy python -m pytest tests/unit/test_release_body.py tests/contract/test_release_body_workflow.py --cov=scripts.release_body --cov-branch --cov-report=term-missing --cov-fail-under=90
-rtk proxy python -m ruff check scripts/release_body.py tests/unit/test_release_body.py tests/contract/test_release_body_workflow.py
-rtk proxy python -m black --check scripts/release_body.py tests/unit/test_release_body.py tests/contract/test_release_body_workflow.py
+rtk proxy python -m pytest tests/unit/config/standalone/foundation/runtime/release/test_release_body.py tests/contract/test_release_body_workflow.py --cov=scripts.release_body --cov-branch --cov-report=term-missing --cov-fail-under=90
+rtk proxy python -m ruff check scripts/release_body.py tests/unit/config/standalone/foundation/runtime/release/test_release_body.py tests/contract/test_release_body_workflow.py
+rtk proxy python -m black --check scripts/release_body.py tests/unit/config/standalone/foundation/runtime/release/test_release_body.py tests/contract/test_release_body_workflow.py
 rtk proxy python -m mypy --config-file pyproject.toml scripts/release_body.py
 rtk proxy python -m bandit scripts/release_body.py
 rtk proxy test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json

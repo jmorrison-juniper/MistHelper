@@ -16,8 +16,8 @@ from werkzeug.serving import make_server
 from src.foundation.support.utils.rate_limiting import RateLimitingUtils
 from src.operations.execution.firmware_policy.sdk import PolicyError
 from tests.e2e.web_portal.test_firmware_policy import PolicyJobs
-from tests.unit.firmware_policy.fakes import ORG_ID, SITE_ID
-from tests.unit.firmware_policy.recovery.fakes import RestoreSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy.fakes import ORG_ID, SITE_ID
+from tests.unit.prod_readiness.operations.execution.firmware.policy.recovery.fakes import RestoreSession
 from web_portal.app import WebPortalApp
 from web_portal.routes.firmware_policy.restore import RestoreInputs
 

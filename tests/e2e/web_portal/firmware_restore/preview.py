@@ -11,8 +11,8 @@ from types import SimpleNamespace
 from werkzeug.serving import make_server
 
 from src.foundation.support.utils.rate_limiting import RateLimitingUtils
-from tests.unit.firmware_policy.fakes import ORG_ID, OTHER_SITE_ID, SITE_ID
-from tests.unit.firmware_policy.recovery.fakes import RestoreSession
+from tests.unit.prod_readiness.operations.execution.firmware.policy.fakes import ORG_ID, OTHER_SITE_ID, SITE_ID
+from tests.unit.prod_readiness.operations.execution.firmware.policy.recovery.fakes import RestoreSession
 from web_portal.app import WebPortalApp
 
 
