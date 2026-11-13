@@ -10,6 +10,7 @@ Coverage target: >= 80%
 # ruff: noqa: E501
 
 import unittest  # WHY: test framework
+import uuid  # WHY: audit identifiers must be valid UUIDs
 from unittest.mock import MagicMock  # WHY: mocking database calls
 
 from src.interfaces.portals.upgrade_portal.audit.logger import AuditLogger  # WHY: audit logging module
@@ -248,12 +249,14 @@ class TestAuditLogger(unittest.TestCase):
             details={"test": "data"},  # WHY: operation details
         )  # WHY: execute logging
         # WHY: verify log ID returned
-        self.assertIsNotNone(log_id)  # WHY: should return log ID
+        self.assertEqual(str(uuid.UUID(log_id)), log_id)  # WHY: the returned identifier must be a canonical UUID
         # WHY: verify database write called
         self.mock_db.write.assert_called_once()  # WHY: assert write called
         # WHY: verify write arguments
         call_args = self.mock_db.write.call_args  # WHY: get call arguments
         self.assertEqual(call_args.kwargs["collection"], "audit_logs")  # WHY: correct collection
+        self.assertEqual(call_args.kwargs["data"][0]["log_id"], log_id)  # WHY: the stored identifier must match
+        self.assertEqual(call_args.kwargs["data"][0]["_key"], log_id)  # WHY: the primary key must match
         self.assertIn("timestamp", call_args.kwargs["data"][0])  # WHY: timestamp present
 
     def test_log_operation_with_masking(self):
@@ -310,10 +313,12 @@ class TestAuditLogger(unittest.TestCase):
             device_ids=["dev1", "dev2", "dev3"],  # WHY: devices
         )  # WHY: execute logging
         # WHY: verify log ID returned
-        self.assertIsNotNone(log_id)  # WHY: should return log ID
+        self.assertEqual(str(uuid.UUID(log_id)), log_id)  # WHY: the returned identifier must be a canonical UUID
         # WHY: verify operation type
         call_args = self.mock_db.write.call_args  # WHY: get call arguments
         entry = call_args.kwargs["data"][0]  # WHY: get entry
+        self.assertEqual(entry["log_id"], log_id)  # WHY: the stored identifier must match
+        self.assertEqual(entry["_key"], log_id)  # WHY: the primary key must match
         self.assertEqual(entry["operation"], "capture_start")  # WHY: correct operation
         self.assertEqual(entry["result"], "pending")  # WHY: status is pending
 
@@ -339,10 +344,12 @@ class TestAuditLogger(unittest.TestCase):
             input_data={"device_ids": []},  # WHY: invalid input
         )  # WHY: execute logging
         # WHY: verify log ID returned
-        self.assertIsNotNone(log_id)  # WHY: should return log ID
+        self.assertEqual(str(uuid.UUID(log_id)), log_id)  # WHY: the returned identifier must be a canonical UUID
         # WHY: verify failure status
         call_args = self.mock_db.write.call_args  # WHY: get call arguments
         entry = call_args.kwargs["data"][0]  # WHY: get entry
+        self.assertEqual(entry["log_id"], log_id)  # WHY: the stored identifier must match
+        self.assertEqual(entry["_key"], log_id)  # WHY: the primary key must match
         self.assertEqual(entry["result"], "failure")  # WHY: status is failure
         self.assertEqual(entry["error_message"], "site_id required")  # WHY: error message present
 
@@ -359,7 +366,7 @@ class TestAuditLogger(unittest.TestCase):
             user_id="user123",  # WHY: user identifier
         )  # WHY: execute logging
         # WHY: verify log ID still returned
-        self.assertIsNotNone(log_id)  # WHY: should return log ID even without db
+        self.assertEqual(str(uuid.UUID(log_id)), log_id)  # WHY: a canonical UUID is required without a database
 
     def test_masking_disabled(self):
         """Test logging with masking disabled.

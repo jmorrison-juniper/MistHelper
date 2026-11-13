@@ -40,6 +40,7 @@ FunctionIndex = prompt_audit.FunctionIndex  # Read the index class from the opti
 PromptWalker = prompt_audit.PromptWalker  # Read the walker class from the optional module.
 read_menu_handlers = prompt_audit.read_menu_handlers  # Read the handler reader from the optional module.
 
+
 from web_portal.menu_registry import build_static_menu_actions  # noqa: E402
 from web_portal.services.operation import PARAMETER_REGISTRY, OperationExecutor  # noqa: E402
 
@@ -87,19 +88,6 @@ AUDIT_SEES_FEWER_PROMPTS = frozenset(
         "95",  # DeviceDataFetcher resolves the site and gateway-device prompts through injected PromptUtils.
         "96",  # DeviceDataFetcher resolves the site and all-device prompts through injected PromptUtils.
         "203",
-        # Issue #4139: the Juniper RMA menus read operator answers through an injected resolver,
-        # SourceDependencyResolver.InputUtils (juniper_menu_support.py), or through the mh.InputUtils
-        # module alias (lookup.py and asset_lookup.py). The static walk cannot resolve either path.
-        # Menus 295, 297, and 303 also add a dependent identifier control through dynamic_parameters,
-        # which this test does not count. The browser tests in tests/e2e/web_portal/test_juniper_menus_browser.py
-        # drive each of these menus through the portal and check the result, so the prompt order is proven there.
-        "294",
-        "295",
-        "296",
-        "297",
-        "300",
-        "303",
-        "304",
     }
 )
 
@@ -376,6 +364,18 @@ def test_a_row_that_prompts_first_offers_real_choices():
         assert options[0]["value"] == "1", f"menu {menu} numbers its first choice {options[0]['value']}, not 1"
         values = [option["value"] for option in options]
         assert values == [str(index) for index in range(1, len(options) + 1)], f"menu {menu} choice values have a gap"
+
+
+@pytest.mark.parametrize(
+    ("menu", "expected"),
+    [("294", 2), ("295", 2), ("296", 3), ("297", 3), ("300", 2), ("303", 3), ("304", 1)],
+)
+def test_the_audit_reaches_every_juniper_rma_prompt(menu, expected, audit):
+    """Each Juniper RMA menu reaches its prompts, so no exemption hides it."""
+    row = audit[menu]
+    assert row["note"] == "ok", f"menu {menu} handler {row['handler']} was not found"
+    assert row["prompts"] == ["raw"] * expected, f"menu {menu} reaches {row['prompts']}, not {expected} prompts"
+    assert len(_declared_types(menu)) <= len(row["prompts"]), f"menu {menu} declares more controls than prompts"
 
 
 def test_no_new_row_declares_a_control_no_prompt_consumes(audit, runnable):

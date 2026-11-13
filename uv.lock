@@ -1526,7 +1526,7 @@ requires-dist = [
     { name = "libcst", marker = "extra == 'dev'", specifier = ">=1.9.0,<2" },
     { name = "matplotlib", specifier = ">=3.11.2,<4" },
     { name = "mistapi", specifier = ">=0.64.1,<0.65" },
-    { name = "misthelper-devtools", marker = "extra == 'dev'", git = "https://github.com/jmorrison-juniper/misthelper-devtools.git?rev=e8e093d205428b5503887267b6a9751fa7354be7" },
+    { name = "misthelper-devtools", marker = "extra == 'dev'", git = "https://github.com/jmorrison-juniper/misthelper-devtools.git?rev=79a5e45970e876f1656d69520d9635cea1aa25ef" },
     { name = "mypy", marker = "extra == 'dev'", specifier = "==2.4.1" },
     { name = "numpy", specifier = ">=2.5.4,<3" },
     { name = "openai", specifier = ">=3.33.0,<4" },
@@ -1579,8 +1579,8 @@ provides-extras = ["dev", "container", "ste-linter"]
 
 [[package]]
 name = "misthelper-devtools"
-version = "0.6.3"
-source = { git = "https://github.com/jmorrison-juniper/misthelper-devtools.git?rev=e8e093d205428b5503887267b6a9751fa7354be7#e8e093d205428b5503887267b6a9751fa7354be7" }
+version = "0.6.4"
+source = { git = "https://github.com/jmorrison-juniper/misthelper-devtools.git?rev=79a5e45970e876f1656d69520d9635cea1aa25ef#79a5e45970e876f1656d69520d9635cea1aa25ef" }
 dependencies = [
     { name = "libcst" },
     { name = "packaging" },

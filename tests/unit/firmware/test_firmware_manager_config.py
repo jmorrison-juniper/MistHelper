@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import types
+from dataclasses import FrozenInstanceError
 from typing import Any
 from unittest.mock import Mock
 
@@ -125,7 +126,7 @@ class TestFirmwareManagerConfigImmutability:
 
     def test_frozen_disallows_mutation(self) -> None:
         cfg = _make_config()
-        with pytest.raises((AttributeError, Exception)):
+        with pytest.raises(FrozenInstanceError):
             cfg.org_id = "other"  # type: ignore[misc]
 
     def test_slots_disallow_new_attributes(self) -> None:
