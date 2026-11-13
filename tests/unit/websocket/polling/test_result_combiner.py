@@ -13,6 +13,7 @@ Why:
 from __future__ import annotations
 
 import logging
+from dataclasses import FrozenInstanceError
 from typing import Any
 
 import pytest
@@ -368,7 +369,7 @@ class TestCombineRequestDataclass:
 
     def test_frozen_disallows_mutation(self) -> None:
         req = _make_request()
-        with pytest.raises((AttributeError, Exception)):
+        with pytest.raises(FrozenInstanceError):
             req.debug_mode = True  # type: ignore[misc]
 
     def test_slots_disallow_new_attributes(self) -> None:
