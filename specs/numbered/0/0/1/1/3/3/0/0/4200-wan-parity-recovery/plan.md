@@ -20,9 +20,10 @@ Redis remains optional and evidence-gated. Do not introduce new keys or TTLs wit
 Use existing portal authorization and request admission.
 
 Source baseline: `jmorrison-juniper/MistWANPerformance` at `2d1c2199fa1e31c129ef1e051c5389349a207785`.
-Destination baseline: PR #4208 remote head `fbb23f8a2348e6840caf479dc10d8841635ea91e`. Local candidate: `8552557d635f1e4e3fdcf8c1388ea1370cdf6214`.
-Observed remote main: `816f42bac74aebfb936ac9fc9b72fe1ec2030c09`.
-These refs are read-only observations. This planning change does not rebase product work.
+The original PR #4208 head and first local candidate are historical observations from 2026-11-05.
+The current reconstruction uses main `2a6a5844698aeb180fea353e0243034890774565` as its merge base.
+It started at `07b7751fb9e6c0e8d285d2adb9b0273bc5aae4fc` and includes the locally reviewed repairs in `d7a706d71cf13661cf33e5b4a96ddafd79b6b67b`.
+This candidate remains local. This plan does not authorize publication, hosted checks, or merge.
 
 The approved sampling decision preserves each real poll as a raw sample with full identity and a UTC timestamp.
 Use the poll collection time for scalar statistics. Preserve API timestamps for time-series responses.
@@ -111,8 +112,10 @@ Before touching them, record current violations, obtain scoped ownership, and de
 
 ## Tool limitations
 
-PowerShell is unavailable. Managed-route allocation, setup, and prerequisite scripts were not executed.
-The route was calculated from the repository radix algorithm and must pass local structure checks.
+PowerShell was unavailable during the initial planning review.
+A verified session-local PowerShell 7.7.0 runtime now supports read-only prerequisite checks.
+The WAN prerequisite check ran with an explicit feature directory and did not update `.specify/feature.json`.
+Managed-route allocation and setup scripts remain unexecuted.
 The mandatory branch hook was loaded but not executed because this app already owns the feature branch.
-No feature pointer was changed. Optional commit hooks were not executed.
-This is a manually prepared Spec Kit record, not a claim that the complete command pipeline ran.
+Optional commit hooks were not executed.
+This record does not claim that the complete Spec Kit command pipeline ran.

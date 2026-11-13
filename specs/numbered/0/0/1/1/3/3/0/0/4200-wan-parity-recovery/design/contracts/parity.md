@@ -14,8 +14,9 @@ Map rows to destination selectors and assertions. Do not mark a page complete be
 | WAN port | `/port/{site}/{encoded-port}?gateway_id={gateway}` | Encoded identity, utilization, receive/transmit bandwidth, capacity, history |
 | VPN peer | `/vpn/{site}/{encoded-peer}` | Peer identity, loss, latency, jitter, tunnel details, missing history |
 
-The [source and destination discovery](discovery.md) records 15 additional surface groups, static call paths, and SDK incompatibilities.
-Use its D01-D15 evidence with P01-P20. Neither inventory is exhaustive or runtime-accepted.
+The [source and destination discovery](discovery.md) records 15 surface groups, static call paths, and SDK incompatibilities.
+P01-P20 are seed rows. P21-P50 expand those rows across every reviewed static surface, including explicit unknowns and test gaps.
+The inventory is complete only for the inspected static evidence. Runtime and visual acceptance remain unverified.
 
 Destination routes may differ but must preserve tested equivalent identifiers and navigation.
 The gateway identifier representation requires explicit source-to-destination mapping, not an assumed UUID/MAC substitution.
@@ -98,9 +99,10 @@ Every required comparison row must reference a passing assertion or remain expli
 
 ## Seed inventory
 
-This table starts the exhaustive inventory. It does not complete T003 or T007-T010.
+This table completes the static inventory tasks T003 and T007-T010 for the reviewed documents, pages, and tests.
+It does not establish runtime acceptance or source visual approval.
 All source references below use revision `2d1c2199fa1e31c129ef1e051c5389349a207785`.
-Destination observations use product revision `1a408c9511d8b32662d201068f2f54196f643450`.
+Earlier destination observations use product revision `1a408c9511d8b32662d201068f2f54196f643450`.
 Documented means described by source documentation, not runtime-verified.
 Goal means requested in ProjectGoals, not proven completed behavior.
 Each row still needs exact source locations, destination assertions, and a reviewer decision.
@@ -129,11 +131,96 @@ Each row still needs exact source locations, destination assertions, and a revie
 | P20 | docs/screens.md: synthetic captures at 1440-by-1100, documented | Destination synthetic pages exist; visual approval absent | T033-T036 |
 
 For P01-P04, enumerate every control rather than using one page row as acceptance.
-Inspect source README, page definitions, tests, and operational documentation read-only to determine completed behavior.
-Source imagery is not imported. Source fixture data is not reused.
-Source detail inventory includes MOS, gateway CPU/memory/uptime, port packet/error counters, and peer path configuration.
-Verify their field contracts and destination assertions individually.
-Preserve actual source 6h/12h/24h/7-day controls separately from the desired 3h project window.
+The detailed rows below use pinned documentation, active page definitions, source test names, and destination assertions.
+They classify a visible source surface separately from a completed source behavior.
+No source image, fixture, or code was copied.
+
+## Detailed source-to-destination inventory
+
+Source references use revision `2d1c2199fa1e31c129ef1e051c5389349a207785`.
+Destination behavior uses the candidate source at `d7a706d71cf13661cf33e5b4a96ddafd79b6b67b`.
+Destination test names identify independent synthetic or mocked assertions.
+They do not establish source runtime behavior or visual parity.
+
+| Row | Source evidence and classification | Visible item, action, metric, state, or transition | Destination selector and assertion | Decision |
+| --- | --- | --- | --- | --- |
+| P21 | D01, active overview code | Site health summary | `wan-overview-status`, `wan-overview-kpis`; offline route tests | Synthetic content only. Population and denominator remain unknown. |
+| P22 | D01, active overview code | Gateway state, circuit summary, and failovers | `wan-overview-kpis`, `wan-top-congested-circuits`; live state tests | Live snapshots exist. Historical failover behavior remains unverified. |
+| P23 | D01, D03, active overview code | Current alerts and degraded sites | `wan-active-alerts`, `wan-sle-degraded-sites`; offline route tests | Selectors exist in synthetic preview. Scope and alert rules remain unknown. |
+| P24 | D02, active overview code | Ranked table with rank, site, port, speed, utilization, and status | `wan-top-congested-circuits`, `wan-gateway-link`, `wan-port-link` | Destination renders a synthetic table and links. Ranking and precision are not accepted. |
+| P25 | D02, active overview code | Ten-row pagination | No destination pagination selector or control | Not implemented. No live pagination behavior is claimed. |
+| P26 | D03, active overview code | Alert and degraded-SLE tables | `wan-active-alerts`, `wan-sle-degraded-sites` | Synthetic panels exist. Live SLE data is not established. |
+| P27 | D03, active overview code | SLE table sorting and filtering | No destination sorting or filtering control | Not implemented. Source scope and classifier rules remain unknown. |
+| P28 | D04, active overview code | Region, utilization, trends, throughput, gateway bandwidth, and VPN quality charts | `wan-region-summary-chart`, `wan-utilization-distribution-chart`, `wan-overview-trends`, `wan-site-charts` | Synthetic charts exist. Source axes, units, series, and missing-history rules remain unverified. |
+| P29 | D05, active overview code | Site selector | `wan-site-controls` contains a disabled synthetic selector. Live gateway form has `wan-live-gateway-site` text input. | A live site identifier input exists, but it does not match the source selector. |
+| P30 | D05, active overview code | 6-hour, 12-hour, 24-hour, and 7-day range controls with a 24-hour default | `wan-site-controls` contains a disabled 24-hour synthetic value | Source ranges are documented. Live controls are not implemented. Keep the 3-hour goal separate. |
+| P31 | D05, D15, active overview code | Overview auto-refresh and status interval | `wan-site-controls`; background worker tests | Source intervals are 60 and 10 seconds. Destination worker uses bounded 300-second refresh and 10-second lease retry. |
+| P32 | D06, active route code | Region-to-site-to-circuit drilldown and breadcrumbs | `wan-gateway-link`, `wan-port-link`, `wan-peer-link`, `wan-back-link` | Gateway, port, and peer routes exist. Region and site list transitions do not. |
+| P33 | D07, active overview code | SLE summary, histogram, and classifiers | `wan-sle-degraded-sites` only | No destination SLE detail route or verified data contract exists. |
+| P34 | D07, active overview code | Impacted gateways, interfaces, applications, and peers | No destination impact-detail selector | Not implemented. SDK and field contracts remain unverified. |
+| P35 | D08, active overview code | CSV export for congestion, alerts, and degraded SLE | No destination export control | Not implemented. Source callback presence does not prove a working download. |
+| P36 | D09, active gateway page | Gateway ID, site, status, and last-seen time | `wan-gateway-health`, `wan-gateway-kpis` | Offline values are synthetic. Live field units and time meaning remain unverified. |
+| P37 | D09, active gateway page | Port and peer counts, CPU, memory, and uptime | `wan-gateway-kpis`, `wan-port-table`, `wan-peer-table` | Source lists these fields. The destination does not show them or verify their units. |
+| P38 | D10, active gateway page | WAN-port and VPN-peer tables and detail links | `wan-port-table`, `wan-peer-table`, `wan-port-link`, `wan-peer-link` | Synthetic navigation is tested. Full identity and source row coverage remain unverified. |
+| P39 | D10, active gateway page | Gateway bandwidth and device-metric charts with 24-hour coverage | `wan-gateway-charts` | Synthetic charts exist. Source units and 24-hour completeness remain unknown. |
+| P40 | D11, active port page | Port status and utilization gauge | `wan-port-kpis`, `wan-port-gauges` | Offline values are synthetic. The live scalar contract does not establish utilization units. |
+| P41 | D11, active port page | Current statistics and port configuration | `wan-port-current-statistics`, `wan-port-configuration` | Synthetic panels exist. Capacity, role, provider, address, and MTU mappings remain unverified. |
+| P42 | D11, active route code | Encoded interface path and gateway/site query scope | `/wan-performance/port/{site}/{encoded-port}`; `test_port_route_preserves_an_encoded_slash_and_bandwidth_units` | Encoded slash preservation and fixture scope have offline assertions. Source and live field parity remain open. |
+| P43 | D12, active port page | Receive and transmit bandwidth history | `wan-port-charts` | Offline charts exist. The supported SDK does not provide the source historical method. |
+| P44 | D12, active port page | Unicast, multicast, broadcast, drops, and CRC counters | `wan-port-packet-statistics`, `wan-port-error-counters`; destination-only `wan-calendar-summaries` | Synthetic panels exist. Counter semantics and any source equivalent for calendar summaries remain unknown. |
+| P45 | D13, active peer page | Loss, latency, jitter, and MOS gauges and history | `wan-peer-kpis`, `wan-peer-gauges`, `wan-peer-charts` | Current scalar loss, latency, and jitter are supported with verified units. MOS scale and source history remain unknown. |
+| P46 | D14, active peer page | Peer path identity, addresses, type, tunnel name, and MTU | `wan-peer-details` | Synthetic fields exist. The live response does not verify each source field. |
+| P47 | D14, active peer page | Uptime, bytes, and packets | `wan-peer-statistics` | Synthetic fields exist. Live field contracts and counter semantics remain unknown. |
+| P48 | D14, active route code | Peer route and tunnel-path identity | Live peer links include site, MAC, and path key. Offline peer route tests cover site and MAC. | Full path identity is retained in live scope. The source field mapping remains unverified. |
+| P49 | `tests/test_detail_pages.py:217-366`, source test intent | Populated, missing, raising-provider, gateway lookup, duplicate-peer, and encoded-link cases | `test_wan_performance_offline.py`, `test_wan_performance_live.py` | Source tests were inspected, not run. Destination tests use independent data. |
+| P50 | `tests/test_views.py:48-347`, source test intent | Ranking, availability ranking, chronic offenders, current alerts, and serialized fields | `test_wan_performance_live.py` and offline preview tests | Source tests were inspected, not run. Destination ranking and availability parity remain blocked. |
+
+### Audience requirements for T031
+
+These are goals in `ProjectGoals.md`, not proof of completed source behavior.
+The destination selectors identify available preview content only.
+
+| Audience | Source goal | Destination inventory | Decision |
+| --- | --- | --- | --- |
+| Executive | Trends, top offenders, and SLE health scores | `wan-overview-trends`, `wan-top-congested-circuits`, `wan-sle-degraded-sites` | Map the goal. Audience controls, approved rankings, and live SLE scores are absent. |
+| Engineering | Live congestion and quality, circuit drilldown, availability, flaps, and chronic offenders | Live snapshot routes, `wan-port-link`, `wan-peer-link`, and `wan-calendar-summaries` | Current snapshots and navigation exist. Historical availability and chronic ranking remain unknown. |
+| SLE health | Gateway, application, and WAN-link scores with impact analysis | `wan-sle-degraded-sites` | No verified score mapping, filters, or impact drilldown exists. |
+
+### Descriptive layout inventory for T034
+
+The source screen guide documents four synthetic routes and a 1440-by-1100 capture.
+It names a Bootstrap DARKLY theme and disables the production CDN during capture.
+Source captures were not opened, copied, or compared because written rights are absent.
+
+| Subject | Pinned source evidence | Destination observation | Status |
+| --- | --- | --- | --- |
+| Page hierarchy | `docs/screens.md`, Overview, Gateway, WAN port, and VPN peer | Overview, gateway, port, and peer sections use stable page selectors | Descriptive mapping only. No visual approval exists. |
+| Colors and type | `docs/screens.md`; source theme is Darkly | Page CSS defines dark panels, pink accents, cyan values, muted text, and a clamped heading size | Source style values and pixel comparison remain unknown. |
+| Charts | D04, D10, D12, and D13 | SVG charts use grid lines, axes, series, reference lines, labels, and legends | Source axis and color equivalence is not established. |
+| Tables | D02, D03, D08, D10, D11, and D12 | Destination panels use responsive tables. Source pagination, sorting, filters, and exports lack equivalent controls. | Behavior differences are listed above. |
+| Responsive layout | Source capture documents 1440-by-1100 only | Destination CSS uses 1100, 760, and 480 pixel breakpoints | Source narrow-screen behavior is unknown. Destination tests cover 1440 and 390 pixels. |
+| Keyboard and overlap | Source visual evidence is unavailable | Offline browser tests tab to links, activate them, check selectors, and reject overlapping regions | Destination behavior is tested. Source comparison remains blocked. |
+
+### Shared refresh and Redis evidence for T037-T039
+
+These bounds are observed in MistHelper code and tests.
+They do not authorize a new request rate or prove source scheduling parity.
+
+| Behavior | Current MistHelper policy | Evidence |
+| --- | --- | --- |
+| Worker ownership | One organization key uses atomic `NX` acquisition and a 600-second lease. Renew and release scripts compare the owner token. | `test_background_refresh.py::test_workers_share_one_organization_lease`, `test_worker_does_not_release_a_lease_after_ownership_changes` |
+| Contention retry | A worker retries a denied lease after 10 seconds. A successful owner refreshes every 300 seconds. | `test_worker_retries_lease_acquisition_after_the_configured_wait`; constants in `background_refresh.py` |
+| Refresh failure | The worker logs the failure and continues its bounded schedule. The test stops it after one failed refresh. | `test_worker_refresh_failure_stops_cleanly` |
+| Optional worker | The portal starts the worker only when shared request admission and history are available. No local-lock fallback starts API collection. | `test_portal_starts_worker_with_shared_admission_and_history`, `test_portal_skips_worker_when_shared_admission_is_disabled` |
+| Request admission | A rolling 5,000-request-per-hour limit is scoped to the authentication fingerprint and organization. Redis failure rejects the request. | `test_request_admission.py`; existing E8 evidence |
+| Selected refresh lease | The organization-scoped lease lasts 300 seconds. Ownership and remaining TTL are checked before collection. | `test_refresh_store.py::test_only_one_org_refresh_wins`, `test_expired_or_replaced_lease_refuses_next_call` |
+| Snapshot cache | Live snapshots use an organization key and a 3,600-second TTL. Synthetic or wrong-organization content is rejected. | `test_refresh_store.py::test_cache_keys_are_separate_and_preserve_provenance`, `test_synthetic_or_wrong_org_cannot_be_cached` |
+| Bounded reads | Each snapshot endpoint reads at most five pages of 100 rows and marks partial coverage. | `snapshot_client.py`; partial-coverage unit tests |
+| Stale and error states | Cached live pages show stale state. Redis, API, and missing-history failures do not become success-shaped empty data. | `test_wan_performance_live.py::test_all_live_journeys_read_cache_without_live_calls`, stale and failure cases |
+
+No verified refresh-policy failure requires a production-code repair.
+The tests above prove bounded ownership, retry, and failure behavior with mocks.
+They do not use a production Redis store or a live Mist session.
 
 ## Required assertion matrix
 

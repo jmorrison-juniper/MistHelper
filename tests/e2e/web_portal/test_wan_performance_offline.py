@@ -17,6 +17,32 @@ from src.interfaces.wan_performance.presentation.offline_preview import OfflineP
 logger = logging.getLogger(__name__)  # Keep route test records on the module logger.
 SITE_ID = "11111111-1111-1111-1111-111111111111"
 GATEWAY_ID = "aabbccddeeff"
+RESPONSIVE_REGIONS = {
+    "wan-overview": (
+        "wan-overview-kpis",
+        "wan-overview-tables",
+        "wan-overview-charts",
+        "wan-overview-trends",
+        "wan-site-charts",
+    ),
+    "wan-gateway": ("wan-gateway-kpis", "wan-gateway-tables", "wan-gateway-charts"),
+    "wan-port": (
+        "wan-port-kpis",
+        "wan-port-gauges",
+        "wan-port-current-statistics",
+        "wan-port-configuration",
+        "wan-port-charts",
+        "wan-port-packet-statistics",
+        "wan-port-error-counters",
+    ),
+    "wan-peer": (
+        "wan-peer-kpis",
+        "wan-peer-gauges",
+        "wan-peer-charts",
+        "wan-peer-details",
+        "wan-peer-statistics",
+    ),
+}
 
 
 @pytest.fixture
@@ -123,6 +149,124 @@ def test_browser_follows_live_and_synthetic_wan_journeys(
     expect(page.get_by_test_id("wan-overview")).to_be_visible()
     page.screenshot(path=str(evidence / f"{detail}-journey.png"), full_page=True)
     logger.debug("The offline WAN browser journey for %s returned to the overview", detail)
+
+
+def _assert_region_within_viewport(region: str, bounds: dict[str, float], width: int) -> None:
+    """Keep one visible page region inside the browser viewport."""
+    assert bounds["x"] >= 0, f"The {region} region starts outside the viewport."
+    assert bounds["x"] + bounds["width"] <= width + 1, f"The {region} region exceeds the viewport."
+
+
+def _assert_regions_do_not_overlap(bounds: list[dict[str, float]], width: int) -> None:
+    """Reject intersections between sibling page regions."""
+    for index, first in enumerate(bounds):
+        for second in bounds[index + 1 :]:
+            overlap_width = min(first["x"] + first["width"], second["x"] + second["width"]) - max(
+                first["x"], second["x"]
+            )
+            overlap_height = min(first["y"] + first["height"], second["y"] + second["height"]) - max(
+                first["y"], second["y"]
+            )
+            assert overlap_width <= 1 or overlap_height <= 1, f"Page regions overlap at {width}px."
+
+
+def _assert_responsive_regions(page: Page, view: str, viewport_width: int) -> None:
+    """Keep major page regions inside the viewport and separate."""
+    bounds = []
+    for region in RESPONSIVE_REGIONS[view]:
+        region_bounds = page.get_by_test_id(region).bounding_box()
+        assert region_bounds is not None, f"The {region} region has no visible bounds."
+        _assert_region_within_viewport(region, region_bounds, viewport_width)
+        bounds.append(region_bounds)
+    _assert_regions_do_not_overlap(bounds, viewport_width)
+
+
+def _tab_to_test_id(page: Page, test_id: str) -> None:
+    """Use browser Tab input to reach a visible link."""
+    link = page.get_by_test_id(test_id)
+    for _ in range(32):
+        if link.evaluate("(element) => element === document.activeElement"):
+            return
+        page.keyboard.press("Tab")
+    raise AssertionError(f"Keyboard focus did not reach {test_id}.")
+
+
+@pytest.mark.parametrize(
+    ("path", "view"),
+    [
+        ("/wan-performance/", "wan-overview"),
+        (f"/wan-performance/gateway/{GATEWAY_ID}?site_id={SITE_ID}", "wan-gateway"),
+        (
+            f"/wan-performance/port/{SITE_ID}/ge-0%2F0%2F1?gateway_id={GATEWAY_ID}",
+            "wan-port",
+        ),
+        (f"/wan-performance/vpn/{SITE_ID}/11%3A22%3A33%3A44%3A55%3A66", "wan-peer"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("width", "height"),
+    [(1440, 1100), (1280, 800), (390, 844)],
+)
+def test_browser_pages_keep_selectors_and_regions_responsive(
+    page: Page,
+    wan_browser_portal: str,
+    path: str,
+    view: str,
+    width: int,
+    height: int,
+) -> None:
+    """Check page selectors, horizontal overflow, and region overlap at three viewport sizes."""
+    page.set_viewport_size({"width": width, "height": height})
+    response = page.goto(f"{wan_browser_portal}{path}", wait_until="domcontentloaded")
+    assert response is not None and response.status == 200, "The preview route did not load."
+    _assert_preview_layout(page, view)
+    page_width = page.evaluate("document.documentElement.scrollWidth")
+    assert page_width <= width, f"The page scrolls horizontally at {width}px."
+    _assert_responsive_regions(page, view, width)
+
+
+@pytest.mark.parametrize(
+    ("path", "link_test_id", "expected_view"),
+    [
+        ("/wan-performance/", "wan-gateway-link", "wan-gateway"),
+        (
+            f"/wan-performance/gateway/{GATEWAY_ID}?site_id={SITE_ID}",
+            "wan-port-link",
+            "wan-port",
+        ),
+        (
+            f"/wan-performance/gateway/{GATEWAY_ID}?site_id={SITE_ID}",
+            "wan-peer-link",
+            "wan-peer",
+        ),
+        (
+            f"/wan-performance/port/{SITE_ID}/ge-0%2F0%2F1?gateway_id={GATEWAY_ID}",
+            "wan-back-link",
+            "wan-gateway",
+        ),
+        (
+            f"/wan-performance/vpn/{SITE_ID}/11%3A22%3A33%3A44%3A55%3A66",
+            "wan-back-link",
+            "wan-gateway",
+        ),
+    ],
+)
+def test_browser_detail_links_support_keyboard_navigation(
+    page: Page,
+    wan_browser_portal: str,
+    path: str,
+    link_test_id: str,
+    expected_view: str,
+) -> None:
+    """Navigate between detail pages with keyboard focus and Enter."""
+    response = page.goto(f"{wan_browser_portal}{path}", wait_until="domcontentloaded")
+    assert response is not None and response.status == 200, "The preview route did not load."
+    link = page.get_by_test_id(link_test_id)
+    expect(link).to_be_visible()
+    _tab_to_test_id(page, link_test_id)
+    expect(link).to_be_focused()
+    page.keyboard.press("Enter")
+    expect(page.get_by_test_id(expected_view)).to_be_visible()
 
 
 def test_portal_navigation_opens_live_wan_snapshots(client: FlaskClient) -> None:

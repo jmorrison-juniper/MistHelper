@@ -2,8 +2,9 @@
 
 **Input**: [specification](spec.md), [plan](plan.md), and [contracts](design/contracts/parity.md).
 
-All tasks remain open. Existing implementation is evidence to verify, not an automatic completed task.
-This sequence covers the remaining work. Do not execute blocked implementation pairs without their evidence gates.
+Tasks marked `[X]` have evidence in `analysis.md`. Open tasks remain gated or blocked by named evidence limits.
+Existing implementation is evidence to verify, not an automatic completed task.
+Do not execute blocked implementation pairs without their evidence gates.
 Preserve these task IDs across updates. Dependency rules override phase display order.
 Task paths are repository-relative unless the task names a document in this feature record.
 For a combined test and repair task, record the failing assertion before production edits and the passing assertion afterward.
@@ -13,7 +14,7 @@ If existing behavior passes, record that evidence instead of adding an unnecessa
 
 - [X] T001 Record current source, destination, main, ownership, and copying-rights baselines in design/research.md.
 - [ ] T002 Reconcile owner-provided historical T001-T087 records into an old-to-new mapping in analysis.md without changing historical states.
-- [ ] T003 Complete the exhaustive inventory in design/contracts/parity.md from pinned docs, active pages, and tests, using D01-D15 in design/contracts/discovery.md.
+- [X] T003 Complete the exhaustive inventory in design/contracts/parity.md from pinned docs, active pages, and tests, using D01-D15 in design/contracts/discovery.md.
 - [X] T004 Complete SDK field, timestamp, limitation, and refresh prerequisites in design/contracts/parity.md, using the static signature findings in design/contracts/discovery.md.
 
 ## Phase 2 - Foundation
@@ -26,10 +27,10 @@ Independent test: denied and synthetic requests perform no live collection or li
 
 ## Phase 3 - US1: Four journeys and source comparison
 
-- [ ] T007 [US1] Map every overview element and behavior to destination selectors and evidence in design/contracts/parity.md.
-- [ ] T008 [US1] Map every gateway identity, panel, port, and peer transition in design/contracts/parity.md.
-- [ ] T009 [US1] Map every encoded port route, control, metric, and state in design/contracts/parity.md.
-- [ ] T010 [US1] Map every peer route, tunnel field, quality metric, and state in design/contracts/parity.md.
+- [X] T007 [US1] Map every overview element and behavior to destination selectors and evidence in design/contracts/parity.md.
+- [X] T008 [US1] Map every gateway identity, panel, port, and peer transition in design/contracts/parity.md.
+- [X] T009 [US1] Map every encoded port route, control, metric, and state in design/contracts/parity.md.
+- [X] T010 [US1] Map every peer route, tunnel field, quality metric, and state in design/contracts/parity.md.
 - [X] T011 [US1] Add failing four-journey navigation, query, scope, and direct-link assertions in tests/e2e/web_portal/test_wan_performance_offline.py.
 - [ ] T012 [US1] Repair verified journey differences in src/interfaces/wan_performance/presentation/ after T007-T011 and E1 pass.
 
@@ -68,7 +69,7 @@ Independent test: approved quality results and SLE impacts preserve identity and
 - [ ] T028 [US4] Test 3h/12h/24h and calendar rollups in tests/unit/wan_performance/test_calendar_summaries.py before repairing src/interfaces/wan_performance/domain/calendar.py and src/interfaces/wan_performance/domain/summary.py after E3 and interval E7 pass.
 - [ ] T029 [US4] Verify 13-month reads, source backfill, storage capacity, retention, and incomplete-history rules in design/contracts/parity.md.
 - [ ] T030 [US4] Test both stores in tests/unit/wan_performance/test_history_repository.py before updating src/interfaces/wan_performance/integration/sqlite_history.py and src/interfaces/wan_performance/integration/arango_history.py after retention E7 passes.
-- [ ] T031 [US4] Define executive, engineering, and SLE audience controls and summaries in design/contracts/parity.md from verified source goals.
+- [X] T031 [US4] Define executive, engineering, and SLE audience controls and summaries in design/contracts/parity.md from verified source goals.
 - [ ] T032 [US4] Test audience filters, report scope, and required top-offender exports in tests/e2e/web_portal/test_wan_performance_live.py before updating src/interfaces/wan_performance/presentation/live_routes.py after T027-T031 pass.
 
 Goal: show reporting coverage honestly and preserve approved audience requirements.
@@ -77,8 +78,8 @@ Independent test: each approved scope and window matches independent results wit
 ## Phase 7 - US1: Appearance acceptance
 
 - [X] T033 [US1] Record written rights or the explicit runtime-comparison blocker and approved evidence method in design/research.md.
-- [ ] T034 [US1] Inventory layout, typography, colors, chart semantics, table behavior, and responsive differences in design/contracts/parity.md.
-- [ ] T035 [US1] Add failing layout, keyboard, overlap, and selector assertions in tests/e2e/web_portal/test_wan_performance_offline.py.
+- [X] T034 [US1] Inventory layout, typography, colors, chart semantics, table behavior, and responsive differences in design/contracts/parity.md.
+- [X] T035 [US1] Add failing layout, keyboard, overlap, and selector assertions in tests/e2e/web_portal/test_wan_performance_offline.py.
 - [ ] T036 [US1] Repair approved visual differences in web_portal/static/css/wan_performance.css and src/interfaces/wan_performance/presentation/templates/wan_performance/ after T033-T035 pass.
 
 Goal: preserve reviewed appearance without reproducing protected material.
@@ -86,9 +87,9 @@ Independent test: every required visual row has approved evidence or a named blo
 
 ## Phase 8 - US5: Safety, refresh, and failures
 
-- [ ] T037 [US5] Verify shared refresh bounds, concurrency, retry budgets, stale states, and optional Redis ownership in design/contracts/parity.md.
+- [X] T037 [US5] Verify shared refresh bounds, concurrency, retry budgets, stale states, and optional Redis ownership in design/contracts/parity.md.
 - [X] T038 [US5] Test request limits, repeated users, expiry, and outage errors in tests/unit/wan_performance/test_background_refresh.py and tests/unit/wan_performance/test_refresh_store.py.
-- [ ] T039 [US5] Repair verified refresh failures in src/interfaces/wan_performance/background_refresh.py and src/interfaces/wan_performance/integration/refresh_store.py after E8 and T038 pass.
+- [X] T039 [US5] Repair verified refresh failures in src/interfaces/wan_performance/background_refresh.py and src/interfaces/wan_performance/integration/refresh_store.py after E8 and T038 pass.
 - [X] T040 [US5] Add browser denied-access, missing-data, stale-data, invalid-scope, storage-error, and API-error assertions in tests/e2e/web_portal/test_wan_performance_live.py.
 - [X] T041 [US5] Run complete synthetic and mocked live journeys with external requests blocked and retained redacted evidence using design/quickstart.md.
 - [X] T042 [US5] Verify unchanged host navigation, existing portal journeys, no extra services, and synthetic isolation in design/quickstart.md.
@@ -98,8 +99,8 @@ Independent test: negative cases stop safely and unrelated portal journeys still
 
 ## Phase 9 - Acceptance and publication
 
-- [ ] T043 Verify every FR/SC and every source inventory row has task, test, evidence, and decision coverage in analysis.md.
-- [ ] T044 Run Spec Kit consistency, task format, link, structure, and STE checks and record exact results in analysis.md.
+- [X] T043 Verify every FR/SC and every source inventory row has task, test, evidence, and decision coverage in analysis.md.
+- [X] T044 Run Spec Kit consistency, task format, link, structure, and STE checks and record exact results in analysis.md.
 - [ ] T045 Run applicable local gates and exact-head CI after ownership reconciliation using design/quickstart.md.
 - [X] T046 Update documentation/wan-performance.md and changelog.d/pr-4208.md with verified behavior and unresolved blockers.
 - [ ] T047 Prepare owner acceptance evidence in analysis.md and the existing PR template without enabling auto-merge or closing issue #4200.

@@ -9,7 +9,7 @@ Historical T001-T087 reconciliation remains T002. No historical task state was c
 ## Skill-guided review and corrections
 
 The local analyze and tasks skills supplied the review and task-refinement rules.
-PowerShell setup remains unavailable. Direct document review does not claim successful script execution.
+PowerShell was unavailable during the original review. The later session-local prerequisite and analysis results appear below.
 The user authorized these document refinements on 2026-11-05.
 
 | ID | Category | Severity | Location | Finding and correction |
@@ -96,21 +96,21 @@ The remaining 11 tasks cover setup, foundation, and final acceptance.
 | Shared refresh and optional Redis safety | E8 | T037-T040 |
 | Full end-to-end and host regression evidence | All required gates | T041-T047 |
 
-## Command status
+## Historical command status
 
-The required Spec Kit prerequisite command failed with exit 127:
+The first Spec Kit prerequisite command failed with exit 127 because `pwsh` was unavailable:
 
 ```text
 pwsh -NoProfile -File .specify/scripts/powershell/check-prerequisites.ps1 -Json -RequireSpec -RequireTasks -IncludeTasks
 /bin/bash: pwsh: command not found
 ```
 
-Spec Kit analysis stopped at prerequisites. No full consistency result is claimed.
-The branch hook was loaded but not executed because the app already owns this feature branch.
+That attempt stopped before Spec Kit analysis. A verified session-local PowerShell runtime later became available.
+The branch hook was loaded but not executed because this app already owns the feature branch.
 Optional commit hooks were deferred. No feature pointer or other worktree was changed.
-Local structural, format, link, and writing checks must remain separate from the blocked command.
+The successful feature-specific prerequisite and consistency results are recorded below.
 
-## Local document validation
+## Historical local document validation
 
 - STE examined nine files with no skipped files. Scores range from 93 to 97, above the required 80.
 - Markdown link validation examined nine indexed Markdown files and found zero broken links.
@@ -207,14 +207,14 @@ The 47 task IDs below were checked against current code, tests, and evidence.
 | --- | --- | --- |
 | T001 | Complete | `design/research.md` now records pinned source, fresh-main base, candidate start, branch ownership, and absent copying rights. |
 | T002 | Blocked | Preserved commit `d77a900f9ec4db7149f90f324f1ade7772a6243d` contains only the current T001-T047 file. The owner-provided historical T001-T087 records are unavailable. |
-| T003 | Buildable | `design/contracts/parity.md` says its P01-P20 rows are a seed, not an exhaustive inventory. Extend the static inventory without copying protected material. |
+| T003 | Complete | `design/contracts/parity.md` now maps D01-D15, ProjectGoals, source test intent, destination selectors, and unknown contracts in P21-P50. No source code or assets were copied. |
 | T004 | Complete | `design/contracts/parity.md` records gateway and organization-stat schemas, timestamps, SDK limits, admission, paging, lease, and cache bounds. |
 | T005 | Complete | `test_live_service.py` and `test_request_admission.py` cover organization scope, admission, and failed writes. The focused feature suite passed. |
 | T006 | Complete | `live_service.py` and `history_repository.py` preserve authorization, configured-store selection, and fail-closed admission. Their regression tests passed. |
-| T007 | Buildable | The overview row is only a seed. Inventory each source control and destination selector in `design/contracts/parity.md`. |
-| T008 | Buildable | The gateway row is only a seed. Inventory identity, panels, and each port and peer transition. |
-| T009 | Buildable | The port row is only a seed. Inventory controls, metrics, and states for every encoded route. |
-| T010 | Buildable | The peer row is only a seed. Inventory tunnel, quality, and state fields from permitted static evidence. |
+| T007 | Complete | P21-P35 map overview summaries, rankings, alerts, charts, controls, navigation, SLE details, and exports to destination selectors or explicit gaps. |
+| T008 | Complete | P36-P39 map gateway identity, health, tables, links, charts, and unsupported fields. |
+| T009 | Complete | P40-P44 map port status, configuration, encoded routing, bandwidth, and counters. |
+| T010 | Complete | P45-P48 map peer quality, MOS, path fields, tunnel scope, and destination links. |
 | T011 | Complete | `test_wan_performance_offline.py` covers direct routes, encoded paths, scope, and four-journey navigation. |
 | T012 | Blocked E1 | Journey changes must follow the incomplete source inventory. Do not claim source parity from destination tests. |
 | T013 | Blocked E3 | Source capacity, region membership, role history, and complete-hour semantics remain unverified. |
@@ -235,23 +235,110 @@ The 47 task IDs below were checked against current code, tests, and evidence.
 | T028 | Blocked E3/E7 | Local 3h, 12h, 24h, and calendar tests pass. Source aggregation and coverage acceptance remain blocked. |
 | T029 | Blocked E7 | Existing 13-month data, backfill, retention, capacity, and completeness have no proof. |
 | T030 | Blocked E7 | Both stores pass append-only replay tests. No retention or backfill policy is approved. |
-| T031 | Buildable | Source goals name audiences, but the control and summary inventory is incomplete. Keep goals separate from completed source behavior. |
+| T031 | Complete | The audience table maps executive, engineering, and SLE goals to existing selectors and records missing controls as unimplemented. |
 | T032 | Blocked E1/E3/E6 | Audience filters and exports depend on incomplete source controls, dimensions, and SLE mappings. |
 | T033 | Complete | `design/research.md` records absent written rights and permits descriptive static comparison only. Runtime and visual parity remain blocked. |
-| T034 | Buildable | Add a descriptive layout inventory from permitted static evidence. Protected captures and pixel comparison remain blocked by E2. |
-| T035 | Buildable | Current offline browser tests check selectors and layout. Keyboard and overlap assertions remain absent. |
+| T034 | Complete | The descriptive inventory covers hierarchy, type, colors, charts, tables, and responsive behavior. Source captures remain unopened and visual approval remains blocked by E2. |
+| T035 | Complete | Offline browser tests check stable selectors at 1440x1100, 1280x800, and 390x844, plus horizontal overflow, sibling overlap, Tab focus, and Enter activation. |
 | T036 | Blocked E2 | No written rights or approved runtime capture method exists for protected visual comparison. |
-| T037 | Blocked E8 | Static bounds exist, but shared concurrency, retry, stale-state, and optional Redis ownership need evidence. |
+| T037 | Complete | `design/contracts/parity.md` records worker and cache bounds, Redis ownership, retries, stale states, and matching local tests. |
 | T038 | Complete | `test_background_refresh.py`, `test_refresh_store.py`, and `test_request_admission.py` cover limits, expiry, repeated requests, and outages. |
-| T039 | Blocked E8 | No verified new refresh-policy failure permits changes to the worker or lease store. |
+| T039 | Complete | Added concurrent-owner, retry, and lost-lease regressions. All pass. No refresh-policy defect was reproduced, so no production code change was justified. |
 | T040 | Complete | `test_wan_performance_live.py` covers stale, missing, invalid-scope, store, session, and API failure states. |
 | T041 | Complete | The quickstart regression command ran mocked live and synthetic journeys with no production credentials. It passed 408 tests. |
 | T042 | Complete | The same 408-test run covered portal smoke, converter routes, websocket routes, and synthetic isolation. No service or port changed. |
-| T043 | Blocked T003 | Source-to-task and source-to-test coverage cannot be complete until the source inventory is exhaustive. |
-| T044 | Blocked | The Spec Kit prerequisite and consistency command requires `pwsh`, which is unavailable. Manual link and writing checks do not replace it. |
+| T043 | Complete | The coverage matrices below map all 50 inventory rows and 24 FR/SC entries to tasks, tests or explicit test gaps, evidence, and decisions. |
+| T044 | Complete | The feature-specific prerequisite, consistency review, task format audit, link scan, structure tests, and STE checks passed. The broader route contract has one unrelated failure, recorded below. |
 | T045 | Blocked by assignment scope | Local gates can run. Hosted exact-head CI is not authorized before parent review. |
 | T046 | Complete | `documentation/wan-performance.md` and `changelog.d/pr-4208.md` now describe replay, unknown event coverage, gateway scope, and issues #4793-#4795. |
 | T047 | Blocked by assignment scope | Parent review must precede PR metadata or acceptance changes. No PR template or hosted state was changed. |
+
+### Source inventory and requirement coverage for T043
+
+The inventory contains P01-P50.
+Every row has a source classification, destination evidence, and an acceptance decision in `design/contracts/parity.md`.
+The table below gives the task and local test evidence.
+An explicit test gap means the behavior remains unaccepted.
+
+| Row | Task | Destination test or evidence | Decision |
+| --- | --- | --- | --- |
+| P01 | T007, T011 | Offline overview browser journey and `wan-overview` selectors | Synthetic route only. |
+| P02 | T008, T011 | Gateway route and gateway-to-detail browser links | Identity and history parity remain open. |
+| P03 | T009, T011 | Encoded-port and calendar-summary tests | Synthetic values only. |
+| P04 | T010, T011 | Peer route and peer-quality tests | Synthetic fields only. |
+| P05 | T019-T022 | `wan-top-congested-circuits` preview selector | Top-N ranking test is absent. |
+| P06 | T013-T016 | Threshold observation tests in the live test module | Source threshold and override semantics remain unknown. |
+| P07 | T015-T016 | `test_wan_performance_live.py` duration assertions | Current sample intervals do not prove source duration parity. |
+| P08 | T017-T018 | `test_calendar_summaries.py` event and unknown-coverage cases | Historical flap and availability parity remains open. |
+| P09 | T019-T022 | No primary/secondary parity assertion exists | Blocked by missing role and failover contracts. |
+| P10 | T023-T024 | Peer snapshot and history tests | Poll samples do not establish source mean, maximum, or p95. |
+| P11 | T003, T004, T023 | SDK compatibility test and pinned source discovery | Source methods exist, but required SDK symbols or arguments are unsupported. |
+| P12 | T025-T026 | No accepted SLE score test exists | Blocked by missing field and scale mapping. |
+| P13 | T025-T026 | No accepted impact drilldown test exists | Blocked by missing source and SDK contracts. |
+| P14 | T013, T027-T028 | No region-to-circuit metric test exists | Region mapping and effective dates remain unknown. |
+| P15 | T027-T028 | Calendar summary domain and offline route tests | Local observation windows pass. Source aggregation parity remains open. |
+| P16 | T029-T030 | Append-only history tests for both stores | Retention, capacity, completeness, and backfill remain unverified. |
+| P17 | T031-T032 | Audience goal matrix in `parity.md` | Goal mapping is complete. Audience behavior is not implemented. |
+| P18 | T003, T031-T032 | Source callback inventory and destination selector scan | No destination export control is accepted. |
+| P19 | T007-T012 | Offline journey and keyboard navigation browser tests | Gateway, port, and peer routes pass. Region and site list routes remain absent. |
+| P20 | T034-T036 | Responsive browser tests and rights record | Destination layout passes. Source visual approval remains blocked. |
+| P21 | T007, T011 | Offline overview status, KPI, and route tests | Synthetic population only. |
+| P22 | T007, T011 | Live snapshot route tests | Current states pass. Historical failover remains unverified. |
+| P23 | T007, T011 | Offline alert and SLE selector assertions | Live alert rules and SLE data remain unknown. |
+| P24 | T007, T011 | Offline top-circuit table selector and link tests | Rank and precision parity remain untested. |
+| P25 | T007 | No destination pagination control exists | Source pagination remains unimplemented. |
+| P26 | T007, T011 | Offline alert and degraded-SLE selector assertions | Synthetic panels only. |
+| P27 | T007 | No destination sort or filter control exists | Source table behavior remains unimplemented. |
+| P28 | T007, T011, T035 | Offline chart selectors and responsive-region assertions | Layout passes. Source chart semantics remain unknown. |
+| P29 | T007 | Disabled offline site selector and live gateway site-ID input | The live text input does not match the source selector. |
+| P30 | T007 | Disabled offline time-range selector | Live source ranges are not implemented. |
+| P31 | T037-T039 | Background worker retry, ownership, failure, and start-gate tests | Local scheduling policy is bounded and passes. |
+| P32 | T007-T011 | Offline route, direct-link, and keyboard navigation tests | Tested routes pass. Region and site transitions remain absent. |
+| P33 | T007 | No destination SLE detail selector exists | SLE detail remains unimplemented. |
+| P34 | T007 | No destination impact-detail selector exists | SLE impact analysis remains unimplemented. |
+| P35 | T007 | No destination export selector exists | Export behavior remains unimplemented. |
+| P36 | T008, T011 | Gateway live and offline route tests | Offline identity is synthetic. Live field units remain unverified. |
+| P37 | T008 | Gateway selector and explicit field-gap record | CPU, memory, and uptime have no destination assertion. |
+| P38 | T008, T011 | Gateway port/peer table and link tests | Synthetic navigation passes. Full identity parity remains open. |
+| P39 | T008, T011 | Gateway chart selectors in offline browser tests | Source axes, units, and coverage remain unknown. |
+| P40 | T009, T011 | Port KPI and gauge assertions | Synthetic status and utilization only. |
+| P41 | T009, T011 | Current-statistic and configuration selectors | Field mapping and units remain unverified. |
+| P42 | T009, T011 | Encoded-slash route test | Offline encoded route behavior passes. |
+| P43 | T009, T023 | Selected-port history and SDK compatibility tests | Source historical method is not portable to the installed SDK. |
+| P44 | T009 | Packet and error-counter selectors | Synthetic counters only. No source counter semantics are accepted. |
+| P45 | T010, T023-T024 | Peer quality and snapshot tests | Scalar units are known. Source history and MOS scale remain unknown. |
+| P46 | T010 | Peer detail selector and explicit contract gap | Live field mapping remains unverified. |
+| P47 | T010 | Peer statistics selector and explicit contract gap | Live uptime and counter semantics remain unknown. |
+| P48 | T010, T040 | Scoped live peer route and path-key tests | MistHelper identity is tested. Source identity equivalence remains open. |
+| P49 | T003, T011 | Source test names and destination independent route tests | Source tests were inspected, not executed. No fixtures were copied. |
+| P50 | T003, T019-T022 | Source test names and destination live test module | Source tests were inspected, not executed. Ranking parity remains blocked. |
+
+| Requirement | Task | Local test or evidence | Decision |
+| --- | --- | --- | --- |
+| FR-001 | T003, T007-T010 | P01-P50 inventory and offline browser tests | Static inventory is complete. Runtime parity is not. |
+| FR-002 | T002-T003, T043 | Source classifications in `parity.md` and `discovery.md` | Goals, TODOs, and implemented-but-unverified methods remain separate. |
+| FR-003 | T007-T012, T033-T036 | Four-route browser journeys and responsive tests | Destination routes pass. Source visual parity remains blocked. |
+| FR-004 | T013-T016, T021-T022 | Threshold and duration tests in the live module | Source calculations and thresholds remain unverified. |
+| FR-005 | T017-T022 | Calendar event and live state tests | Flap, failover, and availability parity remains open. |
+| FR-006 | T023-T024 | Peer snapshot and history tests | Poll-sample statistics do not prove source history. |
+| FR-007 | T025-T026 | SLE source/API contract record | No destination SLE mapping is accepted. |
+| FR-008 | T013, T027-T028 | UTC calendar and rolling-window tests | Local windows pass. Region and source weighting remain unknown. |
+| FR-009 | T029-T030 | SQLite and Arango append-only tests | Retention and backfill evidence is missing. |
+| FR-010 | T031-T032 | Audience goal matrix | Goals are inventoried. Audience controls are not implemented. |
+| FR-011 | T004-T006, T037-T042 | Admission, live service, worker, Redis, and browser tests | Local scope and failure controls pass. |
+| FR-012 | T042, T045 | Changed-file inventory and offline tests | No extra service, port, or credential store was added. |
+| FR-013 | T005-T006, T040-T042 | Synthetic isolation and provenance tests | Offline data remains separate from live collection. |
+| FR-014 | T005, T038-T042 | Empty, stale, denied, store, session, and API error tests | Current unsupported states remain explicit. |
+| FR-015 | T033-T036, T041, T043 | Descriptive comparison, browser evidence, and rights record | Runtime comparison remains blocked by missing rights. |
+| FR-016 | T043-T047 | Exact local candidate and check records | Hosted and owner acceptance remain pending. |
+| SC-001 | T003, T007-T010, T043 | P01-P50 classifications | All inventory rows have a decision, including explicit unknowns. |
+| SC-002 | T011-T042, T043 | Focused tests and blocked-row decisions | Full source behavior is not complete. |
+| SC-003 | T014-T030, T040 | Unknown and missing-state assertions | Unavailable values remain explicit where tested. |
+| SC-004 | T014-T030 | Domain expected-value tests | Supported calculations pass. Unsupported source formulas remain open. |
+| SC-005 | T011, T021, T026, T032, T035, T040-T042 | Four-route browser tests | Destination journeys pass. |
+| SC-006 | T033-T036, T043 | Descriptive layout inventory and rights record | Source visual acceptance remains blocked. |
+| SC-007 | T005-T006, T037-T042 | Offline, scoped-store, and admission tests | No live Mist call or production store was used. |
+| SC-008 | T043-T047 | Local validation record and parent review hold | Parent review is pending. |
 
 ### Frozen-head defect regressions
 
@@ -260,6 +347,37 @@ The second refresh raised `sqlite3.IntegrityError: UNIQUE constraint failed: wan
 `test_sqlite_api_sample_replay_keeps_one_original_sample` now proves an unchanged replay is a no-op.
 `test_sqlite_rejects_changed_api_sample_without_replacing_prior_rows` proves changed data aborts the hourly and sample transaction.
 `test_arango_api_sample_replay_is_idempotent_and_rejects_changes` proves both Arango replay outcomes through the transactional repository boundary.
+
+## Current continuation validation
+
+The read-only consistency review found no conflict with the constitution.
+It covered 24 requirements, 47 tasks, and 50 inventory rows.
+All 24 requirement rows map to tasks. All 50 inventory rows have evidence and a decision.
+No task lacks an evidence row. No critical issue remains in these artifacts.
+The review found and corrected three stale statements about inventory completeness, live site selection, and PowerShell availability.
+
+| Gate | Command or evidence | Result |
+| --- | --- | --- |
+| Spec Kit prerequisite | `POWERSHELL_TELEMETRY_OPTOUT=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 SPECIFY_FEATURE_DIRECTORY=specs/numbered/0/0/1/1/3/3/0/0/4200-wan-parity-recovery rtk /Users/jmorrison/.copilot/session-state/9dc828a7-11a6-41a6-8d00-fe4383d12c54/files/tools/pr4208-powershell-7.7.0-osx-arm64/runtime/pwsh -NoLogo -NoProfile -NonInteractive -File .specify/scripts/powershell/check-prerequisites.ps1 -Json -RequireSpec -RequireTasks -IncludeTasks` | Passed. JSON resolved this feature and listed five available documents. |
+| Feature pointer | `rtk shasum -a 256 .specify/feature.json` before and after the prerequisite | Unchanged at `2a4c81936e119e39033cb787044b14649832177a469855d843835ea8f2189039`. |
+| Task format | `rtk .venv/bin/speckit-task-audit --root <temporary-root>` on an isolated copy of this feature record | Examined 47 task markers: 24 checked, 23 unchecked, and zero malformed. The 23 open tasks remain gated or blocked. |
+| Markdown links | `rtk .venv/bin/markdown-link-check` with the four changed feature record paths | Examined four tracked Markdown files and found zero broken links. |
+| Feature structure | `rtk .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/test_process_folder_structure.py tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | 12 passed. The structure guard examined 795 children, 262 structural directories, and 104 feature records. |
+| STE | `rtk .venv/bin/ste-linter --config .ste-linter.toml --min-score 80 --quiet` with the four changed feature record paths | Passed. Scores: analysis 94, plan 95, tasks 97, parity 92. |
+| Local whitespace | `git diff --check` | Passed. |
+| WAN suite | `rtk .venv/bin/python -m pytest tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_live.py tests/e2e/web_portal/test_wan_performance_offline.py` | 341 passed with two existing deprecation warnings. |
+| Mist SDK | `rtk .venv/bin/python -m pytest tests/integration/test_mistapi_sdk_compatibility.py` | Eight passed. The guard found zero known signature failures. |
+| Types | `rtk .venv/bin/python -m mypy src/interfaces/wan_performance src/foundation/support/refactors/initialize_mist_session.py --config-file pyproject.toml` | Passed with no issues in 25 source files. |
+| Style | `rtk .venv/bin/python -m ruff check` and `rtk .venv/bin/python -m black --check` with both changed test paths | Passed. |
+| Quality guidance | `rtk .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | One passed. The gate read and validated all four required inputs. |
+
+The broader `test_spec_route_contract.py` run had 39 passes and one unrelated failure.
+`test_timestamp_route_rejects_invalid_names[20261013-240000-bad]` expected the shared route script to reject hour `24`, but the script accepted it.
+This task changed no route script. The folder structure guard and feature prerequisite passed.
+
+The repository-wide task audit examined 900 feature records and found 36 malformed markers outside this feature.
+This feature audit found zero malformed markers. The repository-wide audit also found open tasks, as expected.
+No dependency manifest changed, so no dependency audit ran.
 
 The parent reproduced #4794 with actual domain modules.
 `CalendarSummaries.build` raised `KeyError('flap_count')` when an event hour and an ordinary poll hour shared one circuit.

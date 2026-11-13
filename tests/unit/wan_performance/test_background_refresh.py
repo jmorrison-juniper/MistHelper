@@ -1,6 +1,6 @@
 """Verify one Redis-elected worker refreshes and stops without duplicate writes."""
 
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -59,6 +59,86 @@ def test_worker_without_lease_does_not_refresh() -> None:
 
     service.refresh.assert_not_called()
     client.eval.assert_not_called()
+
+
+def test_workers_share_one_organization_lease() -> None:
+    """Prevent two portal processes from refreshing the same organization."""
+    attempts_lock = Lock()
+    attempts = 0
+    second_attempt = Event()
+    refresh_started = Event()
+    allow_refresh = Event()
+    client = MagicMock()
+
+    def acquire_lease(*_arguments: object, **_options: object) -> bool:
+        nonlocal attempts
+        with attempts_lock:
+            attempts += 1
+            attempt = attempts
+        if attempt == 2:
+            second_attempt.set()
+        return attempt == 1
+
+    client.set.side_effect = acquire_lease
+    client.eval.return_value = 1
+    service = service_with_client(client)
+
+    def refresh_once() -> dict[str, list[object]]:
+        refresh_started.set()
+        allow_refresh.wait(1)
+        return {"ports": [], "peers": []}
+
+    service.refresh.side_effect = refresh_once
+    workers = [WanBackgroundRefreshWorker(service) for _ in range(2)]
+
+    workers[0].start()
+    assert refresh_started.wait(1), "The lease owner did not start its refresh."
+    workers[1].start()
+    assert second_attempt.wait(1), "The second worker did not contend for the shared lease."
+    allow_refresh.set()
+    for worker in workers:
+        worker.stop()
+
+    assert service.refresh.call_count == 1, "More than one worker refreshed the organization."
+    assert client.set.call_count == 2, "Both workers must attempt the same shared lease."
+
+
+def test_worker_retries_lease_acquisition_after_the_configured_wait(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retry a contended lease once the configured wait ends."""
+    completed = Event()
+    client = MagicMock()
+    client.set.side_effect = [None, True]
+    client.eval.return_value = 1
+    service = service_with_client(client)
+    service.refresh.side_effect = lambda: completed.set() or {"ports": [], "peers": []}
+    monkeypatch.setattr(WanBackgroundRefreshWorker, "RETRY_INTERVAL_SECONDS", 0.01)
+    worker = WanBackgroundRefreshWorker(service)
+
+    worker.start()
+    assert completed.wait(1), "The worker did not retry after its lease wait."
+    worker.stop()
+
+    assert client.set.call_count == 2, "The worker did not make exactly one retry."
+    assert service.refresh.call_count == 1, "The worker refreshed more than once."
+
+
+def test_worker_does_not_release_a_lease_after_ownership_changes() -> None:
+    """Do not release a Redis lease after its renewal check fails."""
+    completed = Event()
+    client = MagicMock()
+    client.set.return_value = True
+    client.eval.return_value = 0
+    service = service_with_client(client)
+    service.refresh.side_effect = lambda: completed.set() or {"ports": [], "peers": []}
+    worker = WanBackgroundRefreshWorker(service)
+
+    worker.start()
+    assert completed.wait(1), "The lease owner did not complete its refresh."
+    worker.stop()
+
+    assert client.eval.call_count == 1, "The worker evaluated a release after losing ownership."
 
 
 def test_worker_refresh_failure_stops_cleanly() -> None:
