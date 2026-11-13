@@ -5,6 +5,7 @@ with pagination, and enforces path traversal guards.
 """
 
 import csv
+import json
 import logging
 import math
 import os
@@ -231,8 +232,6 @@ class DataBrowserService:
     def _preview_json(self, filepath: str, page: int, per_page: int, search: str) -> dict:
         """Read and paginate a JSON or JSONL file as tabular data."""
         try:
-            import json
-
             with open(filepath, encoding="utf-8", errors="replace") as fh:
                 prefix = self._read_json_line_prefix(fh)  # Detect JSON Lines without parsing the first item twice.
                 if prefix["is_json_lines"]:
@@ -241,8 +240,12 @@ class DataBrowserService:
                     self._add_remaining_json_lines(state, fh)  # Continue from the second JSON Lines record.
                     return self._format_json_lines_preview(state)  # Format the same response as the old path.
                 data = json.load(fh)
-        except Exception as exc:
-            return {"error": f"Failed to read JSON: {exc}"}
+        except json.JSONDecodeError as error:
+            logger.error("JSON preview parsing failed: %s", error)
+            return {"error": f"Failed to read JSON: {error.msg} (line {error.lineno}, column {error.colno})"}
+        except Exception as error:
+            logger.error("JSON preview failed while reading the selected result.", exc_info=error)
+            return {"error": "Failed to read JSON: Cannot read the selected result file."}
         return self._paginate_json_data(data, page, per_page, search)
 
     @staticmethod
