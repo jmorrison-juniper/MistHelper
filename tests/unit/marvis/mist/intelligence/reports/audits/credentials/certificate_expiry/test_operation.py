@@ -212,7 +212,7 @@ def test_crl_metadata_creates_no_rows_and_failed_source_summary(caplog) -> None:
 
 def test_wiring_manifest_contains_deferred_sections() -> None:
     """The wiring manifest keeps integration-only files deferred."""
-    root = Path(__file__).resolve().parents[4]  # Resolve the repository root from the test path.
+    root = Path(__file__).resolve().parents[9]  # Resolve the repository root from the test path.
     wiring = (root / "specs" / "3553-certificate-expiry-report" / "wiring.md").read_text(
         encoding="utf-8"
     )  # Read the feature-owned manifest.
@@ -237,7 +237,7 @@ def test_wiring_manifest_contains_deferred_sections() -> None:
 
 def test_release_note_fragment_exists() -> None:
     """The release note fragment exists and names issue #3553."""
-    root = Path(__file__).resolve().parents[4]  # Resolve the repository root from the test path.
+    root = Path(__file__).resolve().parents[9]  # Resolve the repository root from the test path.
     release_note = root / "changelog.d" / "issue-3553-certificate-expiry-report.md"  # Build the fragment path.
     content = release_note.read_text(encoding="utf-8")  # Read the fragment content.
     assert "### Added" in content  # Verify the required heading.

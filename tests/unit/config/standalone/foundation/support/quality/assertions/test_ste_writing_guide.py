@@ -16,7 +16,7 @@ from misthelper_devtools.ste_linter.rules import RuleContext, load_rules  # The 
 from misthelper_devtools.ste_linter.scoring import ScoringModel  # The scoring model.
 
 # The guide sits two levels above the folder of this test file.
-GUIDE = Path(__file__).resolve().parents[2] / "documentation" / "ASD-STE100_writing-guide.md"
+GUIDE = Path(__file__).resolve().parents[8] / "documentation" / "ASD-STE100_writing-guide.md"
 
 
 def test_writing_guide_scores_high() -> None:

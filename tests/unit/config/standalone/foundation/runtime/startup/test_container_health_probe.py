@@ -14,7 +14,7 @@ from pathlib import Path  # Portable paths, because the repository runs on Windo
 
 import pytest  # Test framework of the repository.
 
-REPO_ROOT = Path(__file__).resolve().parents[2]  # tests/unit/<file> sits two levels below the root.
+REPO_ROOT = Path(__file__).resolve().parents[7]  # Resolve the repository root from the mapped test package.
 QUADLET_UNIT = REPO_ROOT / "deploy" / "misthelper.container"  # The systemd Quadlet unit.
 CONTAINERFILE = REPO_ROOT / "Containerfile"  # The Podman build file.
 DOCKERFILE = REPO_ROOT / "Dockerfile"  # The Docker build file.

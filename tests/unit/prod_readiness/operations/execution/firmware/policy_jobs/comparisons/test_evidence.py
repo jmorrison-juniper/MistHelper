@@ -15,7 +15,7 @@ class TestBrowserEvidence:
     @staticmethod
     def configuration() -> dict[str, Any]:
         """Read the live workflow so absent or malformed input fails the guard."""
-        workflow = Path(__file__).resolve().parents[4] / ".github" / "workflows" / "ci.yml"
+        workflow = Path(__file__).resolve().parents[8] / ".github" / "workflows" / "ci.yml"
         return yaml.safe_load(workflow.read_text(encoding="utf-8"))
 
     @staticmethod
@@ -65,6 +65,6 @@ class TestBrowserEvidence:
         """Resolve real screenshot destinations under the repository after a directory change."""
         monkeypatch.chdir(tmp_path)
         destination = BrowserEvidence.path(name)
-        expected = Path(__file__).resolve().parents[4] / "test-artifacts" / name
+        expected = Path(__file__).resolve().parents[8] / "test-artifacts" / name
         assert destination == expected
         assert destination.is_absolute()

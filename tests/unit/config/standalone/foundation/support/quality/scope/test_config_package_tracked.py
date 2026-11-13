@@ -16,7 +16,7 @@ from pathlib import Path  # Portable paths, because the repository runs on Windo
 
 import pytest  # Test framework of the repository.
 
-REPO_ROOT = Path(__file__).resolve().parents[2]  # tests/unit/<file> sits two levels below the root.
+REPO_ROOT = Path(__file__).resolve().parents[8]  # Resolve the repository root from the mapped test package.
 GITIGNORE = REPO_ROOT / ".gitignore"  # The file that held the over-broad rule.
 SETTINGS = REPO_ROOT / "mist-ops-platform" / "src" / "shared" / "config" / "settings.py"  # The hidden module.
 CONFIG_PACKAGE = SETTINGS.parent  # The whole package that the rule hid.

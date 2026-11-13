@@ -33,7 +33,7 @@ from __future__ import annotations
 import importlib
 import sys
 from contextlib import contextmanager
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -73,6 +73,17 @@ def _restore_real_mistapi_modules() -> None:
     leaving the real modules in place is strictly safer for downstream tests
     than reinstating a broken MagicMock.
     """
+    existing_package = sys.modules.get("mistapi")  # WHY: retain package identity for already-imported clients.
+    if isinstance(existing_package, ModuleType) and hasattr(existing_package, "__path__"):
+        imported_modules = [importlib.import_module(dotted) for dotted in (_MISTAPI_SELF, _MISTAPI_MSPS)]
+        if all(isinstance(module, ModuleType) for module in imported_modules):
+            for dotted, real in zip((_MISTAPI_SELF, _MISTAPI_MSPS), imported_modules, strict=True):
+                parent_path, _, leaf = dotted.rpartition(".")
+                parent = sys.modules.get(parent_path)
+                if parent is not None:
+                    setattr(parent, leaf, real)
+            return
+
     # Purge any mistapi.* entries so importlib does a full re-import from disk.
     for key in [k for k in sys.modules if k == "mistapi" or k.startswith("mistapi.")]:
         del sys.modules[key]

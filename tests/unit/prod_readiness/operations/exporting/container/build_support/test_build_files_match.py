@@ -33,7 +33,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[7]
 DOCKERFILE = REPOSITORY_ROOT / "Dockerfile"
 CONTAINERFILE = REPOSITORY_ROOT / "Containerfile"
 WORKFLOW_DIR = REPOSITORY_ROOT / ".github" / "workflows"

@@ -7,9 +7,26 @@ PROGRESS_EMITTER lifecycle. All API calls are mocked.
 Covers: FR-001, FR-005, US1, US4 from spec-024.
 """
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 import MistHelper
+from src.operations.exporting.export import org_inventory_exporter
+
+
+def _patch_exporter_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    api_data_fetcher: object,
+    progress_emitter: object | None,
+) -> None:
+    """Bind the inventory exporter dependencies to test-owned doubles."""
+    dependencies = SimpleNamespace(  # WHY: keep relocated tests on the exporter's current dependency seam.
+        APIDataFetcher=api_data_fetcher,
+        PROGRESS_EMITTER=progress_emitter,
+    )
+    monkeypatch.setattr(org_inventory_exporter, "SourceDependencyResolver", dependencies)
 
 
 class TestInventoryAPIDataFetcherWiring:
@@ -26,8 +43,7 @@ class TestInventoryAPIDataFetcherWiring:
             def execute(self):
                 pass
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        _patch_exporter_dependencies(monkeypatch, MockFetcher, None)
 
         MistHelper.OrgInventoryExporter.inventory()
 
@@ -48,8 +64,7 @@ class TestInventoryAPIDataFetcherWiring:
             def execute(self):
                 mock_instance.execute()
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        _patch_exporter_dependencies(monkeypatch, MockFetcher, None)
 
         MistHelper.OrgInventoryExporter.inventory()
 
@@ -67,8 +82,7 @@ class TestInventoryAPIDataFetcherWiring:
                 nonlocal execute_called
                 execute_called = True
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        _patch_exporter_dependencies(monkeypatch, MockFetcher, None)
 
         MistHelper.OrgInventoryExporter.inventory()
 
@@ -89,8 +103,7 @@ class TestInventoryProgressEmitter:
             def execute(self):
                 pass
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", mock_emitter)
+        _patch_exporter_dependencies(monkeypatch, MockFetcher, mock_emitter)
 
         MistHelper.OrgInventoryExporter.inventory()
 
@@ -114,7 +127,6 @@ class TestInventoryProgressEmitter:
             def execute(self):
                 pass
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        _patch_exporter_dependencies(monkeypatch, MockFetcher, None)
 
         MistHelper.OrgInventoryExporter.inventory()

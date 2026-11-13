@@ -10,10 +10,31 @@ Covers: FR-001, FR-005, FR-006, FR-007, US1, US4, US5, US6 from spec-025.
 
 import os
 import time
+from types import SimpleNamespace
 from unittest.mock import MagicMock
+
+import pytest
 
 import MistHelper
 from src.foundation.runtime.config import runtime_settings
+from src.operations.exporting.export import org_device_stats_exporter
+
+SourceDependencyResolver = SimpleNamespace(  # WHY: hold isolated dependencies for the relocated tests.
+    APIDataFetcher=None,
+    PROGRESS_EMITTER=None,
+    ProgressContext=MistHelper.ProgressContext,
+    mistapi=MistHelper.mistapi,
+)
+
+
+@pytest.fixture(autouse=True)
+def _bind_test_source_dependency_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bind the export module to the isolated dependency container for each test."""
+    monkeypatch.setattr(  # WHY: prevent tests from reaching the production resolver.
+        org_device_stats_exporter,
+        "SourceDependencyResolver",
+        SourceDependencyResolver,
+    )
 
 
 class TestDeviceStatsAPIDataFetcherWiring:
@@ -30,8 +51,8 @@ class TestDeviceStatsAPIDataFetcherWiring:
             def execute(self):
                 pass
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
+        monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", None, raising=False)
         monkeypatch.setattr(
             MistHelper.TimeUtils,
             "get_dynamic_lookback_hours",
@@ -64,8 +85,8 @@ class TestDeviceStatsAPIDataFetcherWiring:
             def execute(self):
                 mock_instance.execute()
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
+        monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", None, raising=False)
         monkeypatch.setattr(
             MistHelper.TimeUtils,
             "get_dynamic_lookback_hours",
@@ -93,8 +114,8 @@ class TestDeviceStatsAPIDataFetcherWiring:
                 nonlocal execute_called
                 execute_called = True
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
+        monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", None, raising=False)
         monkeypatch.setattr(
             MistHelper.TimeUtils,
             "get_dynamic_lookback_hours",
@@ -125,8 +146,8 @@ class TestDeviceStatsProgressEmitter:
             def execute(self):
                 pass
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", mock_emitter)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
+        monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", mock_emitter, raising=False)
         monkeypatch.setattr(
             MistHelper.TimeUtils,
             "get_dynamic_lookback_hours",
@@ -160,8 +181,8 @@ class TestDeviceStatsProgressEmitter:
             def execute(self):
                 pass
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
+        monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", None, raising=False)
         monkeypatch.setattr(
             MistHelper.TimeUtils,
             "get_dynamic_lookback_hours",
@@ -186,7 +207,7 @@ class TestDeviceStatsFastMode:
 
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(runtime_settings, "CSV_FRESHNESS_MINUTES", 5)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", None, raising=False)
 
         fetcher_created = False
 
@@ -198,7 +219,7 @@ class TestDeviceStatsFastMode:
             def execute(self):
                 pass
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
 
         MistHelper.OrgDeviceStatsExporter.device_stats(fast=True)
 
@@ -213,7 +234,7 @@ class TestDeviceStatsFastMode:
 
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(runtime_settings, "CSV_FRESHNESS_MINUTES", 5)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", None, raising=False)
         monkeypatch.setattr(
             MistHelper.TimeUtils,
             "get_dynamic_lookback_hours",
@@ -235,7 +256,7 @@ class TestDeviceStatsFastMode:
             def execute(self):
                 pass
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
 
         MistHelper.OrgDeviceStatsExporter.device_stats(fast=True)
 
@@ -244,7 +265,7 @@ class TestDeviceStatsFastMode:
     def test_fast_mode_cache_miss_no_file(self, monkeypatch, tmp_path):
         """FR-006 / US5 Scenario 3: No CSV file proceeds with API fetch."""
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", None, raising=False)
         monkeypatch.setattr(
             MistHelper.TimeUtils,
             "get_dynamic_lookback_hours",
@@ -266,7 +287,7 @@ class TestDeviceStatsFastMode:
             def execute(self):
                 pass
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
 
         MistHelper.OrgDeviceStatsExporter.device_stats(fast=True)
 
@@ -278,7 +299,7 @@ class TestDeviceStatsFastMode:
         csv_file.write_text("header\nrow1\n")
 
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", None, raising=False)
         monkeypatch.setattr(
             MistHelper.TimeUtils,
             "get_dynamic_lookback_hours",
@@ -300,7 +321,7 @@ class TestDeviceStatsFastMode:
             def execute(self):
                 pass
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
 
         MistHelper.OrgDeviceStatsExporter.device_stats()
 
@@ -321,8 +342,8 @@ class TestDeviceStatsDynamicLookback:
             def execute(self):
                 pass
 
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
-        monkeypatch.setattr(MistHelper, "PROGRESS_EMITTER", None)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
+        monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", None, raising=False)
         monkeypatch.setattr(
             MistHelper.TimeUtils,
             "get_dynamic_lookback_hours",

@@ -102,7 +102,7 @@ def test_run_empty_response_writes_header_only_and_message(
 
 def test_wiring_manifest_defers_shared_file_registration() -> None:
     """Assert that the wiring manifest contains the required integration data."""
-    repo_root = Path(__file__).resolve().parents[4]  # WHY: pytest can run from a changed current directory.
+    repo_root = Path(__file__).resolve().parents[9]  # WHY: pytest can run from a changed current directory.
     wiring_path = repo_root / "specs" / "3569-client-fingerprint-census" / "wiring.md"  # WHY: contract path.
     if not wiring_path.exists():  # WHY: fail clearly until the task creates the manifest.
         pytest.fail("wiring.md is missing")  # WHY: acceptance requires the wiring manifest.

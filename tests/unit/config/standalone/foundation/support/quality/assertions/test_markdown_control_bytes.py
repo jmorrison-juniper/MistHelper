@@ -7,7 +7,7 @@ from pathlib import Path
 
 from misthelper_devtools.markdown_control_bytes import MarkdownControlByteScanner
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]  # Anchor scans at the checkout, not the pytest cwd.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[8]  # Anchor scans at the checkout, not the pytest cwd.
 
 
 class ControlByteGuardWorkspace:

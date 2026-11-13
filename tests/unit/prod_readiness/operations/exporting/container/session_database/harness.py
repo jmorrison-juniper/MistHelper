@@ -83,7 +83,7 @@ class DatabaseSettingsFixture:
 class SessionEnvironmentHarness:
     """Write and read the session file through separate clean Bash processes."""
 
-    ROOT = Path(__file__).resolve().parents[4]
+    ROOT = Path(__file__).resolve().parents[7]
     WRITER = ROOT / "container" / "scripts" / "write-session-env.sh"
 
     def __init__(self, directory: Path) -> None:

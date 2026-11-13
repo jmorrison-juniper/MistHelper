@@ -17,7 +17,7 @@ from src.mist.intelligence.reports.client_fingerprint_census.model import (
 
 def test_distinct_fields_match_openapi_enum() -> None:
     """Assert that the model uses the OpenAPI distinct enum."""
-    repo_root = Path(__file__).resolve().parents[4]  # WHY: pytest can run from a changed current directory.
+    repo_root = Path(__file__).resolve().parents[9]  # WHY: pytest can run from a changed current directory.
     spec_path = repo_root / "documentation" / "mist-api-openapi3json.json"  # WHY: local API contract source.
     payload = json.loads(spec_path.read_text(encoding="utf-8"))  # WHY: inspect the checked-in OpenAPI file.
     schema = payload["components"]["schemas"]["fingerprints_count_distinct"]  # WHY: enum lives in this schema.

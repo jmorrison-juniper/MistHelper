@@ -48,7 +48,7 @@ class _TimeoutRun:
 @pytest.fixture
 def repository_root() -> Iterator[Path]:
     """Yield the repository root, because two calls read files below it."""
-    yield Path(__file__).resolve().parents[2]
+    yield Path(__file__).resolve().parents[6]
 
 
 class TestSymbolDiffTimeout:

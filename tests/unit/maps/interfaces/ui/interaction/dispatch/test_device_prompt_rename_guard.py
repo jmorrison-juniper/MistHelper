@@ -18,7 +18,7 @@ import pytest
 
 from src.interfaces.visualization.ui.prompt_utils import PromptUtils
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[7]
 SCANNED_DIRS = ("src", "web_portal")
 REMOVED_NAME = "select_device"
 CANONICAL_NAME = "select_device_id_from_inventory"

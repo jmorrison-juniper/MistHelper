@@ -420,7 +420,7 @@ class TestOutputFailures(ReleaseFixtures):
         release.write(marker + "\n**Full Changelog**: " + self.compare if succeed else marker)
         result = subprocess.run(
             [sys.executable, "-m", "scripts.release_body", *release.arguments],
-            cwd=Path(__file__).resolve().parents[2],
+            cwd=Path(__file__).resolve().parents[7],
             env=os.environ.copy(),
             capture_output=True,
             text=True,

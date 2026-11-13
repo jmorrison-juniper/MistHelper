@@ -8,14 +8,14 @@ limit and every later preview failed.
 
 from __future__ import annotations
 
-import os
 import sqlite3
 import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+sys.path.insert(0, str(Path(__file__).resolve().parents[7]))  # WHY: Add the worktree root after this test moved deeper.
 
 from web_portal.services.data_browser import DataBrowserService
 

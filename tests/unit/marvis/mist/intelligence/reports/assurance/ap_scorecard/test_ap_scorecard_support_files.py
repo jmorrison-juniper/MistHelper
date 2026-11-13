@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[8]
 
 
 def test_ap_scorecard_wiring_manifest_has_required_sections() -> None:

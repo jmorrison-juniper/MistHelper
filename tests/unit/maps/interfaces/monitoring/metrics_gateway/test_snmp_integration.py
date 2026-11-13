@@ -26,7 +26,7 @@ import pytest
 
 from src.interfaces.monitoring.metrics_gateway.snmp import protect_protocol_streams
 
-REPO_ROOT = Path(__file__).resolve().parents[3]  # The folder that holds `src`.
+REPO_ROOT = Path(__file__).resolve().parents[6]  # The folder that holds `src`.
 
 PROCESS_TIMEOUT_SECONDS = 90  # A generous bound. A deadlock must fail the test and never hang the run.
 

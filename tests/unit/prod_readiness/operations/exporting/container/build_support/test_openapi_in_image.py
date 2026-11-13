@@ -26,7 +26,7 @@ import pytest
 from src.operations.hardware.mib_generator.document import OpenApiDocument
 from src.operations.hardware.mib_generator.runner import DEFAULT_OPENAPI
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[7]
 DOCKERIGNORE = REPOSITORY_ROOT / ".dockerignore"
 # Podman prefers `Containerfile` and Docker prefers `Dockerfile`. Both files
 # exist here, so a copy rule that lands in one and not the other repairs only

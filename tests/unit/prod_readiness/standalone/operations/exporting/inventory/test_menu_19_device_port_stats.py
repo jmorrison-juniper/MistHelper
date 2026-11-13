@@ -1,8 +1,27 @@
 """Unit tests for Menu 19 organization device port stats refactor."""
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
 import MistHelper
+from src.operations.exporting.export import org_device_stats_exporter
+
+SourceDependencyResolver = SimpleNamespace(  # WHY: hold isolated dependencies for the relocated tests.
+    APIDataFetcher=None,
+    mistapi=MistHelper.mistapi,
+)
+
+
+@pytest.fixture(autouse=True)
+def _bind_test_source_dependency_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bind the export module to the isolated dependency container for each test."""
+    monkeypatch.setattr(  # WHY: prevent tests from reaching the production resolver.
+        org_device_stats_exporter,
+        "SourceDependencyResolver",
+        SourceDependencyResolver,
+    )
 
 
 class TestDevicePortStatsHelpers:
@@ -36,7 +55,7 @@ class TestDevicePortStatsOrchestration:
         monkeypatch.setattr(MistHelper.TimeUtils, "get_dynamic_lookback_hours", lambda default_hours, test_hours: 1)
         monkeypatch.setattr(MistHelper.TimeUtils, "log_dynamic_lookback", lambda context, hours: None)
         api_fetcher = MagicMock()
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", api_fetcher)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", api_fetcher, raising=False)
 
         MistHelper.OrgDeviceStatsExporter.device_port_stats(fast=True)
 
@@ -57,7 +76,7 @@ class TestDevicePortStatsOrchestration:
         monkeypatch.setattr(MistHelper.OrgDeviceStatsExporter, "_port_stats_cache_hit", lambda output_file, fast: False)
         monkeypatch.setattr(MistHelper.TimeUtils, "get_dynamic_lookback_hours", lambda default_hours, test_hours: 24)
         monkeypatch.setattr(MistHelper.TimeUtils, "log_dynamic_lookback", lambda context, hours: None)
-        monkeypatch.setattr(MistHelper, "APIDataFetcher", MockFetcher)
+        monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
 
         MistHelper.OrgDeviceStatsExporter.device_port_stats(fast=False)
 

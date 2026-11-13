@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[7]
 JSON_SPEC = REPOSITORY_ROOT / "documentation" / "mist-api-openapi31json.json"
 YAML_SPEC = REPOSITORY_ROOT / "documentation" / "mist-api-openapi31yaml.yaml"
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
