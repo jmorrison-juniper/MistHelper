@@ -28,7 +28,7 @@ The approved sampling decision preserves each real poll as a raw sample with ful
 Use the poll collection time for scalar statistics. Preserve API timestamps for time-series responses.
 Derive hourly display values from raw samples. Never replace raw samples with hourly values.
 Add sample storage to the configured store and preserve existing hourly rows.
-Keep the existing hourly display as a latest-sample projection, not an aggregate or coverage claim.
+Keep the existing hourly projection rules unchanged. Do not treat hourly values as raw samples or a coverage claim.
 Do not delete or expire samples before retention policy and capacity have evidence.
 Historical completeness, backfill, and 13-month retention remain unverified.
 
@@ -40,7 +40,7 @@ Historical completeness, backfill, and 13-month retention remain unverified.
 - No production code, compatibility shims, new services, or credentials enter this planning change.
 - A sample-storage change is additive and preserves existing hourly rows.
 - Hourly display values derive from raw samples and do not replace them.
-- The hourly display uses the latest observation in each hour. It does not claim an hourly statistical aggregate or complete coverage.
+- The hourly projection keeps its current calculations. It does not replace timestamped samples or prove complete coverage.
 - No sample expiry, historical backfill, or 13-month guarantee is added without evidence.
 - Implementation must obey structural limits and record touched existing violations with separate remediation actions.
 - Each increment starts with failing tests and preserves existing portal behavior.
