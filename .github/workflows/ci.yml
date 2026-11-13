@@ -822,20 +822,36 @@ jobs:
           print("Preparing the Ubuntu package mirrors.")
           mirrors = Path("/etc/apt/apt-mirrors.txt")
           original = mirrors.read_bytes()
-          azure = b"http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n"
-          if (
-              original.splitlines(keepends=True).count(azure) != 1
-              or b"https://archive.ubuntu.com/ubuntu/\tpriority:2" not in original.splitlines()
-              or b"https://security.ubuntu.com/ubuntu/\tpriority:3" not in original.splitlines()
-          ):
+          mirror_lines = original.splitlines()
+          print(f"Inspected {len(mirror_lines)} Ubuntu mirror lines.")
+          azure = b"http://azure.archive.ubuntu.com/ubuntu/"
+          official = {
+              b"https://archive.ubuntu.com/ubuntu/": 0,
+              b"https://security.ubuntu.com/ubuntu/": 0,
+          }
+          azure_count = 0
+          for line in mirror_lines:
+              fields = line.partition(b"#")[0].split()
+              if fields and fields[0] == azure:
+                  azure_count += 1
+              elif fields and fields[0] in official:
+                  official[fields[0]] += 1
+          if azure_count > 1 or any(count != 1 for count in official.values()):
               raise SystemExit("Unexpected Ubuntu mirror configuration. No file was changed.")
-          with mirrors.with_suffix(".txt.issue-4613.bak").open("xb") as backup:
-              backup.write(original)
-          remaining = b"".join(line for line in original.splitlines(keepends=True) if line != azure)
-          mirrors.write_bytes(remaining)
-          if mirrors.read_bytes() != remaining:
-              raise SystemExit("Ubuntu mirror verification failed. The original backup remains available.")
-          print("Preserved the remaining Ubuntu package mirrors.")
+          if azure_count == 0:
+              print("Ubuntu package mirrors are already prepared. No file was changed.")
+          else:
+              with mirrors.with_suffix(".txt.issue-4613.bak").open("xb") as backup:
+                  backup.write(original)
+              remaining = b"".join(
+                  line
+                  for line in original.splitlines(keepends=True)
+                  if line.partition(b"#")[0].split()[:1] != [azure]
+              )
+              mirrors.write_bytes(remaining)
+              if mirrors.read_bytes() != remaining:
+                  raise SystemExit("Ubuntu mirror verification failed. The original backup remains available.")
+              print("Preserved the remaining Ubuntu package mirrors.")
           PY
       - name: Download the browser
         # Issue #2241: the playwright package ships no browser. Without this step
@@ -882,6 +898,14 @@ jobs:
             test-artifacts/issue-4229-*.png
             test-artifacts/issue-4229-browser/
           if-no-files-found: error
+      - name: Upload WAN Performance browser evidence
+        # Issue #4200: retain synthetic captures without credentials or live data.
+        if: ${{ !cancelled() && matrix.shard == 'web-portal' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: wan-performance-browser-evidence
+          path: test-artifacts/wan-performance/*.png
+          if-no-files-found: warn
       - name: Upload shard diagnostics
         # Issue #4250: a failed or cancelled shard keeps its pytest output, its
         # phase trail, and each retained trace and screenshot.
