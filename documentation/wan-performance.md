@@ -225,13 +225,13 @@ This anchor avoids presenting stale retained data as a current measurement.
 The port detail has a separate CSRF-protected, operator-triggered insight refresh.
 It requires the exact site, gateway, and port identity from the validated cached page.
 It shares the organization cooldown and request ledger with every other WAN refresh.
-It permits at most nine SDK calls: exact gateway discovery, metric catalog, combined rates, device link health, and five event pages.
-The combined rate request selects the actual gateway UUID and exact `port_id`.
+It permits at most ten SDK calls: exact gateway discovery, metric catalog, two rate requests, device link health, and five event pages.
+Each rate request selects the actual gateway UUID and exact `port_id`.
 Rate requests cover one completed UTC hour with `interval=10m` and at most six aligned samples.
 Catalog checks require gateway scope, a supported rate unit, a 600-second interval, and sufficient `max_age`.
 The device link-health request uses the existing `getSiteInsightMetricsForDevice` SDK method and the `wan_link_health` metric.
 It retains `avg_loss`, `avg_jitter`, and `avg_latency` with percent and millisecond units.
-Response checks require the exact window, no next page, and aligned named metric arrays.
+Response checks require the exact window, no next page, and a `results` array aligned with `rt`.
 Empty aligned series remain unknown.
 The selected application store retains these port rate, utilization, link-health, congestion, and event-derived records without replacing the current snapshot.
 Natural-key upserts replace an existing row for the same port and UTC hour.

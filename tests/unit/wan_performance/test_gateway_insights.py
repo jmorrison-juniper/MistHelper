@@ -70,12 +70,12 @@ def test_selected_port_insights_collect_rates_and_quality_with_bounded_calls(dev
         result = GatewayInsights(session, admission).collect_for_port("org-one", target, 100, "up")
     assert discovery.call_count == 1
     assert catalog.call_count == 1
-    assert metrics.call_count == 1
+    assert metrics.call_count == 2
     assert device_quality_response.call_count == 1
-    assert admission.check.call_count == 5
-    assert metrics.call_args.args[3] == "rx_bps,tx_bps"
-    assert metrics.call_args.kwargs["port_id"] == target.port_name
-    assert metrics.call_args.kwargs["limit"] == 6 and metrics.call_args.kwargs["page"] == 1
+    assert admission.check.call_count == 6
+    assert [call.args[3] for call in metrics.call_args_list] == ["rx_bps", "tx_bps"]
+    assert all(call.kwargs["port_id"] == target.port_name for call in metrics.call_args_list)
+    assert all(call.kwargs["limit"] == 6 and call.kwargs["page"] == 1 for call in metrics.call_args_list)
     device_quality_response.assert_called_once_with(
         session,
         "site-one",
@@ -110,13 +110,13 @@ def test_selected_port_insights_collect_rates_and_quality_with_bounded_calls(dev
     assert RecordCodec.decode(RecordCodec.encode(records[0])) == records[0]
 
 
-def test_selected_port_accepts_response_array_named_for_requested_metric():
-    """Map the API's explicit one-metric response key without guessing series order."""
+def test_selected_port_maps_generic_results_for_each_requested_metric():
+    """Map each requested metric from its documented generic results array."""
     from src.interfaces.wan_performance.domain.identity import CircuitIdentity
 
     device, metadata, series = responses("10m")
-    series.data["rx_bps"] = [None] * 6
-    series.data["tx_bps"] = ["12"] * 6
+    receive = SimpleNamespace(status_code=200, data={**series.data, "results": [None] * 6})
+    transmit = SimpleNamespace(status_code=200, data={**series.data, "results": ["12"] * 6})
     with (
         patch(
             "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",
@@ -128,7 +128,7 @@ def test_selected_port_accepts_response_array_named_for_requested_metric():
         ),
         patch(
             "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
-            return_value=series,
+            side_effect=[receive, transmit],
         ) as metrics,
     ):
         result = GatewayInsights(MagicMock(), MagicMock()).collect_for_port(
@@ -136,7 +136,8 @@ def test_selected_port_accepts_response_array_named_for_requested_metric():
         )
 
     assert discovery.call_count == 1
-    assert metrics.call_count == 1
+    assert metrics.call_count == 2
+    assert [call.args[3] for call in metrics.call_args_list] == ["rx_bps", "tx_bps"]
     assert [sample["value"] for sample in result["samples"][:2]] == [None, 12.0]
     assert [sample["metric"] for sample in result["samples"][2:5]] == [
         "avg_loss_pct",
@@ -277,7 +278,7 @@ def test_event_search_timeout_is_not_converted_to_empty_status():
             )
 
 
-@pytest.mark.parametrize("violation", ["scope", "unit", "max_age", "interval", "alignment", "ambiguous_mapping"])
+@pytest.mark.parametrize("violation", ["scope", "unit", "max_age", "interval", "alignment", "result_array"])
 def test_selected_port_refuses_unverified_insight_contract(violation):
     """Do not assign an hourly port rate when catalog or returned alignment disagrees."""
     from src.interfaces.wan_performance.domain.identity import CircuitIdentity
@@ -291,8 +292,8 @@ def test_selected_port_refuses_unverified_insight_contract(violation):
         metadata["rx_bps"]["intervals"]["10m"]["max_age"] = 0
     elif violation == "interval":
         metadata["rx_bps"]["intervals"]["10m"]["interval"] = 300
-    elif violation == "ambiguous_mapping":
-        series.data["rx_bps"] = ["0"]
+    elif violation == "result_array":
+        series.data.pop("results")
     else:
         series.data["rt"] = [datetime.now(UTC).isoformat()]
     with (
@@ -360,7 +361,7 @@ def test_selected_port_insights_persist_to_existing_sqlite_without_snapshot_chan
     history = SQLiteHistory(path)
     device, metadata, series = responses("10m")
     if empty:
-        series.data.update(rt=[], rx_bps=[], tx_bps=[])
+        series.data.update(rt=[], results=[])
     target = CircuitIdentity(TARGET, "ge-0/0/1")
     store = MagicMock()
     store.cached.return_value = {
@@ -406,7 +407,7 @@ def test_selected_port_insights_persist_to_existing_sqlite_without_snapshot_chan
     assert retained[0].metrics["rx_bps"].missing_reason == ("The API snapshot has no value." if empty else None)
     assert retained[0].hour_start_utc == start
     assert retained[0].identity == target
-    assert store.acquire.return_value.check.call_count == 6
+    assert store.acquire.return_value.check.call_count == 7
     store.publish.assert_not_called()
 
 
@@ -526,13 +527,12 @@ def responses(interval="1h", status=200):
         "end": int(end.timestamp()),
         "interval": interval_seconds,
         "rt": [(start + timedelta(seconds=interval_seconds * index)).isoformat() for index in range(sample_count)],
-        "rx_bps": [0] * sample_count,
-        "tx_bps": [0] * sample_count,
+        "results": [0] * sample_count,
     }
     return device, metadata, SimpleNamespace(status_code=status, data=series)
 
 
-def test_insights_use_actual_device_uuid_catalog_and_named_metric_arrays():
+def test_insights_use_actual_device_uuid_catalog_and_generic_result_arrays():
     """Never derive a device UUID from its MAC or assume positional metric mapping."""
     device, metadata, series = responses("1h")
     session, admission = MagicMock(), MagicMock()
@@ -554,12 +554,12 @@ def test_insights_use_actual_device_uuid_catalog_and_named_metric_arrays():
     devices.assert_called_once_with(
         session, "org-one", type="gateway", site_id="site-one", mac="aabbccddeeff", limit=2, page=1
     )
-    assert metrics.call_count == 1
-    assert admission.check.call_count == 3
+    assert metrics.call_count == 2
+    assert admission.check.call_count == 4
     assert metrics.call_args.kwargs["limit"] == 1
     assert metrics.call_args.kwargs["page"] == 1
     assert metrics.call_args.args[2] == DEVICE_ID
-    assert metrics.call_args.args[3] == "rx_bps,tx_bps"
+    assert [call.args[3] for call in metrics.call_args_list] == ["rx_bps", "tx_bps"]
     snapshot = {
         "org_id": "org-one",
         "collected_at_utc": datetime.now(UTC).isoformat(),
@@ -613,11 +613,11 @@ def test_selected_gateway_discovery_uses_exact_site_mac_and_returned_uuid():
     discovery.assert_called_once_with(
         session, "org-one", type="gateway", site_id="site-two", mac="112233445566", limit=2, page=1
     )
-    assert metrics.call_count == 1
+    assert metrics.call_count == 2
     assert metrics.call_args.args[2] == device["id"]
     assert result["gateway"] == device
     assert result["partial"] is False
-    assert admission.check.call_count == 3
+    assert admission.check.call_count == 4
 
 
 @pytest.mark.parametrize("rows", ["wrong_site", "wrong_mac", "duplicate", "absent"])
@@ -763,13 +763,14 @@ def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_p
     sqlite3.connect(path).close()
     repository = SQLiteHistory(path)
     device, metadata, series = responses()
-    metric_data = dict(series.data)
-    if len(empty_metrics) == 2:
-        metric_data["rt"] = []
-        metric_data.update({name: [] for name in empty_metrics})
-    else:
-        metric_data.update({name: [None] for name in empty_metrics})
-    metric_response = SimpleNamespace(status_code=200, data=metric_data)
+    metric_responses = []
+    for name in ("rx_bps", "tx_bps"):
+        metric_data = dict(series.data)
+        if len(empty_metrics) == 2:
+            metric_data.update(rt=[], results=[])
+        elif name in empty_metrics:
+            metric_data["results"] = [None]
+        metric_responses.append(SimpleNamespace(status_code=200, data=metric_data))
     port = {**device, "port_id": "ge-0/0/0", "rx_bps": 40, "tx_bps": 80}
     peer = {
         **port,
@@ -806,7 +807,7 @@ def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_p
         ),
         patch(
             "src.interfaces.wan_performance.collection.snapshot_client.getSiteInsightMetricsForGateway",
-            return_value=metric_response,
+            side_effect=metric_responses,
         ),
     ):
         snapshot = LiveService(MagicMock(), "org-one", store, repository).refresh(target)
@@ -825,5 +826,5 @@ def test_bounded_refresh_persists_gateway_history_before_cache_publication(tmp_p
         assert repository.read(record.identity, record.hour_start_utc, record.hour_start_utc + timedelta(hours=1)) == (
             record,
         )
-    assert store.acquire.return_value.check.call_count == 7
+    assert store.acquire.return_value.check.call_count == 8
     store.publish.assert_called_once_with("org-one", snapshot)

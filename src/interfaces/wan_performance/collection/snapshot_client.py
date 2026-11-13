@@ -228,23 +228,26 @@ class GatewayInsights(SnapshotSession):
     def _metrics(
         self, device: dict[str, Any], units: dict[str, str], start: datetime, end: datetime, interval: str
     ) -> list[dict[str, Any]]:
-        """Read explicitly named rate arrays from one bounded insight response."""
-        self.admission.check()
-        response = getSiteInsightMetricsForGateway(
-            self.session,
-            device["site_id"],
-            device["id"],
-            "rx_bps,tx_bps",
-            port_id=device.get("selected_port"),
-            start=str(int(start.timestamp())),
-            end=str(int(end.timestamp())),
-            interval=interval,
-            limit=6 if interval == "10m" else 1,
-            page=1,
-        )
-        if response.status_code != 200:
-            raise ConnectionError(f"Gateway insight request failed with HTTP {response.status_code}.")
-        return [self._sample(response.data, name, unit, start, end, interval) for name, unit in units.items()]
+        """Read each rate from its own bounded generic results array."""
+        samples: list[dict[str, Any]] = []
+        for name, unit in units.items():
+            self.admission.check()
+            response = getSiteInsightMetricsForGateway(
+                self.session,
+                device["site_id"],
+                device["id"],
+                name,
+                port_id=device.get("selected_port"),
+                start=str(int(start.timestamp())),
+                end=str(int(end.timestamp())),
+                interval=interval,
+                limit=6 if interval == "10m" else 1,
+                page=1,
+            )
+            if response.status_code != 200:
+                raise ConnectionError(f"Gateway insight request failed with HTTP {response.status_code}.")
+            samples.append(self._sample(response.data, name, unit, start, end, interval))
+        return samples
 
     @staticmethod
     def _timestamps(value: object) -> list[str]:
@@ -254,11 +257,11 @@ class GatewayInsights(SnapshotSession):
         return [timestamp for timestamp in value if isinstance(timestamp, str)]
 
     @staticmethod
-    def _sample_arrays(data: dict[str, Any], name: str, maximum_samples: int) -> tuple[list[str], list[object]]:
-        """Select one unambiguous result array and validate its paired timestamps."""
-        if name not in data or "results" in data:
-            raise ValueError("Gateway insight response must name each requested metric array.")
-        values = data[name]
+    def _sample_arrays(data: dict[str, Any], maximum_samples: int) -> tuple[list[str], list[object]]:
+        """Read the documented generic result array and validate paired timestamps."""
+        if "results" not in data:
+            raise ValueError("Gateway insight response must contain the requested results array.")
+        values = data["results"]
         timestamps = GatewayInsights._timestamps(data.get("rt"))
         if not isinstance(values, list) or len(timestamps) != len(values) or len(timestamps) > maximum_samples:
             raise ValueError("Gateway insight values and timestamps must be aligned and bounded.")
@@ -269,7 +272,7 @@ class GatewayInsights(SnapshotSession):
         """Validate timestamps and retain every sample returned for the hour."""
         interval_seconds, maximum_samples = cls._sample_contract(interval)
         cls._validate_sample_window(data, start, end, interval_seconds)
-        timestamps, values = cls._sample_arrays(data, name, maximum_samples)
+        timestamps, values = cls._sample_arrays(data, maximum_samples)
         points = cls._sample_points(timestamps, values, unit, start, interval_seconds, maximum_samples)
         raw_values = tuple(point["value"] for point in points if point["value"] is not None)
         return {
