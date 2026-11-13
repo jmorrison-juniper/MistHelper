@@ -20,9 +20,16 @@ Redis remains optional and evidence-gated. Do not introduce new keys or TTLs wit
 Use existing portal authorization and request admission.
 
 Source baseline: `jmorrison-juniper/MistWANPerformance` at `2d1c2199fa1e31c129ef1e051c5389349a207785`.
-Destination baseline: PR #4208 at `1a408c9511d8b32662d201068f2f54196f643450`.
-Observed remote main: `772fc927761b61dea8beb7f708fbbe78c2a38d86`.
-Refresh these records at execution. This planning change does not rebase product work.
+Destination baseline: PR #4208 remote head `fbb23f8a2348e6840caf479dc10d8841635ea91e`. Local candidate: `8552557d635f1e4e3fdcf8c1388ea1370cdf6214`.
+Observed remote main: `816f42bac74aebfb936ac9fc9b72fe1ec2030c09`.
+These refs are read-only observations. This planning change does not rebase product work.
+
+The approved sampling decision preserves each real poll as a raw sample with full identity and a UTC timestamp.
+Use the poll collection time for scalar statistics. Preserve API timestamps for time-series responses.
+Derive hourly display values from raw samples. Never replace raw samples with hourly values.
+Add sample storage to the configured store and preserve existing hourly rows.
+Do not delete or expire samples before retention policy and capacity have evidence.
+Historical completeness, backfill, and 13-month retention remain unverified.
 
 ## Constitution Check
 
@@ -30,6 +37,9 @@ Refresh these records at execution. This planning change does not rebase product
 - Feature root contains spec, plan, tasks, analysis, and design.
 - Design contains research, data model, quickstart, contracts, and checklists.
 - No production code, compatibility shims, new services, or credentials enter this planning change.
+- A sample-storage change is additive and preserves existing hourly rows.
+- Hourly display values derive from raw samples and do not replace them.
+- No sample expiry, historical backfill, or 13-month guarantee is added without evidence.
 - Implementation must obey structural limits and record touched existing violations with separate remediation actions.
 - Each increment starts with failing tests and preserves existing portal behavior.
 - Publication and deployment require explicit acceptance. The original draft and no-merge holds remain controlling.
@@ -52,13 +62,16 @@ Do not edit the other planning worktree.
 Complete [research](design/research.md), [data model](design/data-model.md), and [comparison contract](design/contracts/parity.md).
 Resolve each metric separately. Endpoint presence alone does not verify units, sampling, completeness, or aggregation.
 Record unresolved findings as blocking evidence, with dependent tasks named.
-No dependent implementation begins until its contract passes.
+Implement only fields with verified SDK and OpenAPI contracts. Keep historical completeness and long-term retention blocked until evidence proves them.
 
 ## Phase 2 - Test-first implementation
 
 Use the existing package and test locations, subject to current file ownership.
 Add failing domain and mocked integration tests before each production increment.
 Implement overview and dimensions, status and utilization, quality and SLE, history, then audience views.
+Store each real poll under its full identity and UTC sample timestamp in additive storage.
+Derive hourly display values separately and preserve each raw sample for quality calculations.
+Keep existing hourly records. Do not add destructive migrations, expiry, or unsupported history claims.
 Each increment updates its comparison rows and runs focused regression gates.
 Do not bundle unrelated repairs.
 
