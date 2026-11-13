@@ -76,14 +76,14 @@ class TestDeviceStatsAPIDataFetcherWiring:
 
     def test_calls_execute_exactly_once(self, monkeypatch):
         """US1: execute() is called exactly once per invocation."""
-        mock_instance = MagicMock()
+        execute_calls: list[None] = []  # WHY: count the actual fetcher execution.
 
         class MockFetcher:
             def __init__(self, **kwargs):
-                pass
+                pass  # WHY: this test checks execution, not constructor arguments.
 
             def execute(self):
-                mock_instance.execute()
+                execute_calls.append(None)  # WHY: record each call for a value assertion.
 
         monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
         monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", None, raising=False)
@@ -100,7 +100,7 @@ class TestDeviceStatsAPIDataFetcherWiring:
 
         MistHelper.OrgDeviceStatsExporter.device_stats()
 
-        mock_instance.execute.assert_called_once()
+        assert len(execute_calls) == 1  # WHY: prove the exporter executes the fetcher once.
 
     def test_handles_empty_api_response(self, monkeypatch):
         """US1 Scenario 3: Empty result does not crash."""
@@ -173,13 +173,14 @@ class TestDeviceStatsProgressEmitter:
 
     def test_handles_no_emitter_gracefully(self, monkeypatch):
         """US4 Scenario 3: No exception when PROGRESS_EMITTER is None."""
+        execute_calls: list[None] = []  # WHY: prove the export still runs without a progress emitter.
 
         class MockFetcher:
             def __init__(self, **kwargs):
-                pass
+                pass  # WHY: this test checks safe execution, not constructor arguments.
 
             def execute(self):
-                pass
+                execute_calls.append(None)  # WHY: record successful fetcher execution.
 
         monkeypatch.setattr(SourceDependencyResolver, "APIDataFetcher", MockFetcher, raising=False)
         monkeypatch.setattr(SourceDependencyResolver, "PROGRESS_EMITTER", None, raising=False)
@@ -195,6 +196,7 @@ class TestDeviceStatsProgressEmitter:
         )
 
         MistHelper.OrgDeviceStatsExporter.device_stats()
+        assert len(execute_calls) == 1  # WHY: prove the exporter completes without an emitter.
 
 
 class TestDeviceStatsFastMode:
