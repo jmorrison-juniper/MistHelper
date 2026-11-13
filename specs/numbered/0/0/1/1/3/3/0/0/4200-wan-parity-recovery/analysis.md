@@ -135,7 +135,7 @@ The isolated task audit again reported 47 unchecked tasks and exit 0.
 The source tree response was not truncated.
 Static callback inspection found three CSV handlers, but did not prove region/site export buttons work.
 Offline SDK inspection found the gateway symbol absent and peer filter arguments unsupported.
-No production tests ran because only documentation changed.
+During that document review, no product tests ran because only documentation had changed.
 The final link scan examined ten tracked Markdown files and found zero broken links.
 The final STE scan examined ten files, skipped none, and passed with scores from 92 to 97.
 `git diff --cached --check` passed.
@@ -154,3 +154,30 @@ It has the `in-progress` label and a recovery progress comment.
 Do not create a duplicate issue for the same recovery scope.
 Update task status only when its full evidence or implementation objective is satisfied.
 Future issue updates must identify completed tasks, open gates, exact revisions, and validation results.
+
+## Fresh-main candidate validation
+
+The candidate uses base `816f42bac74aebfb936ac9fc9b72fe1ec2030c09`.
+Its implementation commit is `40278aa1948cda154f7372c1b0dd893b3865c9f5`.
+Keep issue #4200 open, and leave the existing draft PR #4208 unchanged.
+No workflow, dependency pin, test-quality baseline, `MistHelper.py`, operation registry, or primary-key map changed.
+The current-main workflow fixes remain unchanged, including the WAN browser upload with `if-no-files-found: warn`.
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| WAN unit | `python -m pytest -q tests/unit/wan_performance` | 250 passed. |
+| WAN browser | `python -m pytest -q tests/e2e/web_portal/test_wan_performance_live.py tests/e2e/web_portal/test_wan_performance_offline.py` | 61 passed. |
+| Mist SDK | `python -m pytest -q tests/integration/test_mistapi_sdk_compatibility.py` | 8 passed. It found zero known signature failures. |
+| Types | `python -m mypy src/ MistHelper.py wsgi.py scripts/mist_ideas_analyzer_pkg/__init__.py scripts/mist_ideas_distiller_v2_pkg/__init__.py --config-file pyproject.toml` | 900 source files passed. |
+| Style and compile | `python -m ruff check .` and `python -m black --check .` and `python -m compileall -q src/interfaces/wan_performance web_portal/app.py` | Ruff passed. Black left 2,596 files unchanged. Compilation passed. |
+| Complexity and security | `radon cc src/interfaces/wan_performance -j \| complexity-gate --max 10` and `bandit -c pyproject.toml -r src/interfaces/wan_performance -q` | Both passed. |
+| Dependencies | `pip-audit -r requirements.txt` | No known vulnerabilities. Cache warnings did not stop the audit. |
+| Test quality | `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json` and `test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` | Full gate checked 1,260 files and 404 findings, with zero new findings. Post-commit gate checked 15 test files, found zero findings, skipped two, and reported zero parse errors. |
+| Writing style | `ste-linter --config .ste-linter.toml --min-score 80` on the 12 candidate Markdown files | All 12 passed. Scores ranged from 88 to 97. No file was skipped. |
+| Links | `markdown-link-check --root .` on the 12 candidate Markdown files | Zero broken links. |
+
+The test inventory replaces eight prior unit modules with 13 focused unit-test modules and two browser-test modules.
+All tests used offline or mocked data. No live Mist call, production credential, or production database write occurred.
+These checks do not complete the feature. All 47 tasks remain open.
+Source temporal, weighting, and p95 semantics remain unverified.
+The existing 13-month history, backfill, retention capacity, and completeness also remain unverified.
