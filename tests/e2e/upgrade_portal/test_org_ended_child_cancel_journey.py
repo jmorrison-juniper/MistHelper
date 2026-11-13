@@ -20,11 +20,16 @@ from typing import Any
 import pytest
 
 from tests.e2e.upgrade_portal.org_control_seeds import FIRST_AP_MAC, FIRST_SWITCH_MAC, SECOND_AP_MAC
-from tests.e2e.upgrade_portal.org_ended_seeds import ENDED_CHILD_IDS, ENDED_OPERATION_ID
+from tests.e2e.upgrade_portal.org_ended_seeds import (
+    CONFLICTED_CHILD_ID,
+    CONFLICTED_OPERATION_ID,
+    ENDED_CHILD_IDS,
+    ENDED_OPERATION_ID,
+)
 
 sync_api = pytest.importorskip("playwright.sync_api", reason="Playwright is not installed.")
 
-JOB_PATH = f"/upgrade/org/jobs/{ENDED_OPERATION_ID}"  # The progress page of the seeded operation.
+JOB_PATH = "/upgrade/org/jobs/"  # The root path of each seeded organization operation.
 SEED_TRIES = 20  # The server writes the seeds on a thread, so the first read can come too early.
 SEED_PAUSE_MS = 500  # The pause between two reads of the seeded page.
 ENDED_MESSAGE = "The child job already ended: completed. The portal sent no cancel request."  # The result sentence.
@@ -34,14 +39,14 @@ AP_ID = ENDED_CHILD_IDS["ap"]  # The completed access point job.
 SWITCH_ID = ENDED_CHILD_IDS["switch"]  # The running switch job.
 
 
-def open_seeded_page(page: Any) -> None:
+def open_seeded_page(page: Any, operation_id: str = ENDED_OPERATION_ID) -> None:
     """Open the progress page of the seeded operation, and wait until the seed exists.
 
     Args:
         page: The browser page of the controls operator.
     """
     for _ in range(SEED_TRIES):  # The seed thread can finish after the first test starts.
-        page.goto(JOB_PATH, wait_until="domcontentloaded")
+        page.goto(f"{JOB_PATH}{operation_id}", wait_until="domcontentloaded")
         if page.get_by_test_id("org-upgrade-progress").count() == 1:  # The seed exists.
             return
         page.wait_for_timeout(SEED_PAUSE_MS)
@@ -88,3 +93,23 @@ class TestEndedChildJobCancel:
         check_ended_result(page)
         assert page.get_by_test_id(f"org-cancel-outcome-{AP_ID}").inner_text() == first_section  # Stored result.
         page.screenshot(path=str(tmp_path / "ended-reload.png"), full_page=True)
+
+    def test_conflicting_submission_evidence_overrides_a_stale_ended_result(
+        self, controls_operator_page: Any, tmp_path: Path
+    ) -> None:
+        """The page shows an uncertain result and lists each device as potentially writing."""
+        page = controls_operator_page  # The operator that owns the seeded operation.
+        open_seeded_page(page, CONFLICTED_OPERATION_ID)
+        sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-status-{CONFLICTED_CHILD_ID}")).to_have_text(
+            "Result not known"
+        )
+        sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-message-{CONFLICTED_CHILD_ID}")).to_have_text(
+            "The stored cancel result conflicts with the submission record."
+        )
+        sync_api.expect(page.get_by_test_id(f"org-cancel-outcome-note-{CONFLICTED_CHILD_ID}")).to_have_text(
+            "The portal cannot tell which devices of this child job stopped. "
+            "Treat each device as a device that can still write firmware."
+        )
+        writing = page.get_by_test_id(f"org-cancel-outcome-writing-{CONFLICTED_CHILD_ID}").locator("li")
+        assert [text.strip() for text in writing.all_inner_texts()] == [FIRST_AP_MAC, SECOND_AP_MAC]
+        page.screenshot(path=str(tmp_path / "conflicted-ended.png"), full_page=True)

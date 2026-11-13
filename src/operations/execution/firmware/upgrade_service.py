@@ -30,6 +30,8 @@ from enum import StrEnum
 from importlib import import_module
 from typing import Any, Final
 
+from src.foundation.support.submission_certainty import SubmissionCertainty
+
 SCOPE_SITE = "site"
 SCOPE_ORG = "org"
 
@@ -511,6 +513,8 @@ class UpgradeSubmission:
         accepted: The MAC addresses that the cloud accepted.
         rejected: Each rejected MAC address with its reason.
         raw_status: The HTTP status code.
+        response_data: The response body used to resolve conflicting evidence.
+        response_data_valid: Whether the normalizer retained a complete response object.
     """
 
     upgrade_id: str | None
@@ -518,6 +522,8 @@ class UpgradeSubmission:
     accepted: tuple[str, ...]
     rejected: tuple[tuple[str, str], ...]
     raw_status: int
+    response_data: Mapping[str, object] | None = None
+    response_data_valid: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -1300,14 +1306,20 @@ def _read_submission(response: Any, plan: UpgradePlan) -> UpgradeSubmission:
     """
     status = _status_code(response)
     macs = tuple(target.mac for target in plan.targets)
+    data = getattr(response, "data", None)
+    response_data_valid = SubmissionCertainty.response_data_is_valid(
+        response, data if isinstance(data, Mapping) else None
+    )
     accepted = status in ACCEPTED_STATUS
     reason = f"the cloud answered status {status}"
     return UpgradeSubmission(
-        upgrade_id=_upgrade_id(response),
+        upgrade_id=_upgrade_id(response) if response_data_valid else None,
         scope=plan.scope,
         accepted=macs if accepted else (),
         rejected=() if accepted else tuple((mac, reason) for mac in macs),
         raw_status=status,
+        response_data=data if isinstance(data, Mapping) else None,
+        response_data_valid=response_data_valid,
     )
 
 

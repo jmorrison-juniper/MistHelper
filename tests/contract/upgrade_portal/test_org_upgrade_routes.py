@@ -758,6 +758,28 @@ def test_unknown_submission_blocks_a_repeat(org_upgrade_client: FlaskClient) -> 
         assert browser_session["org_upgrade_last_job"]["state"] == "submission_unknown"
 
 
+def test_returned_server_error_submission_blocks_a_repeat(  # Keep the replay guard after a returned error.
+    org_upgrade_client: FlaskClient,
+) -> None:
+    """A returned server error keeps the uncertainty marker before return."""
+
+    class UnknownService:  # Return a saved server error without a usable job identity.
+        @staticmethod
+        def submit(cloud_session: Any, org_id: str, body: dict[str, object]) -> OrgUpgradeResult:  # Model HTTP 503.
+            return OrgUpgradeResult(org_id, None, 503, {}, "server error")  # Keep all evidence offline.
+
+    org_upgrade_client.application.config["ORG_UPGRADE_SERVICE"] = UnknownService  # Install the offline service.
+    save_valid_options(org_upgrade_client)  # Prepare the confirmed form without a cloud request.
+    first = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})  # Submit the uncertain result.
+    second = org_upgrade_client.post(ORG_SUBMIT_API, json={"confirmation": "CONFIRM"})  # Attempt a blocked repeat.
+    assert first.status_code == 502  # The route reports the malformed response envelope.
+    assert first.get_json()["error"]["code"] == "org_upgrade_submission_failed"  # Keep the public failure contract.
+    assert second.status_code == 409  # The uncertainty marker blocks a second write.
+    assert second.get_json()["error"]["code"] == "org_upgrade_already_submitted"  # Name the replay refusal.
+    with org_upgrade_client.session_transaction() as browser_session:  # Read the durable browser marker.
+        assert browser_session["org_upgrade_last_job"]["state"] == "submission_unknown"  # Preserve unknown state.
+
+
 def test_zero_failure_limit_survives_the_options_round_trip(org_upgrade_client: FlaskClient) -> None:
     """The strict zero-percent failure limit stays visible after validation."""
     answer = org_upgrade_client.post(
@@ -983,7 +1005,8 @@ def test_reference_site_entries_use_root_totals() -> None:
     assert summary["site_upgrades"][0]["id"] == SITE_UPGRADE_ID
 
 
-def test_rejected_child_targets_count_as_failed_devices() -> None:
+@pytest.mark.parametrize(("proof", "failed"), [(True, 1), (False, 0), (None, 0)])
+def test_rejected_child_targets_count_as_failed_devices(proof: bool | None, failed: int) -> None:
     """A rejected child counts every target as failed when Mist created no job."""
     summary = org_upgrade.aggregate_summary(
         {
@@ -993,6 +1016,8 @@ def test_rejected_child_targets_count_as_failed_devices() -> None:
                 {
                     "child_id": "rejected-gateway",
                     "status": "rejected",
+                    "raw_status": 400,
+                    "response_data_valid": proof,
                     "target_ids": ["gateway-1"],
                     "targets": [{"mac": "gateway-1"}],
                     "status_data": {},
@@ -1000,8 +1025,46 @@ def test_rejected_child_targets_count_as_failed_devices() -> None:
             ],
         }
     )
-    assert summary["failed_count"] == 1
-    assert summary["children"][0]["failed"] == 1
+    assert summary["failed_count"] == failed
+    assert summary["children"][0]["failed"] == failed
+
+
+@pytest.mark.parametrize(
+    ("evidence", "upgraded", "failed"),
+    [
+        pytest.param({"upgrade_id": "job-one"}, 0, 0, id="retained-upgrade-identity"),
+        pytest.param({"raw_status": 429}, 0, 0, id="rate-limit"),
+        pytest.param(
+            {"status_data": {"targets": {"upgraded": ["gateway-1"]}}},
+            1,
+            0,
+            id="accepted-target-evidence",
+        ),
+    ],
+)
+def test_legacy_rejected_child_summary_keeps_conflicting_evidence(
+    evidence: dict[str, Any],
+    upgraded: int,
+    failed: int,
+) -> None:
+    """A legacy rejected status cannot count every target as failed when evidence conflicts."""
+    summary = org_upgrade.aggregate_summary(
+        {
+            "operation_id": UPGRADE_ID,
+            "state": "failed",
+            "children": [
+                {
+                    "child_id": "legacy-rejected",
+                    "status": "rejected",
+                    "raw_status": 400,
+                    "target_ids": ["gateway-1"],
+                    "targets": [{"mac": "gateway-1"}],
+                    **evidence,
+                }
+            ],
+        }
+    )
+    assert (summary["upgraded_count"], summary["failed_count"]) == (upgraded, failed)
 
 
 def test_status_page_and_api_preserve_site_progress(
@@ -1402,6 +1465,7 @@ def test_aggregate_summary_counts_nested_ap_site_targets() -> None:
                 "device_family": "ap",
                 "route": "upgradeOrgDevices",
                 "upgrade_id": "upgrade-ap",
+                "status_data_valid": True,
                 "status": "running",
                 "target_ids": ["ap-1", "ap-2", "ap-3"],
                 "status_data": {
@@ -1556,6 +1620,7 @@ def device_table_record(owner: str, org_id: str, site_id: str) -> dict[str, Any]
             table_target(AP_TWO, "ap", SECOND_SITE_ID, "0.15.1"),
         ],
         "status_data": ap_status,
+        "status_data_valid": True,
         "error": None,
         "cancellation": None,
     }

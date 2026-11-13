@@ -21,6 +21,9 @@ from typing import Any
 from flask import Blueprint, Response, current_app, g, has_request_context, jsonify, request, session
 from requests.exceptions import RequestException  # Name the transport faults that the Mist SDK can raise.
 
+from src.foundation.support.submission_certainty import (  # Keep the shared rule private to this module.
+    SubmissionCertainty as _SubmissionCertainty,
+)
 from src.interfaces.portals.upgrade_portal.api.run_controls.views import (
     RunStalePolicy,
 )  # Issue #3249: the age rule of the single-site page.
@@ -1782,7 +1785,13 @@ def _operation_is_settled(operation: Mapping[str, Any]) -> bool:
     if not children:  # A damaged record with no child keeps the conservative state rule.
         return str(operation.get("state", "")) in SETTLED_OPERATION_STATES  # Only a final aggregate state.
     states = [str(child.get("status", "")).strip().lower() for child in children]  # One word for each child.
-    if not all(state in FINAL_WRITE_STATES for state in states):  # One child can still write firmware.
+    if not all(  # Require final states and evidence for each rejected child.
+        state in FINAL_WRITE_STATES  # Require a final child state.
+        and _SubmissionCertainty.allows_settlement(
+            state, child.get("raw_status"), child
+        )  # Require refusal proof without job evidence.
+        for child, state in zip(children, states, strict=True)  # Pair each state with its saved response evidence.
+    ):
         return False  # The operation keeps every selected site.
     watch = operation.get(WATCH_KEY)  # Issue #3333: the watch includes every post-check capture.
     if not isinstance(watch, Mapping):  # An earlier record has no phase watch or post-check stage.
@@ -2293,7 +2302,7 @@ def _aggregate_child_summary(child: Mapping[str, Any]) -> tuple[dict[str, Any], 
         "failed": failed,
         "error": child.get("error"),
         "cancellation": child.get("cancellation"),
-        "cancellation_text": OrgCancelText.text(child.get("cancellation")),  # Issue #3225: one text for both paints.
+        "cancellation_text": OrgCancelOutcomes.text(child),  # Share the panel's verified cancellation evidence.
     }
     return row, (total, upgraded, failed)  # Let the caller add aggregate totals.
 
@@ -2306,7 +2315,7 @@ def _aggregate_child_counts(child: Mapping[str, Any]) -> tuple[int, int, int]:
         cloud answer, so the cloud lists count no upgraded device. The counts of
         that child job come from the proof, with the rule of the device table.
     """
-    data = child.get("status_data") if isinstance(child.get("status_data"), Mapping) else {}  # Read status.
+    data = OrgChildDevices.progress_data(child)  # Count only verified organization progress.
     targets = data.get("targets") if isinstance(data.get("targets"), Mapping) else {}  # Read root targets.
     counts = (  # The target count and the two counts of the stored cloud lists.
         len(child.get("target_ids", [])),  # Each target device of the child job.
@@ -2314,7 +2323,10 @@ def _aggregate_child_counts(child: Mapping[str, Any]) -> tuple[int, int, int]:
         _array_count(targets.get("failed")),  # The devices that the cloud lists as failed.
     )
     status = str(child.get("status") or "").strip().lower()  # A rejected child has no cloud target lists.
-    if status in {"rejected", "not_submitted"}:  # The portal submitted no device of this child job.
+    if status == "not_submitted" or (  # Count only a proven refusal as a failed, unsubmitted child.
+        status == "rejected"  # Legacy rejected states require their saved evidence.
+        and _SubmissionCertainty.is_known_refusal(child.get("raw_status"), child)  # Reject conflicting evidence.
+    ):
         logger.debug(
             "Child job %s rejected %s target(s)", child.get("child_id", ""), counts[0]
         )  # Log the failure count.

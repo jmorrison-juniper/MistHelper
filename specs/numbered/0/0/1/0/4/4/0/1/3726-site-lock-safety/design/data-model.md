@@ -1,0 +1,51 @@
+# Data Model: Submission Certainty
+
+**Feature**: [spec.md](../spec.md)
+
+## Aggregate operation
+
+An aggregate operation holds the selected child submissions, durable outcome evidence, and the site locks that protect those submissions.
+
+| Field | Meaning | Validation |
+|---|---|---|
+| `children` | Child firmware requests in the operation | Each child status follows the outcome rules below. |
+| `site_locks` | Locks held for sites in the operation | Keep each lock while a child can still write or its outcome is uncertain. |
+| `phase_watch` | Optional post-upgrade observation stage | Keep site locks while the watch needs the site. |
+| `state` | Aggregate operation state | An aggregate final state cannot override an uncertain child. |
+
+## Child submission
+
+| Field | Meaning | Validation |
+|---|---|---|
+| `status` | Accepted, rejected, not submitted, running, final, or uncertain state | `rejected` proves no cloud job only when `raw_status` is documented and no conflicting identity or accepted target exists. |
+| `raw_status` | HTTP response status, when available | Only integer status 400, 401, 403, or 404 can prove refusal. Other values remain uncertain. |
+| `upgrade_id` | Cloud identity used to read or cancel an accepted job | Any retained job identity conflicts with a refusal status. |
+| `response_data_valid` | Durable proof that the normalizer retained a verified response object | Require exact `true` before a rejected child can settle. A missing value leaves legacy refusals uncertain. |
+| `status_data_valid` | Durable proof that the current organization progress body passed validation | Require exact `true` before target lists affect counts, device states, or target-based version reads. |
+| `error` | Safe operator-facing reason | Do not include credentials or secret response content. |
+
+## Outcome transitions
+
+| Evidence | Child status | Can settle? | Can release a site? |
+|---|---|---:|---:|
+| Accepted response with a required identity | `accepted` | No | No |
+| Documented refusal status with body-verification proof and no conflicting evidence | `rejected` | Yes | Only after other children and any watch settle |
+| Refusal status with a job identity or accepted target | `submission_unknown` | No | Keep the lock and block retry |
+| Proven local stop before a cloud write | `not_submitted` | Yes | Only after other children and any watch settle |
+| Transport error or timeout | `submission_unknown` | No | No |
+| 408, 429, 499, 5xx, or unlisted response | `submission_unknown` | No | No |
+| Malformed success or missing required identity | `submission_unknown` | No | No |
+| Rejected legacy record without body-verification proof, or with missing or unlisted status | `rejected`, treated as uncertain | No | No |
+| Decoded success identity that disagrees with raw JSON | `submission_unknown`, with no tracking identity | No | No |
+
+## Lock-release invariant
+
+The portal releases site locks only when every child is final and every rejected child carries documented refusal evidence with no conflicting identity or accepted target. It also waits for any required phase watch. An uncertain recorded outcome cannot prove that the cloud job ended.
+
+## Progress evidence
+
+Submission proof and progress proof describe different responses. A valid later status read can establish progress despite invalid or missing submission proof.
+
+Invalid organization responses store empty progress data and false progress proof. Legacy organization bodies without progress proof cannot establish target outcomes.
+
+The summary and device reader share one progress-data selector. Verified reconciliation evidence remains independent from cloud target lists.

@@ -119,6 +119,26 @@ def test_an_ended_result_with_a_damaged_list_still_lists_no_device() -> None:
     assert (row["cancelled"], row["already_writing"], row["note"]) == ([], [], ENDED_NOTE)
 
 
+@pytest.mark.parametrize("upgrade_id", [None, "known-job"])
+@pytest.mark.parametrize(
+    "status", ["rejected", "submission_unknown", "unknown", "read_unknown", "submission_claimed", "running"]
+)
+def test_an_unsettled_child_does_not_show_a_stale_ended_result(upgrade_id: str | None, status: str) -> None:
+    """Unsettled child evidence overrides a stale ended result with or without a job identity."""
+    stale_result = ended_result()  # Preserve the earlier cancellation result.
+    stored_child = child("child-1", status, stale_result, raw_status=400, upgrade_id=upgrade_id)
+
+    row = only_row(record(stored_child))
+
+    assert (row["status"], row["message"], row["ended"]) == (
+        "unknown",
+        "The stored cancel result conflicts with the submission record.",
+        False,
+    )
+    assert (row["cancelled"], row["already_writing"], row["no_cancel_available"]) == ([], [SWITCH], [])
+    assert row["note"] == UNSORTED_NOTE
+
+
 def test_a_partial_result_puts_every_device_in_the_writing_list() -> None:
     """A result with one list is not trusted, because the portal never guesses the other lists."""
     row = only_row(record(child("child-1", "running", {"status": "requested", "cancelled": [SWITCH]})))
@@ -145,14 +165,18 @@ def test_an_access_point_result_without_lists_names_each_access_point() -> None:
     [
         pytest.param("planned", 0, None, id="planned-with-no-live-submission"),
         pytest.param("not_submitted", 0, "claim-1", id="not-submitted"),
-        pytest.param("rejected", 400, None, id="refused-by-the-cloud"),
-        pytest.param("rejected", 499, None, id="refused-at-the-upper-bound"),
+        pytest.param("rejected", 400, None, id="refused-by-the-cloud"),  # The server rejected the request.
+        pytest.param("rejected", 401, None, id="unauthorized"),  # The server rejected the credentials.
+        pytest.param("rejected", 403, None, id="forbidden"),  # The server rejected the operator scope.
+        pytest.param("rejected", 404, None, id="missing-resource"),  # The server rejected the missing resource.
     ],
 )
 def test_a_child_job_that_never_started_lists_no_device(status: str, raw_status: int, claim: str | None) -> None:
     """No cloud job exists, so no device of the child job writes firmware."""
     unavailable = {"status": "unavailable", "message": "The child has no known upgrade identifier."}
-    row = only_row(record(child("child-1", status, unavailable, raw_status=raw_status), claim=claim))
+    row = only_row(
+        record(child("child-1", status, unavailable, raw_status=raw_status, response_data_valid=True), claim=claim)
+    )
     assert (row["cancelled"], row["already_writing"], row["no_cancel_available"]) == ([], [], [])
     assert (row["status"], row["note"]) == ("unavailable", NEVER_STARTED_NOTE)
 
@@ -160,16 +184,41 @@ def test_a_child_job_that_never_started_lists_no_device(status: str, raw_status:
 @pytest.mark.parametrize(
     ("status", "raw_status", "claim"),
     [
-        pytest.param("planned", 0, "claim-1", id="planned-during-a-live-submission"),
-        pytest.param("rejected", 500, None, id="a-server-error"),
-        pytest.param("rejected", 200, None, id="a-damaged-success"),
-        pytest.param("submission_unknown", 0, None, id="an-unknown-submission"),
+        pytest.param("planned", 0, "claim-1", id="planned-during-a-live-submission"),  # The write may still run.
+        pytest.param("rejected", 400, None, id="legacy-refusal-without-body-proof"),
+        pytest.param("rejected", 405, None, id="undocumented-method-status"),
+        pytest.param("rejected", 408, None, id="a-request-timeout"),  # The response does not prove refusal.
+        pytest.param("rejected", 409, None, id="undocumented-conflict-status"),
+        pytest.param("rejected", 429, None, id="a-rate-limit"),  # The response does not prove refusal.
+        pytest.param("rejected", 499, None, id="an-unlisted-client-status"),  # The status is not allowlisted.
+        pytest.param("rejected", 451, None, id="an-unlisted-client-status"),  # The status is not allowlisted.
+        pytest.param("rejected", 500, None, id="a-server-error"),  # The response does not prove refusal.
+        pytest.param("rejected", 200, None, id="a-damaged-success"),  # The response does not prove refusal.
+        pytest.param("submission_unknown", 0, None, id="an-unknown-submission"),  # No response proves refusal.
     ],
 )
 def test_an_uncertain_child_job_lists_every_device_as_writing(status: str, raw_status: int, claim: str | None) -> None:
     """A cloud job can exist, so the portal claims no stop (issue #3327)."""
     unavailable = {"status": "unavailable", "message": "The child has no known upgrade identifier."}
     row = only_row(record(child("child-1", status, unavailable, raw_status=raw_status), claim=claim))
+    assert (row["cancelled"], row["already_writing"], row["note"]) == ([], [SWITCH], UNSORTED_NOTE)
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        pytest.param({"upgrade_id": "job-one"}, id="retained-upgrade-identity"),
+        pytest.param({"status_data": {"targets": {"upgraded": [SWITCH]}}}, id="accepted-target"),
+        pytest.param({"status_data": {"id": "job-one"}}, id="identity-in-response-data"),
+    ],
+)
+def test_a_documented_refusal_with_conflicting_legacy_evidence_reports_writing_devices(
+    evidence: dict[str, Any],
+) -> None:
+    """A legacy rejected child cannot claim that no job exists when evidence conflicts."""
+    unavailable = {"status": "unavailable", "message": "The child has no known upgrade identifier."}
+    stored_child = child("child-1", "rejected", unavailable, raw_status=400, response_data_valid=True, **evidence)
+    row = only_row(record(stored_child))
     assert (row["cancelled"], row["already_writing"], row["note"]) == ([], [SWITCH], UNSORTED_NOTE)
 
 

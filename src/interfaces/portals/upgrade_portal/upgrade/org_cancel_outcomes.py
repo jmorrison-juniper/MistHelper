@@ -18,9 +18,16 @@ import logging  # Record each build before and after its action.
 from collections.abc import Mapping  # Name the read-only shape of a stored record.
 from typing import Any  # Accept the stored record as plain JSON.
 
+from src.foundation.support.submission_certainty import (  # Keep the shared rule private to this module.
+    SubmissionCertainty as _SubmissionCertainty,
+)
+from src.interfaces.portals.upgrade_portal.upgrade.org_cancel_text import OrgCancelText as _OrgCancelText
 from src.operations.execution.firmware.aggregate_upgrade_service import (
     ENDED_CHILD_STATUS,
 )  # Issue #3367: the ended result word.
+from src.operations.execution.firmware.aggregate_upgrade_service import (
+    FINAL_CHILD_STATES as _FINAL_CHILD_STATES,
+)
 
 logger = logging.getLogger(__name__)  # Use the module logger without secret fields.
 
@@ -41,7 +48,6 @@ class OrgCancelLists:
     """Apply the three list rules to the cancel result of one child job."""
 
     KEYS = ("cancelled", "already_writing", "no_cancel_available")  # The three lists of one cancel result.
-    REFUSED_STATUSES = range(400, 500)  # A client error proves that the cloud created no job.
 
     @classmethod
     def lists(cls, child: Mapping[str, Any], claimed: bool) -> tuple[dict[str, list[str]], str]:
@@ -56,6 +62,8 @@ class OrgCancelLists:
         """
         cancellation = child["cancellation"]  # The stored cancel result.
         empty: dict[str, list[str]] = {key: [] for key in cls.KEYS}  # The lists of a job with no device result.
+        if cls._ended_result_conflicts(child, claimed):  # Keep a stale result from hiding uncertainty.
+            return {**empty, "already_writing": cls._macs(child)}, UNSORTED_NOTE  # Keep every device visible.
         if cancellation.get("status") == ENDED_CHILD_STATUS:  # Issue #3367: the job ended before the cancel.
             return empty, ENDED_NOTE  # No cancel request went out, so no stored list can name a device.
         if all(isinstance(cancellation.get(key), list) for key in cls.KEYS):  # The result holds every list.
@@ -80,7 +88,27 @@ class OrgCancelLists:
             return True  # No later request can send it.
         if status == "planned":  # No request sent the child job yet.
             return not claimed  # A live submission can still send it.
-        return status == "rejected" and child.get("raw_status") in cls.REFUSED_STATUSES  # The cloud refused it.
+        return (  # A rejected child needs explicit evidence before cancellation can call it refused.
+            status == "rejected"  # Apply the refusal rule only to a rejected child.
+            and _SubmissionCertainty.is_known_refusal(
+                child.get("raw_status"), child
+            )  # Require status evidence without a job identity or accepted target.
+        )
+
+    @classmethod
+    def _ended_result_conflicts(cls, child: Mapping[str, Any], claimed: bool) -> bool:
+        """Return whether an ended cancel record lacks a proven final child state."""
+        cancellation = child.get("cancellation")  # Read the stored cancellation evidence.
+        status = child.get("status")  # A persisted JSON value need not contain a state string.
+        return (  # Keep a stale ended result from hiding an uncertain firmware job.
+            isinstance(cancellation, Mapping)  # Require a usable cancellation record.
+            and cancellation.get("status") == ENDED_CHILD_STATUS  # Check only the early-ended result.
+            and not (  # A stale result cannot override a current uncertain or active child.
+                isinstance(status, str)  # Reject arrays and objects before the hash-based state lookup.
+                and status in _FINAL_CHILD_STATES  # Require the same final states as cancellation.
+                and (status != "rejected" or cls._never_started(child, claimed))
+            )
+        )
 
     @staticmethod
     def _macs(child: Mapping[str, Any]) -> list[str]:
@@ -95,6 +123,14 @@ class OrgCancelOutcomes:
     """Build one cancel outcome row for each child job that holds a cancel result."""
 
     MULTIPLE_SITES = "Multiple sites"  # The label of a child job with no site name and no site.
+
+    @classmethod
+    def text(cls, child: Mapping[str, Any]) -> str:
+        """Build cancellation text from the same conflict evidence as the device lists."""
+        cancellation = child.get("cancellation")  # Keep the stored result unchanged.
+        if OrgCancelLists._ended_result_conflicts(child, False):  # Do not repeat a stale ended claim.
+            cancellation = cls._row(child, False)  # Share the panel's uncertain status and device lists.
+        return _OrgCancelText.text(cancellation)  # Text never controls cancellation or lock eligibility.
 
     @classmethod
     def rows(cls, record: Any) -> list[dict[str, Any]]:
@@ -145,16 +181,26 @@ class OrgCancelOutcomes:
     def _row(cls, child: Mapping[str, Any], claimed: bool) -> dict[str, Any]:
         """Build the row of one child job."""
         cancellation = child["cancellation"]  # The stored cancel result.
+        conflicting_ended = OrgCancelLists._ended_result_conflicts(child, claimed)
         lists, note = OrgCancelLists.lists(child, claimed)  # Apply the three list rules.
         return {  # The template reads each key by name.
             "child_id": str(child.get("child_id") or ""),  # The test identifiers of the panel use this value.
             "label": str(child.get("site_name") or child.get("site_id") or cls.MULTIPLE_SITES),  # The site words.
             "device_family": str(child.get("device_family") or ""),  # The family word of the site table.
             "status": (
-                cancellation.get("status") if cancellation.get("status") is not None else ""
-            ),  # Preserve the stored status for tools and tests.
-            "message": str(cancellation.get("message") or ""),  # The exact sentence of the cancel, or no text.
+                "unknown"
+                if conflicting_ended
+                else (  # Do not present conflicting evidence as ended.
+                    cancellation.get("status") if cancellation.get("status") is not None else ""
+                )
+            ),  # Preserve the stored status when it does not conflict.
+            "message": (
+                "The stored cancel result conflicts with the submission record."
+                if conflicting_ended
+                else str(cancellation.get("message") or "")
+            ),  # Explain the conflict instead of showing the stale ended message.
             "note": note,  # The sentence that explains the lists, or no text.
-            "ended": cancellation.get("status") == ENDED_CHILD_STATUS,  # Issue #3367: the panel hides the lists.
+            "ended": cancellation.get("status") == ENDED_CHILD_STATUS and not conflicting_ended,
+            # Issue #3367: hide lists only when the ended result has no conflict.
             **lists,  # The three device lists.
         }

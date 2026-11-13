@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
@@ -10,9 +11,16 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from mistapi.__api_response import APIResponse
+from requests import Response
 
+from src.interfaces.portals.upgrade_portal.app.routes import org_upgrade
+from src.interfaces.portals.upgrade_portal.upgrade.org_cancel_outcomes import OrgCancelOutcomes
+from src.interfaces.portals.upgrade_portal.upgrade.org_devices import OrgChildDevices
+from src.interfaces.portals.upgrade_portal.upgrade.org_versions import OrgVersionRefresh
+from src.operations.execution.firmware import org_upgrade_service, upgrade_service
 from src.operations.execution.firmware.aggregate_upgrade_service import AggregateBuildInput, AggregateUpgradeService
-from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult
+from src.operations.execution.firmware.org_upgrade_service import OrgUpgradeResult, OrgUpgradeService
 from src.operations.execution.firmware.upgrade_service import (
     CancelOutcome,
     DeviceTarget,
@@ -133,6 +141,85 @@ def build_record(service: AggregateUpgradeService) -> dict[str, Any]:
     return service.build(request)  # No cloud call runs here.
 
 
+@pytest.mark.parametrize(
+    ("raw_status", "upgrade_id", "error", "data", "expected"),
+    [
+        pytest.param(400, None, "refused", {}, "rejected", id="documented-refusal"),
+        pytest.param(401, None, "unauthorized", {}, "rejected", id="documented-unauthorized"),
+        pytest.param(403, None, "forbidden", {}, "rejected", id="documented-forbidden"),
+        pytest.param(404, None, "missing-resource", {}, "rejected", id="documented-missing-resource"),
+        pytest.param(405, None, "method-not-allowed", {}, "submission_unknown", id="undocumented-405"),
+        pytest.param(408, None, "timeout", {}, "submission_unknown", id="request-timeout"),
+        pytest.param(409, None, "conflict", {}, "submission_unknown", id="undocumented-409"),
+        pytest.param(429, None, "rate-limited", {}, "submission_unknown", id="rate-limit"),
+        pytest.param(499, None, "client-closed", {}, "submission_unknown", id="unlisted-client-status"),
+        pytest.param(
+            503, None, "server-error", {}, "submission_unknown", id="server-error"
+        ),  # A server reply is uncertain.
+        pytest.param(
+            503, "ap-job", None, {}, "submission_unknown", id="server-error-with-identity"
+        ),  # A server error stays uncertain even when it carries an identity.
+        pytest.param(400, "ap-job", "refused", {}, "submission_unknown", id="refusal-with-job-identity"),
+        pytest.param(
+            400,
+            None,
+            "refused",
+            {"site_upgrades": [{"upgrade": {"targets": {"upgraded": ["ap-one"]}}}]},
+            "submission_unknown",
+            id="refusal-with-accepted-target",
+        ),
+        pytest.param(400, None, "refused", {"id": "ap-job"}, "submission_unknown", id="refusal-with-response-id"),
+        pytest.param(200, None, "malformed", {}, "submission_unknown", id="malformed-success"),
+        pytest.param(200, None, None, {}, "submission_unknown", id="missing-upgrade-identity"),
+        pytest.param(200, "ap-job", None, {}, "accepted", id="accepted"),
+    ],
+)
+def test_org_submission_classifies_response_certainty(  # Preserve uncertain replies instead of calling them refusals.
+    raw_status: int,
+    upgrade_id: str | None,
+    error: str | None,
+    data: dict[str, Any],
+    expected: str,
+) -> None:
+    """Only documented refusals without conflicting evidence settle an organization submission."""
+    child_record: dict[str, Any] = {"child_id": "child-1"}  # Keep the child fields under test.
+    result = OrgUpgradeResult(ORG_ID, upgrade_id, raw_status, data, error)  # Model the saved cloud response.
+    AggregateUpgradeService._apply_org_submission(child_record, result)  # Use the production classifier.
+    assert child_record["status"] == expected  # Preserve uncertainty unless the evidence proves a refusal.
+
+
+@pytest.mark.parametrize(
+    ("raw_status", "accepted", "upgrade_id", "expected"),
+    [
+        pytest.param(200, ("001122334455",), "site-job", "accepted", id="accepted"),  # A tracked job can be read.
+        pytest.param(202, ("001122334455",), "site-job", "accepted", id="accepted-async"),  # Async acceptance is valid.
+        pytest.param(400, (), None, "rejected", id="documented-refusal"),
+        pytest.param(401, (), None, "rejected", id="documented-unauthorized"),
+        pytest.param(403, (), None, "rejected", id="documented-forbidden"),
+        pytest.param(404, (), None, "rejected", id="documented-missing-resource"),
+        pytest.param(405, (), None, "submission_unknown", id="undocumented-405"),
+        pytest.param(408, (), None, "submission_unknown", id="request-timeout"),  # A timeout is uncertain.
+        pytest.param(409, (), None, "submission_unknown", id="undocumented-409"),
+        pytest.param(429, (), None, "submission_unknown", id="rate-limit"),  # The write may have arrived.
+        pytest.param(503, (), None, "submission_unknown", id="server-error"),  # A server reply is uncertain.
+        pytest.param(400, (), "site-job", "submission_unknown", id="refusal-with-job-identity"),
+        pytest.param(400, ("001122334455",), None, "submission_unknown", id="refusal-with-accepted-target"),
+        pytest.param(200, ("001122334455",), None, "submission_unknown", id="missing-upgrade-identity"),
+    ],
+)
+def test_device_submission_requires_a_reconcilable_outcome(  # Require a stable identity before accepting a reply.
+    raw_status: int,
+    accepted: tuple[str, ...],
+    upgrade_id: str | None,
+    expected: str,
+) -> None:
+    """A device response without a job identity cannot prove a final outcome."""
+    child_record: dict[str, Any] = {"child_id": "child-1"}  # Keep the child fields under test.
+    submission = UpgradeSubmission(upgrade_id, "site", accepted, (), raw_status)  # Model the saved response.
+    AggregateUpgradeService._apply_device_submission(child_record, submission)  # Use the production classifier.
+    assert child_record["status"] == expected  # Never collapse an ambiguous reply into a refusal.
+
+
 def test_build_routes_each_family_and_keeps_explicit_targets() -> None:
     """The plan uses one AP child and the proven site and SSR routes."""
     service = AggregateUpgradeService(OrgServiceStandIn(), DeviceServiceStandIn())  # Use stand-ins only.
@@ -182,6 +269,516 @@ def test_partial_submission_keeps_each_child_and_blocks_replay() -> None:
         service.submit(SAFE_SESSION, record, store, permit_lock)
 
 
+@pytest.mark.parametrize(
+    ("response_data", "raw_data", "status_code", "expected_status"),
+    [
+        pytest.param(
+            [{"id": "job-one", "targets": {"upgraded": ["001122334455"]}}],
+            "",
+            400,
+            "submission_unknown",
+            id="unretained-error-body-list",
+        ),
+        pytest.param({}, "{", 400, "submission_unknown", id="malformed-error-body-json"),
+        pytest.param({}, "", 400, "submission_unknown", id="empty-body-sdk-default"),
+        pytest.param({}, None, 400, "submission_unknown", id="missing-raw-body-sdk-default"),
+        pytest.param(
+            {},
+            '{"id":"job-one","targets":{"upgraded":["001122334455"]}}',
+            400,
+            "submission_unknown",
+            id="raw-body-evidence-not-retained",
+        ),
+        pytest.param(
+            {"id": SITE_ONE},
+            '{"id":"' + SITE_TWO + '"}',
+            200,
+            "submission_unknown",
+            id="success-with-mismatched-identity",
+        ),
+        pytest.param({}, "{}", 400, "rejected", id="retained-refusal"),
+    ],
+)
+def test_real_org_normalizer_keeps_unretained_refusal_body_uncertain(
+    monkeypatch: pytest.MonkeyPatch,
+    response_data: object,
+    raw_data: object,
+    status_code: int,
+    expected_status: str,
+) -> None:
+    """A discarded, malformed, or mismatched body cannot prove a refusal."""
+    mac = "001122334455"  # Select one access point for the offline request.
+    calls: list[str] = []  # Prove the fake cloud boundary runs once.
+
+    def submit_response(session: Any, org_id: str, *, body: dict[str, object]) -> Any:
+        """Return one malformed or unretained response without opening a socket."""
+        del session, org_id, body  # The response fixture covers the only decision under test.
+        calls.append("upgradeOrgDevices")  # Record the one mocked endpoint call.
+        return SimpleNamespace(status_code=status_code, data=response_data, raw_data=raw_data)
+
+    monkeypatch.setattr(org_upgrade_service.org_devices, "upgradeOrgDevices", submit_response)
+    service = AggregateUpgradeService(OrgUpgradeService, DeviceServiceStandIn())
+    request = AggregateBuildInput(
+        "owner",
+        ORG_ID,
+        ({"site_id": SITE_ONE, "name": "One"},),
+        (target(mac, "ap", "AP45", SITE_ONE, "0.15.1"),),
+        UpgradeOptions(),
+        "nonce",
+    )
+    record = service.build(request)  # Build the organization child without a cloud request.
+
+    store = CasStore(record)
+    service.submit(SAFE_SESSION, record, store, permit_lock)  # Exercise the normalizer and aggregate path.
+
+    saved = store.read_run(record["run_id"])
+    assert saved == record  # Verify that persistence retains the complete classified submission.
+    reloaded = json.loads(json.dumps(saved))
+    child = reloaded["children"][0]  # Read the only organization child after a durable JSON round trip.
+    assert calls == ["upgradeOrgDevices"]  # Keep the test offline and prove one request.
+    assert child["status"] == expected_status  # Discarded response evidence cannot prove refusal.
+    assert child["raw_status"] == status_code  # Preserve the exact response status.
+    assert child["response_data_valid"] is (expected_status == "rejected")
+    assert child["upgrade_id"] is None
+    assert org_upgrade._operation_is_settled(reloaded) is (expected_status == "rejected")
+    assert service._cancellation_result(SAFE_SESSION, child)["status"] == "unavailable"
+    assert calls == ["upgradeOrgDevices"]  # Never read or cancel an unverified cloud identity.
+    child["cancellation"] = {"status": "unavailable"}
+    row = OrgCancelOutcomes.rows(reloaded)[0]
+    assert row["already_writing"] == ([] if expected_status == "rejected" else [mac])
+
+
+@pytest.mark.parametrize("target_state", ["upgraded", "failed"])
+@pytest.mark.parametrize("action", ["submit", "status"])
+def test_real_org_normalizer_rejects_nonstring_root_targets(
+    monkeypatch: pytest.MonkeyPatch, target_state: str, action: str
+) -> None:
+    """Malformed root target arrays cannot produce progress counts after a real SDK normalization."""
+    data = {"id": SITE_ONE, "targets": {target_state: [7]}}
+    response = Response()
+    response.status_code = 200
+    response._content = json.dumps(data).encode()
+    sdk_response = APIResponse(response, "/offline/upgrade")
+    assert sdk_response.data == data
+    monkeypatch.setattr(org_upgrade_service.org_devices, "upgradeOrgDevices", lambda *args, **kwargs: sdk_response)
+    monkeypatch.setattr(org_upgrade_service.org_devices, "getOrgDeviceUpgrade", lambda *args: sdk_response)
+    service = AggregateUpgradeService(OrgUpgradeService, DeviceServiceStandIn())
+    request = AggregateBuildInput(
+        "owner",
+        ORG_ID,
+        ({"site_id": SITE_ONE, "name": "One"},),
+        (target("001122334455", "ap", "AP45", SITE_ONE, "0.15.1"),),
+        UpgradeOptions(),
+        "nonce",
+    )
+    record = service.build(request)
+    if action == "status":
+        record["children"][0].update({"status": "running", "upgrade_id": SITE_ONE})
+    store = CasStore(record)
+    if action == "status":
+        service.status(SAFE_SESSION, record, store)
+    else:
+        service.submit(SAFE_SESSION, record, store, permit_lock)
+    assert store.record == record
+    record = json.loads(json.dumps(store.record))
+    child = record["children"][0]
+    summary = org_upgrade.aggregate_summary(record)
+    reader = OrgChildDevices(child)
+    assert (summary["upgraded_count"], summary["failed_count"]) == (0, 0)
+    assert child["status"] == ("read_unknown" if action == "status" else "submission_unknown")
+    assert child["status_data_valid"] is False
+    assert reader.state_of("001122334455") == ("pending" if action == "status" else "submission_unknown")
+    assert reader.wants_version("001122334455") is False
+    assert org_upgrade._operation_is_settled(record) is False
+
+
+@pytest.mark.parametrize("target_state", ["upgraded", "failed"])
+def test_invalid_org_submission_cannot_publish_device_progress(
+    monkeypatch: pytest.MonkeyPatch, target_state: str
+) -> None:
+    """Unverified response targets cannot become progress after a durable reload."""
+    mac = "001122334455"
+    response = SimpleNamespace(
+        status_code=200,
+        data={"id": SITE_ONE, "targets": {target_state: [mac]}},
+        raw_data=json.dumps({"id": SITE_TWO, "targets": {}}),
+    )
+    monkeypatch.setattr(org_upgrade_service.org_devices, "upgradeOrgDevices", lambda *args, **kwargs: response)
+    service = AggregateUpgradeService(OrgUpgradeService, DeviceServiceStandIn())
+    request = AggregateBuildInput(
+        "owner",
+        ORG_ID,
+        ({"site_id": SITE_ONE, "name": "One"},),
+        (target(mac, "ap", "AP45", SITE_ONE, "0.15.1"),),
+        UpgradeOptions(),
+        "nonce",
+    )
+    record = service.build(request)
+    store = CasStore(record)
+    service.submit(SAFE_SESSION, record, store, permit_lock)
+    assert store.record == record
+    reloaded = json.loads(json.dumps(store.record))
+    child = reloaded["children"][0]
+    summary = org_upgrade.aggregate_summary(reloaded)
+    reader = OrgChildDevices(child)
+    assert child["status"] == "submission_unknown"
+    assert (summary["upgraded_count"], summary["failed_count"]) == (0, 0)
+    assert reader.state_of(mac) == "submission_unknown"
+    assert reader.wants_version(mac) is False
+    assert org_upgrade._operation_is_settled(reloaded) is False
+    version_result = OrgVersionRefresh(
+        lambda *_: pytest.fail("Unverified targets must not trigger a running-version read.")
+    ).collect(SAFE_SESSION, reloaded)
+    assert version_result.sites_read == 0
+    assert version_result.readings == {}
+
+
+@pytest.mark.parametrize("target_state", ["upgraded", "failed"])
+@pytest.mark.parametrize("proof", [None, False, True])
+def test_persisted_org_progress_requires_its_own_verification(target_state: str, proof: bool | None) -> None:
+    """Old bodies stay uncertain, while a verified later read can report device progress."""
+    mac = "001122334455"
+    child = {
+        "child_id": "org-one",
+        "route": "upgradeOrgDevices",
+        "status": "submission_unknown" if proof is not True else "running",
+        "response_data_valid": False,
+        "target_ids": [mac],
+        "targets": [{"mac": mac}],
+        "status_data": {"targets": {target_state: [mac]}},
+    }
+    if proof is not None:
+        child["status_data_valid"] = proof
+    record = json.loads(json.dumps({"state": "attention_required", "children": [child]}))
+    summary = org_upgrade.aggregate_summary(record)
+    reader = OrgChildDevices(record["children"][0])
+    expected_counts = (int(target_state == "upgraded"), int(target_state == "failed")) if proof is True else (0, 0)
+    assert (summary["upgraded_count"], summary["failed_count"]) == expected_counts
+    assert reader.state_of(mac) == (target_state if proof is True else "submission_unknown")
+    assert reader.wants_version(mac) is (proof is True)
+    assert summary["site_upgrades"][0]["upgraded"] == expected_counts[0]
+    assert summary["site_upgrades"][0]["failed"] == expected_counts[1]
+
+
+@pytest.mark.parametrize("target_state", ["upgraded", "failed"])
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("prior_proof", [None, False])
+def test_real_org_status_read_replaces_unverified_progress(
+    monkeypatch: pytest.MonkeyPatch, target_state: str, nested: bool, prior_proof: bool | None
+) -> None:
+    """A verified later status read restores progress independently from submission proof."""
+    mac = "001122334455"
+    data = {"id": SITE_ONE, "status": "running", "targets": {target_state: [mac]}}
+    if nested:
+        data = {
+            "id": SITE_ONE,
+            "status": "running",
+            "targets": {"upgraded": [], "failed": []},
+            "site_upgrades": [{"site_id": SITE_ONE, "upgrade": {"id": SITE_ONE, "targets": {target_state: [mac]}}}],
+        }
+    response = SimpleNamespace(status_code=200, data=data, raw_data=json.dumps(data))
+    monkeypatch.setattr(org_upgrade_service.org_devices, "getOrgDeviceUpgrade", lambda *args: response)
+    service = AggregateUpgradeService(OrgUpgradeService, DeviceServiceStandIn())
+    child = {
+        "child_id": "org-one",
+        "route": "upgradeOrgDevices",
+        "org_id": ORG_ID,
+        "upgrade_id": SITE_ONE,
+        "status": "running",
+        "response_data_valid": False,
+        "target_ids": [mac],
+        "targets": [{"mac": mac, "site_id": SITE_ONE}],
+        "status_data": {},
+    }
+    if prior_proof is not None:
+        child["status_data_valid"] = prior_proof
+    record = {"run_id": "progress-proof", "record_version": 0, "state": "running", "children": [child]}
+    store = CasStore(record)
+    service.status(SAFE_SESSION, record, store)
+    assert store.record == record
+    record = json.loads(json.dumps(store.record))
+    child = record["children"][0]
+    summary = org_upgrade.aggregate_summary(record)
+    reader = OrgChildDevices(record["children"][0])
+    assert child["status_data_valid"] is True
+    assert child["response_data_valid"] is False
+    assert (summary["upgraded_count"], summary["failed_count"]) == (
+        int(target_state == "upgraded"),
+        int(target_state == "failed"),
+    )
+    assert reader.state_of(mac) == target_state
+    assert reader.wants_version(mac) is True
+    reads: list[str] = []
+
+    def read_versions(session: Any, site_id: str) -> dict[str, str]:
+        """Record a local read without using a cloud session."""
+        reads.append(site_id)
+        return {mac: "0.15.1"}
+
+    result = OrgVersionRefresh(read_versions).collect(SAFE_SESSION, record)
+    assert reads == [SITE_ONE]
+    assert result.readings == {mac: "0.15.1"}
+
+
+@pytest.mark.parametrize("proof", [None, False, True])
+def test_verified_reconciliation_remains_independent_from_progress_proof(proof: bool | None) -> None:
+    """Verified reconciliation counts match rows without trusting invalid failed-target lists."""
+    mac = "001122334455"
+    child = {
+        "route": "upgradeOrgDevices",
+        "status": "completed",
+        "reconciliation": {"proven": True},
+        "target_ids": [mac],
+        "targets": [{"mac": mac}],
+        "status_data": {"targets": {"failed": [mac]}},
+    }
+    if proof is not None:
+        child["status_data_valid"] = proof
+    record = json.loads(json.dumps({"state": "completed", "children": [child]}))
+    summary = org_upgrade.aggregate_summary(record)
+    reader = OrgChildDevices(record["children"][0])
+    assert (summary["upgraded_count"], summary["failed_count"]) == (
+        int(proof is not True),
+        int(proof is True),
+    )
+    assert reader.state_of(mac) == ("failed" if proof is True else "completed")
+    assert reader.wants_version(mac) is True
+
+
+@pytest.mark.parametrize("target_state", ["upgraded", "failed"])
+def test_invalid_real_org_status_read_cannot_replace_progress_with_targets(
+    monkeypatch: pytest.MonkeyPatch, target_state: str
+) -> None:
+    """A malformed subsequent status body cannot become trusted device progress."""
+    mac = "001122334455"
+    response = SimpleNamespace(
+        status_code=200,
+        data={"id": SITE_ONE, "status": "completed", "targets": {target_state: [mac]}},
+        raw_data=json.dumps({"id": SITE_TWO, "targets": {}}),
+    )
+    monkeypatch.setattr(org_upgrade_service.org_devices, "getOrgDeviceUpgrade", lambda *args: response)
+    child = {
+        "child_id": "org-one",
+        "route": "upgradeOrgDevices",
+        "org_id": ORG_ID,
+        "upgrade_id": SITE_ONE,
+        "status": "running",
+        "target_ids": [mac],
+        "targets": [{"mac": mac, "site_id": SITE_ONE}],
+        "status_data_valid": True,
+        "status_data": {"targets": {"downloading": [mac]}},
+    }
+    record = {"run_id": "invalid-progress", "record_version": 0, "state": "running", "children": [child]}
+    store = CasStore(record)
+    AggregateUpgradeService(OrgUpgradeService, DeviceServiceStandIn()).status(SAFE_SESSION, record, store)
+    assert store.record == record
+    record = json.loads(json.dumps(store.record))
+    child = record["children"][0]
+    reader = OrgChildDevices(child)
+    summary = org_upgrade.aggregate_summary(record)
+    assert child["status_data_valid"] is False
+    assert child["status_data"] == {}
+    assert child["status"] == "read_unknown"
+    assert (summary["upgraded_count"], summary["failed_count"]) == (0, 0)
+    assert reader.state_of(mac) == "pending"
+    assert reader.wants_version(mac) is False
+
+
+@pytest.mark.parametrize(
+    ("status_code", "response_data", "raw_data", "expected_status"),
+    [
+        pytest.param(
+            400,
+            {"targets": {"upgraded": ["001122334466"]}},
+            "",
+            "submission_unknown",
+            id="refusal-with-accepted-target",
+        ),
+        pytest.param(429, {}, "", "submission_unknown", id="rate-limit"),
+        pytest.param(
+            400,
+            [{"id": "job-one", "targets": {"upgraded": ["001122334466"]}}],
+            "",
+            "submission_unknown",
+            id="unretained-error-body-list",
+        ),
+        pytest.param(400, {}, "{", "submission_unknown", id="malformed-error-body-json"),
+        pytest.param(
+            400,
+            {},
+            '{"id":"job-one","targets":{"upgraded":["001122334466"]}}',
+            "submission_unknown",
+            id="raw-body-evidence-not-retained",
+        ),
+        pytest.param(400, None, "", "submission_unknown", id="missing-error-body"),
+        pytest.param(400, {}, "", "submission_unknown", id="empty-body-sdk-default"),
+        pytest.param(400, {}, None, "submission_unknown", id="missing-raw-body-sdk-default"),
+        pytest.param(400, {1: "invalid key"}, "", "submission_unknown", id="non-string-body-key"),
+        pytest.param(400, {}, "[]", "submission_unknown", id="raw-body-list"),
+        pytest.param(400, {}, b"{}", "submission_unknown", id="raw-body-not-text"),
+        pytest.param(400, {}, "{}", "rejected", id="retained-empty-object"),
+        pytest.param(400, {"error": "refused"}, '{"error":"refused"}', "rejected", id="retained-error-object"),
+        pytest.param(200, {"id": "job-one"}, '{"id":"job-two"}', "submission_unknown", id="success-id-mismatch"),
+    ],
+)
+def test_real_device_normalizer_keeps_conflicting_refusal_and_429_uncertain(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+    response_data: object,
+    raw_data: object,
+    expected_status: str,
+) -> None:
+    """The actual device normalizer preserves accepted-target evidence and HTTP 429 uncertainty."""
+    mac = "001122334466"  # Select one switch for the offline request.
+    calls: list[str] = []  # Prove the fake cloud boundary runs once.
+
+    def resolve_endpoint(name: str) -> Any:
+        """Return one local response for the real device normalizer."""
+        calls.append(name)  # Record the endpoint selected by the production planner.
+
+        def endpoint(*args: Any, **kwargs: Any) -> Any:
+            """Return the configured status and body."""
+            del args, kwargs  # The endpoint arguments do not affect this response fixture.
+            return SimpleNamespace(status_code=status_code, data=response_data, raw_data=raw_data)
+
+        return endpoint
+
+    class NormalizingDeviceService(DeviceServiceStandIn):
+        """Route the aggregate request through the real device normalizer."""
+
+        def invoke_upgrade(self, session: Any, plan: Any) -> UpgradeSubmission:
+            """Record the call and normalize the mocked SDK response."""
+            self.calls.append(("submit", plan.endpoint))  # Keep the aggregate call count visible.
+            return upgrade_service.invoke_upgrade(session, plan)
+
+    monkeypatch.setattr(upgrade_service, "_resolve_endpoint", resolve_endpoint)
+    devices = NormalizingDeviceService()
+    service = AggregateUpgradeService(OrgServiceStandIn(), devices)
+    request = AggregateBuildInput(
+        "owner",
+        ORG_ID,
+        ({"site_id": SITE_ONE, "name": "One"},),
+        (target(mac, "switch", "EX4400", SITE_ONE, "23.4R1.9"),),
+        UpgradeOptions(),
+        "nonce",
+    )
+    record = service.build(request)  # Build the one-child plan without a cloud request.
+
+    store = CasStore(record)
+    service.submit(SAFE_SESSION, record, store, permit_lock)  # Run the real normalizer and classifier.
+
+    saved = store.read_run(record["run_id"])
+    assert saved == record  # Verify that persistence retains the complete classified submission.
+    reloaded = json.loads(json.dumps(saved))
+    child = reloaded["children"][0]  # Read the only site child after a durable JSON round trip.
+    assert calls == ["upgradeSiteDevices"]  # Keep the test offline and prove one request.
+    assert child["status"] == expected_status  # Only a retained refusal body can settle the child.
+    assert child["raw_status"] == status_code  # Preserve the exact response status.
+    assert org_upgrade._operation_is_settled(reloaded) is (expected_status == "rejected")
+    child["cancellation"] = {"status": "unavailable"}
+    row = OrgCancelOutcomes.rows(reloaded)[0]
+    assert row["already_writing"] == ([] if expected_status == "rejected" else [mac])
+    if status_code == 200:
+        assert child["upgrade_id"] is None
+        assert service._cancellation_result(SAFE_SESSION, child)["status"] == "unavailable"
+        assert devices.calls == [("submit", "upgradeSiteDevices")]
+    if expected_status == "submission_unknown":
+        with pytest.raises(ValueError, match="no untouched child"):
+            service.submit(SAFE_SESSION, record, CasStore(record), permit_lock)
+        assert calls == ["upgradeSiteDevices"]  # An uncertain reply must not send another firmware request.
+
+
+@pytest.mark.parametrize("family", ["ap", "switch"])
+@pytest.mark.parametrize("body", [b"", b"{}", b" \n"])
+def test_sdk_empty_body_cannot_prove_aggregate_refusal(
+    monkeypatch: pytest.MonkeyPatch, family: str, body: bytes
+) -> None:
+    """The installed SDK's empty parse result must not prove a cloud refusal."""
+    response = Response()
+    response.status_code = 400
+    response._content = body
+    sdk_response = APIResponse(response, "/offline/upgrade")
+    assert sdk_response.data == {}
+    assert sdk_response.raw_data == body.decode()
+    monkeypatch.setattr(org_upgrade_service.org_devices, "upgradeOrgDevices", lambda *args, **kwargs: sdk_response)
+    monkeypatch.setattr(upgrade_service, "_resolve_endpoint", lambda _: lambda *args, **kwargs: sdk_response)
+    devices = DeviceServiceStandIn()
+    monkeypatch.setattr(devices, "invoke_upgrade", upgrade_service.invoke_upgrade)
+    service = AggregateUpgradeService(OrgUpgradeService, devices)
+    request = AggregateBuildInput(
+        "owner",
+        ORG_ID,
+        ({"site_id": SITE_ONE, "name": "One"},),
+        (target("001122334466", family, "AP45" if family == "ap" else "EX4400", SITE_ONE, "0.15.1"),),
+        UpgradeOptions(),
+        "nonce",
+    )
+    record = service.build(request)
+    store = CasStore(record)
+    service.submit(SAFE_SESSION, record, store, permit_lock)
+    assert store.record == record
+    record = json.loads(json.dumps(store.record))
+    child = record["children"][0]
+    verified = body == b"{}"
+    assert child["status"] == ("rejected" if verified else "submission_unknown")
+    assert child["response_data_valid"] is verified
+    assert org_upgrade._operation_is_settled(record) is verified
+    child["cancellation"] = {"status": "unavailable"}
+    row = OrgCancelOutcomes.rows(record)[0]
+    assert row["already_writing"] == ([] if verified else ["001122334466"])
+
+
+@pytest.mark.parametrize("body", [b"", b"{}"])
+def test_sdk_empty_cancellation_remains_valid(monkeypatch: pytest.MonkeyPatch, body: bytes) -> None:
+    """An empty cancellation response retains the known job without proving a device stopped."""
+    response = Response()
+    response.status_code = 200
+    response._content = body
+    sdk_response = APIResponse(response, "/offline/cancel")
+    monkeypatch.setattr(org_upgrade_service.org_devices, "cancelOrgDeviceUpgrade", lambda *args: sdk_response)
+    result = OrgUpgradeService.cancel(SAFE_SESSION, ORG_ID, SITE_ONE)
+    assert result.error is None
+    assert result.upgrade_id == SITE_ONE
+    assert result.data == {}
+
+
+def test_stale_submission_recovery_retains_but_does_not_trust_ended_cancel() -> None:
+    """Recovery preserves legacy cancellation data without presenting uncertainty as ended."""
+    org = OrgServiceStandIn()
+    devices = DeviceServiceStandIn()
+    service = AggregateUpgradeService(org, devices)
+    record = build_record(service)
+    child = record["children"][0]
+    child.update(
+        {
+            "status": "submission_claimed",
+            "submission_claim_id": "stale",
+            "submission_claimed_at": "2000-01-01T00:00:00+00:00",
+            "upgrade_id": None,
+            "cancellation": {"status": "already_ended"},
+        }
+    )
+    record["children"] = [child]
+    record["state"] = "submission_claimed"
+    record["submission_claimed_at"] = "2000-01-01T00:00:00+00:00"
+    store = CasStore(record)
+    service.status(SAFE_SESSION, record, store)
+    assert store.record == record
+    reloaded = json.loads(json.dumps(store.record))
+    child = reloaded["children"][0]
+    assert child["status"] == "submission_unknown"
+    assert child["cancellation"] == {"status": "already_ended"}
+    row = OrgCancelOutcomes.rows(reloaded)[0]
+    assert row["status"] == "unknown"
+    assert row["ended"] is False
+    assert row["already_writing"] == child["target_ids"]
+    assert org_upgrade._operation_is_settled(reloaded) is False
+    assert org.calls == []
+    assert devices.calls == []
+    with pytest.raises(ValueError, match="no untouched child"):
+        service.submit(SAFE_SESSION, record, store, permit_lock)
+
+
 def test_mixed_status_and_cancellation_keep_all_results() -> None:
     """A poll and a cancel preserve completed, failed, and running children."""
     org = OrgServiceStandIn()  # Record AP actions.
@@ -203,6 +800,31 @@ def test_mixed_status_and_cancellation_keep_all_results() -> None:
     service.cancel(SAFE_SESSION, record, store)  # A repeated request continues without duplicate cloud calls.
     assert org.calls.count("cancel") == 0  # The completed AP child job still got no cancel request.
     assert len([call for call in devices.calls if call[0] == "cancel"]) == 2  # Each running gateway job once.
+
+
+@pytest.mark.parametrize("route_type", ["organization", "device"])
+def test_legacy_rejected_child_with_identity_receives_cancel(route_type: str) -> None:
+    """A rejected record with a job identity must not be reported as already ended."""
+    org = OrgServiceStandIn()  # Record the organization cancellation.
+    devices = DeviceServiceStandIn()  # Record the device cancellation.
+    service = AggregateUpgradeService(org, devices)  # Keep both cloud boundaries offline.
+    record = build_record(service)  # Build valid child plans for each route.
+    if route_type == "organization":  # Select the organization child path.
+        child = next(child for child in record["children"] if child["route"] == "upgradeOrgDevices")  # Match AP route.
+    else:  # Select one site or SSR child path.
+        child = next(child for child in record["children"] if child["route"] != "upgradeOrgDevices")  # Match device.
+    child.update({"status": "rejected", "raw_status": 400, "upgrade_id": "known-job"})  # Keep conflicting job identity.
+    child["status_data"] = {  # Keep accepted-target evidence in the saved response.
+        "id": "known-job",  # Retain the response identity.
+        "targets": {"upgraded": [child["targets"][0]["mac"]]},  # Prove that the cloud accepted a target.
+    }
+
+    result = service._cancellation_result(SAFE_SESSION, child)  # Apply the production cancellation decision.
+
+    assert result["status"] == "requested"  # Conflicting refusal evidence must not skip the cancel.
+    assert org.calls.count("cancel") == (route_type == "organization")  # The organization route runs once.
+    device_cancel_count = len([call for call in devices.calls if call[0] == "cancel"])  # Count device cancellations.
+    assert device_cancel_count == (route_type == "device")  # Match the selected route.
 
 
 def test_concurrent_parent_claim_allows_one_submitter() -> None:

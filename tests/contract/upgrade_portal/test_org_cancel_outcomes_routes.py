@@ -332,6 +332,99 @@ def test_a_stored_operation_shows_one_section_for_each_cancel_result(harness: Ca
     assert text_of(page, f"org-cancel-outcome-note-{gateway['child_id']}") == NEVER_STARTED_NOTE  # No cloud job.
 
 
+@pytest.mark.parametrize("upgrade_id", [None, "ap-job"])
+@pytest.mark.parametrize(
+    "stored_status", ["submission_unknown", [], ["completed"], {}, {"state": "completed"}, None, True, 7]
+)
+def test_stored_uncertain_submission_cannot_show_stale_ended_cancellation(
+    harness: CancelHarness, upgrade_id: str | None, stored_status: Any
+) -> None:
+    """Stored uncertainty overrides an ended cancellation without changing the saved record."""
+    stored = harness.store.records[harness.operation_id]
+    ap = stored["children"][0]
+    ap.update(
+        {
+            "status": stored_status,
+            "upgrade_id": upgrade_id,
+            "response_data_valid": False,
+            "status_data_valid": False,
+            "status_data": {},
+            "cancellation": {
+                "status": "already_ended",
+                "state": "completed",
+                "message": ENDED_MESSAGE,
+                "cancelled": [],
+                "already_writing": [],
+                "no_cancel_available": [],
+            },
+        }
+    )
+    before = deepcopy(stored)
+    page = page_of(harness)
+    poll = harness.client.get(f"/api/org-upgrades/{harness.operation_id}").get_json()
+    row = next(row for row in poll["cancel_outcomes"] if row["child_id"] == ap["child_id"])
+    assert (row["status"], row["ended"], row["already_writing"]) == ("unknown", False, [AP_ONE, AP_TWO])
+    assert row["note"] == UNSORTED_NOTE
+    summary = next(row for row in poll["site_upgrades"] if row["child_id"] == ap["child_id"])
+    expected_text = (
+        "Status: Result not known. The stored cancel result conflicts with the submission record. "
+        f"Writing firmware: {AP_ONE}, {AP_TWO}."
+    )
+    assert summary["cancellation_text"] == expected_text
+    assert f"<td>{expected_text}</td>" in page
+    assert (summary["route"], summary["status"], summary["error"], summary["id"]) == (
+        ap["route"],
+        stored_status,
+        ap["error"],
+        upgrade_id,
+    )
+    assert summary["cancellation"] == before["children"][0]["cancellation"]
+    assert items(page, f"org-cancel-outcome-writing-{ap['child_id']}") == [AP_ONE, AP_TWO]
+    assert text_of(page, f"org-cancel-outcome-note-{ap['child_id']}") == UNSORTED_NOTE
+    assert harness.org.cancels == []
+    persisted = harness.store.records[harness.operation_id]
+    assert persisted["children"] == before["children"]
+    assert org_upgrade._operation_is_settled(persisted) is False
+
+
+def test_later_completed_devices_do_not_imply_cancellation_prevented_the_write(harness: CancelHarness) -> None:
+    """A later settled display states that the job ended, not that cancellation stopped its devices."""
+    stored = harness.store.records[harness.operation_id]
+    ap = stored["children"][0]
+    ap.update(
+        {
+            "status": "completed",
+            "status_data_valid": True,
+            "status_data": {"targets": {"upgraded": [AP_ONE, AP_TWO]}},
+            "cancellation": {
+                "status": "already_ended",
+                "state": "completed",
+                "message": ENDED_MESSAGE,
+                "cancelled": [],
+                "already_writing": [],
+                "no_cancel_available": [],
+            },
+        }
+    )
+    ap["status"] = "submission_unknown"
+    initial = harness.client.get(f"/api/org-upgrades/{harness.operation_id}").get_json()
+    initial_row = next(row for row in initial["cancel_outcomes"] if row["child_id"] == ap["child_id"])
+    assert (initial_row["status"], initial_row["ended"]) == ("unknown", False)
+    ap = harness.store.records[harness.operation_id]["children"][0]
+    ap["status"] = "completed"
+    before = deepcopy(ap)
+    page = page_of(harness)
+    poll = harness.client.get(f"/api/org-upgrades/{harness.operation_id}").get_json()
+    summary = next(row for row in poll["site_upgrades"] if row["child_id"] == ap["child_id"])
+    row = next(row for row in poll["cancel_outcomes"] if row["child_id"] == ap["child_id"])
+    assert summary["cancellation_text"] == f"Status: Not sent. {ENDED_MESSAGE}"
+    assert f"<td>Status: Not sent. {ENDED_MESSAGE}</td>" in page
+    assert (summary["status"], summary["upgraded"], row["cancelled"]) == ("completed", 2, [])
+    assert row["ended"] is True
+    assert harness.store.records[harness.operation_id]["children"][0] == before
+    assert harness.org.cancels == []
+
+
 def test_an_ended_child_job_gets_no_cancel_and_shows_no_list(harness: CancelHarness) -> None:
     """The access point job completed before the cancel, so it gets no request and names no device (issue #3367)."""
     stored = harness.store.records[harness.operation_id]  # The durable operation of the page.

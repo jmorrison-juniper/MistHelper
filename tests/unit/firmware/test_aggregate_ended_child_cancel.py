@@ -132,9 +132,9 @@ def test_a_running_access_point_job_still_gets_its_sorted_cancel() -> None:
     assert cancel_of(store, "switch")["status"] == ENDED_CHILD_STATUS  # The failed job ended before the cancel.
 
 
-@pytest.mark.parametrize("state", sorted(FINAL_CHILD_STATES))
-def test_each_final_child_state_gets_no_call(state: str) -> None:
-    """A child job in any final state gets no request, and its result names the state."""
+@pytest.mark.parametrize("state", sorted(FINAL_CHILD_STATES - {"rejected"}))
+def test_each_confirmed_final_child_state_gets_no_call(state: str) -> None:
+    """A child job in a confirmed final state gets no request, and its result names the state."""
     edge = CloudEdge()  # The cloud edge of both child job families.
     service = AggregateUpgradeService(edge, edge)  # The production cancel.
     store = CasStore(running_operation(service, {"ap": "running", "switch": state}))  # The durable store.
@@ -142,6 +142,19 @@ def test_each_final_child_state_gets_no_call(state: str) -> None:
     assert edge.cancels == ["job-ap"]  # The ended switch job got no request.
     assert cancel_of(store, "switch")["state"] == state  # The result keeps the final state.
     assert cancel_of(store, "switch")["message"] == ENDED_CHILD_TEXT.format(state=state)  # One sentence.
+
+
+def test_an_uncertain_rejected_child_gets_a_cancel_attempt() -> None:
+    """A rejected response without refusal proof can still name a live cloud job."""
+    edge = CloudEdge()  # The cloud edge of both child job families.
+    service = AggregateUpgradeService(edge, edge)  # The production cancel.
+    record = running_operation(service, {"ap": "running", "switch": "rejected"})  # Keep a possible cloud job.
+    switch = next(child for child in record["children"] if child["device_family"] == "switch")  # The rejected child.
+    switch.update(raw_status=503, response_data_valid=False)  # The response cannot prove that no job exists.
+    store = CasStore(record)  # Keep the original reply in the durable record.
+    service.cancel(WRITE_SESSION, deepcopy(store.record), store)  # The operator sends the typed cancel.
+    assert edge.cancels == ["job-ap", "job-switch"]  # Try to stop both jobs that can exist.
+    assert cancel_of(store, "switch")["status"] == "requested"  # Record the attempted cancel.
 
 
 def test_a_child_job_with_no_identifier_stays_unavailable() -> None:

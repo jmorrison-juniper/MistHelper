@@ -266,7 +266,7 @@ class TestHistoryCardScopeJourney:
         """The named site has one capture while other sites supply runs and multi-site upgrades."""
         ScopeJourney.open(page, "/history", e2e_test_run_id)
         HistoryEvidence.single_site_runs(page)
-        assert len(ScopeJourney.identifiers(page, "operation")) == 5
+        assert len(ScopeJourney.identifiers(page, "operation")) == 6
         site = HistoryEvidence.StoredSite
         ScopeJourney.open(page, "/history?" + urlencode({"site_id": site.ID}), e2e_test_run_id)
         ScopeJourney.descriptions(page, site.NAME, True)
@@ -291,6 +291,7 @@ class TestHistoryCardScopeJourney:
         HistoryEvidence.single_site_runs(page)
         assert sorted(ScopeJourney.identifiers(page, "operation")) == [
             "org-run-e2e-cancel-0001",
+            "org-run-e2e-conflicted-ended-0001",
             "org-run-e2e-ended-0001",
             "org-run-e2e-mixed-0001",
             "org-run-e2e-reconcile-0001",

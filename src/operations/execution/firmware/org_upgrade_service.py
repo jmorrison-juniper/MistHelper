@@ -25,6 +25,7 @@ from mistapi import APISession
 from mistapi.api.v1.orgs import devices as org_devices
 from requests.adapters import HTTPAdapter
 
+from src.foundation.support.submission_certainty import SubmissionCertainty
 from src.operations.execution.firmware.org_upgrade_body import OrgUpgradeBody
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,7 @@ class OrgUpgradeResult:
         raw_status: The HTTP status code, or zero when no valid code exists.
         data: A detached copy of the response object, including both site fields.
         error: The response error, or None for a valid HTTP 200 response.
+        response_data_valid: Whether the SDK retained a JSON object that agrees with raw JSON, when present.
     """
 
     org_id: str
@@ -65,6 +67,7 @@ class OrgUpgradeResult:
     raw_status: int
     data: Mapping[str, object]
     error: str | None
+    response_data_valid: bool = True
 
 
 class _OrgUpgradeResponse:
@@ -101,14 +104,20 @@ class _OrgUpgradeResponse:
         raw_status = code if type(code) is int and 100 <= code <= 599 else 0
         raw_data: object = getattr(response, "data", None)
         data = cls._copy_data(raw_data)
+        response_data_valid = SubmissionCertainty.response_data_is_valid(
+            response, raw_data if isinstance(raw_data, Mapping) else None
+        )
         error = None
         try:
             cls._check_http(response, raw_status, raw_data, cancel)
+            empty_cancel = cancel and raw_data in (None, {}) and getattr(response, "raw_data", "") in ("", None)
+            if not response_data_valid and not empty_cancel:
+                raise ValueError("The decoded upgrade response does not match the response body.")
             upgrade_id = cls._response_id(data, upgrade_id, cancel)
             cls._check_sites(data)
         except ValueError as problem:
             error = str(problem)
-        return OrgUpgradeResult(org_id, upgrade_id, raw_status, data, error)
+        return OrgUpgradeResult(org_id, upgrade_id, raw_status, data, error, response_data_valid)
 
     @staticmethod
     def _copy_data(raw_data: object) -> dict[str, object]:
@@ -196,6 +205,7 @@ class _OrgUpgradeResponse:
             The OpenAPI ``upgrade_org_devices_item`` schema uses ``site_upgrades``.
             The saved guide uses ``upgrades``. If both fields exist, validate both.
         """
+        cls._check_site_state(data)  # Apply the same target-shape rules at the organization root.
         for field in ("site_upgrades", "upgrades"):
             if field not in data:
                 continue
