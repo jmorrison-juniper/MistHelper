@@ -1,10 +1,11 @@
 """Normalize controlled API snapshots without claiming full-hour observations."""
 
 import json
+from datetime import datetime
 
 import pytest
 
-from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
+from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRates, SnapshotRecords
 from src.interfaces.wan_performance.integration.record_codec import RecordCodec
 
 
@@ -43,6 +44,46 @@ def test_snapshot_hours_have_no_invented_coverage():
     assert records[0].metrics["rx_bps"].sample_count == 1
     assert records[0].metrics["rx_bps"].coverage_fraction is None
     assert records[1].metrics["loss"].value == 0
+    assert records[1].metrics["loss"].unit == "%"
+
+
+def test_snapshot_samples_keep_raw_scalars_and_full_identity():
+    """Keep scalar stats at poll time without replacing the hourly projection."""
+    data = snapshot()
+
+    samples = SnapshotRecords.build_samples(data)
+
+    assert len(samples) == 2
+    assert samples[0].sampled_at_utc.isoformat() == data["collected_at_utc"]
+    assert samples[0].raw_fields == {"loss": None, "jitter": None, "latency": None}
+    assert samples[1].sampled_at_utc.isoformat() == data["collected_at_utc"]
+    assert samples[1].identity == SnapshotRecords.build(data)[1].identity
+    assert samples[1].raw_fields == {"loss": 0, "latency": None, "jitter": None, "mos": None, "last_seen": None}
+    assert samples[1].metrics["loss"].value == 0
+
+
+def test_quality_sample_survives_when_no_rate_samples_exist():
+    """Keep scalar stats even when the rate endpoint has no points."""
+    data = snapshot()
+    gateway = {
+        "org_id": "org-one",
+        "site_id": "site-one",
+        "mac": "aabbccddeeff",
+    }
+    insight = {
+        "gateway": gateway,
+        "port_id": "ge-0/0/0",
+        "samples": [],
+        "quality_fields": {"loss": 0.1, "jitter": 2.0, "latency": 10.0, "up": True},
+        "quality_partial": True,
+    }
+
+    samples = SnapshotRates.samples(insight, "org-one", datetime.fromisoformat(data["collected_at_utc"]))
+
+    assert len(samples) == 1
+    assert samples[0].partial is True
+    assert samples[0].raw_fields == {"loss": 0.1, "jitter": 2.0, "latency": 10.0}
+    assert samples[0].metrics["avg_loss_pct"].value is None
 
 
 def test_remote_peer_ports_have_distinct_path_keys():

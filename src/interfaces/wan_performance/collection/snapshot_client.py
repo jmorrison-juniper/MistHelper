@@ -11,8 +11,9 @@ from uuid import UUID
 from mistapi.api.v1.const.insight_metrics import listInsightMetrics
 from mistapi.api.v1.orgs.devices import searchOrgDeviceEvents
 from mistapi.api.v1.orgs.stats import listOrgDevicesStats, searchOrgPeerPathStats, searchOrgSwOrGwPorts
-from mistapi.api.v1.sites.insights import getSiteInsightMetricsForDevice, getSiteInsightMetricsForGateway
+from mistapi.api.v1.sites.insights import getSiteInsightMetricsForGateway
 
+from src.interfaces.wan_performance.collection.request_admission import StatsPageCollector
 from src.interfaces.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, IdentityValidator
 from src.interfaces.wan_performance.domain.measurement import MetricMeasurement
 
@@ -42,45 +43,64 @@ class SnapshotClient(SnapshotSession):
     """Never run a poll loop, arbitrary pagination, or an implicit retry."""
 
     def collect(self, org_id: str, target: GatewayIdentity | None = None) -> dict[str, object]:
-        """Return at most 100 gateway ports and 100 VPN paths for one organization."""
+        """Return at most five bounded pages for each organization-stat endpoint."""
         IdentityValidator.identifier(org_id, "org_id")
         if target is not None and target.site.org_id != org_id:
             raise ValueError("The selected gateway organization does not match the portal.")
         logger.info("Collect bounded WAN snapshot pages for organization %s.", org_id)
-        self.admission.check()
-        ports = self._page(
-            searchOrgSwOrGwPorts(
-                self.session, org_id, device_type="gateway", mac=target.gateway_id if target else None, limit=100
-            )
+        pager = StatsPageCollector(self.admission.check)
+        ports, ports_partial = self._ports(org_id, target, pager)
+        peers, peers_partial = self._peers(org_id, target, pager)
+        self._scope(ports + peers, target)
+        insights = (
+            GatewayInsights(self.session, self.admission).collect(org_id, target)
+            if target is not None
+            else {"samples": [], "partial": False}
         )
-        self.admission.check()
-        peers = self._page(
-            searchOrgPeerPathStats(
+        return {
+            "org_id": org_id,
+            "collected_at_utc": datetime.now(UTC).isoformat(),
+            "ports": ports,
+            "peers": peers,
+            "ports_partial": ports_partial,
+            "peers_partial": peers_partial,
+            "insights": insights,
+            "partial": ports_partial or peers_partial or insights.get("partial", False),
+            "provenance": "live",
+        }
+
+    def _ports(
+        self, org_id: str, target: GatewayIdentity | None, pager: StatsPageCollector
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Fetch supported gateway port statistics with the API cursor only."""
+        return pager.collect(
+            lambda cursor: searchOrgSwOrGwPorts(
+                self.session,
+                org_id,
+                device_type="gateway",
+                mac=target.gateway_id if target else None,
+                limit=100,
+                search_after=cursor,
+            ),
+            "WAN port",
+        )
+
+    def _peers(
+        self, org_id: str, target: GatewayIdentity | None, pager: StatsPageCollector
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """Fetch supported peer-path statistics with gateway and site filters."""
+        return pager.collect(
+            lambda cursor: searchOrgPeerPathStats(
                 self.session,
                 org_id,
                 mac=target.gateway_id if target else None,
                 site_id=target.site.site_id if target else None,
                 duration="1h",
                 limit=100,
-            )
+                search_after=cursor,
+            ),
+            "VPN peer",
         )
-        self._scope(ports[0] + peers[0], target)
-        insights = (
-            GatewayInsights(self.session, self.admission).collect(org_id, target)
-            if target is not None
-            else {"samples": [], "partial": False}
-        )
-        snapshot = {
-            "org_id": org_id,
-            "collected_at_utc": datetime.now(UTC).isoformat(),
-            "ports": ports[0],
-            "peers": peers[0],
-            "insights": insights,
-            "partial": ports[1] or peers[1] or insights.get("partial", False),
-            "provenance": "live",
-        }
-        logger.debug("Collected %d ports and %d peer paths.", len(ports[0]), len(peers[0]))
-        return snapshot
 
     @staticmethod
     def _scope(rows: list[dict[str, object]], target: GatewayIdentity | None) -> None:
@@ -89,35 +109,6 @@ class SnapshotClient(SnapshotSession):
             (row.get("site_id"), row.get("mac")) != (target.site.site_id, target.gateway_id) for row in rows
         ):
             raise ValueError("WAN snapshot rows do not match the selected site and gateway.")
-
-    @staticmethod
-    def _page(response: Any) -> tuple[list[dict[str, object]], bool]:
-        """Validate one result page and retain an explicit truncation indicator."""
-        if response.status_code != 200:
-            logger.error("WAN snapshot request failed with HTTP %s.", response.status_code)
-            raise ConnectionError(f"WAN snapshot request failed with HTTP {response.status_code}.")
-        data = response.data
-        if not isinstance(data, dict) or not isinstance(data.get("results"), list):
-            raise ValueError("WAN snapshot results must be an array.")
-        rows = SnapshotClient._rows(data["results"])
-        total = data.get("total")
-        if total is None:
-            return rows, len(rows) == 100 or bool(data.get("next"))
-        if isinstance(total, bool) or not isinstance(total, int) or total < 0:
-            raise ValueError("WAN snapshot total must be a non-negative integer.")
-        return rows, bool(data.get("next")) or total > len(rows)
-
-    @staticmethod
-    def _rows(rows: list[object]) -> list[dict[str, object]]:
-        """Enforce the fixed page size and dictionary row shape."""
-        if len(rows) > 100:
-            raise ValueError("WAN snapshot results must contain at most 100 objects.")
-        result = []
-        for row in rows:
-            if not isinstance(row, dict):
-                raise ValueError("WAN snapshot results must contain objects.")
-            result.append(row)
-        return result
 
 
 class GatewayInsights(SnapshotSession):
@@ -165,8 +156,15 @@ class GatewayInsights(SnapshotSession):
         selected = {**device, "selected_port": port_name}
         samples = self._metrics(selected, units, start, end, interval)
         status_events = None
+        quality_fields = None
+        quality_partial = False
         if port_name is not None:
-            samples.extend(PortQualityInsights(self.session, self.admission).collect(device, port_name, end))
+            quality = PortQualityStats(self.session, self.admission).collect(
+                org_id, CircuitIdentity(target, port_name), start
+            )
+            samples.extend(quality["samples"])
+            quality_fields = quality["quality_fields"]
+            quality_partial = quality["partial"]
             utilization = self._utilization(samples, speed_mbps)
             samples.append(utilization)
             status_events = self._status_events(device, port_name, start, end, current_status)
@@ -178,8 +176,10 @@ class GatewayInsights(SnapshotSession):
             "gateway": device,
             "port_id": port_name,
             "samples": samples,
+            "quality_fields": quality_fields,
+            "quality_partial": quality_partial,
             "status_events": status_events,
-            "partial": bool(status_events and not status_events["complete"]),
+            "partial": quality_partial or bool(status_events and not status_events["complete"]),
         }
 
     @staticmethod
@@ -636,85 +636,77 @@ class GatewayInsights(SnapshotSession):
         }
 
 
-class PortQualityInsights(SnapshotSession):
-    """Read bounded hourly loss, jitter, and latency for one selected gateway port."""
+class PortQualityStats(SnapshotSession):
+    """Read documented port scalars without assigning undocumented units."""
 
-    _FIELDS = {
-        "avg_loss": ("avg_loss_pct", "%"),
-        "avg_jitter": ("avg_jitter_ms", "ms"),
-        "avg_latency": ("avg_latency_ms", "ms"),
-    }
-
-    def collect(self, device: dict[str, Any], port_name: str, end: datetime) -> list[dict[str, Any]]:
-        """Use the existing device-scoped Mist insight endpoint and shared admission."""
-        start = end - timedelta(hours=1)
-        mac = device["mac"].replace("-", "")[-12:]
-        self.admission.check()
-        response = getSiteInsightMetricsForDevice(
-            self.session,
-            device["site_id"],
-            "wan_link_health",
-            mac,
-            port_id=port_name,
-            start=str(int(start.timestamp())),
-            end=str(int(end.timestamp())),
-            interval="1h",
-            limit=1,
-            page=1,
+    def collect(self, org_id: str, target: CircuitIdentity, hour_start: datetime) -> dict[str, Any]:
+        """Search the exact port through bounded organization-stat pages."""
+        rows, partial = StatsPageCollector(self.admission.check).collect(
+            lambda cursor: searchOrgSwOrGwPorts(
+                self.session,
+                org_id,
+                device_type="gateway",
+                mac=target.gateway.gateway_id,
+                port_id=target.port_name,
+                limit=100,
+                search_after=cursor,
+            ),
+            "WAN port",
         )
-        if response.status_code != 200:
-            raise ConnectionError(f"Port link-health request failed with HTTP {response.status_code}.")
-        return self._samples(response.data, start, end)
+        row = self._matching_row(rows, org_id, target)
+        fields = self._quality_fields(row)
+        return {"samples": self._samples(fields, hour_start), "quality_fields": fields, "partial": partial}
 
-    @classmethod
-    def _samples(cls, data: Any, start: datetime, end: datetime) -> list[dict[str, Any]]:
-        """Validate the requested hour and preserve absent fields as unknown values."""
-        if not isinstance(data, dict) or (
-            data.get("start"),
-            data.get("end"),
-            data.get("interval"),
-            bool(data.get("next")),
-        ) != (int(start.timestamp()), int(end.timestamp()), 3600, False):
-            raise ValueError("Port link-health response does not match the requested hourly window.")
-        timestamps = cls._timestamps(data.get("rt", []))
-        return [
-            cls._sample(data, field, metric, unit, timestamps, start) for field, (metric, unit) in cls._FIELDS.items()
+    @staticmethod
+    def _matching_row(rows: list[dict[str, Any]], org_id: str, target: CircuitIdentity) -> dict[str, Any]:
+        """Require one exact tenant, site, gateway, and port result."""
+        matches = [
+            row
+            for row in rows
+            if (row.get("org_id"), row.get("site_id"), row.get("mac"), row.get("port_id"))
+            == (
+                org_id,
+                target.gateway.site.site_id,
+                target.gateway.gateway_id,
+                target.port_name,
+            )
         ]
+        if not matches:
+            raise LookupError("WAN port stats did not return the selected full identity.")
+        if len(matches) != 1:
+            raise ValueError("WAN port stats returned duplicate full identities without a sample timestamp.")
+        return matches[0]
 
     @staticmethod
-    def _timestamps(value: object) -> list[datetime]:
-        """Parse at most one UTC timestamp from the response."""
-        if not isinstance(value, list) or len(value) > 1:
-            raise ValueError("Port link-health timestamps must contain at most one value.")
-        if not value:
-            return []
-        timestamp = value[0]
-        if isinstance(timestamp, (int, float)) and not isinstance(timestamp, bool):
-            return [datetime.fromtimestamp(timestamp, UTC)]
-        if not isinstance(timestamp, str):
-            raise ValueError("Port link-health timestamp must be text or epoch seconds.")
-        return [datetime.fromisoformat(timestamp.replace("Z", "+00:00"))]
+    def _quality_fields(row: dict[str, Any]) -> dict[str, Any]:
+        """Validate finite source scalars while retaining the reported port state."""
+        fields = {name: row.get(name) for name in ("loss", "jitter", "latency")}
+        for name, value in fields.items():
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            ):
+                raise ValueError(f"WAN port source field {name} must be a finite number or None.")
+        fields["up"] = row.get("up") if isinstance(row.get("up"), bool) else None
+        return fields
 
     @staticmethod
-    def _sample(
-        data: dict[str, Any],
-        field: str,
-        metric: str,
-        unit: str,
-        timestamps: list[datetime],
-        start: datetime,
-    ) -> dict[str, Any]:
-        """Map one optional hourly series to its source-compatible name and unit."""
-        values = data.get(field, [])
-        if values is None:
-            values = []
-        if not isinstance(values, list) or len(values) > 1:
-            raise ValueError(f"Port link-health field {field} must contain at most one value.")
-        if values and timestamps and timestamps[0] != start:
-            raise ValueError("Port link-health timestamp does not match the requested hour.")
-        return {
-            "metric": metric,
-            "unit": unit,
-            "hour_start_utc": start.isoformat(),
-            "value": values[0] if values else None,
-        }
+    def _samples(fields: dict[str, Any], hour_start: datetime) -> list[dict[str, Any]]:
+        """Keep unverified quality units missing while raw scalar fields remain stored."""
+        names = {"loss": "avg_loss_pct", "jitter": "avg_jitter_ms", "latency": "avg_latency_ms"}
+        samples = []
+        for source_name, metric_name in names.items():
+            reason = (
+                "The API snapshot has no value."
+                if fields[source_name] is None
+                else "The gateway port stats schema does not define this field's unit."
+            )
+            samples.append(
+                {
+                    "metric": metric_name,
+                    "unit": "unknown",
+                    "hour_start_utc": hour_start.isoformat(),
+                    "value": None,
+                    "missing_reason": reason,
+                }
+            )
+        return samples

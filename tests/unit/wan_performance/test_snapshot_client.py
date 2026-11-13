@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.interfaces.wan_performance.collection.request_admission import StatsPageCollector
 from src.interfaces.wan_performance.collection.snapshot_client import SnapshotClient
 from src.interfaces.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
 
@@ -36,16 +37,27 @@ def test_http_errors_stop_collection(status):
     peers.assert_not_called()
 
 
-def test_fixed_two_calls_and_truncated_results():
-    """Keep the cap explicit and never follow a server next URL."""
+def test_search_after_pages_preserve_all_rows_and_admission():
+    """Follow only the supported cursor and admit each bounded request."""
     session = MagicMock()
     admission = MagicMock()
-    ports = SimpleNamespace(status_code=200, data={"results": [{"port_id": "ge-0/0/0"}], "next": "https://unsafe"})
+    first_port_page = SimpleNamespace(
+        status_code=200,
+        data={
+            "results": [{"port_id": "ge-0/0/0"}],
+            "total": 2,
+            "next": "https://api.mist.com/api/v1/orgs/org-one/stats/ports?search_after=opaque-cursor",
+        },
+    )
+    second_port_page = SimpleNamespace(
+        status_code=200,
+        data={"results": [{"port_id": "ge-0/0/1"}], "total": 2},
+    )
     peers = SimpleNamespace(status_code=200, data={"results": [], "total": 0})
     with (
         patch(
             "src.interfaces.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
-            return_value=ports,
+            side_effect=[first_port_page, second_port_page],
         ) as port_call,
         patch(
             "src.interfaces.wan_performance.collection.snapshot_client.searchOrgPeerPathStats",
@@ -53,11 +65,26 @@ def test_fixed_two_calls_and_truncated_results():
         ) as peer_call,
     ):
         result = SnapshotClient(session, admission).collect("org-one")
-    port_call.assert_called_once_with(session, "org-one", device_type="gateway", mac=None, limit=100)
-    peer_call.assert_called_once_with(session, "org-one", mac=None, site_id=None, duration="1h", limit=100)
-    assert admission.check.call_count == 2
-    assert result["ports"] == [{"port_id": "ge-0/0/0"}]
-    assert result["partial"] is True
+    assert [call.kwargs["search_after"] for call in port_call.call_args_list] == [None, "opaque-cursor"]
+    assert port_call.call_args_list[0].args == (session, "org-one")
+    assert port_call.call_args_list[0].kwargs == {
+        "device_type": "gateway",
+        "mac": None,
+        "limit": 100,
+        "search_after": None,
+    }
+    peer_call.assert_called_once_with(
+        session,
+        "org-one",
+        mac=None,
+        site_id=None,
+        duration="1h",
+        limit=100,
+        search_after=None,
+    )
+    assert admission.check.call_count == 3
+    assert result["ports"] == [{"port_id": "ge-0/0/0"}, {"port_id": "ge-0/0/1"}]
+    assert result["partial"] is False
 
 
 @pytest.mark.parametrize("site_id,mac", [("site-one", "aabbccddeeff"), ("site-two", "112233445566")])
@@ -78,8 +105,10 @@ def test_selected_pages_use_exact_sdk_filters(site_id, mac):
         ) as peers,
     ):
         result = SnapshotClient(session, admission).collect("org-one", target)
-    ports.assert_called_once_with(session, "org-one", device_type="gateway", mac=mac, limit=100)
-    peers.assert_called_once_with(session, "org-one", mac=mac, site_id=site_id, duration="1h", limit=100)
+    ports.assert_called_once_with(session, "org-one", device_type="gateway", mac=mac, limit=100, search_after=None)
+    peers.assert_called_once_with(
+        session, "org-one", mac=mac, site_id=site_id, duration="1h", limit=100, search_after=None
+    )
     assert result["ports"] == [row]
     assert result["peers"] == [row]
     assert admission.check.call_count == 2
@@ -92,8 +121,9 @@ def test_selected_pages_use_exact_sdk_filters(site_id, mac):
 def test_full_page_without_completeness_evidence_is_partial(count, metadata, partial):
     """Never label a capped page complete when the server supplies no total."""
     rows = [{"port_id": str(index)} for index in range(count)]
-    returned, actual_partial = SnapshotClient._page(
-        SimpleNamespace(status_code=200, data={"results": rows, **metadata})
+    returned, actual_partial = StatsPageCollector(MagicMock()).collect(
+        lambda cursor: SimpleNamespace(status_code=200, data={"results": rows, **metadata}),
+        "WAN port",
     )
     assert returned == rows
     assert actual_partial is partial

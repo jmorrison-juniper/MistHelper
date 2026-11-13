@@ -1,5 +1,6 @@
 """Validate UTC hourly WAN measurements before aggregation or storage."""
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -113,3 +114,72 @@ class HourlyMeasurement:
             "provenance": self.provenance,
             "is_up_observation": self.is_up_observation,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class SampleMeasurement:
+    """Keep one source observation with its full identity and exact UTC time."""
+
+    identity: MeasurementIdentity
+    sampled_at_utc: datetime
+    collected_at_utc: datetime
+    metrics: Mapping[str, MetricMeasurement]
+    raw_fields: Mapping[str, float | int | None]
+    timestamp_source: Literal["poll", "api"]
+    partial: bool
+    provenance: Literal["live", "synthetic"]
+    is_up_observation: bool | None = None
+
+    def __post_init__(self) -> None:
+        """Validate sample timestamps, source state, and immutable values."""
+        for field_name in ("sampled_at_utc", "collected_at_utc"):
+            value = getattr(self, field_name)
+            if value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value):
+                raise ValueError(f"{field_name} must use an explicit UTC timezone.")
+        if self.sampled_at_utc > self.collected_at_utc:
+            raise ValueError("sampled_at_utc cannot follow collected_at_utc.")
+        if self.timestamp_source not in {"poll", "api"}:
+            raise ValueError("timestamp_source must be poll or api.")
+        if not isinstance(self.partial, bool):
+            raise ValueError("partial must be a boolean.")
+        if self.provenance not in {"live", "synthetic"}:
+            raise ValueError("provenance must be live or synthetic.")
+        if self.is_up_observation is not None and not isinstance(self.is_up_observation, bool):
+            raise ValueError("is_up_observation must be a boolean or None.")
+        if not self.metrics or any(not isinstance(metric, MetricMeasurement) for metric in self.metrics.values()):
+            raise ValueError("metrics must contain named measurements.")
+        if any(not isinstance(name, str) or not name.strip() for name in self.raw_fields):
+            raise ValueError("raw_fields must contain named source values.")
+        for value in self.raw_fields.values():
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            ):
+                raise ValueError("raw_fields values must be finite numbers or None.")
+        object.__setattr__(self, "metrics", MappingProxyType(dict(self.metrics)))
+        object.__setattr__(self, "raw_fields", MappingProxyType(dict(self.raw_fields)))
+
+    @property
+    def natural_key(self) -> tuple[str, ...]:
+        """Return full source identity plus the exact UTC sample timestamp."""
+        return (*self.identity.natural_key, self.sampled_at_utc.isoformat())
+
+    def to_dict(self) -> dict[str, object]:
+        """Return the sample and source fields as JSON-compatible values."""
+        return {
+            "identity": self.identity.to_dict(),
+            "sampled_at_utc": self.sampled_at_utc.isoformat(),
+            "collected_at_utc": self.collected_at_utc.isoformat(),
+            "metrics": {name: metric.to_dict() for name, metric in self.metrics.items()},
+            "raw_fields": dict(self.raw_fields),
+            "timestamp_source": self.timestamp_source,
+            "partial": self.partial,
+            "provenance": self.provenance,
+            "is_up_observation": self.is_up_observation,
+        }
+
+    def to_hourly(self) -> HourlyMeasurement:
+        """Create a separate hour projection without changing this raw sample."""
+        hour = self.sampled_at_utc.replace(minute=0, second=0, microsecond=0)
+        return HourlyMeasurement(
+            self.identity, hour, self.collected_at_utc, self.metrics, self.provenance, self.is_up_observation
+        )

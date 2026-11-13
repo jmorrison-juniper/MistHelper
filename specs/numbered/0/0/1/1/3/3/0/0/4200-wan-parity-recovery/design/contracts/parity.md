@@ -52,6 +52,20 @@ Do not use generic insights or peer search as proof of explicit peer time-series
 Record scope and timestamp limitations of current snapshots.
 No new direct HTTP transport is authorized.
 
+### Verified organization-stat fields
+
+The installed SDK exposes `searchOrgSwOrGwPorts` with `device_type`, `mac`, `port_id`, `limit`, and `search_after`.
+The `stats_gateway_port` schema defines scalar `loss`, `jitter`, and `latency` fields without units or metric timestamps.
+Store those port values as raw poll samples and do not assign units.
+
+The installed SDK exposes `searchOrgPeerPathStats` with gateway, site, type, time-bound, duration, limit, and cursor filters.
+It does not expose a peer-port filter, so filter the returned bounded rows by the full peer identity.
+The `vpn_peer_stat` schema defines scalar `loss` in percent and `latency` and `jitter` in milliseconds.
+The schema defines MOS as a quality measure without a scale and gives `last_seen` as peer observation time.
+Store each selected peer scalar at poll time and keep `last_seen` separate.
+Reject duplicate rows for one full peer identity because the schema gives no metric timestamp.
+These contracts support current scalar samples, not source time series, complete history, or backfill.
+
 ## Browser acceptance
 
 Complete overview to gateway to port to gateway to peer to overview.
@@ -82,8 +96,8 @@ Each row still needs exact source locations, destination assertions, and a revie
 | P07 | ProjectGoals.md: continuous/cumulative duration, goal | `wan-live-congestion-duration` is sample-based | T015-T016 |
 | P08 | ProjectGoals.md: status/flaps/availability, goal | `wan-live-link-event-summary` exists; coverage unverified | T017-T018 |
 | P09 | ProjectGoals.md: primary/secondary failure, goal | Role mapping and comparison unverified | T019-T022 |
-| P10 | ProjectGoals.md: loss/latency/jitter statistics, goal | Current peer and history controls exist; sample contract unverified | T023-T024 |
-| P11 | TODO.md: peer and port time-series collection; method bodies also exist but remain unverified | Source gateway symbol is absent in installed SDK; peer arguments do not match its signature | T003-T004, T023 |
+| P10 | ProjectGoals.md: loss/latency/jitter statistics, goal | Peer scalar units are verified; poll-time samples do not prove source time-series parity | T023-T024 |
+| P11 | TODO.md: peer and port time-series collection; method bodies also exist but remain unverified | Supported organization-stat filters and response fields are verified; no source time-series or peer-port query exists | T003-T004, T023 |
 | P12 | ProjectGoals.md: SLE health scores and trends, goal | Source-to-destination field/score mapping unverified | T025-T026 |
 | P13 | ProjectGoals.md: SLE impacts and classifiers, goal | Required drilldown chain unverified | T025-T026 |
 | P14 | ProjectGoals.md: region/site/circuit/hour dimensions, goal | Region/role effective-time mapping unverified | T013, T027-T028 |

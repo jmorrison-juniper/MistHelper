@@ -1,6 +1,9 @@
 """Validate WAN entity identities before a caller uses their route values."""
 
+import hashlib
+import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 
@@ -69,6 +72,16 @@ class GatewayIdentity:
         """Return JSON-compatible identity values with their parent context."""
         return {**self.site.to_dict(), "gateway_id": self.gateway_id}
 
+    @classmethod
+    def from_stats_row(cls, row: Mapping[str, object], org_id: str) -> "GatewayIdentity":
+        """Build a gateway identity from verified organization-stat fields."""
+        if row.get("org_id") != org_id:
+            raise ValueError("WAN row organization does not match the selected organization.")
+        site_id, gateway_id = row.get("site_id"), row.get("mac")
+        if not isinstance(site_id, str) or not isinstance(gateway_id, str):
+            raise ValueError("WAN gateway stats require site_id and mac strings.")
+        return cls(SiteIdentity(org_id, site_id), gateway_id)
+
 
 @dataclass(frozen=True, slots=True)
 class CircuitIdentity:
@@ -133,3 +146,21 @@ class PeerPathIdentity:
             "peer_mac": self.peer_mac,
             "tunnel_identity": self.tunnel_identity,
         }
+
+    @classmethod
+    def from_stats_row(cls, row: Mapping[str, object], org_id: str) -> "PeerPathIdentity":
+        """Build a full path key from the peer fields returned by organization stats."""
+        gateway = GatewayIdentity.from_stats_row(row, org_id)
+        path_fields = [row.get(name) for name in ("peer_site_id", "peer_port_id", "type")]
+        if any(not isinstance(value, str) or not value.strip() for value in path_fields):
+            raise ValueError("WAN peer path requires peer_site_id, peer_port_id, and type.")
+        port_name, peer_port_id, peer_mac = row.get("port_id"), row.get("peer_port_id"), row.get("peer_mac")
+        if not isinstance(port_name, str) or not isinstance(peer_port_id, str) or not isinstance(peer_mac, str):
+            raise ValueError("WAN peer stats require port_id, peer_port_id, and peer_mac strings.")
+        return cls(
+            gateway,
+            port_name,
+            peer_port_id,
+            peer_mac,
+            hashlib.sha256(json.dumps(path_fields).encode()).hexdigest(),
+        )

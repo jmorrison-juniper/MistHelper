@@ -225,28 +225,29 @@ This anchor avoids presenting stale retained data as a current measurement.
 The port detail has a separate CSRF-protected, operator-triggered insight refresh.
 It requires the exact site, gateway, and port identity from the validated cached page.
 It shares the organization cooldown and request ledger with every other WAN refresh.
-It permits at most ten SDK calls: exact gateway discovery, metric catalog, two rate requests, device link health, and five event pages.
+It permits at most fifteen SDK calls: gateway discovery, metric catalog, two rate requests, five port-stat pages, and five event pages.
 Each rate request selects the actual gateway UUID and exact `port_id`.
 Rate requests cover one completed UTC hour with `interval=10m` and at most six aligned samples.
 Catalog checks require gateway scope, a supported rate unit, a 600-second interval, and sufficient `max_age`.
-The device link-health request uses the existing `getSiteInsightMetricsForDevice` SDK method and the `wan_link_health` metric.
-It retains `avg_loss`, `avg_jitter`, and `avg_latency` with percent and millisecond units.
-Response checks require the exact window, no next page, and a `results` array aligned with `rt`.
-Empty aligned series remain unknown.
-The selected application store retains these port rate, utilization, link-health, congestion, and event-derived records without replacing the current snapshot.
+The port-stat request uses `searchOrgSwOrGwPorts` with the selected gateway and port.
+The API schema defines scalar `loss`, `jitter`, and `latency` fields but does not define their units.
+The application retains each scalar as a raw poll sample and does not assign a unit.
+The selected application store retains port rate, utilization, raw quality, congestion, and event-derived records without replacing the current snapshot.
+Each live poll is stored separately with its full identity and UTC sample time.
+SQLite stores raw samples in `wan_performance_samples`, and ArangoDB uses the matching collection.
+Hourly records keep their existing replacement behavior, and repeated polls in one hour remain distinct samples.
+The application sets no sample expiry and makes no retention or backfill guarantee.
 Natural-key upserts replace an existing row for the same port and UTC hour.
 The record derives utilization from the cached Mbps speed and six aligned rate samples.
 It does not request earlier rate windows or promise complete 13-month coverage.
 The peer detail has a separate CSRF-protected refresh for one cached peer path.
-It sends the source `vpn_peer-metrics` request through the existing admitted Mist session.
-The request includes the peer MAC, local port, remote port, one completed UTC hour, and a two-row cap.
-The collector stores only timestamped loss, latency, jitter, and MOS rows returned for that exact path.
-It uses `APISession.mist_get` because the installed generated wrapper does not accept both peer filters.
-The collector checks response bounds, timestamps, interval, and pagination before storage.
-The live catalog reports device scope, keyed-timeseries type, and `unit=null` for `vpn_peer-metrics`.
-It supports 10m samples with a maximum age of 86,400 seconds and 1h samples with a maximum age of 1,209,600 seconds.
-The keyed result has no catalog unit. The source page labels loss as percent, latency and jitter as milliseconds, and MOS as a score.
-Mocked response tests cover the source-shaped rows. Live peer mapping remains unverified because the bounded probe returned no peer rows.
+It searches `searchOrgPeerPathStats` with the supported gateway and site filters.
+The collector follows at most five `search_after` pages, then matches the full peer identity locally.
+The API schema defines scalar peer `loss` in percent and `latency` and `jitter` in milliseconds.
+The schema describes MOS as a quality measure but gives no display scale or metric timestamp.
+The collector stores each scalar as a raw poll sample and keeps epoch-second `last_seen` separate.
+It preserves a partial state when the page limit leaves results unseen.
+It rejects duplicate rows for one full path because the response has no sample timestamp to disambiguate them.
 This read window is not a retention period.
 WAN code does not delete application history or change existing TimeSeries retention.
 Unknown values and missing hours never become healthy observations.
@@ -279,13 +280,14 @@ The history horizon does not prove complete 13-month availability or hourly cove
 The source `data_provider.py` calls `api_client.get_vpn_peer_metrics_timeseries` for peer detail.
 The source `detail_data.py` passes site, device, peer MAC, start, and end to that provider.
 The source `mist_client.py` requests `vpn_peer-metrics` with peer MAC, local port, remote port, interval, start, and end.
-The source `app.py` wires the returned loss, latency, jitter, and MOS series to the peer detail chart.
+The bundled OpenAPI does not define this source response contract.
 Gateway insights do supply timestamped samples within each catalog metric's supported `max_age`.
 The gateway insight operation also accepts `port_id` for a selected interface.
 The existing MistHelper WAN Dashboard reads `wan_link_health` through `getSiteInsightMetricsForDevice`.
-The selected-port workflow uses that same read-only SDK method for average loss, jitter, and latency.
-It uses four fixed calls for discovery, catalog, combined rates, and device link health.
-It uses up to five additional event pages.
+The bundled OpenAPI and installed SDK do not establish that metric as a supported request contract.
+The selected-port workflow uses `searchOrgSwOrGwPorts` for documented scalar fields.
+The bounded page collector uses at most five pages for each organization-stat search.
+The selected-port workflow uses up to five event pages.
 It collects only one completed hour, not 13-month backfill.
 The migration uses cached link capacity to derive utilization from aligned 10-minute rate samples.
 The live event query returned the four source WAN event types with timestamp and port fields.
@@ -296,13 +298,16 @@ The event search has a five-page cap and cannot prove historical availability ac
 The port `last_flapped` field does not establish timestamp units or a flap-count history.
 VPN peer search supports `start`, `end`, and `duration`.
 The collector already requests `duration="1h"` within its existing call ceiling.
-The resolved `vpn_peer_stat` response schema describes latency and jitter as last sampled values.
-Its rows have `last_seen`, but no measurement `timestamp`.
+The resolved `vpn_peer_stat` schema defines scalar `loss`, `latency`, `jitter`, and `mos` fields.
+It gives percent units for loss and millisecond units for latency and jitter.
+It describes MOS as a quality measure but gives no scale.
+Its rows have epoch-second `last_seen`, but no metric `timestamp`.
 The public `VpnPeersStatsExample` has no measurement timestamp either.
 Peer observation time does not establish the sample time of each metric.
 The existing exporter primary-key strategy names `timestamp`, `from_device`, and `to_device`.
 Those application fields do not establish a source response contract.
-The source peer method defines the requested time-series fields, but the bundled API schema omits its response contract.
+The source peer method defines requested time-series fields, but the bundled API schema omits its response contract.
+The separate peer-stat schema supports raw scalar values, not timestamped quality history.
 The source `QualityCollector.get_wan_edge_stats` reads `wan_interfaces` from `getSiteDeviceStats`.
 It calculates gateway WAN-interface p95 from `loss_samples`, `jitter_samples`, and `latency_samples`.
 It falls back to scalar loss, jitter, and latency fields when those sample arrays are absent.
@@ -310,7 +315,8 @@ This gateway-wide WAN-interface quality series differs from the peer-specific de
 The observed p95 uses the source index rule on retained WAN observations.
 MistHelper retains one observation per identity and hour, not every raw quality sample.
 The raw utilization p95 uses the source index rule on the six 10-minute values.
-The quality p95 still summarizes retained hourly averages.
+The source quality p95 needs raw WAN samples, which the organization stats schema does not timestamp.
+The application retains each scalar quality poll separately and does not claim that polling reconstructs past samples.
 The bounded event page cap can leave an hour incomplete.
 The bundled OpenAPI defines a generic device-insight operation with a metric path parameter.
 Its response schema pairs string `rt` timestamps with numeric `results` values.
@@ -319,9 +325,8 @@ The installed `getSiteInsightMetricsForDevice` wrapper also lacks `peer_mac` and
 The migration therefore uses `APISession.mist_get` through the shared admitted Mist session.
 Its query carries the exact source metric name and peer, local-port, and remote-port filters.
 The source wrapper expects `results` rows with timestamp, loss, latency, jitter, and MOS fields.
-Mocked tests verify that source-shaped request and response contract.
-The generic OpenAPI schema differs from the source contract, and a bounded one-hour query returned no peer rows.
-Live response mapping therefore remains unverified.
+The verified SDK signature does not accept those peer and port filters.
+The implementation does not send this unsupported request or infer a peer time series from scalar stats.
 Gateway refresh supports any selected organization gateway through exact filtered discovery.
 The cached gateway list reflects bounded port and peer pages, not a complete organization inventory.
 Complete organization-wide gateway history and VPN history beyond individually refreshed hours remain unimplemented.

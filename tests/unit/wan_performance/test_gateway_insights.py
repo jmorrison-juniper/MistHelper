@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.interfaces.wan_performance.collection.snapshot_client import GatewayInsights
+from src.interfaces.wan_performance.collection.snapshot_client import GatewayInsights, PortQualityStats
 from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
-from src.interfaces.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
+from src.interfaces.wan_performance.domain.identity import CircuitIdentity, GatewayIdentity, SiteIdentity
 from src.interfaces.wan_performance.integration.record_codec import RecordCodec
 
 DEVICE_ID = "00000000-0000-0000-0000-000000000001"
@@ -18,25 +18,25 @@ TARGET = GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff")
 
 @pytest.fixture(autouse=True)
 def device_quality_response():
-    """Keep selected-port device insight tests on bounded synthetic responses."""
+    """Keep selected-port stats tests on bounded synthetic responses."""
     from src.interfaces.wan_performance.collection import snapshot_client
 
-    end = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
-    start = end - timedelta(hours=1)
-    response = SimpleNamespace(
-        status_code=200,
-        data={
-            "start": int(start.timestamp()),
-            "end": int(end.timestamp()),
-            "interval": 3600,
-            "rt": [start.isoformat()],
-            "avg_loss": [0.25],
-            "avg_jitter": [4.5],
-            "avg_latency": [33.3],
-        },
-    )
+    row = {
+        "org_id": "org-one",
+        "site_id": "site-one",
+        "mac": TARGET.gateway_id,
+        "port_id": "ge-0/0/1",
+        "loss": 0.25,
+        "jitter": 4.5,
+        "latency": 33.3,
+        "up": True,
+    }
     with (
-        patch.object(snapshot_client, "getSiteInsightMetricsForDevice", return_value=response) as request,
+        patch.object(
+            snapshot_client,
+            "searchOrgSwOrGwPorts",
+            return_value=SimpleNamespace(status_code=200, data={"results": [row], "total": 1}),
+        ) as request,
         patch.object(
             snapshot_client,
             "searchOrgDeviceEvents",
@@ -46,8 +46,8 @@ def device_quality_response():
         yield request
 
 
-def test_selected_port_insights_collect_rates_and_quality_with_bounded_calls(device_quality_response):
-    """Collect source-compatible rates and link health for one exact port and hour."""
+def test_selected_port_insights_collect_rates_and_raw_quality_with_bounded_calls(device_quality_response):
+    """Collect rate insights and raw scalar quality from supported organization stats."""
     from src.interfaces.wan_performance.domain.identity import CircuitIdentity
 
     target = CircuitIdentity(TARGET, "ge-0/0/1")
@@ -78,15 +78,12 @@ def test_selected_port_insights_collect_rates_and_quality_with_bounded_calls(dev
     assert all(call.kwargs["limit"] == 6 and call.kwargs["page"] == 1 for call in metrics.call_args_list)
     device_quality_response.assert_called_once_with(
         session,
-        "site-one",
-        "wan_link_health",
-        "aabbccddeeff",
+        "org-one",
+        device_type="gateway",
+        mac="aabbccddeeff",
         port_id=target.port_name,
-        start=str(series.data["start"]),
-        end=str(series.data["end"]),
-        interval="1h",
-        limit=1,
-        page=1,
+        limit=100,
+        search_after=None,
     )
     records = SnapshotRecords.build(
         {
@@ -103,11 +100,107 @@ def test_selected_port_insights_collect_rates_and_quality_with_bounded_calls(dev
     assert records[0].hour_start_utc.isoformat() == series.data["rt"][0]
     assert records[0].metrics["rx_bps"].value == 0
     assert records[0].metrics["tx_bps"].unit == "bit/s"
-    assert records[0].metrics["avg_loss_pct"].value == 0.25
-    assert records[0].metrics["avg_jitter_ms"].value == 4.5
-    assert records[0].metrics["avg_latency_ms"].value == 33.3
+    assert records[0].metrics["avg_loss_pct"].unit == "unknown"
+    assert records[0].metrics["avg_loss_pct"].value is None
+    assert records[0].metrics["avg_jitter_ms"].value is None
+    assert records[0].metrics["avg_latency_ms"].value is None
     assert records[0].metrics["utilization_pct"].raw_values == (0.0,) * 6
     assert RecordCodec.decode(RecordCodec.encode(records[0])) == records[0]
+    samples = SnapshotRecords.build_samples(
+        {
+            "org_id": "org-one",
+            "provenance": "live",
+            "collected_at_utc": datetime.now(UTC).isoformat(),
+            "ports": [],
+            "peers": [],
+            "insights": result,
+        }
+    )
+    quality_samples = [sample for sample in samples if sample.timestamp_source == "poll"]
+    assert len(quality_samples) == 1
+    assert quality_samples[0].raw_fields == {"loss": 0.25, "jitter": 4.5, "latency": 33.3}
+
+
+def test_port_quality_pages_filter_full_identity_and_preserve_partial_state():
+    """Keep the exact selected port sample and mark the bounded search as partial."""
+    target = CircuitIdentity(TARGET, "ge-0/0/1")
+    other_port = {
+        "org_id": "org-one",
+        "site_id": "site-one",
+        "mac": TARGET.gateway_id,
+        "port_id": "ge-0/0/2",
+        "loss": 9,
+        "jitter": 9,
+        "latency": 9,
+        "up": False,
+    }
+    selected_port = {
+        "org_id": "org-one",
+        "site_id": "site-one",
+        "mac": TARGET.gateway_id,
+        "port_id": target.port_name,
+        "loss": 0.25,
+        "jitter": 4.5,
+        "latency": 33.3,
+        "up": True,
+    }
+    pages = [
+        SimpleNamespace(
+            status_code=200,
+            data={
+                "results": [other_port],
+                "total": 10,
+                "next": f"https://api.mist.com/api/v1/orgs/org-one/stats/ports?search_after=cursor-{index}",
+            },
+        )
+        for index in range(1, 5)
+    ]
+    pages.append(
+        SimpleNamespace(
+            status_code=200,
+            data={
+                "results": [selected_port],
+                "total": 10,
+                "next": "https://api.mist.com/api/v1/orgs/org-one/stats/ports?search_after=cursor-5",
+            },
+        )
+    )
+    session, admission = MagicMock(), MagicMock()
+    with patch(
+        "src.interfaces.wan_performance.collection.snapshot_client.searchOrgSwOrGwPorts",
+        side_effect=pages,
+    ) as search:
+        result = PortQualityStats(session, admission).collect("org-one", target, datetime.now(UTC))
+
+    assert result["partial"] is True
+    assert result["quality_fields"] == {"loss": 0.25, "jitter": 4.5, "latency": 33.3, "up": True}
+    assert [call.kwargs["search_after"] for call in search.call_args_list] == [
+        None,
+        "cursor-1",
+        "cursor-2",
+        "cursor-3",
+        "cursor-4",
+    ]
+    assert admission.check.call_count == 5
+    samples = SnapshotRecords.build_samples(
+        {
+            "org_id": "org-one",
+            "provenance": "live",
+            "collected_at_utc": datetime.now(UTC).isoformat(),
+            "ports": [],
+            "peers": [],
+            "insights": {
+                "gateway": {"org_id": "org-one", "site_id": "site-one", "mac": TARGET.gateway_id},
+                "port_id": target.port_name,
+                "samples": result["samples"],
+                "quality_fields": result["quality_fields"],
+                "quality_partial": result["partial"],
+            },
+        }
+    )
+    assert len(samples) == 1
+    assert samples[0].identity == target
+    assert samples[0].partial is True
 
 
 def test_selected_port_maps_generic_results_for_each_requested_metric():
@@ -465,13 +558,12 @@ def test_port_quality_timeout_is_not_stored_as_empty_success(device_quality_resp
 
 
 def test_port_quality_missing_arrays_remain_unknown(device_quality_response):
-    """Persist missing quality values as unknown without inventing zero samples."""
+    """Persist missing scalar values as unknown without inventing zero samples."""
     from src.interfaces.wan_performance.domain.identity import CircuitIdentity
 
     device, metadata, series = responses("10m")
     response = device_quality_response.return_value
-    response.data["rt"] = []
-    response.data.update(avg_loss=[], avg_jitter=[], avg_latency=[])
+    response.data["results"][0].update(loss=None, jitter=None, latency=None)
     with (
         patch(
             "src.interfaces.wan_performance.collection.snapshot_client.listOrgDevicesStats",

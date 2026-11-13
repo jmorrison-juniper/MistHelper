@@ -4,8 +4,9 @@ import hashlib
 import logging
 import os
 import secrets
+from collections.abc import Callable
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import redis
 from redis.backoff import NoBackoff
@@ -16,6 +17,74 @@ from requests.adapters import HTTPAdapter
 from src.foundation.persistence.db import DatabaseConfig
 
 logger = logging.getLogger(__name__)
+MAX_STATS_PAGE_LIMIT = 100
+MAX_STATS_PAGES = 5
+
+
+class StatsPageCollector:
+    """Follow only bounded Mist search-after pages through shared admission."""
+
+    def __init__(self, check: Callable[[], None], page_limit: int = 100, max_pages: int = 5) -> None:
+        """Fix safe page and request caps before any search begins."""
+        if not 1 <= page_limit <= MAX_STATS_PAGE_LIMIT or not 1 <= max_pages <= MAX_STATS_PAGES:
+            raise ValueError("WAN stats pagination limits exceed the fixed collection bounds.")
+        self.check = check
+        self.page_limit = page_limit
+        self.max_pages = max_pages
+
+    def collect(self, request: Callable[[str | None], Any], label: str) -> tuple[list[dict[str, Any]], bool]:
+        """Return validated rows and explicit truncation after at most five requests."""
+        rows: list[dict[str, Any]] = []
+        cursor, total = None, None
+        seen: set[str] = set()
+        for page_number in range(1, self.max_pages + 1):
+            logger.info("Read WAN stats page %d for %s.", page_number, label)
+            self.check()  # Reserve each actual API request through the shared admission boundary.
+            page_rows, next_cursor, page_total = self._page(request(cursor), label)
+            rows.extend(page_rows)  # Keep the complete bounded page for local identity filtering.
+            logger.debug("Read %d rows from WAN stats page %d.", len(page_rows), page_number)
+            if page_total is not None and total is not None and page_total != total:
+                raise ValueError(f"{label} total changed during pagination.")
+            total = page_total if page_total is not None else total
+            if total is not None and len(rows) > total:
+                raise ValueError(f"{label} returned more rows than its reported total.")
+            if next_cursor is None:
+                return rows, total > len(rows) if total is not None else len(page_rows) == self.page_limit
+            if total is not None and len(rows) >= total:
+                raise ValueError(f"{label} returned a continuation after its reported total.")
+            if next_cursor in seen:
+                raise ValueError(f"{label} repeated a search-after cursor.")
+            seen.add(next_cursor)  # Refuse a pagination loop before the next request.
+            cursor = next_cursor  # Send only the server-provided search-after token.
+        return rows, True
+
+    def _page(self, response: Any, label: str) -> tuple[list[dict[str, Any]], str | None, int | None]:
+        """Validate one response envelope before accepting its rows or cursor."""
+        if response.status_code != 200:
+            logger.error("%s stats request failed with HTTP %s.", label, response.status_code)
+            raise ConnectionError(f"{label} stats request failed with HTTP {response.status_code}.")
+        data = response.data  # Read only the decoded SDK response, not an arbitrary next URL.
+        if not isinstance(data, dict) or not isinstance(data.get("results"), list):
+            raise ValueError(f"{label} stats results must be an array.")
+        rows = data["results"]
+        if len(rows) > self.page_limit or any(not isinstance(row, dict) for row in rows):
+            raise ValueError(f"{label} stats results exceed the bounded object page.")
+        total = data.get("total")
+        if total is not None and (isinstance(total, bool) or not isinstance(total, int) or total < 0):
+            raise ValueError(f"{label} stats total must be a non-negative integer.")
+        return rows, self._cursor(data.get("next"), label), total
+
+    @staticmethod
+    def _cursor(value: object, label: str) -> str | None:
+        """Extract one bounded search-after token without following its URL."""
+        if value is None or value == "":
+            return None
+        if not isinstance(value, str) or len(value) > 4096 or any(ord(char) < 32 for char in value):
+            raise ValueError(f"{label} stats next-page value must be a bounded URL string.")
+        tokens = parse_qs(urlsplit(value).query, keep_blank_values=True).get("search_after", [])
+        if len(tokens) != 1 or not tokens[0]:
+            raise ValueError(f"{label} stats next-page URL has no unique search-after cursor.")
+        return tokens[0]
 
 
 class RequestLedger:

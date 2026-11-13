@@ -1,8 +1,7 @@
 """Map documented snapshots to observation-hour records, never full-hour coverage."""
 
-import hashlib
-import json
 import logging
+import math
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from types import MappingProxyType
@@ -12,44 +11,77 @@ from src.interfaces.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
     PeerPathIdentity,
-    SiteIdentity,
 )
-from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
+from src.interfaces.wan_performance.domain.measurement import (
+    HourlyMeasurement,
+    MetricMeasurement,
+    SampleMeasurement,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class PeerSnapshotMetrics:
-    """Read source peer fields without assigning a unit to the keyed API metric."""
+    """Map peer scalar fields only where the schema defines their units."""
 
-    FIELDS: Mapping[str, tuple[str, int | None]] = MappingProxyType(
-        {"latency": ("ms", None), "jitter": ("ms", None), "loss": ("%", 100), "mos": ("score", 5)}
-    )
+    FIELDS: Mapping[str, str] = MappingProxyType({"loss": "%", "latency": "ms", "jitter": "ms"})
 
     @classmethod
     def parse(cls, row: Mapping[str, object]) -> Mapping[str, MetricMeasurement]:
-        """Return immutable peer fields while keeping missing values unknown."""
+        """Return stable peer metrics without inventing fields or units."""
         logger.info("Validate VPN peer snapshot metrics.")
-        metrics = {name: cls._metric(name, row.get(name)) for name in cls.FIELDS}
+        metrics = {name: cls._metric(name, row) for name in ("loss", "latency", "jitter", "mos")}
         logger.debug("Validated %d VPN peer snapshot metrics.", len(metrics))
         return MappingProxyType(metrics)
 
     @classmethod
-    def _metric(cls, name: str, value: object) -> MetricMeasurement:
-        """Validate the source field value before constructing its measurement."""
-        unit, maximum = cls.FIELDS[name]
-        try:
-            if value is None:
-                return MetricMeasurement(None, unit, missing_reason="The API snapshot has no value.")
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
-                raise ValueError("The value must be a number.")
-            metric = MetricMeasurement(value, unit)
-            if value < 0 or (maximum is not None and value > maximum):
-                raise ValueError("The value is outside the documented bounds.")
-            return metric
-        except ValueError as error:
-            logger.error("Invalid VPN snapshot metric %s: %s", name, error)
-            raise ValueError(f"Invalid {name} in VPN snapshot: {error}") from error
+    def _metric(cls, name: str, row: Mapping[str, object]) -> MetricMeasurement:
+        """Retain scalar metrics only when the schema defines their units."""
+        value = row.get(name)
+        unit = cls.FIELDS.get(name)
+        if unit is None:
+            reason = (
+                "The API snapshot has no value."
+                if value is None
+                else "The VPN peer stats schema does not define this field's unit."
+            )
+            return MetricMeasurement(None, "unknown", missing_reason=reason)
+        if value is None:
+            return MetricMeasurement(None, unit, missing_reason="The API snapshot has no value.")
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise ValueError(f"VPN peer source field {name} must be a non-negative finite number.")
+        return MetricMeasurement(value, unit, sample_count=1)
+
+    @staticmethod
+    def raw_fields(row: Mapping[str, object]) -> dict[str, float | int | None]:
+        """Retain all documented peer scalars and last-seen time without normalization."""
+        fields: dict[str, float | int | None] = {}
+        for name in ("loss", "latency", "jitter", "mos", "last_seen"):
+            value = row.get(name)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            ):
+                raise ValueError(f"VPN peer source field {name} must be a finite number or None.")
+            fields[name] = value
+        return fields
+
+    @classmethod
+    def sample(
+        cls, row: dict[str, Any], org_id: str, sampled_at: datetime, collected_at: datetime, partial: bool
+    ) -> SampleMeasurement:
+        """Build a poll-time sample from the verified peer identity and scalar fields."""
+        state = row.get("up")
+        return SampleMeasurement(
+            PeerPathIdentity.from_stats_row(row, org_id),
+            sampled_at,
+            collected_at,
+            cls.parse(row),
+            cls.raw_fields(row),
+            "poll",
+            partial,
+            "live",
+            state if isinstance(state, bool) else None,
+        )
 
 
 class SnapshotRecords:
@@ -69,11 +101,32 @@ class SnapshotRecords:
         return ports + peers + insights
 
     @classmethod
+    def build_samples(cls, snapshot: dict[str, Any]) -> tuple[SampleMeasurement, ...]:
+        """Keep every source observation outside the one-record-per-hour projection."""
+        if snapshot.get("provenance") != "live":
+            raise ValueError("WAN samples must have live provenance.")
+        instant = datetime.fromisoformat(snapshot["collected_at_utc"])
+        org_id = snapshot["org_id"]
+        logger.info("Build timestamped raw samples from the WAN poll.")
+        ports = tuple(
+            PortSnapshotMetrics.sample(row, org_id, instant, instant, snapshot.get("ports_partial", False))
+            for row in snapshot["ports"]
+        )
+        peers = tuple(
+            PeerSnapshotMetrics.sample(row, org_id, instant, instant, snapshot.get("peers_partial", False))
+            for row in snapshot["peers"]
+        )
+        insights = SnapshotRates.samples(snapshot.get("insights", {}), org_id, instant)
+        samples = ports + peers + insights
+        logger.debug("Built %d timestamped raw WAN samples.", len(samples))
+        return samples
+
+    @classmethod
     def _insights(cls, insight: dict[str, Any], org_id: str, instant: datetime) -> tuple[HourlyMeasurement, ...]:
         """Keep catalog units and source hourly timestamps in gateway history."""
         if not insight.get("samples"):
             return ()
-        gateway = cls._gateway(insight["gateway"], org_id)
+        gateway = GatewayIdentity.from_stats_row(insight["gateway"], org_id)
         identity = CircuitIdentity(gateway, insight["port_id"]) if insight.get("port_id") is not None else gateway
         samples = insight["samples"]
         expected = {"rx_bps", "tx_bps"}
@@ -100,17 +153,10 @@ class SnapshotRecords:
         metrics = {sample["metric"]: SnapshotRates.parse_sample(sample) for sample in samples}
         return (HourlyMeasurement(identity, datetime.fromisoformat(hours.pop()), instant, metrics, "live"),)
 
-    @staticmethod
-    def _gateway(row: dict[str, Any], org_id: str) -> GatewayIdentity:
-        """Validate organization membership using explicit SDK row identifiers."""
-        if not isinstance(row, dict) or row.get("org_id") != org_id:
-            raise ValueError("WAN row organization does not match the selected organization.")
-        return GatewayIdentity(SiteIdentity(org_id, row["site_id"]), row["mac"])
-
     @classmethod
     def _port(cls, row: dict[str, Any], org_id: str, instant: datetime) -> HourlyMeasurement:
         """Store only bit rates, not cumulative counters or unverified speed units."""
-        identity = CircuitIdentity(cls._gateway(row, org_id), row["port_id"])
+        identity = CircuitIdentity(GatewayIdentity.from_stats_row(row, org_id), row["port_id"])
         metrics = PortSnapshotMetrics.parse(row)
         return HourlyMeasurement(
             identity,
@@ -118,32 +164,21 @@ class SnapshotRecords:
             instant,
             metrics,
             "live",
-            cls._up_observation(row.get("up")),
+            row.get("up") if isinstance(row.get("up"), bool) else None,
         )
 
     @classmethod
     def _peer(cls, row: dict[str, Any], org_id: str, instant: datetime) -> HourlyMeasurement:
-        """Use all remote path fields for a stable derived key, not a claimed tunnel ID."""
-        fields = [row.get(name) for name in ("peer_site_id", "peer_port_id", "type")]
-        if any(not isinstance(value, str) or not value.strip() for value in fields):
-            raise ValueError("WAN peer path requires peer_site_id, peer_port_id, and type.")
-        path_key = hashlib.sha256(json.dumps(fields).encode()).hexdigest()
-        identity = PeerPathIdentity(
-            cls._gateway(row, org_id), row["port_id"], row["peer_port_id"], row["peer_mac"], path_key
-        )
+        """Use the full peer path fields for a stable derived identity."""
+        identity = PeerPathIdentity.from_stats_row(row, org_id)
         return HourlyMeasurement(
             identity,
             instant.replace(minute=0, second=0, microsecond=0),
             instant,
             PeerSnapshotMetrics.parse(row),
             "live",
-            cls._up_observation(row.get("up")),
+            row.get("up") if isinstance(row.get("up"), bool) else None,
         )
-
-    @staticmethod
-    def _up_observation(value: object) -> bool | None:
-        """Retain only an explicitly reported up/down state."""
-        return value if isinstance(value, bool) else None
 
 
 class SnapshotRates:
@@ -184,6 +219,84 @@ class SnapshotRates:
             raw_values,
         )
 
+    @classmethod
+    def samples(cls, insight: dict[str, Any], org_id: str, collected_at: datetime) -> tuple[SampleMeasurement, ...]:
+        """Preserve API-timestamped rates and separately retain scalar port stats."""
+        if not insight.get("samples") and insight.get("quality_fields") is None:
+            return ()
+        gateway = GatewayIdentity.from_stats_row(insight["gateway"], org_id)
+        port_name = insight.get("port_id")
+        identity = CircuitIdentity(gateway, port_name) if isinstance(port_name, str) else gateway
+        rate_samples = cls._rate_samples(insight.get("samples", []), identity, collected_at)
+        quality_sample = cls._quality_sample(insight, identity, collected_at)
+        return rate_samples + ((quality_sample,) if quality_sample is not None else ())
+
+    @classmethod
+    def _rate_samples(
+        cls, sources: list[dict[str, Any]], identity: GatewayIdentity | CircuitIdentity, collected_at: datetime
+    ) -> tuple[SampleMeasurement, ...]:
+        """Pair each rate value with its own API timestamp and verified unit."""
+        grouped: dict[datetime, dict[str, MetricMeasurement]] = {}
+        for source in sources:
+            metric_name = source.get("metric")
+            if metric_name not in {"rx_bps", "tx_bps"}:
+                continue
+            for point in source.get("points", []):
+                timestamp = datetime.fromisoformat(point["timestamp"])
+                grouped.setdefault(timestamp, {})[metric_name] = cls.parse(point["value"], source["unit"])
+        missing = MetricMeasurement(None, "bit/s", missing_reason="The API insight has no value for this sample.")
+        return tuple(
+            SampleMeasurement(
+                identity,
+                timestamp,
+                collected_at,
+                {name: metrics.get(name, missing) for name in ("rx_bps", "tx_bps")},
+                {},
+                "api",
+                False,
+                "live",
+            )
+            for timestamp, metrics in sorted(grouped.items())
+        )
+
+    @classmethod
+    def _quality_sample(
+        cls, insight: dict[str, Any], identity: GatewayIdentity | CircuitIdentity, collected_at: datetime
+    ) -> SampleMeasurement | None:
+        """Store unnormalized port scalars at poll time, not an assumed source time."""
+        fields = insight.get("quality_fields")
+        if fields is None:
+            return None
+        metric_sources = {
+            "loss": "avg_loss_pct",
+            "jitter": "avg_jitter_ms",
+            "latency": "avg_latency_ms",
+        }
+        metrics = {
+            metric_name: MetricMeasurement(
+                None,
+                "unknown",
+                missing_reason=(
+                    "The API snapshot has no value."
+                    if fields.get(source_name) is None
+                    else "The gateway port stats schema does not define this field's unit."
+                ),
+            )
+            for source_name, metric_name in metric_sources.items()
+        }
+        state = fields.get("up")
+        return SampleMeasurement(
+            identity,
+            collected_at,
+            collected_at,
+            metrics,
+            {name: fields[name] for name in ("loss", "jitter", "latency")},
+            "poll",
+            insight.get("quality_partial", False),
+            "live",
+            state if isinstance(state, bool) else None,
+        )
+
 
 class PortSnapshotMetrics:
     """Use documented gateway Mbps capacity for directional snapshot utilization."""
@@ -197,8 +310,55 @@ class PortSnapshotMetrics:
             name.removesuffix("_bps") + "_utilization_percent": cls._utilization(metric, row.get("speed"))
             for name, metric in metrics.items()
         }
-        logger.debug("Validated %d directional port snapshot metrics.", len(metrics) + len(utilization))
-        return {**metrics, **utilization}
+        quality = {
+            metric: MetricMeasurement(
+                None,
+                "unknown",
+                missing_reason=(
+                    "The API snapshot has no value."
+                    if row.get(source_name) is None
+                    else "The gateway port stats schema does not define this field's unit."
+                ),
+            )
+            for source_name, metric in (
+                ("loss", "avg_loss_pct"),
+                ("jitter", "avg_jitter_ms"),
+                ("latency", "avg_latency_ms"),
+            )
+        }
+        logger.debug("Validated %d directional port snapshot metrics.", len(metrics) + len(utilization) + len(quality))
+        return {**metrics, **utilization, **quality}
+
+    @staticmethod
+    def raw_fields(row: dict[str, Any]) -> dict[str, float | int | None]:
+        """Retain gateway port quality scalars without assigning undocumented units."""
+        fields: dict[str, float | int | None] = {}
+        for name in ("loss", "jitter", "latency"):
+            value = row.get(name)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+            ):
+                raise ValueError(f"Gateway port source field {name} must be a finite number or None.")
+            fields[name] = value
+        return fields
+
+    @classmethod
+    def sample(
+        cls, row: dict[str, Any], org_id: str, sampled_at: datetime, collected_at: datetime, partial: bool
+    ) -> SampleMeasurement:
+        """Build one raw gateway port observation with verified identity and poll time."""
+        state = row.get("up")
+        return SampleMeasurement(
+            CircuitIdentity(GatewayIdentity.from_stats_row(row, org_id), row["port_id"]),
+            sampled_at,
+            collected_at,
+            cls.parse(row),
+            cls.raw_fields(row),
+            "poll",
+            partial,
+            "live",
+            state if isinstance(state, bool) else None,
+        )
 
     @staticmethod
     def _rate(name: str, value: object) -> MetricMeasurement:

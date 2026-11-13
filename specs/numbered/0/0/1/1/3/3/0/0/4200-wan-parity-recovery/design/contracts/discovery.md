@@ -109,8 +109,8 @@ It does not prove a metric exists or that returned fields have the required mean
 | sites.insights.getSiteGatewayMetrics | Symbol absent | Source port-history call is not portable as written |
 | sites.insights.getSiteInsightMetricsForGateway | Requires site ID, device ID, and metrics; interval is a string | Supported metric catalog, units, identity, and sample shape |
 | sites.insights.getSiteInsightMetricsForDevice | Requires site ID, metric, device MAC; no peer_mac or peer_port_id arguments | Do not forward source peer filters; prove a supported alternative or remain blocked |
-| orgs.stats.searchOrgPeerPathStats | Supports org, gateway MAC, site, bounds/duration, and search_after | Timestamp semantics and historical completeness |
-| orgs.stats.searchOrgSwOrGwPorts | Supports org and gateway filtering, limit, and search_after | Snapshot coverage and scoped identity |
+| orgs.stats.searchOrgPeerPathStats | Supports org, gateway MAC, site, type, bounds/duration, limit, and search_after; no peer-port filter | Timestamp semantics and historical completeness |
+| orgs.stats.searchOrgSwOrGwPorts | Supports org, device type, gateway MAC, port ID, limit, and search_after | Snapshot coverage and scoped identity |
 | sites.sle summary/histogram/threshold | Require site, scope, scope ID, and metric; summary/histogram have time bounds but no interval argument | Discover supported metrics and response interval/score meaning |
 | sites.sle impact summary/gateways/interfaces | Require scoped identity and metric; support classifier and time bounds | Classifier values, entity links, score units, and completeness |
 
@@ -118,6 +118,18 @@ The inspected SLE functions are `getSiteSleSummary`, `getSiteSleHistogram`, `get
 `getSiteSleImpactSummary`, `listSiteSleImpactedGateways`, and `listSiteSleImpactedInterfaces`.
 Do not pass source generic aggregation arguments into functions that do not declare them.
 Recheck against the locked environment before implementation.
+
+## Organization-stat response schemas
+
+The bundled `stats_gateway_port` schema defines scalar `loss`, `jitter`, and `latency` fields.
+It describes them as last-sampled values but does not define their units or a metric timestamp.
+Keep these values as raw poll samples and do not assign units.
+
+The bundled `vpn_peer_stat` schema defines scalar `loss`, `latency`, `jitter`, and `mos` fields.
+It defines loss in percent and latency and jitter in milliseconds.
+It describes MOS as a quality measure without a scale.
+Its `last_seen` field uses epoch seconds and describes peer observation time, not metric sample time.
+Do not treat these scalar fields as a peer time series or as historical backfill.
 
 ## Existing MistHelper integration facts
 
@@ -135,7 +147,7 @@ These are implementation observations, not end-to-end acceptance.
 | domain/calendar.py:CalendarPeriod | Contains 3h/12h/24h and daily/weekly/monthly window calculations | Verify UI exposure and sample weighting independently |
 | integration/refresh_store.py | Org refresh lease uses 300 seconds; snapshot TTL uses 3600 seconds | Test multiworker ownership, expiry, failure, and stale display |
 | collection/request_admission.py:RequestLedger | Rolling request limit is 5000/hour per authentication fingerprint and org; ledger TTL is 3601 seconds | Verify coverage across shared sessions and retry attempts |
-| collection/snapshot_client.py:SnapshotClient | Snapshot reads at most 100 ports and 100 peer paths; partial coverage is explicit | Do not present bounded pages as complete organization inventory |
+| collection/snapshot_client.py:SnapshotClient | Snapshot reads at most five 100-row pages per endpoint; partial coverage is explicit | Do not present bounded pages as complete organization inventory |
 
 Existing cache keys use `misthelper:wan:v1:refresh:{org_id}` and `misthelper:wan:v1:snapshot:{org_id}`.
 The shared admission ledger uses `misthelper:api:v1:requests:{fingerprint}` and `misthelper:api:v1:org:{org_id}`.

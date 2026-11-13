@@ -6,7 +6,11 @@ from typing import Protocol
 
 from src.foundation.persistence.db import DatabaseConfig
 from src.foundation.runtime.config.source_dependency_resolver import SourceDependencyResolver
-from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MeasurementIdentity
+from src.interfaces.wan_performance.domain.measurement import (
+    HourlyMeasurement,
+    MeasurementIdentity,
+    SampleMeasurement,
+)
 from src.interfaces.wan_performance.integration.arango_history import ArangoHistory
 from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
 
@@ -14,11 +18,16 @@ from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHist
 class HistoryRepository(Protocol):
     """Define idempotent writes and bounded reads without exposing driver internals."""
 
-    def upsert(self, records: tuple[HourlyMeasurement, ...]) -> None:
-        """Write one complete validated live batch or raise a storage error."""
+    def upsert(self, records: tuple[HourlyMeasurement, ...], samples: tuple[SampleMeasurement, ...] = ()) -> None:
+        """Write hourly projections and append-only samples in one store transaction."""
 
     def read(self, identity: MeasurementIdentity, start: datetime, end: datetime) -> tuple[HourlyMeasurement, ...]:
         """Read the exact identity in a bounded half-open UTC interval."""
+
+    def read_samples(
+        self, identity: MeasurementIdentity, start: datetime, end: datetime
+    ) -> tuple[SampleMeasurement, ...]:
+        """Read exact timestamped samples in a bounded half-open UTC interval."""
 
 
 class HistorySelection:

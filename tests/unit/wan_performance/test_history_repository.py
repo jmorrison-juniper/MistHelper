@@ -9,6 +9,7 @@ import pytest
 from arango.cursor import Cursor
 
 from src.interfaces.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS
+from src.interfaces.wan_performance.domain.measurement import SampleMeasurement
 from src.interfaces.wan_performance.integration.arango_history import ArangoHistory
 from src.interfaces.wan_performance.integration.history_repository import HistorySelection
 from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
@@ -26,6 +27,22 @@ def history(tmp_path):
 def live_record():
     """Use independent synthetic inputs labeled live only in an isolated test."""
     return replace(OfflinePreviewFactory.build().measurements[0], provenance="live")
+
+
+def live_sample(record, minute_offset=0):
+    """Build one deterministic poll sample from an isolated live-labeled record."""
+    sampled_at = record.hour_start_utc + timedelta(minutes=minute_offset)
+    return SampleMeasurement(
+        record.identity,
+        sampled_at,
+        sampled_at,
+        record.metrics,
+        {"loss": 0.0},
+        "poll",
+        False,
+        "live",
+        record.is_up_observation,
+    )
 
 
 def test_round_trip_and_idempotent_upsert(history):
@@ -47,6 +64,21 @@ def test_history_round_trip_preserves_sampled_link_state(history):
     assert result[0].is_up_observation is False
 
 
+def test_raw_samples_append_distinct_observations_within_one_hour(history):
+    """Keep repeated polls distinct while the hourly projection keeps one key."""
+    record = live_record()
+    first, second = live_sample(record), live_sample(record, 5)
+
+    history.upsert((first.to_hourly(), second.to_hourly()), (first, second))
+
+    start = record.hour_start_utc
+    end = start + timedelta(hours=1)
+    assert history.read_samples(record.identity, start, end) == (first, second)
+    hourly = history.read(record.identity, start, end)
+    assert len(hourly) == 1
+    assert hourly[0].collected_at_utc == second.collected_at_utc
+
+
 def test_half_open_query_and_identity_isolation(history):
     """Exclude another identity and the upper time boundary."""
     record = live_record()
@@ -66,6 +98,16 @@ def test_synthetic_batch_is_rejected_before_any_write(history):
     with pytest.raises(ValueError, match="synthetic"):
         history.upsert((record, replace(record, provenance="synthetic")))
     assert history.read(record.identity, record.hour_start_utc, record.hour_start_utc + timedelta(hours=1)) == ()
+
+
+def test_synthetic_sample_is_rejected_before_any_write(history):
+    """Reject synthetic samples before creating or changing history tables."""
+    record = live_record()
+    with pytest.raises(ValueError, match="synthetic"):
+        history.upsert((), (replace(live_sample(record), provenance="synthetic"),))
+    with sqlite3.connect(history.path) as connection:
+        tables = connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+    assert tables == []
 
 
 def test_missing_database_is_not_created(tmp_path):
@@ -119,7 +161,8 @@ def test_arango_upserts_use_stable_keys_and_transaction():
     record = live_record()
     history.upsert((record, record))
     transaction = database.begin_transaction.return_value
-    database.begin_transaction.assert_called_once_with(write=["wan_performance_hours"])
+    database.begin_transaction.assert_called_once_with(write=["wan_performance_hours", "wan_performance_samples"])
+    transaction.collection.assert_any_call("wan_performance_hours")
     documents = transaction.collection.return_value.insert.call_args_list
     assert documents[0].args[0] == documents[1].args[0]
     assert documents[0].kwargs == {"overwrite": True, "overwrite_mode": "replace"}
@@ -144,6 +187,27 @@ def test_arango_read_failure_is_explicit():
     record = live_record()
     with pytest.raises(ConnectionError, match="unavailable"):
         ArangoHistory(database).read(record.identity, record.hour_start_utc, record.hour_start_utc + timedelta(hours=1))
+
+
+def test_arango_appends_raw_samples_to_the_same_transaction():
+    """Store different poll timestamps under distinct stable sample keys."""
+    database = MagicMock()
+    transaction = database.begin_transaction.return_value
+    hours, samples = MagicMock(), MagicMock()
+    transaction.collection.side_effect = lambda name: {
+        "wan_performance_hours": hours,
+        "wan_performance_samples": samples,
+    }[name]
+    record = live_record()
+    first, second = live_sample(record), live_sample(record, 5)
+
+    ArangoHistory(database).upsert((first.to_hourly(), second.to_hourly()), (first, second))
+
+    assert hours.insert.call_count == 2
+    assert samples.insert.call_count == 2
+    assert samples.insert.call_args_list[0].args[0]["_key"] != samples.insert.call_args_list[1].args[0]["_key"]
+    assert samples.insert.call_args_list[0].kwargs == {}
+    transaction.commit_transaction.assert_called_once_with()
 
 
 def test_arango_connect_uses_existing_database_and_finite_timeout():
@@ -226,6 +290,29 @@ def test_arango_reads_bind_full_identity_and_close_cursor():
     assert result == (record,)
     assert "FILTER record.identity == @identity" in database.aql.execute.call_args.args[0]
     assert database.aql.execute.call_args.kwargs["bind_vars"]["@collection"] == "wan_performance_hours"
+    cursor.close.assert_called_once_with()
+
+
+def test_arango_sample_read_binds_identity_and_sample_collection():
+    """Query raw samples by full identity and half-open UTC timestamps."""
+    from src.interfaces.wan_performance.integration.record_codec import SampleRecordCodec
+
+    record = live_record()
+    sample = live_sample(record)
+    cursor = MagicMock(spec=Cursor)
+    cursor.__iter__.return_value = iter([SampleRecordCodec.encode(sample)])
+    database = MagicMock()
+    database.aql.execute.return_value = cursor
+
+    result = ArangoHistory(database).read_samples(
+        record.identity,
+        record.hour_start_utc,
+        record.hour_start_utc + timedelta(hours=1),
+    )
+
+    assert result == (sample,)
+    assert "FILTER record.identity == @identity" in database.aql.execute.call_args.args[0]
+    assert database.aql.execute.call_args.kwargs["bind_vars"]["@collection"] == "wan_performance_samples"
     cursor.close.assert_called_once_with()
 
 

@@ -30,7 +30,7 @@ def test_refresh_commits_history_before_cache():
         assert service.refresh() == snapshot
     assert [call[0] for call in order.mock_calls] == ["write", "publish"]
     store.acquire.assert_called_once_with("org-one")
-    history.upsert.assert_called_once_with(())
+    history.upsert.assert_called_once_with((), ())
 
 
 def test_history_failure_preserves_previous_cache():
@@ -152,7 +152,7 @@ def test_port_history_refresh_writes_before_return_without_replacing_snapshot():
     collect.assert_called_once_with("org-one", target, None, None)
     store.acquire.assert_called_once_with("org-one")
     assert store.acquire.return_value.check.call_count == 1
-    history.upsert.assert_called_once_with(())
+    history.upsert.assert_called_once_with((), ())
     store.publish.assert_not_called()
 
 
@@ -161,7 +161,7 @@ def test_peer_history_refresh_uses_cached_path_and_shared_admission():
     from datetime import UTC, datetime, timedelta
 
     from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
-    from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
+    from src.interfaces.wan_performance.domain.measurement import MetricMeasurement, SampleMeasurement
 
     snapshot = {
         "org_id": "org-one",
@@ -185,20 +185,22 @@ def test_peer_history_refresh_uses_cached_path_and_shared_admission():
     store.cached.return_value = snapshot
     target = SnapshotRecords.build(snapshot)[0].identity
     hour = datetime(2024, 1, 1, 12, tzinfo=UTC)
-    sample = HourlyMeasurement(
+    sample = SampleMeasurement(
         target,
         hour,
         hour + timedelta(minutes=10),
         {
-            "loss": MetricMeasurement(0.25, "%"),
-            "latency": MetricMeasurement(33.3, "ms"),
-            "jitter": MetricMeasurement(4.5, "ms"),
-            "mos": MetricMeasurement(4.2, "score"),
+            "latency": MetricMeasurement(None, "unknown", missing_reason="The source unit is unknown."),
+            "mos": MetricMeasurement(None, "unknown", missing_reason="The source unit is unknown."),
         },
+        {"latency": 33.3, "mos": 4.2, "last_seen": 1704112440},
+        "poll",
+        False,
         "live",
+        True,
     )
     with patch(
-        "src.interfaces.wan_performance.collection.live_service.PeerQualityInsights.collect",
+        "src.interfaces.wan_performance.collection.live_service.PeerQualityStats.collect",
         return_value=(sample,),
     ) as collect:
         count = LiveService(MagicMock(), "org-one", store, history).refresh_peer(target)
@@ -207,7 +209,7 @@ def test_peer_history_refresh_uses_cached_path_and_shared_admission():
     store.acquire.assert_called_once_with("org-one")
     collect.assert_called_once_with(target)
     store.acquire.return_value.check.assert_called_once_with()
-    history.upsert.assert_called_once_with((sample,))
+    history.upsert.assert_called_once_with((sample.to_hourly(),), (sample,))
     store.publish.assert_not_called()
 
 
@@ -241,7 +243,7 @@ def test_peer_history_refresh_rejects_uncached_path_before_admission():
             ],
         }
     )[0].identity
-    with patch("src.interfaces.wan_performance.collection.live_service.PeerQualityInsights.collect") as collect:
+    with patch("src.interfaces.wan_performance.collection.live_service.PeerQualityStats.collect") as collect:
         with pytest.raises(ValueError, match="absent from the cached organization"):
             LiveService(MagicMock(), "org-one", store, MagicMock()).refresh_peer(target)
     store.acquire.assert_not_called()
@@ -266,7 +268,7 @@ def test_peer_history_refresh_stops_when_cached_snapshot_is_unavailable():
         "path-key-1",
     )
 
-    with patch("src.interfaces.wan_performance.collection.live_service.PeerQualityInsights.collect") as collect:
+    with patch("src.interfaces.wan_performance.collection.live_service.PeerQualityStats.collect") as collect:
         with pytest.raises(ConnectionError, match="cache unavailable"):
             LiveService(MagicMock(), "org-one", store, history).refresh_peer(target)
 

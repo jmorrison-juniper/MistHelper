@@ -4,7 +4,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from src.interfaces.wan_performance.collection.peer_insights import PeerQualityInsights
+from src.interfaces.wan_performance.collection.peer_insights import PeerQualityStats
 from src.interfaces.wan_performance.collection.snapshot_client import GatewayInsights, SnapshotClient
 from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
 from src.interfaces.wan_performance.domain.identity import (
@@ -41,11 +41,16 @@ class LiveService:
         lease = self.store.acquire(self.org_id)
         snapshot = SnapshotClient(self.session, lease).collect(self.org_id, target)
         records = SnapshotRecords.build(snapshot)
+        samples = SnapshotRecords.build_samples(snapshot)
         lease.check()
-        self.history.upsert(records)
+        self.history.upsert(records, samples)
         lease.check()
         self.store.publish(self.org_id, snapshot)
-        logger.debug("Finished the bounded WAN refresh with %d history records.", len(records))
+        logger.debug(
+            "Finished the bounded WAN refresh with %d hourly records and %d raw samples.",
+            len(records),
+            len(samples),
+        )
         return snapshot
 
     def refresh_port(self, target: CircuitIdentity) -> int:
@@ -67,9 +72,14 @@ class LiveService:
             "insights": insights,
         }
         records = SnapshotRecords.build(snapshot)
+        samples = SnapshotRecords.build_samples(snapshot)
         lease.check()
-        self.history.upsert(records)
-        logger.debug("Persisted %d selected-port insight records without snapshot publication.", len(records))
+        self.history.upsert(records, samples)
+        logger.debug(
+            "Persisted %d selected-port hourly records and %d raw samples without snapshot publication.",
+            len(records),
+            len(samples),
+        )
         return len(records)
 
     def refresh_peer(self, target: PeerPathIdentity) -> int:
@@ -82,10 +92,15 @@ class LiveService:
         if snapshot is None or target not in {record.identity for record in SnapshotRecords.build(snapshot)}:
             raise ValueError("The selected peer path is absent from the cached organization.")
         lease = self.store.acquire(self.org_id)
-        records = PeerQualityInsights(self.session, lease).collect(target)
+        samples = PeerQualityStats(self.session, lease).collect(target)
+        records = tuple(sample.to_hourly() for sample in samples)
         lease.check()
-        self.history.upsert(records)
-        logger.debug("Persisted %d selected peer quality records.", len(records))
+        self.history.upsert(records, samples)
+        logger.debug(
+            "Persisted %d selected peer hourly records and %d raw samples.",
+            len(records),
+            len(samples),
+        )
         return len(records)
 
     def _check_port(self, target: CircuitIdentity) -> dict[str, object]:

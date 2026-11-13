@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from typing import Literal, cast
 
 from src.interfaces.wan_performance.domain.identity import (
     CircuitIdentity,
@@ -9,7 +10,11 @@ from src.interfaces.wan_performance.domain.identity import (
     PeerPathIdentity,
     SiteIdentity,
 )
-from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
+from src.interfaces.wan_performance.domain.measurement import (
+    HourlyMeasurement,
+    MetricMeasurement,
+    SampleMeasurement,
+)
 
 
 class RecordCodec:
@@ -124,3 +129,66 @@ class RecordCodec:
         if "port_name" not in values:
             return gateway
         return CircuitIdentity(gateway, values["port_name"])
+
+
+class SampleRecordCodec:
+    """Serialize immutable raw samples without changing hourly records."""
+
+    @staticmethod
+    def encode(sample: SampleMeasurement) -> str:
+        """Reject synthetic samples and encode each live poll deterministically."""
+        if sample.provenance != "live":
+            raise ValueError("History cannot contain synthetic samples.")
+        return json.dumps(sample.to_dict(), sort_keys=True, allow_nan=False)
+
+    @classmethod
+    def decode(cls, payload: str) -> SampleMeasurement:
+        """Revalidate stored raw sample shape, identity, and provenance."""
+        row = json.loads(payload)
+        if not isinstance(row, dict) or row.get("provenance") != "live":
+            raise ValueError("History must contain a live sample.")
+        source, partial, is_up = row.get("timestamp_source"), row.get("partial"), row.get("is_up_observation")
+        if source not in {"poll", "api"} or not isinstance(partial, bool):
+            raise ValueError("Stored sample timestamp source and partial state must be valid.")
+        if is_up is not None and not isinstance(is_up, bool):
+            raise ValueError("Stored sample link state must be a boolean or None.")
+        identity = row.get("identity")
+        if not isinstance(identity, dict):
+            raise ValueError("Stored sample identity must be an object.")
+        return SampleMeasurement(
+            RecordCodec._identity(identity),
+            cls._timestamp(row.get("sampled_at_utc")),
+            cls._timestamp(row.get("collected_at_utc")),
+            cls._metric_map(row.get("metrics")),
+            cls._raw_fields(row.get("raw_fields")),
+            cast(Literal["poll", "api"], source),
+            partial,
+            "live",
+            is_up,
+        )
+
+    @staticmethod
+    def _timestamp(value: object) -> datetime:
+        """Require one stored ISO timestamp before domain validation."""
+        if not isinstance(value, str):
+            raise ValueError("Stored sample timestamps must be ISO 8601 strings.")
+        return datetime.fromisoformat(value)
+
+    @staticmethod
+    def _metric_map(value: object) -> dict[str, MetricMeasurement]:
+        """Rebuild each metric only from a named JSON object."""
+        if not isinstance(value, dict) or any(not isinstance(metric, dict) for metric in value.values()):
+            raise ValueError("Stored sample metrics must be an object of metric objects.")
+        return {name: RecordCodec._metric(metric) for name, metric in value.items()}
+
+    @staticmethod
+    def _raw_fields(value: object) -> dict[str, float | int | None]:
+        """Keep source scalar fields numeric and reject malformed stored values."""
+        if not isinstance(value, dict):
+            raise ValueError("Stored raw fields must be an object.")
+        for name, field_value in value.items():
+            if not isinstance(name, str) or (
+                field_value is not None and (isinstance(field_value, bool) or not isinstance(field_value, (int, float)))
+            ):
+                raise ValueError("Stored raw fields must contain named numeric values or None.")
+        return value

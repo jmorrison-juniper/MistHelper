@@ -14,16 +14,20 @@ from arango.exceptions import ArangoError
 
 from src.foundation.persistence.db import DatabaseConfig
 from src.interfaces.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS
-from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MeasurementIdentity
-from src.interfaces.wan_performance.integration.record_codec import RecordCodec
+from src.interfaces.wan_performance.domain.measurement import (
+    HourlyMeasurement,
+    MeasurementIdentity,
+    SampleMeasurement,
+)
+from src.interfaces.wan_performance.integration.record_codec import RecordCodec, SampleRecordCodec
 
 logger = logging.getLogger(__name__)
+HOURS_COLLECTION = "wan_performance_hours"
+SAMPLES_COLLECTION = "wan_performance_samples"
 
 
 class ArangoHistory:
     """Keep atomic WAN upserts in one configured database, without a mirror."""
-
-    COLLECTION = "wan_performance_hours"
 
     def __init__(self, database: StandardDatabase) -> None:
         """Accept a public database boundary so tests need no running service."""
@@ -37,13 +41,14 @@ class ArangoHistory:
         logger.info("Connect WAN history to the configured ArangoDB database.")
         client = ArangoClient(hosts=config.arango_host, request_timeout=2)
         database = client.db(config.arango_database, username=config.arango_username, password=config.arango_password)
-        if not database.has_collection(cls.COLLECTION):
-            database.create_collection(cls.COLLECTION)
-        logger.debug("WAN history collection is available.")
+        for collection_name in (HOURS_COLLECTION, SAMPLES_COLLECTION):
+            if not database.has_collection(collection_name):
+                database.create_collection(collection_name)
+        logger.debug("WAN hourly and raw sample collections are available.")
         return cls(database)
 
-    def upsert(self, records: tuple[HourlyMeasurement, ...]) -> None:
-        """Validate the complete batch before atomic natural-key replacements."""
+    def upsert(self, records: tuple[HourlyMeasurement, ...], samples: tuple[SampleMeasurement, ...] = ()) -> None:
+        """Validate both batches before atomic hourly replacements and sample appends."""
         documents = [
             {
                 "_key": hashlib.sha256(json.dumps(record.natural_key).encode()).hexdigest(),
@@ -53,17 +58,32 @@ class ArangoHistory:
             }
             for record in records
         ]
-        logger.info("Write %d WAN history records to the configured ArangoDB store.", len(documents))
-        transaction = self.database.begin_transaction(write=[self.COLLECTION])
+        sample_documents = [
+            {
+                "_key": hashlib.sha256(json.dumps(sample.natural_key).encode()).hexdigest(),
+                "identity": json.dumps(sample.identity.natural_key),
+                "sampled_at": sample.sampled_at_utc.isoformat(),
+                "payload": SampleRecordCodec.encode(sample),
+            }
+            for sample in samples
+        ]
+        logger.info(
+            "Write %d hourly records and %d raw samples to the configured ArangoDB store.",
+            len(documents),
+            len(sample_documents),
+        )
+        transaction = self.database.begin_transaction(write=[HOURS_COLLECTION, SAMPLES_COLLECTION])
         try:
             for document in documents:
-                transaction.collection(self.COLLECTION).insert(document, overwrite=True, overwrite_mode="replace")
+                transaction.collection(HOURS_COLLECTION).insert(document, overwrite=True, overwrite_mode="replace")
+            for document in sample_documents:
+                transaction.collection(SAMPLES_COLLECTION).insert(document)
             transaction.commit_transaction()
         except (ArangoError, OSError) as error:
             transaction.abort_transaction()
             logger.exception("WAN ArangoDB history transaction failed: %s.", error)
             raise
-        logger.debug("Committed %d WAN history records.", len(documents))
+        logger.debug("Committed %d hourly records and %d raw samples.", len(documents), len(sample_documents))
 
     def read(self, identity: MeasurementIdentity, start: datetime, end: datetime) -> tuple[HourlyMeasurement, ...]:
         """Read a thirteen-month half-open UTC window through the public AQL interface."""
@@ -77,7 +97,7 @@ class ArangoHistory:
             "AND record.hour >= @start AND record.hour < @end "
             "SORT record.hour LIMIT @limit RETURN record.payload",
             bind_vars={
-                "@collection": self.COLLECTION,
+                "@collection": HOURS_COLLECTION,
                 "identity": json.dumps(identity.natural_key),
                 "start": start.isoformat(),
                 "end": end.isoformat(),
@@ -92,3 +112,36 @@ class ArangoHistory:
             cursor.close()
         logger.debug("Read %d WAN history records.", len(records))
         return records
+
+    def read_samples(
+        self, identity: MeasurementIdentity, start: datetime, end: datetime
+    ) -> tuple[SampleMeasurement, ...]:
+        """Read timestamped samples without silently truncating the fixed result cap."""
+        if any(value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value) for value in (start, end)):
+            raise ValueError("History window must use UTC.")
+        if not 0 < (end - start).total_seconds() <= MAX_HISTORY_WINDOW_DAYS * 86400:
+            raise ValueError(f"History window must span more than zero and at most {MAX_HISTORY_WINDOW_DAYS} days.")
+        logger.info("Read WAN raw samples from the configured ArangoDB store.")
+        cursor = self.database.aql.execute(
+            "FOR record IN @@collection FILTER record.identity == @identity "
+            "AND record.sampled_at >= @start AND record.sampled_at < @end "
+            "SORT record.sampled_at LIMIT @limit RETURN record.payload",
+            bind_vars={
+                "@collection": SAMPLES_COLLECTION,
+                "identity": json.dumps(identity.natural_key),
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "limit": cast(Number, MAX_HISTORY_RECORDS + 1),
+            },
+        )
+        if not isinstance(cursor, Cursor):
+            raise TypeError("WAN raw history requires a synchronous ArangoDB cursor.")
+        try:
+            payloads = tuple(cursor)
+            if len(payloads) > MAX_HISTORY_RECORDS:
+                raise ValueError("WAN raw sample result exceeds the fixed history record limit.")
+            samples = tuple(SampleRecordCodec.decode(payload) for payload in payloads)
+        finally:
+            cursor.close()
+        logger.debug("Read %d WAN raw samples.", len(samples))
+        return samples

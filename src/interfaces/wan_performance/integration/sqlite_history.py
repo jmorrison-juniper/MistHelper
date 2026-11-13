@@ -8,8 +8,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from src.interfaces.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS
-from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MeasurementIdentity
-from src.interfaces.wan_performance.integration.record_codec import RecordCodec
+from src.interfaces.wan_performance.domain.measurement import (
+    HourlyMeasurement,
+    MeasurementIdentity,
+    SampleMeasurement,
+)
+from src.interfaces.wan_performance.integration.record_codec import RecordCodec, SampleRecordCodec
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +29,8 @@ class SQLiteHistory:
         """Require an existing file and keep SQLite lock waits finite."""
         return sqlite3.connect(f"{self.path.as_uri()}?mode=rw", uri=True, timeout=2)
 
-    def upsert(self, records: tuple[HourlyMeasurement, ...]) -> None:
-        """Validate the full batch before an atomic natural-key upsert."""
+    def upsert(self, records: tuple[HourlyMeasurement, ...], samples: tuple[SampleMeasurement, ...] = ()) -> None:
+        """Validate both batches before atomic hourly updates and sample appends."""
         rows = [
             (
                 json.dumps(record.identity.natural_key),
@@ -35,7 +39,15 @@ class SQLiteHistory:
             )
             for record in records
         ]
-        logger.info("Write %d WAN history records to the selected SQLite store.", len(rows))
+        sample_rows = [
+            (
+                json.dumps(sample.identity.natural_key),
+                sample.sampled_at_utc.isoformat(),
+                SampleRecordCodec.encode(sample),
+            )
+            for sample in samples
+        ]
+        logger.info("Write %d hourly records and %d raw samples to SQLite.", len(rows), len(sample_rows))
         try:
             with closing(self._connect()) as connection, connection:
                 connection.execute("BEGIN IMMEDIATE")
@@ -43,15 +55,24 @@ class SQLiteHistory:
                     "CREATE TABLE IF NOT EXISTS wan_performance_hours "
                     "(identity TEXT NOT NULL, hour TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(identity, hour))"
                 )
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS wan_performance_samples "
+                    "(identity TEXT NOT NULL, sampled_at TEXT NOT NULL, payload TEXT NOT NULL, "
+                    "PRIMARY KEY(identity, sampled_at))"
+                )
                 connection.executemany(
                     "INSERT INTO wan_performance_hours VALUES (?, ?, ?) "
                     "ON CONFLICT(identity,hour) DO UPDATE SET payload=excluded.payload",
                     rows,
                 )
+                connection.executemany(
+                    "INSERT INTO wan_performance_samples VALUES (?, ?, ?)",
+                    sample_rows,
+                )
         except sqlite3.Error:
             logger.exception("WAN SQLite history write failed.")
             raise
-        logger.debug("Committed %d WAN history records.", len(rows))
+        logger.debug("Committed %d hourly records and %d raw samples.", len(rows), len(sample_rows))
 
     def read(self, identity: MeasurementIdentity, start: datetime, end: datetime) -> tuple[HourlyMeasurement, ...]:
         """Read one identity in a half-open UTC window, bounded to thirteen months."""
@@ -78,3 +99,38 @@ class SQLiteHistory:
             raise
         logger.debug("Read %d WAN history records.", len(records))
         return records
+
+    def read_samples(
+        self, identity: MeasurementIdentity, start: datetime, end: datetime
+    ) -> tuple[SampleMeasurement, ...]:
+        """Read exact samples without truncating a result above the fixed cap."""
+        if any(value.tzinfo is None or value.utcoffset() != UTC.utcoffset(value) for value in (start, end)):
+            raise ValueError("History window must use UTC.")
+        if not 0 < (end - start).total_seconds() <= MAX_HISTORY_WINDOW_DAYS * 86400:
+            raise ValueError(f"History window must span more than zero and at most {MAX_HISTORY_WINDOW_DAYS} days.")
+        logger.info("Read WAN raw samples in a bounded UTC window.")
+        try:
+            with closing(self._connect()) as connection:
+                exists = connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='wan_performance_samples'"
+                ).fetchone()
+                if exists is None:
+                    return ()
+                rows = connection.execute(
+                    "SELECT payload FROM wan_performance_samples WHERE identity=? AND sampled_at>=? AND sampled_at<? "
+                    "ORDER BY sampled_at LIMIT ?",
+                    (
+                        json.dumps(identity.natural_key),
+                        start.isoformat(),
+                        end.isoformat(),
+                        MAX_HISTORY_RECORDS + 1,
+                    ),
+                ).fetchall()
+                if len(rows) > MAX_HISTORY_RECORDS:
+                    raise ValueError("WAN raw sample result exceeds the fixed history record limit.")
+                samples = tuple(SampleRecordCodec.decode(row[0]) for row in rows)
+        except (sqlite3.Error, ValueError, KeyError, TypeError):
+            logger.exception("WAN SQLite raw sample read failed.")
+            raise
+        logger.debug("Read %d WAN raw samples.", len(samples))
+        return samples
