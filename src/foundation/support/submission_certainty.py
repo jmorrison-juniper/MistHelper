@@ -20,7 +20,8 @@ class SubmissionCertainty:  # Share one refusal rule across every firmware consu
     ) -> bool:  # Require documented refusal evidence without conflicts.
         """Return whether a documented status and its evidence prove that the cloud refused the request."""
         return (  # Keep unknown or conflicting responses fail-closed.
-            type(raw_status) is int  # Reject booleans and non-integer statuses.
+            isinstance(raw_status, int)  # Reject non-integer statuses.
+            and not isinstance(raw_status, bool)  # Reject booleans, which are integer subclasses.
             and raw_status in cls.REFUSAL_STATUSES  # Accept only documented upgrade endpoint statuses.
             and evidence is not None
             and evidence.get("response_data_valid") is True
