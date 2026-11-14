@@ -166,6 +166,24 @@ The fixed duration is one hour. Return only the first response page and label co
 Do not calculate scores or infer units for degraded, duration, or total.
 Do not persist SLE results or start background collection.
 
+The next independent increment adds cached organization-site navigation and retained observation windows.
+Use `presentation/inspection/windows.py` as the inspection package's fifth counted child.
+The site selector lists only IDs in the selected organization's cached pages.
+Add a scoped cached-site route and preserve the selected window across existing detail links.
+Do not fetch a site catalog or invent region membership or site display names.
+
+Support only `6h`, `12h`, `24h`, and `7d` retained-window identifiers.
+End each half-open interval at the current UTC hour boundary.
+Read at most one exact identity with the existing hourly-history repository.
+The maximum interval contains 168 expected hour buckets.
+Reject duplicate hours, foreign identities, non-live provenance, and out-of-window results.
+Show the hourly projection values and collection times without new aggregation or interpolation.
+Count missing retained buckets, but never equate bucket presence with metric completeness or elapsed measurement coverage.
+Show an explicit unavailable state for organization/site aggregate history, missing stores, or failed reads.
+Keep the current snapshot table and its CSV export explicitly separate from the retained view.
+Preserve the existing default summaries when no window is selected.
+Do not change storage, start background work, request API history, or backfill missing hours.
+
 The cached table uses independent destination policies.
 Filter identity text with a case-insensitive substring. Sort site, gateway, port, or peer identifiers lexically.
 Use full identity as the deterministic tie key. Default to site ascending and ten rows per page.

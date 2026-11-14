@@ -27,6 +27,7 @@ from src.interfaces.wan_performance.integration.history_repository import Histor
 from src.interfaces.wan_performance.integration.refresh_store import RefreshStore
 from src.interfaces.wan_performance.presentation.inspection.sle_routes import SlePages
 from src.interfaces.wan_performance.presentation.inspection.table import RecordTable, TableOptions
+from src.interfaces.wan_performance.presentation.inspection.windows import ObservationWindow, RetainedWindow
 
 logger = logging.getLogger(__name__)
 live_bp = Blueprint("live", __name__, url_prefix="/live", template_folder="inspection/templates")
@@ -38,10 +39,14 @@ class LiveHistory:
 
     @staticmethod
     def read(
-        service: LiveService, records: tuple[HourlyMeasurement, ...], kind: str, cache_only: bool = False
+        service: LiveService,
+        records: tuple[HourlyMeasurement, ...],
+        kind: str,
+        cache_only: bool = False,
+        window: ObservationWindow | None = None,
     ) -> tuple[tuple[PeriodSummary, ...], str | None]:
         """Read bounded persisted observations only for a selected detail identity."""
-        if cache_only or kind not in {"gateway", "port", "peer"}:
+        if cache_only or window is not None or kind not in {"gateway", "port", "peer"}:
             return (), None
         identity = LiveHistory._select_identity(service, records, kind)
         if identity is None:
@@ -61,6 +66,32 @@ class LiveHistory:
         except STORE_ERRORS:
             logger.exception("WAN history is unavailable for the selected identity.")
             return (), "History is unavailable. The selected application store did not return valid records."
+
+    @staticmethod
+    def window(
+        service: LiveService,
+        records: tuple[HourlyMeasurement, ...],
+        kind: str,
+        selected: ObservationWindow | None,
+        cache_only: bool,
+    ) -> RetainedWindow | None:
+        """Read one selected detail identity or expose an explicit unavailable state."""
+        if selected is None or cache_only:
+            return None
+        if kind not in {"gateway", "port", "peer"}:
+            return RetainedWindow(
+                selected,
+                error="Select one gateway, port, or peer. Organization and site aggregate history is unavailable.",
+            )
+        identity = LiveHistory._select_identity(service, records, kind)
+        try:
+            return RetainedWindow.read(service.history, identity, selected)
+        except STORE_ERRORS:
+            logger.exception("The retained WAN observation read failed.")
+            return RetainedWindow(
+                selected,
+                error="Retained observations are unavailable. The history store did not return valid scoped records.",
+            )
 
     @staticmethod
     def _select_identity(
@@ -120,8 +151,10 @@ class LivePages:
         summaries: tuple[PeriodSummary, ...] = ()
         states: dict[tuple[str, ...], dict[str, str]] = {}
         gateways: tuple[GatewayIdentity, ...] = ()
+        retained: RetainedWindow | None = None
         history_error, instant, partial = None, None, False
         options = TableOptions.from_request()
+        window = ObservationWindow.from_request()
         try:
             service = cls.service()
             snapshot = service.store.cached(service.org_id)
@@ -136,7 +169,10 @@ class LivePages:
             records = cls.select(records, kind, filters)
             if filters and not records:
                 abort(404, description="The requested WAN identity is absent from the cached organization.")
-            summaries, history_error = LiveHistory.read(service, records, kind, request.args.get("download") == "csv")
+            retained = LiveHistory.window(service, records, kind, window, request.args.get("download") == "csv")
+            summaries, history_error = LiveHistory.read(
+                service, records, kind, request.args.get("download") == "csv", window
+            )
         except STORE_ERRORS:
             logger.exception("The WAN live view is unavailable.")
             error = cls.unavailable(error)
@@ -149,6 +185,8 @@ class LivePages:
             kind=kind,
             records=records,
             table=table,
+            window=window,
+            retained=retained,
             summaries=summaries,
             states=states,
             gateways=gateways,
@@ -201,7 +239,14 @@ live_bp.add_url_rule("/sle", endpoint="sle", view_func=SlePages(LivePages.servic
 @live_bp.get("/")
 def overview() -> str | Response:
     """Show the server-selected organization without automatic live calls."""
-    return LivePages.render("overview")
+    site_id = request.args.get("site_id", "")
+    return LivePages.render("site", {"site_id": site_id}) if site_id else LivePages.render("overview")
+
+
+@live_bp.get("/site/<site_id>")
+def site(site_id: str) -> str | Response:
+    """Show only cached identities within one site of the selected organization."""
+    return LivePages.render("site", {"site_id": site_id})
 
 
 @live_bp.get("/gateway/<gateway_id>")

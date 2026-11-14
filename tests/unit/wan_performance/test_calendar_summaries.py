@@ -397,6 +397,94 @@ def test_peer_mos_summary_rejects_incompatible_present_units() -> None:
         CalendarSummaries.build((first, second), peer.identity)
 
 
+@pytest.mark.parametrize("key,hours", [("6h", 6), ("12h", 12), ("24h", 24), ("7d", 168)])
+def test_retained_view_windows_use_completed_utc_hour_buckets(key: str, hours: int) -> None:
+    """Define independent UTC view intervals without claiming measurement coverage."""
+    from src.interfaces.wan_performance.presentation.inspection.windows import ObservationWindow
+
+    instant = datetime(2026, 11, 14, 6, 46, 32, tzinfo=UTC)
+    window = ObservationWindow.select(key, instant)
+    assert window is not None
+    assert window.end == datetime(2026, 11, 14, 6, tzinfo=UTC)
+    assert window.start == window.end - timedelta(hours=hours)
+    assert window.expected_hours == hours
+    assert ObservationWindow.select("", instant) is None
+
+
+@pytest.mark.parametrize(
+    "instant",
+    [
+        datetime(2026, 11, 14, 6),
+        datetime.fromisoformat("2026-11-14T06:00:00+05:00"),
+    ],
+)
+def test_retained_view_rejects_non_utc_reference_times(instant: datetime) -> None:
+    """Do not reinterpret local wall-clock references as UTC history bounds."""
+    from src.interfaces.wan_performance.presentation.inspection.windows import ObservationWindow
+
+    with pytest.raises(ValueError, match="UTC"):
+        ObservationWindow.select("7d", instant)
+
+
+def test_retained_view_reads_exact_identity_without_filling_missing_hours(tmp_path) -> None:
+    """Use actual SQLite bounds and preserve absent metrics instead of synthesizing records."""
+    import sqlite3
+
+    from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
+    from src.interfaces.wan_performance.presentation.inspection.windows import ObservationWindow, RetainedWindow
+
+    record = OfflinePreviewFactory.build().measurements[0]
+    window = ObservationWindow.select("6h", record.hour_start_utc + timedelta(hours=6, minutes=20))
+    assert window is not None
+    retained = replace(
+        record,
+        provenance="live",
+        collected_at_utc=window.end + timedelta(hours=1),
+        metrics={"mos": MetricMeasurement(None, "unknown", missing_reason="Absent.")},
+    )
+    path = tmp_path / "retained-window.sqlite"
+    sqlite3.connect(path).close()
+    history = SQLiteHistory(path)
+    history.upsert(
+        tuple(replace(retained, hour_start_utc=window.start + timedelta(hours=hour)) for hour in [-1, 0, 3, 6])
+    )
+
+    view = RetainedWindow.read(history, retained.identity, window)
+
+    assert [entry.hour_start_utc for entry in view.records] == [window.start, window.start + timedelta(hours=3)]
+    assert view.missing_hours == 4
+    assert all(entry.metrics["mos"].value is None for entry in view.records)
+    assert view.error is None
+
+
+@pytest.mark.parametrize("bad", ["duplicate", "foreign", "before", "end", "synthetic"])
+def test_retained_view_rejects_invalid_repository_results(bad: str) -> None:
+    """Refuse history that breaks the exact-identity, half-open, live-only contract."""
+    from unittest.mock import MagicMock
+
+    from src.interfaces.wan_performance.presentation.inspection.windows import ObservationWindow, RetainedWindow
+
+    dashboard = OfflinePreviewFactory.build()
+    record = replace(
+        dashboard.measurements[0],
+        provenance="live",
+        collected_at_utc=dashboard.measurements[0].hour_start_utc + timedelta(hours=7),
+    )
+    window = ObservationWindow.select("6h", record.hour_start_utc + timedelta(hours=6))
+    assert window is not None
+    changes = {
+        "foreign": {"identity": dashboard.peer_path},
+        "before": {"hour_start_utc": window.start - timedelta(hours=1)},
+        "end": {"hour_start_utc": window.end},
+        "synthetic": {"provenance": "synthetic"},
+    }
+    records = (record, record) if bad == "duplicate" else (replace(record, **changes[bad]),)
+    history = MagicMock()
+    history.read.return_value = records
+    with pytest.raises(ValueError, match="retained"):
+        RetainedWindow.read(history, record.identity, window)
+
+
 def test_threshold_counts_break_runs_at_missing_and_unknown_hours() -> None:
     """Count retained observations rather than inferred time above a threshold."""
     dashboard = OfflinePreviewFactory.build()

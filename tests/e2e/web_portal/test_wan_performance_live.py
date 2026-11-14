@@ -90,6 +90,214 @@ def test_unknown_gateway_returns_not_found(client, live_service):
 
 
 @pytest.fixture
+def retained_history(live_service):
+    """Return one independent retained observation inside each requested window."""
+    from datetime import datetime, timedelta
+
+    from src.interfaces.wan_performance.domain.measurement import (
+        HourlyMeasurement,
+        MeasurementIdentity,
+        MetricMeasurement,
+    )
+
+    def read(identity: MeasurementIdentity, start: datetime, end: datetime) -> tuple[HourlyMeasurement, ...]:
+        """Return synthetic values through the mocked live repository boundary."""
+        hour = start.replace(minute=0, second=0, microsecond=0)
+        if hour < start:
+            hour += timedelta(hours=1)
+        return (
+            HourlyMeasurement(
+                identity,
+                hour,
+                hour + timedelta(minutes=1),
+                {
+                    "rx_bps": MetricMeasurement(40, "bit/s"),
+                    "loss": MetricMeasurement(None, "%", missing_reason="No fixture sample."),
+                },
+                "live",
+            ),
+        )
+
+    live_service.history.read.side_effect = read
+    return live_service.history
+
+
+@pytest.mark.parametrize("path", ["/wan-performance/live/site/site-one", "/wan-performance/live/?site_id=site-one"])
+def test_cached_site_selection_uses_exact_cached_org_membership(client, live_service, path):
+    """Scope site views without claiming complete site inventory or reading all histories."""
+    snapshot = live_service.store.cached.return_value
+    snapshot["ports"].append({**snapshot["ports"][0], "site_id": "site-two", "mac": "112233445566"})
+    snapshot["ports"].append({**snapshot["ports"][0], "site_id": "SITE-ONE", "mac": "112233445577"})
+    response = client.get(path)
+    text = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'data-testid="wan-live-site"' in text
+    assert '<option value="site-one" selected>' in text
+    assert '<option value="SITE-ONE">' in text
+    assert 'data-testid="wan-live-gateway-link" href="/wan-performance/live/gateway/112233445566' not in text
+    assert 'data-testid="wan-live-refresh"' not in text
+    live_service.history.read.assert_not_called()
+    live_service.store.acquire.assert_not_called()
+
+
+def test_uncached_site_is_not_a_valid_history_selector(client, live_service):
+    """Reject arbitrary site names before any history or API operation."""
+    response = client.get("/wan-performance/live/site/unknown?window=6h")
+    assert response.status_code == 404
+    live_service.history.read.assert_not_called()
+    live_service.store.acquire.assert_not_called()
+
+
+@pytest.mark.parametrize("case", [("6h", 6), ("12h", 12), ("24h", 24), ("7d", 168)])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/wan-performance/live/gateway/aabbccddeeff?site_id=site-one",
+        "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff",
+        "/wan-performance/live/vpn/site-one/11:22:33:44:55:66",
+    ],
+)
+def test_retained_window_reads_one_full_identity_without_new_aggregation(
+    client, live_service, retained_history, case, path
+):
+    """Read one bounded UTC history and expose raw values, missing metrics, and missing buckets."""
+    from datetime import timedelta
+
+    key, hours = case
+    separator = "&" if "?" in path else "?"
+    response = client.get(path + separator + "window=" + key)
+    assert response.status_code == 200
+    text = response.get_data(as_text=True)
+    assert 'data-testid="wan-retained-window"' in text
+    assert f"1 retained hour buckets of {hours} expected" in text
+    assert f"Missing retained buckets: {hours - 1}" in text
+    assert "loss: Unknown: No fixture sample." in text
+    assert "rx_bps: 40 bit/s" in text
+    assert "Measurement completeness remains unknown" in text
+    assert 'data-testid="wan-live-history"' not in text
+    retained_history.read.assert_called_once()
+    identity, start, end = retained_history.read.call_args.args
+    gateway = identity if hasattr(identity, "site") else identity.gateway
+    assert (gateway.site.org_id, gateway.site.site_id, gateway.gateway_id) == ("org-one", "site-one", "aabbccddeeff")
+    assert end - start == timedelta(hours=hours)
+    assert start.utcoffset() == end.utcoffset() == timedelta(0)
+    assert (end.minute, end.second, end.microsecond) == (0, 0, 0)
+    live_service.store.acquire.assert_not_called()
+    retained_history.upsert.assert_not_called()
+    retained_history.read_samples.assert_not_called()
+
+
+@pytest.mark.parametrize("path", ["/wan-performance/live/", "/wan-performance/live/site/site-one"])
+def test_retained_organization_and_site_aggregates_remain_unavailable(client, live_service, path):
+    """Do not fan out across circuit identities or invent organization/site metrics."""
+    response = client.get(path + "?window=7d")
+    assert response.status_code == 200
+    text = response.get_data(as_text=True)
+    assert "Organization and site aggregate history is unavailable" in text
+    assert 'data-testid="wan-retained-coverage"' not in text
+    live_service.history.read.assert_not_called()
+    live_service.store.acquire.assert_not_called()
+
+
+@pytest.mark.parametrize("key", ["1h", "0h", "13months", "6H", "unknown"])
+def test_invalid_retained_window_is_a_client_error(client, live_service, key):
+    """Reject unsupported ranges before reading a cache or store."""
+    response = client.get("/wan-performance/live/?window=" + key)
+    assert response.status_code == 400
+    live_service.store.cached.assert_not_called()
+    live_service.history.read.assert_not_called()
+
+
+@pytest.mark.parametrize("state", ["empty", "store-missing", "read-failed"])
+def test_retained_window_distinguishes_empty_from_unavailable(client, live_service, state):
+    """Never turn a failed history read into zero missing buckets or healthy metrics."""
+    history = live_service.history
+    if state == "store-missing":
+        live_service.history = None
+    elif state == "read-failed":
+        history.read.side_effect = ConnectionError("Synthetic unavailable history.")
+    response = client.get("/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=6h")
+    text = response.get_data(as_text=True)
+    assert response.status_code == 200
+    if state == "empty":
+        assert "Missing retained buckets: 6" in text
+        assert "No retained observations exist in this window" in text
+    else:
+        assert 'data-testid="wan-retained-unavailable"' in text
+        assert 'data-testid="wan-retained-coverage"' not in text
+    live_service.store.acquire.assert_not_called()
+
+
+def test_retained_window_does_not_change_cached_csv_scope(client, live_service):
+    """Export only current cached rows without opening a retained history read."""
+    response = client.get("/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=7d&download=csv")
+    assert response.status_code == 200
+    assert response.mimetype == "text/csv"
+    assert "2024-01-01T12:00:00+00:00" in response.get_data(as_text=True)
+    live_service.history.read.assert_not_called()
+    live_service.store.acquire.assert_not_called()
+
+
+def test_cached_site_csv_cannot_include_other_cached_sites(client, live_service):
+    """Preserve selected-site scope across the separate cached export."""
+    import csv
+    import io
+
+    snapshot = live_service.store.cached.return_value
+    snapshot["ports"].append({**snapshot["ports"][0], "site_id": "site-two", "mac": "112233445566"})
+    response = client.get("/wan-performance/live/site/site-one?download=csv&window=12h")
+    rows = list(csv.DictReader(io.StringIO(response.get_data(as_text=True))))
+    assert response.status_code == 200
+    assert {row["site_id"] for row in rows} == {"site-one"}
+    assert {row["gateway_id"] for row in rows} == {"aabbccddeeff"}
+    live_service.history.read.assert_not_called()
+    live_service.store.acquire.assert_not_called()
+
+
+def test_retained_peer_window_refuses_ambiguous_path_scope(client, live_service):
+    """Keep distinct peer paths separate instead of reading an arbitrary history."""
+    snapshot = live_service.store.cached.return_value
+    snapshot["peers"].append({**snapshot["peers"][0], "peer_port_id": "ge-0/0/2"})
+    response = client.get("/wan-performance/live/vpn/site-one/11:22:33:44:55:66?window=6h")
+    assert response.status_code == 200
+    assert "Select exactly one full detail identity" in response.get_data(as_text=True)
+    live_service.history.read.assert_not_called()
+
+
+@pytest.mark.parametrize("viewport", [(1440, 1100), (1280, 800), (390, 844)])
+def test_browser_cached_site_and_retained_window_journey(page: Page, live_browser_url: str, retained_history, viewport):
+    """Navigate cached sites and exact detail histories with a preserved UTC window."""
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.goto(live_browser_url + "/wan-performance/live/")
+    page.get_by_test_id("wan-cached-site").select_option("site-one")
+    page.get_by_test_id("wan-cached-site-open").click()
+    expect(page.get_by_test_id("wan-live-site")).to_be_visible()
+    page.get_by_test_id("wan-live-gateway-link").first.click()
+    for key in ["6h", "12h", "24h", "7d"]:
+        page.get_by_test_id("wan-retained-selection").select_option(key)
+        page.get_by_test_id("wan-retained-apply").click()
+        expect(page.get_by_test_id("wan-retained-records")).to_contain_text("rx_bps: 40 bit/s")
+        expect(page.get_by_test_id("wan-retained-coverage")).to_contain_text("Measurement completeness remains unknown")
+    page.get_by_test_id("wan-live-port-link").first.click()
+    expect(page.get_by_test_id("wan-live-port")).to_be_visible()
+    expect(page.get_by_test_id("wan-retained-selection")).to_have_value("7d")
+    page.get_by_test_id("wan-live-gateway-link").first.click()
+    page.get_by_test_id("wan-live-peer-link").first.click()
+    expect(page.get_by_test_id("wan-live-peer")).to_be_visible()
+    expect(page.get_by_test_id("wan-retained-selection")).to_have_value("7d")
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), page.evaluate(
+        "Array.from(document.querySelectorAll('dd'))"
+        ".filter(element => element.scrollWidth > element.clientWidth).map(element => element.textContent)"
+    )
+    reads = retained_history.read.call_count
+    page.get_by_test_id("wan-live-back-link").click()
+    expect(page.get_by_test_id("wan-retained-unavailable")).to_contain_text(
+        "Organization and site aggregate history is unavailable"
+    )
+    assert retained_history.read.call_count == reads
+
+
+@pytest.fixture
 def sle_api():
     """Return independent synthetic SDK results without opening any network connection."""
     namespace = "src.interfaces.wan_performance.presentation.inspection.sle"

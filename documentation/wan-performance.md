@@ -259,7 +259,24 @@ Rates use `rx_bps` and `tx_bps`, never cumulative byte counters.
 Peer path keys include the remote site, remote port, and VPN type.
 Their derived key is not a claimed source tunnel identifier.
 
-Detail pages query up to thirteen calendar months of retained history and show daily, weekly, and monthly summaries.
+The live site selector uses only site identifiers in the selected organization's cached pages.
+The `/wan-performance/live/site/<site_id>` route shows that site's cached records.
+Unknown sites return HTTP 404. Site views do not start an organization refresh.
+These pages do not establish complete organization inventory, region membership, or source selector equivalence.
+
+The retained-window control offers 6 hours, 12 hours, 24 hours, and 7 days.
+Each interval ends at the current UTC hour boundary and excludes the current hour.
+Select one exact gateway, port, or peer to read its retained hourly projections.
+Each view makes one identity-scoped repository read and contains at most 168 hour buckets.
+The table preserves observation hours, collection times, units, missing reasons, and live provenance.
+Missing buckets remain absent. Even a dense result does not establish measurement completeness or elapsed coverage.
+These views perform no interpolation, backfill, aggregate calculation, or API request.
+Organization and site aggregate histories remain unavailable because their weighting and completeness contracts are unverified.
+Failed reads and missing stores show unavailable states. Successful empty reads show no retained observations.
+The current-cache table and CSV export remain separate from the selected retained window.
+Navigation links preserve the selected window across cached sites and gateway, port, and peer details.
+
+Without a selected window, detail pages query up to thirteen calendar months and show daily, weekly, and monthly summaries.
 The query bound is 397 days and at most 9,528 hourly records for one identity.
 This limit bounds reads. It does not change MistHelper storage retention.
 Daily summaries show mean, maximum, and observed p95 across retained hourly values.

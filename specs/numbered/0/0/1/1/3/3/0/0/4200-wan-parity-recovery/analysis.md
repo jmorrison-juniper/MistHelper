@@ -2,7 +2,60 @@
 
 ## Latest independent destination implementation
 
-T048-T051 are complete with local proof. The task ledger now has 28 completed tasks of 51.
+T052-T053 add independently defined cached-site navigation and retained UTC observation views.
+The task ledger now has 30 completed tasks of 53.
+The original 47-task audit still has 24 completed tasks and 23 acceptance tasks open.
+These controls do not establish source parity or close issue #4200.
+
+Site choices come only from the selected organization's validated cache.
+Exact site routes reject absent identifiers and preserve case-sensitive identity and CSV scope.
+Navigation preserves the selected window across site, gateway, port, peer, and overview links.
+Site pages contain no organization-refresh action.
+
+The `6h`, `12h`, `24h`, and `7d` intervals end at the current UTC hour boundary.
+They exclude the current hour and read one exact detail identity, with at most 168 expected hour buckets.
+Retained rows remain hourly projections with collection times, units, missing reasons, and live provenance.
+No sample read, interpolation, aggregate calculation, backfill, API request, or storage change occurs.
+Missing buckets remain absent. Measurement completeness and elapsed coverage remain unknown even when every bucket exists.
+Organization and site aggregate histories remain unavailable because their weighting and completeness contracts are unverified.
+Missing stores, failed reads, and successful empty reads have separate visible states.
+The current-cache table and CSV export remain explicitly separate from the retained view.
+
+Temporary SQLite cases verify half-open boundaries and missing buckets.
+Invalid-history cases reject foreign identities, synthetic provenance, duplicate hours, and out-of-window records.
+The browser journey covers all four ranges and site/gateway/port/peer/overview navigation at three viewports.
+The mobile assertion reproduced a peer-identity overflow. Text wrapping repairs the defect without changing identifiers.
+The complete focused suite reports 447 passed, two existing plugin warnings, and no removed test.
+This increment adds 43 cases beyond the preceding 404-case result.
+
+### Site and retained-window validation
+
+The new tests add 208 browser-module lines and 88 unit-module lines without removing any existing line.
+The table module loses no declaration. The route module adds two imports and the `site` route without losing declarations.
+The symbol checker returns one for those three intentional additions.
+Protected paths remain identical to merge base `2a6a5844698aeb180fea353e0243034890774565`.
+No dependency, workflow, baseline, entry point, registry, primary-key map, or feature-pointer change occurred.
+No source execution, live Mist call, production write, publication, hosted run, readiness change, or merge occurred.
+
+| Command | Actual result |
+| - | - |
+| `rtk .venv/bin/python -m pytest -q tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_offline.py tests/e2e/web_portal/test_wan_performance_live.py tests/integration/test_mistapi_sdk_compatibility.py --tb=short --show-capture=no` | 447 passed, two existing plugin warnings. |
+| `rtk .venv/bin/python -m pytest -q tests/e2e/web_portal/test_wan_performance_live.py -k 'cached_site_and_retained' --tb=short --show-capture=no` | Three browser journeys passed after the final assertion formatting change. |
+| `rtk .venv/bin/python -m ruff check src/interfaces/wan_performance tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_live.py` | All checks passed. |
+| `rtk .venv/bin/python -m black --check src/interfaces/wan_performance tests/unit/wan_performance/test_calendar_summaries.py tests/e2e/web_portal/test_wan_performance_live.py` | 31 files unchanged. |
+| `rtk .venv/bin/python -m mypy src/interfaces/wan_performance --config-file pyproject.toml` | Success, 29 source files. |
+| `rtk .venv/bin/python -m compileall -q src/interfaces/wan_performance` | Exit zero, no output. |
+| `rtk .venv/bin/bandit -c pyproject.toml -r src/interfaces/wan_performance -q` | Exit zero, no findings. |
+| `rtk .venv/bin/radon cc src/interfaces/wan_performance -j \| rtk .venv/bin/complexity-gate --max 10` | All functions within the threshold. |
+| `rtk .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | One passed, four input reads and validations. |
+| `rtk git diff --check` | Exit zero. |
+
+STE checks passed on all seven changed Markdown records, with scores from 86 through 97.
+The Markdown link check examined seven files and found zero broken links.
+
+### Earlier independent SLE, table, and MOS increment
+
+T048-T051 are complete with local proof. At that checkpoint, the ledger had 28 completed tasks of 51.
 The original 47-task audit still has 24 completed tasks and 23 acceptance tasks open.
 These increments do not close source-parity acceptance or issue #4200.
 
@@ -345,7 +398,7 @@ The 47 task IDs below were checked against current code, tests, and evidence.
 | T043 | Complete | The coverage matrices below map all 50 inventory rows and 24 FR/SC entries to tasks, tests or explicit test gaps, evidence, and decisions. |
 | T044 | Complete | The feature-specific prerequisite, consistency review, task format audit, link scan, structure tests, and STE checks passed. The broader route contract has one unrelated failure, recorded below. |
 | T045 | Blocked by assignment scope | Local gates can run. Hosted exact-head CI is not authorized before parent review. |
-| T046 | Complete | `documentation/wan-performance.md` and `changelog.d/pr-4208.md` describe replay, unknown event coverage, gateway scope, issues #4793-#4795, retained MOS compatibility, and the independent SLE and table controls. |
+| T046 | Complete | `documentation/wan-performance.md` and `changelog.d/pr-4208.md` describe replay, unknown event coverage, gateway scope, issues #4793-#4795, retained MOS compatibility, and independent SLE, table, cached-site, and retained-window controls. |
 | T047 | Blocked by assignment scope | Parent review must precede PR metadata or acceptance changes. No PR template or hosted state was changed. |
 
 ### Source inventory and requirement coverage for T043
@@ -375,7 +428,7 @@ An explicit test gap means the behavior remains unaccepted.
 | P16 | T029-T030 | Append-only history tests for both stores | Retention, capacity, completeness, and backfill remain unverified. |
 | P17 | T031-T032, T049-T051 | Audience goal matrix and independent SLE, cached-table, and CSV tests | Independent controls exist. Source-specific audience behavior remains unverified. |
 | P18 | T003, T031-T032, T051 | `wan-table-export` and scoped cached CSV tests | Full filtered cached export passes. Source export fields, format, and audience equivalence remain unverified. |
-| P19 | T007-T012 | Offline journey and keyboard navigation browser tests | Gateway, port, and peer routes pass. Region and site list routes remain absent. |
+| P19 | T007-T012, T052 | Core journeys, keyboard navigation, and cached-site browser tests | Organization/site/gateway/port/peer navigation passes independently. Source navigation equivalence and region routing remain unverified. |
 | P20 | T034-T036 | Responsive browser tests and rights record | Destination layout passes. Source visual approval remains blocked. |
 | P21 | T007, T011 | Offline overview status, KPI, and route tests | Synthetic population only. |
 | P22 | T007, T011 | Live snapshot route tests | Current states pass. Historical failover remains unverified. |
@@ -385,10 +438,10 @@ An explicit test gap means the behavior remains unaccepted.
 | P26 | T007, T011, T049 | Offline degraded-SLE selectors and separate raw SLE inspection tests | Overview panels remain synthetic. Independent raw inspection does not establish source degraded-score panel parity. |
 | P27 | T007, T050 | `wan-table-filter`, `wan-table-sort`, `wan-table-direction`, and route/browser tests | Independent identity filtering and lexical sorting pass. Source ordering, filters, and ranking semantics remain unverified. |
 | P28 | T007, T011, T035 | Offline chart selectors and responsive-region assertions | Layout passes. Source chart semantics remain unknown. |
-| P29 | T007, T049 | Disabled offline site selector, live gateway site-ID input, and `wan-sle-site` browser test | Cached-site SLE selection passes. Organization-wide source selector behavior remains unverified. |
-| P30 | T007 | Disabled offline time-range selector | Live source ranges are not implemented. |
+| P29 | T007, T049, T052 | `wan-cached-site`, exact site routes, scoped CSV, case-sensitive membership, and browser tests | Independent cached-site selection passes. Complete organization inventory and source selector equivalence remain unverified. |
+| P30 | T007, T053 | `wan-retained-selection`, bounded repository tests, and four-range route/browser tests | Independent 6h/12h/24h/7d retained UTC views pass. The default remains cache/calendar summaries. Source time semantics, aggregation, and 24-hour default parity remain unverified. |
 | P31 | T037-T039 | Background worker retry, ownership, failure, and start-gate tests | Local scheduling policy is bounded and passes. |
-| P32 | T007-T011, T049 | Core journey, direct-link, keyboard, and SLE return-navigation browser tests | Tested destination routes pass. Source region and site-list transitions remain absent. |
+| P32 | T007-T011, T049, T052-T053 | Core, cached-site, SLE return, and selected-window browser journeys | Cached site-to-gateway-to-port/peer navigation passes. Region routing and source navigation equivalence remain unverified. |
 | P33 | T007, T049 | `wan-live-sle-link`, `wan-sle-metric`, `wan-sle-results`, and SLE browser tests | Independent site/metric inspection passes. Source SLE-detail behavior and score equivalence remain unverified. |
 | P34 | T007, T049 | `wan-sle-site`, `wan-sle-results`, `wan-sle-coverage`, and scoped request tests | Raw impacted-gateway rows and partial-page labels pass. Source impact-detail interactions, units, and classifier equivalence remain unverified. |
 | P35 | T007, T051 | `wan-table-export`, CSV scope/formula tests, and browser download tests | Independent full filtered cached CSV export passes. Source export format and equivalence remain unverified. |
@@ -412,27 +465,27 @@ An explicit test gap means the behavior remains unaccepted.
 | --- | --- | --- | --- |
 | FR-001 | T003, T007-T010 | P01-P50 inventory and offline browser tests | Static inventory is complete. Runtime parity is not. |
 | FR-002 | T002-T003, T043 | Source classifications in `parity.md` and `discovery.md` | Goals, TODOs, and implemented-but-unverified methods remain separate. |
-| FR-003 | T007-T012, T033-T036, T049-T051 | Four core journeys plus independent SLE and cached-control browser tests | Destination navigation and responsive checks pass. Source visual and interaction parity remain unverified. |
+| FR-003 | T007-T012, T033-T036, T049-T053 | Core, SLE, cached-site, table, and selected-window browser journeys | Independent destination navigation and responsive checks pass. Source visual and interaction parity remain unverified. |
 | FR-004 | T013-T016, T021-T022 | Threshold and duration tests in the live module | Source calculations and thresholds remain unverified. |
 | FR-005 | T017-T022 | Calendar event and live state tests | Flap, failover, and availability parity remains open. |
 | FR-006 | T023-T024, T048 | Peer snapshot, history, retained-MOS SQLite, and displayed-unit tests | Missing-unit compatibility passes without rewriting data. Poll-sample statistics do not prove source history. |
 | FR-007 | T025-T026, T049 | Catalog, cached-site scope, raw impacted-gateway, failure, and browser tests | Independent bounded SLE inspection passes. Source score, classifier, duration-unit, and impact equivalence remain unverified. |
-| FR-008 | T013, T027-T028 | UTC calendar and rolling-window tests | Local windows pass. Region and source weighting remain unknown. |
+| FR-008 | T013, T027-T028, T053 | UTC calendar, rolling summaries, and bounded retained-window tests | Independent UTC views pass without new aggregation. Region weighting, source time semantics, and measured completeness remain unknown. |
 | FR-009 | T029-T030 | SQLite and Arango append-only tests | Retention and backfill evidence is missing. |
 | FR-010 | T031-T032, T049-T051 | Audience goal matrix plus independent SLE, cached-filter, and CSV tests | Independent destination controls exist. Source-specific audience dimensions and export equivalence remain unverified. |
 | FR-011 | T004-T006, T037-T042, T049 | Admission, live service, worker, Redis protocol, SLE scope, and browser tests | Local scope and failure controls pass. No live Redis or multi-process proof is claimed. |
 | FR-012 | T042, T045 | Changed-file inventory and offline tests | No extra service, port, or credential store was added. |
 | FR-013 | T005-T006, T040-T042 | Synthetic isolation and provenance tests | Offline data remains separate from live collection. |
-| FR-014 | T005, T038-T042, T048-T049 | Missing-unit, empty, stale, denied, store, session, and SLE response-error tests | Missing retained values and unsupported response states remain explicit. |
+| FR-014 | T005, T038-T042, T048-T049, T053 | Missing-unit, empty, stale, denied, store, session, SLE, and retained-window failure tests | Missing buckets and values remain explicit. Failed or unsupported history never appears as healthy empty data. |
 | FR-015 | T033-T036, T041, T043 | Descriptive comparison, browser evidence, and rights record | Runtime comparison remains blocked by missing rights. |
 | FR-016 | T043-T047 | Exact local candidate and check records | Hosted and owner acceptance remain pending. |
 | SC-001 | T003, T007-T010, T043 | P01-P50 classifications | All inventory rows have a decision, including explicit unknowns. |
 | SC-002 | T011-T042, T043 | Focused tests and blocked-row decisions | Full source behavior is not complete. |
-| SC-003 | T014-T030, T040, T048-T049 | Unknown-value, retained missing-unit, and raw SLE response assertions | Unavailable values remain explicit. Missing MOS records remain unchanged beside later scores. |
+| SC-003 | T014-T030, T040, T048-T049, T053 | Unknown-value, missing-unit, raw SLE, and retained-window assertions | Unavailable values remain explicit. Missing buckets remain absent, and bucket presence does not establish measurement completeness. |
 | SC-004 | T014-T030 | Domain expected-value tests | Supported calculations pass. Unsupported source formulas remain open. |
-| SC-005 | T011, T021, T026, T032, T035, T040-T042, T049-T051 | Four core journeys plus SLE and cached-control browser tests at three viewports | Tested independent destination journeys pass. Source interaction equivalence remains unverified. |
+| SC-005 | T011, T021, T026, T032, T035, T040-T042, T049-T053 | Core, SLE, cached-control, site, and retained-window browser tests at three viewports | Tested independent destination journeys pass. Source interaction equivalence remains unverified. |
 | SC-006 | T033-T036, T043 | Descriptive layout inventory and rights record | Source visual acceptance remains blocked. |
-| SC-007 | T005-T006, T037-T042, T049-T051 | Offline, scoped-store, admission, SLE, and CSV tests | No live Mist call or production store was used. |
+| SC-007 | T005-T006, T037-T042, T049-T053 | Offline, scoped-store, admission, SLE, CSV, site, and bounded-window tests | No live Mist call or production store was used. |
 | SC-008 | T043-T047 | Local validation record and parent review hold | Parent review is pending. |
 
 ### Frozen-head defect regressions

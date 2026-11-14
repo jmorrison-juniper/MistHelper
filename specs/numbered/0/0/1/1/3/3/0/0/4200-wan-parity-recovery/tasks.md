@@ -113,6 +113,8 @@ These tasks do not replace source-parity acceptance or authorize source executio
 - [X] T049 Add a bounded catalog-validated SLE inspection page under presentation/inspection/, with mocked scope, admission, failure, and browser tests.
 - [X] T050 Add cached identity filtering, lexical sorting, and ten-row pagination without changing route or history scope.
 - [X] T051 Add a full-identity cached CSV export with explicit missing values, scope preservation, and spreadsheet-formula protection.
+- [X] T052 Add cached-site selection and scoped site/detail navigation with tenant and selected-window preservation, plus route and browser tests.
+- [X] T053 Add bounded 6h/12h/24h/7d retained UTC observation views with explicit missing/unavailable states and repository, route, and browser tests.
 
 ## Dependencies and execution order
 

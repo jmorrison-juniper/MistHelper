@@ -13,6 +13,40 @@
     {% if instant %}<p>Collected at {{ instant.isoformat() }} UTC.</p>{% endif %}
     {% if partial %}<div role="alert">Partial results. A fixed page cap excluded records or link-event history.</div>{% endif %}
     {% if error %}<div class="alert alert-warning" role="alert" data-testid="wan-live-error">{{ error }}</div>{% endif %}
+    <nav aria-label="Cached site navigation" data-testid="wan-cached-sites">
+        <form method="get" action="{{ url_for('wan_performance.live.overview') }}">
+            <label for="wan-cached-site">Site in the cached organization pages</label>
+            <select id="wan-cached-site" name="site_id" data-testid="wan-cached-site">
+                <option value="">All cached sites</option>
+                {% for site_id in gateways|map(attribute="site.site_id")|unique(case_sensitive=true)|sort(case_sensitive=true) %}
+                <option value="{{ site_id }}"{% if filters.get("site_id") == site_id %} selected{% endif %}>{{ site_id }}</option>
+                {% endfor %}
+            </select>
+            {% if window %}<input type="hidden" name="window" value="{{ window.key }}">{% endif %}
+            <button type="submit" class="btn btn-secondary" data-testid="wan-cached-site-open">Open cached site</button>
+        </form>
+        <ul>{% for site_id in gateways|map(attribute="site.site_id")|unique(case_sensitive=true)|sort(case_sensitive=true) %}
+            <li><a href="{{ url_for('wan_performance.live.site', site_id=site_id, window=window.key if window else none) }}" data-testid="wan-cached-site-link">{{ site_id }}</a></li>
+        {% endfor %}</ul>
+        <p>These identifiers reflect cached pages, not complete organization inventory.
+            Site views do not combine persisted identity histories.</p>
+    </nav>
+    <form method="get" data-testid="wan-retained-controls">
+        {% for name, value in request.args.items() if name in ["gateway_id", "site_id", "path_key", "q", "sort", "direction"] %}
+        <input type="hidden" name="{{ name }}" value="{{ value }}">
+        {% endfor %}
+        <label for="wan-retained-selection">Retained UTC observation window</label>
+        <select id="wan-retained-selection" name="window" data-testid="wan-retained-selection">
+            <option value="">Default cache and summaries</option>
+            {% for key, label in [("6h", "6 hours"), ("12h", "12 hours"), ("24h", "24 hours"), ("7d", "7 days")] %}
+            <option value="{{ key }}"{% if window and window.key == key %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-secondary" data-testid="wan-retained-apply">Open retained window</button>
+        <p>A retained window requires one selected gateway, port, or peer.
+            It shows stored hourly projections without interpolation, backfill, or new aggregation.</p>
+    </form>
+    {% if kind != "site" %}
     <form method="post" action="{{ url_for('wan_performance.live.refresh') }}">
         {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
         {% if kind == "gateway" and filters %}
@@ -30,6 +64,10 @@
         {% endif %}
         <button class="btn btn-primary" type="submit" data-testid="wan-live-refresh">{% if kind == "gateway" %}Refresh selected gateway and current snapshots{% else %}Refresh current snapshots{% endif %}</button>
     </form>
+    {% else %}
+    <p>This site view reads cached data only.
+        For organization-wide refresh, <a href="{{ url_for('wan_performance.live.overview') }}">open the WAN overview</a>.</p>
+    {% endif %}
     {% if kind == "port" and filters %}
     <form class="mt-3" method="post" action="{{ url_for('wan_performance.live.refresh_port') }}">
         {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
@@ -68,7 +106,7 @@
     <details data-testid="wan-live-gateway-list">
         <summary>Gateways in the cached pages</summary>
         <ul>{% for gateway in gateways %}
-            <li><a href="{{ url_for('wan_performance.live.gateway', gateway_id=gateway.gateway_id, site_id=gateway.site.site_id) }}">{{ gateway.site.site_id }} / {{ gateway.gateway_id }}</a></li>
+            <li><a href="{{ url_for('wan_performance.live.gateway', gateway_id=gateway.gateway_id, site_id=gateway.site.site_id, window=window.key if window else none) }}">{{ gateway.site.site_id }} / {{ gateway.gateway_id }}</a></li>
             {% else %}<li>No gateways appear in the cached pages.</li>{% endfor %}</ul>
         <p>This list reflects bounded pages, not a complete organization inventory. Use the optional fields for another known gateway.</p>
     </details>
@@ -80,8 +118,9 @@
     </div>
     <section class="mt-4">
         <h2>Gateways, WAN ports, and VPN paths</h2>
+        <p>The table and CSV export show the latest cache, independently of any retained UTC window.</p>
         <form method="get" class="mb-3" data-testid="wan-table-controls">
-            {% for name, value in request.args.items() if name in ["gateway_id", "site_id", "path_key"] %}
+            {% for name, value in request.args.items() if name in ["gateway_id", "site_id", "path_key", "window"] %}
             <input type="hidden" name="{{ name }}" value="{{ value }}">
             {% endfor %}
             <label for="wan-table-filter">Identity text</label>
@@ -115,12 +154,12 @@
             {% set gateway = record.identity.gateway if record.identity.gateway is defined else record.identity %}
             <tr>
                 <td>{{ gateway.site.site_id }}</td>
-                <td><a data-testid="wan-live-gateway-link" href="{{ url_for('wan_performance.live.gateway', gateway_id=gateway.gateway_id, site_id=gateway.site.site_id) }}">{{ gateway.gateway_id }}</a></td>
+                <td><a data-testid="wan-live-gateway-link" href="{{ url_for('wan_performance.live.gateway', gateway_id=gateway.gateway_id, site_id=gateway.site.site_id, window=window.key if window else none) }}">{{ gateway.gateway_id }}</a></td>
                 {% if record.identity.port_name is defined %}
-                <td><a data-testid="wan-live-port-link" href="{{ url_for('wan_performance.live.port', site_id=record.identity.gateway.site.site_id, port_name=record.identity.port_name, gateway_id=record.identity.gateway.gateway_id) }}">{{ record.identity.port_name }}</a></td>
+                <td><a data-testid="wan-live-port-link" href="{{ url_for('wan_performance.live.port', site_id=record.identity.gateway.site.site_id, port_name=record.identity.port_name, gateway_id=record.identity.gateway.gateway_id, window=window.key if window else none) }}">{{ record.identity.port_name }}</a></td>
                 {% else %}<td data-testid="wan-live-gateway-insights">Gateway insight hour: {{ record.hour_start_utc.isoformat() }}</td>{% endif %}
                 <td>{% if record.identity.peer_mac is defined %}
-                    <a data-testid="wan-live-peer-link" href="{{ url_for('wan_performance.live.peer', site_id=record.identity.gateway.site.site_id, peer_mac=record.identity.peer_mac, path_key=record.identity.tunnel_identity) }}">{{ record.identity.peer_mac }}</a>
+                    <a data-testid="wan-live-peer-link" href="{{ url_for('wan_performance.live.peer', site_id=record.identity.gateway.site.site_id, peer_mac=record.identity.peer_mac, path_key=record.identity.tunnel_identity, window=window.key if window else none) }}">{{ record.identity.peer_mac }}</a>
                     <small>Path key {{ record.identity.tunnel_identity }}</small>
                     {% else %}Not a VPN path{% endif %}</td>
                 <td>{% for name, metric in record.metrics.items() %}
@@ -138,7 +177,38 @@
         </table>
         </div>
     </section>
-    {% if kind in ["gateway", "port", "peer"] %}
+    {% if window %}
+    <details open data-testid="wan-retained-window">
+        <summary>Retained hourly observations: {{ window.key }}</summary>
+        <p data-testid="wan-retained-bounds">{{ window.start.isoformat() }} inclusive to {{ window.end.isoformat() }} exclusive.
+            The interval excludes the current UTC hour.</p>
+        <p>These values are retained hourly projections, not raw samples or full-hour measurements.
+            Bucket presence does not establish elapsed coverage, metric completeness, or healthy service.
+            No interpolation, backfill, or new aggregate ran for this view.</p>
+        {% if retained and not retained.error %}
+        <p data-testid="wan-retained-coverage">{{ retained.records|length }} retained hour buckets of {{ window.expected_hours }} expected.
+            Missing retained buckets: {{ retained.missing_hours }}.
+            Measurement completeness remains unknown.</p>
+        {% if retained.records %}
+        <dl>{% for name, value in retained.records[0].identity.to_dict().items() %}
+            <dt>{{ name }}</dt><dd class="text-break">{{ value }}</dd>
+        {% endfor %}</dl>
+        {% endif %}
+        <div class="table-responsive"><table class="table" data-testid="wan-retained-records">
+            <thead><tr><th>Observation hour UTC</th><th>Collected at UTC</th><th>Provenance</th><th>Retained values</th></tr></thead>
+            <tbody>{% for record in retained.records %}<tr>
+                <td>{{ record.hour_start_utc.isoformat() }}</td><td>{{ record.collected_at_utc.isoformat() }}</td><td>{{ record.provenance }}</td>
+                <td>{% for name, metric in record.metrics.items() %}
+                    <div>{{ name }}: {% if metric.value is not none %}{{ metric.value }} {{ metric.unit }}{% else %}Unknown{% if metric.missing_reason %}: {{ metric.missing_reason }}{% endif %}{% endif %}</div>
+                {% endfor %}</td>
+            </tr>{% else %}<tr><td colspan="4">No retained observations exist in this window. This does not mean healthy service.</td></tr>{% endfor %}</tbody>
+        </table></div>
+        {% else %}
+        <p role="alert" data-testid="wan-retained-unavailable">{{ retained.error if retained else "Retained observations are unavailable because cache or history validation failed." }}</p>
+        {% endif %}
+    </details>
+    {% endif %}
+    {% if not window and kind in ["gateway", "port", "peer"] %}
     <details data-testid="wan-live-history">
         <summary>Persisted observation summaries</summary>
         <p>Port and peer hours retain the last observation. Gateway hours use catalog-validated insight samples.
@@ -210,7 +280,7 @@
         {% else %}{% if not history_error %}<p>No persisted observations exist in the previous thirteen calendar months.</p>{% endif %}{% endfor %}
     </details>
     {% endif %}
-    <a data-testid="wan-live-back-link" href="{{ url_for('wan_performance.live.overview') }}">Return to the WAN overview</a>
+    <a data-testid="wan-live-back-link" href="{{ url_for('wan_performance.live.overview', window=window.key if window else none) }}">Return to the WAN overview</a>
     <a data-testid="wan-offline-link" href="{{ url_for('wan_performance.overview') }}">Open the isolated synthetic preview</a>
 </section>
 {% endblock %}

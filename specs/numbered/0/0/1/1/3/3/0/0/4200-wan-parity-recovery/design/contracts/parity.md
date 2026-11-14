@@ -2,8 +2,27 @@
 
 ## Latest independent destination coverage
 
+T052 adds exact cached-site navigation, not a complete site catalog or source-equivalent selector.
+`test_cached_site_csv_cannot_include_other_cached_sites` verifies selected-site export scope.
+Unknown and case-sensitive site identifiers have separate route assertions.
+
+T053 adds independent `6h`, `12h`, `24h`, and `7d` UTC views for one full detail identity.
+Each half-open interval ends before the current UTC hour and reads at most 168 retained hourly projections.
+`test_retained_view_reads_exact_identity_without_filling_missing_hours` exercises actual temporary SQLite boundary reads.
+`test_retained_view_rejects_invalid_repository_results` rejects duplicate, foreign, synthetic, and out-of-window records.
+`test_retained_peer_window_refuses_ambiguous_path_scope` proves ambiguous peer routes cannot read arbitrary history.
+Route tests distinguish empty data, missing stores, and failed reads without sample reads, writes, or API requests.
+Organization and site aggregate windows remain explicitly unavailable. They do not fan out across identities.
+The current-cache table and its CSV export remain independent of the selected retained window.
+`test_browser_cached_site_and_retained_window_journey` covers site, gateway, port, peer, and overview navigation at all three viewports.
+The mobile assertion reproduced unwrapped peer-identity overflow. Text wrapping repairs it without changing identifiers.
+These views do not calculate aggregates, infer elapsed coverage, interpolate, or backfill missing hours.
+Bucket presence never proves measurement completeness, healthy service, source time semantics, or source parity.
+
 The independent SLE page supersedes the earlier evidence-only SLE assessment below.
 It does not establish source parity.
+The detailed inventory preserves its frozen destination observations.
+The [current acceptance audit](../../analysis.md) records later controls and their remaining source-equivalence gaps.
 `test_sle_get_is_cache_only_and_post_uses_supported_signature` proves cached-site scope and the installed SDK argument shape.
 `test_sle_uses_actual_refresh_lease_without_releasing_cooldown` exercises the actual lease class with a mocked Redis client.
 This is protocol evidence, not proof of two real processes or live Redis.

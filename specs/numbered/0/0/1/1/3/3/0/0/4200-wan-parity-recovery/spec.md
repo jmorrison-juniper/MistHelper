@@ -150,6 +150,10 @@ This specification authorizes no new transport or live request.
 - Retained missing metrics with unknown units remain readable beside later documented values. Do not reinterpret incompatible measured units.
 - Independent live SLE inspection uses only cached sites, enabled catalog metrics, a fixed one-hour query, and explicit unknown duration units.
 - Destination table controls operate on authorized cached identities only. They do not establish source ordering, complete inventory, or ranking.
+- Cached-site navigation uses only site identifiers present in the selected organization's cached pages. It does not claim complete site inventory.
+- Independent 6-hour, 12-hour, 24-hour, and 7-day UTC views show retained hourly observations for one verified detail identity.
+- Retained windows end at the current UTC hour boundary and exclude the current hour. Missing buckets remain missing, not measured healthy time.
+- Organization and site windows do not combine identity histories. They report unavailable history until the operator selects one gateway, port, or peer.
 - New per-poll sample storage is additive. Existing hourly records remain available, and hourly values derive from samples.
 - The existing hourly projection keeps its current calculations. A stored hour does not replace timestamped samples or prove complete coverage.
 - Retention, capacity, historical completeness, and backfill remain unverified. No 13-month history guarantee is claimed.
