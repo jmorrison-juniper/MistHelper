@@ -30,6 +30,10 @@ This increment adds 43 cases beyond the preceding 404-case result.
 
 ### Site and retained-window validation
 
+Implementation commit: `d519094517ab73f32168fe63a823e3168252a43b`.
+The following assertion-only commit strengthens UTC boundaries after the ratchet found three existence-only guards: `960d81c`.
+The calendar module then passed all 50 cases. Ruff and Black also passed.
+The committed quality ratchet now reports zero findings and zero new findings.
 The new tests add 208 browser-module lines and 87 unit-module lines without removing any existing line.
 The table module loses no declaration. The route module adds two imports and the `site` route without losing declarations.
 The symbol checker returns one for those three intentional additions.
@@ -48,6 +52,7 @@ No source execution, live Mist call, production write, publication, hosted run, 
 | `rtk .venv/bin/bandit -c pyproject.toml -r src/interfaces/wan_performance -q` | Exit zero, no findings. |
 | `rtk .venv/bin/radon cc src/interfaces/wan_performance -j \| rtk .venv/bin/complexity-gate --max 10` | All functions within the threshold. |
 | `rtk .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | One passed, four input reads and validations. |
+| `rtk .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` | 15 files checked, zero findings, two skipped, zero parse errors, zero new findings. |
 | `rtk git diff --check` | Exit zero. |
 
 STE checks passed on all seven changed Markdown records, with scores from 86 through 97.
