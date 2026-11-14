@@ -37,8 +37,7 @@ class TestCachedGatewayStatistics:
 
         snapshot, _ = self.snapshot()
         statistics = GatewayStatistics.build(snapshot, "org-one", TARGET.to_dict())
-        assert statistics is not None
-        assert statistics.rows == (
+        assert statistics is not None and statistics.rows == (
             ("Reported CPU usage", "125.25 %"),
             ("Reported memory usage", "0 %"),
             ("Reported device uptime", "0 seconds"),
@@ -64,13 +63,13 @@ class TestCachedGatewayStatistics:
 
         snapshot, device = self.snapshot()
         baseline = GatewayStatistics.build(snapshot, "org-one", TARGET.to_dict())
-        assert baseline is not None
         device[field] = value
         statistics = GatewayStatistics.build(snapshot, "org-one", TARGET.to_dict())
-        assert statistics is not None
+        assert statistics is not None and statistics.rows[index][1].startswith("Unavailable:")
         rows = statistics.rows
-        assert rows[index][1].startswith("Unavailable:")
-        assert all(row == baseline.rows[position] for position, row in enumerate(rows) if position != index)
+        assert baseline is not None and all(
+            row == baseline.rows[position] for position, row in enumerate(rows) if position != index
+        )
 
     @pytest.mark.parametrize("snapshot", [None, {}, {"insights": {}}, {"insights": {"gateway": None}}])
     def test_absent_discovery_does_not_create_metrics(self, snapshot: dict[str, object] | None) -> None:
@@ -78,9 +77,8 @@ class TestCachedGatewayStatistics:
         from src.interfaces.wan_performance.presentation.inspection.table import GatewayStatistics
 
         statistics = GatewayStatistics.build(snapshot, "org-one", TARGET.to_dict())
-        assert statistics is not None
+        assert statistics is not None and len(statistics.rows) == 4
         rows = statistics.rows
-        assert len(rows) == 4
         assert all(value == "Unavailable: no matching cached gateway discovery." for _, value in rows)
 
     @pytest.mark.parametrize(
@@ -101,7 +99,7 @@ class TestCachedGatewayStatistics:
         snapshot, device = self.snapshot()
         (snapshot if field.startswith("snapshot.") else device)[field.removeprefix("snapshot.")] = value
         statistics = GatewayStatistics.build(snapshot, "org-one", TARGET.to_dict())
-        assert statistics is not None
+        assert statistics is not None and len(statistics.rows) == 4
         rows = statistics.rows
         assert all(value.startswith("Unavailable:") for _, value in rows)
         assert not any("125.25" in value for _, value in rows)

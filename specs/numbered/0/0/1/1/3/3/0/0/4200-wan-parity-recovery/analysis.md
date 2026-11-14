@@ -23,6 +23,9 @@ Selection now belongs to the gateway statistics builder. The renderer has comple
 The read-only consistency review found eight consecutive builder operations above the five-operation block limit.
 An explicit missing-discovery return now separates those operations without another helper, class, or request.
 All 24 requirements have task mappings. No task is unmapped, and the recorded structural finding is repaired.
+The first committed quality check found five standalone non-None assertions in the new unit cases.
+Each assertion now verifies result values, unchanged sibling fields, or the required four-row shape with its non-None guard.
+No baseline, detector, or exclusion changed.
 All 505 focused WAN, SDK, and browser tests pass after that repair, with two existing warnings.
 Three destination captures show the read-only fields at 1440, 1280, and 390 pixels without layout overflow.
 They verify unchanged SDK, acquisition, storage, and single-history-read behavior.
