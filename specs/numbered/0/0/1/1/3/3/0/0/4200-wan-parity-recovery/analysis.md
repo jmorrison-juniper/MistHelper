@@ -30,7 +30,7 @@ This increment adds 43 cases beyond the preceding 404-case result.
 
 ### Site and retained-window validation
 
-The new tests add 208 browser-module lines and 88 unit-module lines without removing any existing line.
+The new tests add 208 browser-module lines and 87 unit-module lines without removing any existing line.
 The table module loses no declaration. The route module adds two imports and the `site` route without losing declarations.
 The symbol checker returns one for those three intentional additions.
 Protected paths remain identical to merge base `2a6a5844698aeb180fea353e0243034890774565`.

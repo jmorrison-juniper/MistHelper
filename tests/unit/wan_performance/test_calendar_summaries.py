@@ -404,8 +404,7 @@ def test_retained_view_windows_use_completed_utc_hour_buckets(key: str, hours: i
 
     instant = datetime(2026, 11, 14, 6, 46, 32, tzinfo=UTC)
     window = ObservationWindow.select(key, instant)
-    assert window is not None
-    assert window.end == datetime(2026, 11, 14, 6, tzinfo=UTC)
+    assert window is not None and window.end == datetime(2026, 11, 14, 6, tzinfo=UTC)
     assert window.start == window.end - timedelta(hours=hours)
     assert window.expected_hours == hours
     assert ObservationWindow.select("", instant) is None
@@ -435,7 +434,7 @@ def test_retained_view_reads_exact_identity_without_filling_missing_hours(tmp_pa
 
     record = OfflinePreviewFactory.build().measurements[0]
     window = ObservationWindow.select("6h", record.hour_start_utc + timedelta(hours=6, minutes=20))
-    assert window is not None
+    assert window is not None and window.start == record.hour_start_utc
     retained = replace(
         record,
         provenance="live",
@@ -471,7 +470,7 @@ def test_retained_view_rejects_invalid_repository_results(bad: str) -> None:
         collected_at_utc=dashboard.measurements[0].hour_start_utc + timedelta(hours=7),
     )
     window = ObservationWindow.select("6h", record.hour_start_utc + timedelta(hours=6))
-    assert window is not None
+    assert window is not None and window.start == record.hour_start_utc
     changes = {
         "foreign": {"identity": dashboard.peer_path},
         "before": {"hour_start_utc": window.start - timedelta(hours=1)},
