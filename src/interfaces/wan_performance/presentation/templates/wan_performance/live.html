@@ -201,7 +201,7 @@
             The interval excludes the current UTC hour.</p>
         <p>These values are retained hourly projections, not raw samples or full-hour measurements.
             Bucket presence does not establish elapsed coverage, metric completeness, or healthy service.
-            No interpolation, backfill, or new aggregate ran for this view.</p>
+            No interpolation or backfill ran. Independent projection statistics do not establish source aggregation.</p>
         {% if retained and not retained.error %}
         <p data-testid="wan-retained-coverage">{{ retained.records|length }} retained hour buckets of {{ window.expected_hours }} expected.
             Missing retained buckets: {{ retained.missing_hours }}.
@@ -211,6 +211,36 @@
             <dt>{{ name }}</dt><dd class="text-break">{{ value }}</dd>
         {% endfor %}</dl>
         {% endif %}
+        <section aria-label="Designed hourly-projection statistics">
+            <h2>Designed replacement v1: observation statistics</h2>
+            <p>Each present hourly projection has one equal weight. These are not raw-sample or duration-weighted statistics.
+                Missing values have no weight. Exact metric names and units remain separate.
+                Plot selection, visibility, and zoom do not change this full-window report.</p>
+            <form method="get" action="{{ table.options.url(download='', observation_threshold='') }}">
+                {% for name, value in request.args.items() %}
+                {% if name not in ['observation_threshold', 'download'] %}
+                <input type="hidden" name="{{ name }}" value="{{ value }}">
+                {% endif %}{% endfor %}
+                <label for="wan-observation-threshold">Percentage threshold (0 through 100)</label>
+                <input id="wan-observation-threshold" data-testid="wan-observation-threshold" type="number"
+                    name="observation_threshold" value="{{ observation_threshold }}" min="0" max="100" step="1" required>
+                <button type="submit" data-testid="wan-observation-apply">Apply observation threshold</button>
+            </form>
+            <p>Only percentage metrics use this threshold. Values must be strictly above it.
+                Runs count adjacent observed UTC hour keys, not elapsed duration or availability.</p>
+            <div class="table-responsive"><table class="table" data-testid="wan-observation-statistics">
+                <thead><tr><th>Metric</th><th>Unit</th><th>Present values</th><th>Minimum</th><th>Mean</th>
+                    <th>nearest-rank p95</th><th>Maximum</th><th>Above {{ observation_threshold }}%</th>
+                    <th>Longest adjacent observed-hour run</th></tr></thead>
+                <tbody>{% for row in observation_statistics %}<tr>
+                    <td>{{ row.name }}</td><td>{{ row.unit }}</td><td>{{ row.count }}</td><td>{{ row.minimum }}</td>
+                    <td>{{ row.mean }}</td><td>{{ row.p95 }}</td><td>{{ row.maximum }}</td>
+                    <td>{{ row.above if row.above is not none else 'Not a percentage metric' }}</td>
+                    <td>{{ row.longest if row.longest is not none else 'Not a percentage metric' }}</td>
+                </tr>{% else %}<tr><td colspan="9">Observation statistics are unavailable. No present retained metric values exist.</td></tr>
+                {% endfor %}</tbody>
+            </table></div>
+        </section>
         <section data-testid="wan-retained-plots" aria-label="Discrete retained projection plots">
             <p>Points do not identify source metric sample times. Each point belongs to its labeled UTC hour bucket.
                 Missing values and hours have no points. No line implies continuous measurement.

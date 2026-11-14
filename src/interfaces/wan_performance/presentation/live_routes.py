@@ -28,6 +28,7 @@ from src.interfaces.wan_performance.integration.refresh_store import RefreshStor
 from src.interfaces.wan_performance.presentation.inspection.sle_routes import SlePages
 from src.interfaces.wan_performance.presentation.inspection.table import GatewayStatistics, RecordTable, TableOptions
 from src.interfaces.wan_performance.presentation.inspection.windows import (
+    ObservationStatistics,
     ObservationWindow,
     RetainedPlot,
     RetainedWindow,
@@ -160,6 +161,7 @@ class LivePages:
         history_error, instant, partial = None, None, False
         options = TableOptions.from_request()
         window = ObservationWindow.from_request()
+        threshold = ObservationStatistics.from_request()
         try:
             service = cls.service()
             snapshot = service.store.cached(service.org_id)
@@ -188,6 +190,7 @@ class LivePages:
         exported = table.export(error)
         if exported is not None:
             return exported
+        plots = RetainedPlot.build(retained)
         return render_template(
             "wan_performance/live.html",
             kind=kind,
@@ -195,7 +198,9 @@ class LivePages:
             table=table,
             window=window,
             retained=retained,
-            plots=RetainedPlot.build(retained),
+            plots=plots,
+            observation_statistics=ObservationStatistics.build(plots, threshold),
+            observation_threshold=threshold,
             summaries=summaries,
             states=states,
             gateways=gateways,

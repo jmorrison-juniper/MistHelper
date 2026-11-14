@@ -40,7 +40,18 @@ class TableOptions:
 
     def url(self, **changes: str | int) -> str:
         """Preserve the complete route and query scope when changing table controls."""
-        allowed = {"gateway_id", "site_id", "path_key", "q", "sort", "direction", "page", "download", "window"}
+        allowed = {
+            "gateway_id",
+            "site_id",
+            "path_key",
+            "q",
+            "sort",
+            "direction",
+            "page",
+            "download",
+            "window",
+            "observation_threshold",
+        }
         arguments = {name: value for name, value in request.args.items() if name in allowed}
         arguments.update(request.view_args or {})
         arguments.update({name: str(value) for name, value in changes.items()})

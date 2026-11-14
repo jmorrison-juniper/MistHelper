@@ -123,7 +123,7 @@ These tasks do not replace source-parity acceptance or authorize source executio
 - [X] T059 Verify the original site-selector provider shape with independent isolated data. Add accessible independent retained-point rectangle selection with exact identity, zero/missing, bounds, pointer cancellation, keyboard, figure-isolation, and no-query browser tests.
 - [X] T060 Display only documented cached gateway CPU/memory usage, device uptime, and last observation in the existing inspection table module and live route/template, with unit, scope, missing/invalid, no-query, and three-viewport browser tests.
 - [X] T061 Define independently designed version-one replacement contracts and preserve original acceptance states in spec.md, plan.md, analysis.md, and design/contracts/replacements.md.
-- [ ] T062 Add scoped hourly-projection observation statistics and configurable percentage-threshold counts in presentation/inspection/windows.py and the existing live route/template, with hand-calculated unit, missing/overflow, scope, no-extra-read, and browser assertions.
+- [X] T062 Add scoped hourly-projection observation statistics and configurable percentage-threshold counts in presentation/inspection/windows.py and the existing live route/template, with hand-calculated unit, missing/overflow, scope, no-extra-read, and browser assertions.
 - [ ] T063 Validate thirteen calendar months of independently authored synthetic records through temporary SQLite and mocked Arango in tests/unit/wan_performance/test_history_repository.py, preserving provenance, gaps, exact identity, boundaries, and repeat-write behavior.
 
 ## Dependencies and execution order

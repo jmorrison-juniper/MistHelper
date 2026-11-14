@@ -130,6 +130,8 @@ T061 records replacement requirements, evidence labels, and future ranking/decla
 T062 implements observation mean, nearest-rank p95, and configurable percentage-threshold counts over the existing retained view.
 Keep old calendar summaries, raw samples, cache exports, and source-parity decisions unchanged.
 T063 validates thirteen calendar months with independently authored synthetic records in temporary SQLite and mocked Arango.
+Preserve the application codec prohibition on synthetic data.
+Use native temporary SQLite payload storage and separate adapter-rejection checks. Mocked Arango proves query guards, not executed persistence.
 Do not claim that synthetic storage evidence establishes production retention or deployment capacity.
 Each verified commit receives a uniquely named recovery copy with remote SHA verification.
 Do not update the existing PR branch or change the publication hold.

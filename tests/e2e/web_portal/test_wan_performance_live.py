@@ -190,6 +190,87 @@ def retained_history(live_service):
     return live_service.history
 
 
+@pytest.fixture
+def statistics_history(retained_history):
+    """Provide independently authored values only through the existing mocked history boundary."""
+    from dataclasses import replace
+    from datetime import timedelta
+
+    from src.interfaces.wan_performance.domain.measurement import MetricMeasurement
+
+    original_read = retained_history.read.side_effect
+
+    def read(identity, start, end):
+        """Keep exact route identity and deliberately incomplete metric observations."""
+        original = original_read(identity, start, end)[0]
+        return tuple(
+            replace(
+                original,
+                hour_start_utc=start + timedelta(hours=offset),
+                collected_at_utc=start + timedelta(hours=offset, minutes=1),
+                metrics={"loss": MetricMeasurement(value, "%", missing_reason="Absent" if value is None else None)},
+            )
+            for offset, value in [(0, 0), (1, 80), (2, 90), (4, 100), (5, None)]
+        )
+
+    retained_history.read.side_effect = read
+    return retained_history
+
+
+@pytest.mark.parametrize("threshold", ["", "-1", "101", "80.0", "8e1", "８０", "true", "0" * 1000])
+def test_replacement_threshold_rejects_invalid_input_before_store_reads(client, live_service, threshold):
+    """Reject malformed controls without cache access, history reads, or live requests."""
+    response = client.get("/wan-performance/live/", query_string={"window": "6h", "observation_threshold": threshold})
+    assert response.status_code == 400
+    assert "integer from 0 through 100" in response.get_data(as_text=True)
+    live_service.store.cached.assert_not_called()
+    live_service.history.read.assert_not_called()
+    live_service.session.assert_not_called()
+
+
+def test_replacement_report_uses_full_identity_window_independent_of_table_filter(client, statistics_history):
+    """Retain full-window scope, missing evidence, and the threshold across navigation."""
+    response = client.get(
+        "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=6h&q=absent&observation_threshold=80"
+    )
+    text = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'data-testid="wan-observation-statistics"' in text
+    assert "67.5" in text and "nearest-rank p95" in text and "Designed replacement v1" in text
+    assert "5 retained hour buckets of 6 expected" in text and "Measurement completeness remains unknown" in text
+    assert "observation_threshold=80" in text
+    identity, start, end = statistics_history.read.call_args.args
+    assert identity.natural_key == ("org-one", "site-one", "aabbccddeeff", "ge-0/0/0")
+    assert (end - start).total_seconds() == 21600 and statistics_history.read.call_count == 1
+    statistics_history.read_samples.assert_not_called()
+    statistics_history.upsert.assert_not_called()
+
+
+@pytest.mark.parametrize("viewport", [(1440, 1000), (1280, 900), (390, 844)])
+def test_replacement_statistics_browser_controls_preserve_retained_records(
+    page: Page, live_browser_url: str, statistics_history, viewport, wan_browser_artifacts: Path
+):
+    """Exercise threshold updates and local plot controls without changing metric values or scope."""
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.goto(live_browser_url + "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=6h")
+    report = page.get_by_test_id("wan-observation-statistics")
+    expect(report).to_contain_text("67.5")
+    expect(report.locator("tbody tr").first.locator("td").nth(7)).to_have_text("2")
+    original = page.get_by_test_id("wan-retained-records").inner_text()
+    page.get_by_test_id("wan-observation-threshold").fill("90")
+    page.get_by_test_id("wan-observation-apply").click()
+    expect(page).to_have_url(re.compile("observation_threshold=90"))
+    expect(report.locator("tbody tr").first.locator("td").nth(7)).to_have_text("1")
+    assert page.get_by_test_id("wan-retained-records").inner_text() == original
+    before = report.inner_text()
+    page.get_by_test_id("wan-retained-zoom-in").first.click()
+    assert report.inner_text() == before and statistics_history.read.call_count == 2
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    statistics_history.read_samples.assert_not_called()
+    statistics_history.upsert.assert_not_called()
+    page.screenshot(path=str(wan_browser_artifacts / f"replacement-statistics-{viewport[0]}.png"), full_page=True)
+
+
 @pytest.mark.parametrize("path", ["/wan-performance/live/site/site-one", "/wan-performance/live/?site_id=site-one"])
 def test_cached_site_selection_uses_exact_cached_org_membership(client, live_service, path):
     """Scope site views without claiming complete site inventory or reading all histories."""

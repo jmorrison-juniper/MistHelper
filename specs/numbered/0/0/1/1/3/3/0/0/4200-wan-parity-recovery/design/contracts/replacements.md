@@ -18,7 +18,8 @@ Report present-value count, minimum, mean, nearest-rank p95, and maximum.
 For N sorted values, p95 selects the value at one-based rank `ceil(95*N/100)`.
 Do not interpolate percentiles or combine incompatible units.
 Compute the mean from exact rational representations of supplied decimal strings.
-Display derived means with 28 significant decimal digits. Preserve original values in the existing table.
+Display derived means with at most 28 significant decimal digits and half-even rounding.
+Remove insignificant trailing zeros. Preserve original values in the existing table.
 Empty groups have no statistic. Do not substitute zero.
 These are hourly-projection observation statistics, not raw-sample percentiles or duration-weighted measurements.
 Source sample timestamps, weighting, and statistical equivalence remain unverified.
@@ -67,6 +68,9 @@ The bundled OpenAPI remains the executable-contract reference for independently 
 
 Generate records independently, using explicit UTC hour keys and `synthetic` provenance.
 Use only a temporary, existing SQLite file and mocked Arango adapters.
+The application codec rejects synthetic records on reads and writes. Preserve that guard.
+Validate native SQLite payload storage separately from application-codec acceptance.
+Mocked Arango checks prove query construction and synthetic rejection, not executed database persistence.
 Read exact half-open thirteen-calendar-month intervals and compare complete identities and payloads.
 Exercise missing periods, repeated writes, and boundary exclusions.
 Record actual counts and outcomes without relabeling them as live data.

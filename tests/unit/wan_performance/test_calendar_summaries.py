@@ -650,6 +650,100 @@ def test_retained_plots_do_not_draw_missing_or_unavailable_values() -> None:
     assert RetainedPlot.build(RetainedWindow(window, (missing,), error="Store unavailable")) == ()
 
 
+@pytest.mark.parametrize(
+    ("values", "mean", "percentile"),
+    [
+        ((0,), "0", 0),
+        (tuple(range(20)), "9.5", 18),
+        ((-1e308, 1, 1e308), "0.3333333333333333333333333333", 1e308),
+        ((1e308, 1e308), "1E+308", 1e308),
+        ((1e-310, 2e-310), "1.5E-310", 2e-310),
+    ],
+)
+def test_replacement_statistics_keep_exact_values_and_stable_means(values, mean, percentile) -> None:
+    """Verify hand-calculated nearest ranks and exact cancellation without source-weighting claims."""
+    from src.interfaces.wan_performance.presentation.inspection.windows import (
+        ObservationStatistics,
+        ObservationWindow,
+        RetainedPlot,
+        RetainedWindow,
+    )
+
+    original = OfflinePreviewFactory.build().measurements[0]
+    window = ObservationWindow("24h", original.hour_start_utc, original.hour_start_utc + timedelta(hours=24))
+    records = tuple(
+        replace(
+            original,
+            hour_start_utc=window.start + timedelta(hours=index),
+            collected_at_utc=window.start + timedelta(hours=index, minutes=1),
+            metrics={"value": MetricMeasurement(value, "unknown")},
+            provenance="live",
+        )
+        for index, value in enumerate(values)
+    )
+    rows = ObservationStatistics.build(RetainedPlot.build(RetainedWindow(window, records)), 80)
+    assert rows == (
+        {
+            "name": "value",
+            "unit": "unknown",
+            "count": len(values),
+            "minimum": min(values),
+            "mean": mean,
+            "p95": percentile,
+            "maximum": max(values),
+            "above": None,
+            "longest": None,
+        },
+    )
+    assert tuple(record.metrics["value"].value for record in records) == values
+
+
+@pytest.mark.parametrize(("threshold", "above", "longest"), [(0, 4, 2), (80, 2, 1), (90, 1, 1), (100, 0, 0)])
+def test_replacement_threshold_runs_break_at_missing_hours_and_values(threshold, above, longest) -> None:
+    """Count strict exceedances without substituting missing values or elapsed durations."""
+    from src.interfaces.wan_performance.presentation.inspection.windows import (
+        ObservationStatistics,
+        ObservationWindow,
+        RetainedPlot,
+        RetainedWindow,
+    )
+
+    original = OfflinePreviewFactory.build().measurements[0]
+    window = ObservationWindow("6h", original.hour_start_utc, original.hour_start_utc + timedelta(hours=6))
+    records = tuple(
+        replace(
+            original,
+            hour_start_utc=window.start + timedelta(hours=offset),
+            collected_at_utc=window.start + timedelta(hours=offset, minutes=1),
+            metrics={"loss": MetricMeasurement(value, "%", missing_reason="Absent" if value is None else None)},
+            provenance="live",
+        )
+        for offset, value in [(0, 0), (1, 80), (2, 90), (3, None), (4, 100), (5, 10)]
+    )
+    row = ObservationStatistics.build(RetainedPlot.build(RetainedWindow(window, records)), threshold)[0]
+    assert (row["count"], row["above"], row["longest"], row["p95"]) == (5, above, longest, 100)
+    assert records[3].metrics["loss"].value is None
+
+
+def test_replacement_statistics_preserve_unit_groups_and_empty_results() -> None:
+    """Keep incompatible units separate and unavailable groups absent instead of measured zero."""
+    from src.interfaces.wan_performance.presentation.inspection.windows import ObservationStatistics, RetainedPlot
+
+    hour = "2024-01-01T12:00:00+00:00"
+    plots = (
+        RetainedPlot("loss", "%", ((32, 100, hour, 90, hour),)),
+        RetainedPlot("loss", "ms", ((32, 100, hour, 90, hour),)),
+        RetainedPlot("loss", "percent", ((32, 100, hour, 80, hour),)),
+    )
+    rows = ObservationStatistics.build(plots, 80)
+    assert [(row["unit"], row["above"], row["longest"]) for row in rows] == [
+        ("%", 1, 1),
+        ("ms", None, None),
+        ("percent", 0, 0),
+    ]
+    assert ObservationStatistics.build((), 80) == ()
+
+
 def test_monthly_thresholds_exclude_other_identity_and_prior_month() -> None:
     """Keep calendar boundaries and complete circuit identities separate."""
     dashboard = OfflinePreviewFactory.build()

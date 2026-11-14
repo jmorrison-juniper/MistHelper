@@ -5,7 +5,7 @@
 The later user direction authorizes independently designed replacements and bounded synthetic validation.
 T061 defines [version-one contracts](design/contracts/replacements.md) without changing original acceptance states.
 T062 will implement observation statistics and configurable threshold counts over existing bounded retained projections.
-T063 will validate thirteen calendar months with explicit synthetic provenance in temporary SQLite and mocked Arango.
+T063 will validate native temporary SQLite payload storage and mocked Arango guards with explicit synthetic provenance.
 Neither increment manufactures production data or establishes source equivalence.
 Future ranking, declarations, event, SLE, backfill, visual, and acceptance policies now have explicit replacement definitions.
 Actual network declarations, actual archives, production environment evidence, and owner deployment acceptance remain external facts.
@@ -16,6 +16,27 @@ New verified commits will receive unique remote recovery copies without modifyin
 T061 document checks passed: STE scores 94, 92, 96, 90, and 84 across five changed records.
 The structure guard passed eleven tests with one existing warning. The existing tracked feature links had zero broken targets.
 The new contract receives a separate tracked-link check before commit.
+
+### T062 replacement statistics
+
+The new report implements FR-018 and FR-019 under the T061 evidence contract for FR-017 and FR-021.
+Ten unit cases, nine route cases, and three browser cases passed. No existing test was removed.
+SC-009 and SC-010 cover full identity, exact units, missing values, zero, threshold boundaries, nearest-rank p95, and extreme-value cancellation.
+Browser checks passed at 1440, 1280, and 390 pixels. Threshold changes preserved retained records.
+Local zoom changed neither the report nor the read count. Raw-sample reads and writes did not run.
+The initial negative run had fourteen genuine missing-feature failures and eight fixture/query failures.
+The corrected malformed-input negative control failed all eight cases when threshold admission was replaced with the prior permissive behavior.
+The final focused run passed 22 cases with two existing warnings in 3.52 seconds.
+The complete WAN, browser, and SDK regression selection passed 527 cases with two existing warnings in 58.56 seconds.
+Ruff, Black, compilation, Bandit, mypy on 29 source files, and complexity passed.
+The window-choice constant moved into the selection method. No external Python reference used the removed module declaration.
+The renderer remains within complexity 10. New statistics methods preserve the five-member class limit.
+Neither P06 nor P10 source acceptance is complete.
+
+Temporary source evidence now resides in the current session's `files/original-review-4208` directory.
+The first full quality scan included temporary foreign tests and failed with 15157 new findings.
+After that ignored tree moved intact outside the checkout, the unchanged full gate checked 1260 repository files with zero new findings.
+No analyzer exclusion, baseline, configuration, or detector changed.
 
 ## Final bounded remainder and acceptance dependencies
 
@@ -837,11 +858,11 @@ An explicit test gap means the behavior remains unaccepted.
 | P03 | T009, T011 | Encoded-port and calendar-summary tests | Synthetic values only. |
 | P04 | T010, T011 | Peer route and peer-quality tests | Synthetic fields only. |
 | P05 | T019-T022 | `wan-top-congested-circuits` preview selector | Top-N ranking test is absent. |
-| P06 | T013-T016 | Threshold observation tests in the live test module | Source threshold and override semantics remain unknown. |
+| P06 | T013-T016, T062 | Threshold observation tests and version-one adjustable percentage controls | Source threshold and override semantics remain unknown. Independent counts do not establish elapsed duration. |
 | P07 | T015-T016 | `test_wan_performance_live.py` duration assertions | Current sample intervals do not prove source duration parity. |
 | P08 | T017-T018 | `test_calendar_summaries.py` event and unknown-coverage cases | Historical flap and availability parity remains open. |
 | P09 | T019-T022 | No primary/secondary parity assertion exists | Blocked by missing role and failover contracts. |
-| P10 | T023-T024 | Peer snapshot and history tests | Poll samples do not establish source mean, maximum, or p95. |
+| P10 | T023-T024, T062 | Peer snapshot/history tests and independent hourly-projection distribution tests | Neither poll samples nor designed projection statistics establish source mean, maximum, or p95. |
 | P11 | T003, T004, T023 | SDK compatibility test and pinned source discovery | Source methods exist, but required SDK symbols or arguments are unsupported. |
 | P12 | T025-T026, T049 | Catalog-choice, raw-value, and SLE browser tests in `test_wan_performance_live.py` | Independent inspection passes. Source score normalization, duration units, and equivalence remain unverified. |
 | P13 | T025-T026, T049 | Scoped impacted-gateway request, response-validation, admission, and browser tests | Bounded raw gateway inspection passes. Source-specific classifiers and impact semantics remain unverified. |

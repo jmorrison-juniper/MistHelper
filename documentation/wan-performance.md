@@ -1,5 +1,12 @@
 # WAN Performance
 
+## Independently designed observation reports
+
+Retained detail windows include version-one hourly-projection statistics and an adjustable percentage threshold.
+The report preserves missing values, exact units, full identity, and the existing bounded read.
+It does not claim raw-sample statistics, elapsed coverage, or source equivalence.
+The [replacement contract](../specs/numbered/0/0/1/1/3/3/0/0/4200-wan-parity-recovery/design/contracts/replacements.md) defines calculation rules and evidence limits.
+
 Select **WAN Performance** in the existing portal navigation.
 The tab opens the read-only live overview.
 Select **Open the isolated synthetic preview** to view the four source-shaped sample pages.
