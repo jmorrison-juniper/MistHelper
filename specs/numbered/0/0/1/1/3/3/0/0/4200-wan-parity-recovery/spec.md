@@ -80,6 +80,18 @@ Users need consistent authorization, offline isolation, errors, and bounded refr
 2. **Given** denied access or invalid identifiers, **When** a user opens a detail link, **Then** the portal denies access without collection or disclosure.
 3. **Given** throttling or storage failure, **When** refresh runs, **Then** bounded retries and explicit unavailable states preserve existing portal operation.
 
+### User Story 6 - Use explicit replacement contracts (Priority: P1)
+
+Operators need useful, defined behavior when original contracts or historical evidence are absent.
+
+**Independent Test**: Compare independently designed reports with hand-calculated expectations and clearly labeled synthetic historical records.
+
+**Acceptance Scenarios**:
+
+1. **Given** retained hourly projections, **When** users request observation statistics, **Then** values follow the named replacement policy without claiming source sampling semantics.
+2. **Given** missing measurements, **When** users inspect thresholds or percentiles, **Then** missing values remain absent and observation counts never become elapsed coverage.
+3. **Given** thirteen months of independent synthetic records, **When** validation exercises isolated storage, **Then** evidence identifies synthetic provenance and does not claim production retention.
+
 ### Edge Cases
 
 - Empty organizations, removed gateways, encoded port names, peer identity changes, and wrong-site detail links.
@@ -108,6 +120,11 @@ Users need consistent authorization, offline isolation, errors, and bounded refr
 - **FR-014**: Test authorization, validation, missing data, stale data, API failures, throttling, storage failures, and refresh bounds.
 - **FR-015**: Retain approved browser evidence and map every accepted comparison row to a test and reviewer decision.
 - **FR-016**: Keep unsupported contracts blocked and preserve draft status until every required acceptance row has evidence.
+- **FR-017**: Version replacement behavior separately from source behavior. Distinguish observed source facts, independently designed rules, operator declarations, and synthetic evidence.
+- **FR-018**: Summarize one full identity, metric, and unit from present hourly projections with equal observation weights and a nearest-rank p95.
+- **FR-019**: Permit an integer observation threshold from zero through 100, defaulting to 80. Count strict exceedances and adjacent above-threshold hour keys without claiming duration.
+- **FR-020**: Validate thirteen calendar months with independently authored synthetic records, exact boundaries, identity isolation, missing periods, and preserved provenance.
+- **FR-021**: Define replacement ranking, declared metadata, backfill eligibility, and acceptance policies before their implementation. Missing network facts remain explicit input requirements.
 
 ### Mist Cloud Transport Requirements
 
@@ -137,9 +154,17 @@ This specification authorizes no new transport or live request.
 - **SC-006**: Every required visual row has reviewed evidence or remains blocked by a named evidence limitation.
 - **SC-007**: No new service, port, database, token store, or synthetic-to-live data path exists.
 - **SC-008**: Final acceptance uses the exact tested revision and leaves zero unexplained required gaps.
+- **SC-009**: Observation reports preserve zero, missing values, exact metric units, and full identity with no additional acquisition or history reads.
+- **SC-010**: Replacement threshold and percentile results match hand-calculated boundaries, sparse hours, ties, and extreme finite numbers.
+- **SC-011**: Synthetic historical validation reports actual record counts and scope results, distinguishing temporary SQLite execution from mocked Arango evidence.
 
 ## Assumptions
 
+- The later user direction authorizes independently designed replacements, not invented source contracts, production records, or historical completeness.
+- The version-one replacement contract is [defined separately](design/contracts/replacements.md).
+- Replacement observation statistics weight each present hourly projection equally. They are not raw-sample, duration-weighted, or source-equivalent statistics.
+- Replacement threshold runs describe adjacent observed UTC hour keys, not continuous measured time.
+- New verified commits may receive uniquely named remote recovery copies. The existing PR branch and publication hold remain unchanged.
 - This record replaces the execution sequence, not the historical planning record or original acceptance requirements.
 - Existing PR work is provisional until current evidence establishes its behavior.
 - Source goals do not prove completed features. Source TODOs are not accepted functionality.

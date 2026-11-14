@@ -1,5 +1,22 @@
 # Recovery coverage and execution status
 
+## User-directed replacement contracts
+
+The later user direction authorizes independently designed replacements and bounded synthetic validation.
+T061 defines [version-one contracts](design/contracts/replacements.md) without changing original acceptance states.
+T062 will implement observation statistics and configurable threshold counts over existing bounded retained projections.
+T063 will validate thirteen calendar months with explicit synthetic provenance in temporary SQLite and mocked Arango.
+Neither increment manufactures production data or establishes source equivalence.
+Future ranking, declarations, event, SLE, backfill, visual, and acceptance policies now have explicit replacement definitions.
+Actual network declarations, actual archives, production environment evidence, and owner deployment acceptance remain external facts.
+Unsupported original semantics no longer prevent the independently defined observation report or synthetic validation.
+The existing reviewer checklist remains unchanged. It is not a replacement-implementation completion checklist.
+The branch-creation hook cannot run because this app owns the current branch. No feature pointer or branch changes.
+New verified commits will receive unique remote recovery copies without modifying the original PR branch.
+T061 document checks passed: STE scores 94, 92, 96, 90, and 84 across five changed records.
+The structure guard passed eleven tests with one existing warning. The existing tracked feature links had zero broken targets.
+The new contract receives a separate tracked-link check before commit.
+
 ## Final bounded remainder and acceptance dependencies
 
 T060 adds the remaining justified cached gateway fields without a new acquisition or metric calculation.

@@ -122,6 +122,24 @@ This record does not claim that the complete Spec Kit command pipeline ran.
 
 ## Renewed parity investigation
 
+### Independently designed replacement sequence
+
+The later user direction permits defensible replacements instead of waiting for absent source evidence.
+Use [version-one contracts](design/contracts/replacements.md), and preserve original acceptance states.
+T061 records replacement requirements, evidence labels, and future ranking/declaration/backfill policies.
+T062 implements observation mean, nearest-rank p95, and configurable percentage-threshold counts over the existing retained view.
+Keep old calendar summaries, raw samples, cache exports, and source-parity decisions unchanged.
+T063 validates thirteen calendar months with independently authored synthetic records in temporary SQLite and mocked Arango.
+Do not claim that synthetic storage evidence establishes production retention or deployment capacity.
+Each verified commit receives a uniquely named recovery copy with remote SHA verification.
+Do not update the existing PR branch or change the publication hold.
+
+The inspection window module already has five top-level classes/constants.
+Move its window-choice constant into the existing selection method before adding the replacement statistics class.
+Update every internal reference, remove the old declaration, and record the intentional symbol change.
+The new report class has at most five methods and introduces no directory or schema.
+Existing oversized route/test structures remain recorded debt. Their ownership-approved division remains separate work.
+
 T060 addresses the independently supported portion of P36-P37.
 The existing selected-gateway discovery retains the `stats_gateway` payload in the snapshot cache.
 Display `cpu_stat.usage` and `memory_stat.usage` as reported percentages, `uptime` as seconds since boot, and `last_seen` as gateway observation time.

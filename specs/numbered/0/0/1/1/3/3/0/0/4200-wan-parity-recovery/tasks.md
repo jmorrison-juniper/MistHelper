@@ -122,6 +122,9 @@ These tasks do not replace source-parity acceptance or authorize source executio
 - [X] T058 Examine remaining authorized source legends, sharing, clipboard boundaries, and selection modes. Add independent retained metric visibility controls with keyboard, no-script, figure-isolation, zoom/reset, PNG, and no-request browser tests.
 - [X] T059 Verify the original site-selector provider shape with independent isolated data. Add accessible independent retained-point rectangle selection with exact identity, zero/missing, bounds, pointer cancellation, keyboard, figure-isolation, and no-query browser tests.
 - [X] T060 Display only documented cached gateway CPU/memory usage, device uptime, and last observation in the existing inspection table module and live route/template, with unit, scope, missing/invalid, no-query, and three-viewport browser tests.
+- [X] T061 Define independently designed version-one replacement contracts and preserve original acceptance states in spec.md, plan.md, analysis.md, and design/contracts/replacements.md.
+- [ ] T062 Add scoped hourly-projection observation statistics and configurable percentage-threshold counts in presentation/inspection/windows.py and the existing live route/template, with hand-calculated unit, missing/overflow, scope, no-extra-read, and browser assertions.
+- [ ] T063 Validate thirteen calendar months of independently authored synthetic records through temporary SQLite and mocked Arango in tests/unit/wan_performance/test_history_repository.py, preserving provenance, gaps, exact identity, boundaries, and repeat-write behavior.
 
 ## Dependencies and execution order
 
@@ -141,6 +144,7 @@ T037-T038 and E8 block T039.
 T041-T042 depend on the verified story increments, not unsupported substitute values.
 T043-T047 follow all required comparison rows. A blocked required row prevents acceptance.
 T054 establishes source isolation for T059. T055-T058 establish the retained geometry and visibility contracts before T059.
+T061 precedes T062 and T063. These independent replacements do not mark original source acceptance tasks complete.
 
 ## Parallel opportunities
 
