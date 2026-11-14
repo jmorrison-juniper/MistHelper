@@ -1,5 +1,32 @@
 # Source comparison and end-to-end contract
 
+## Latest independent destination coverage
+
+The independent SLE page supersedes the earlier evidence-only SLE assessment below.
+It does not establish source parity.
+`test_sle_get_is_cache_only_and_post_uses_supported_signature` proves cached-site scope and the installed SDK argument shape.
+`test_sle_uses_actual_refresh_lease_without_releasing_cooldown` exercises the actual lease class with a mocked Redis client.
+This is protocol evidence, not proof of two real processes or live Redis.
+HTTP 403, 429, and 500 responses remain errors. A lost lease prevents the second API request.
+Disabled metrics and foreign sites cannot trigger an impacted-gateway request.
+Malformed rows, non-finite numbers, mismatched metrics, and oversized pages fail explicitly.
+SLE duration units, aggregation, historical coverage, and response completeness remain unverified.
+
+`test_browser_sle_explicit_inspection` exercises the independent form, results, unknown-unit labels, partial-page message, and return navigation.
+`test_browser_cached_table_controls` exercises pagination, filtering, lexical sorting, and CSV download.
+Both run at 1440x1100, 1280x800, and 390x844, with document overflow assertions.
+These are destination usability checks, not protected source screenshots or visual comparisons.
+
+`test_table_filter_keeps_full_scoped_history_and_csv_identity` separates table filtering from detail history and CSV scope.
+`test_table_paginates_and_exports_all_matching_rows` verifies a complete cached export across display pages.
+Formula-prefix tests preserve numeric values and neutralize dangerous text.
+`test_cached_controls_preserve_scope_and_reject_foreign_cache` rejects another organization's cache.
+
+`test_peer_mos_summary_preserves_retained_missing_units` stores old and new hours in temporary SQLite before summary calculation.
+It covers either input order, same-day hours, cross-day merges, and documented summary units.
+The route regression verifies a displayed score after an earlier missing unknown-unit record.
+Incompatible measured units still fail. Old records remain unchanged.
+
 ## Inventory rules
 
 Create one row for each visible element, action, metric, state, and navigation transition.

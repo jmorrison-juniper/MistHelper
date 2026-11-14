@@ -6,6 +6,7 @@
 {% block content %}
 <section class="container-fluid wan-performance" data-testid="wan-live-{{ kind }}">
     <h1>WAN Performance{% if kind != "overview" %}: {{ kind }}{% endif %}</h1>
+    <a href="{{ url_for('wan_performance.live.sle') }}" data-testid="wan-live-sle-link">Inspect cached-site SLE data</a>
     <p data-testid="wan-live-data-state">Live snapshot{% if stale %} — stale{% endif %}.
         These are latest observations, not full-hour measurements.
         Unknown values do not mean healthy service.</p>
@@ -79,11 +80,38 @@
     </div>
     <section class="mt-4">
         <h2>Gateways, WAN ports, and VPN paths</h2>
+        <form method="get" class="mb-3" data-testid="wan-table-controls">
+            {% for name, value in request.args.items() if name in ["gateway_id", "site_id", "path_key"] %}
+            <input type="hidden" name="{{ name }}" value="{{ value }}">
+            {% endfor %}
+            <label for="wan-table-filter">Identity text</label>
+            <input id="wan-table-filter" name="q" value="{{ table.options.query }}" maxlength="128" data-testid="wan-table-filter">
+            <label for="wan-table-sort">Lexical sort</label>
+            <select id="wan-table-sort" name="sort" data-testid="wan-table-sort">
+                {% for value, label in [("site_id", "Site"), ("gateway_id", "Gateway"), ("port_name", "Port"), ("peer_mac", "Peer")] %}
+                <option value="{{ value }}"{% if table.options.sort == value %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <label for="wan-table-direction">Direction</label>
+            <select id="wan-table-direction" name="direction" data-testid="wan-table-direction">
+                <option value="asc"{% if not table.options.descending %} selected{% endif %}>Ascending</option>
+                <option value="desc"{% if table.options.descending %} selected{% endif %}>Descending</option>
+            </select>
+            <button type="submit" class="btn btn-secondary" data-testid="wan-table-apply">Apply table controls</button>
+        </form>
+        <p data-testid="wan-table-page">Page {{ table.options.page }} of {{ table.pages }}.
+            {{ table.matching|length }} matching cached observations. Ten rows per page.
+            These independent controls do not establish inventory completeness or performance ranking.</p>
+        {% if table.options.page > 1 %}<a href="{{ table.options.url(page=table.options.page - 1) }}" data-testid="wan-table-previous">Previous page</a>{% endif %}
+        {% if table.options.page < table.pages %}<a href="{{ table.options.url(page=table.options.page + 1) }}" data-testid="wan-table-next">Next page</a>{% endif %}
+        <a href="{{ table.options.url(download='csv', page=1) }}" data-testid="wan-table-export">Export all matching cached observations as CSV</a>
+        <p>CSV contains UTC observation hours, collection times, units, missing reasons, and provenance.
+            It is not a historical backfill. Text formula prefixes receive an apostrophe.</p>
         <div class="table-responsive">
         <table class="table" data-testid="wan-live-records">
             <thead><tr><th>Site</th><th>Gateway</th><th>Port</th><th>Peer</th><th>Measurements</th></tr></thead>
             <tbody>
-            {% for record in records %}
+            {% for record in table.rows %}
             {% set gateway = record.identity.gateway if record.identity.gateway is defined else record.identity %}
             <tr>
                 <td>{{ gateway.site.site_id }}</td>
@@ -105,7 +133,7 @@
                     </div>
                     {% endif %}</td>
             </tr>
-            {% else %}<tr><td colspan="5">No cached observations are available. No live call ran for this page.</td></tr>{% endfor %}
+            {% else %}<tr><td colspan="5">No cached observations match the identity filter. No live call ran for this page.</td></tr>{% endfor %}
             </tbody>
         </table>
         </div>

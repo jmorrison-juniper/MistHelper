@@ -1,5 +1,48 @@
 # Recovery coverage and execution status
 
+## Latest independent destination implementation
+
+T048-T051 are complete with local proof. The task ledger now has 28 completed tasks of 51.
+The original 47-task audit still has 24 completed tasks and 23 acceptance tasks open.
+These increments do not close source-parity acceptance or issue #4200.
+
+The retained-MOS regression first reproduced five failures and one passing incompatible-unit guard.
+The exception was `ValueError: Calendar summaries cannot mix metric units.`
+The final regression stores retained missing unknown-unit and new score hours in temporary SQLite.
+It covers either input order and same-day or different-day hours.
+Daily, rolling, weekly, and monthly summaries use the documented score unit when present.
+The route test confirms the visible score. Old stored records remain unchanged.
+
+The independent SLE view uses existing access controls, CSRF, cached organization membership, the session transport, and shared organization admission.
+Navigation starts no API request. A submission reads the enabled catalog and optionally one impacted-gateway page.
+The fixed request duration is one hour. Duration units and completeness remain unknown.
+No new storage, worker, background request, classifier mapping, or production operation was added.
+The actual lease class is exercised with a mocked Redis client, not a live Redis service.
+
+Cached table controls provide identity filtering, lexical sorting, ten-row pagination, and full filtered CSV export.
+History selection uses the full route scope before table filtering.
+CSV fields retain identity, UTC observation hour, collection time, units, missing reasons, and provenance.
+The observation hour is an hourly projection, not a raw metric timestamp.
+Text formula prefixes receive an apostrophe.
+Browser journeys cover both new interfaces at 1440x1100, 1280x800, and 390x844 without document overflow.
+
+The combined WAN, destination-browser, and SDK suite reports 404 passed, with two existing plugin warnings.
+The previous candidate reported 355 passed. This increment adds 49 cases and removes no existing test.
+The SDK guard reports 587 checked signatures, 10 unresolved sites, 364 unverifiable signatures, and zero known failures.
+Ruff and Black pass. Mypy reports success for 28 source files.
+Compilation, Bandit, and the maximum-ten complexity gate pass.
+The summary module loses no module-level names.
+The route symbol comparison reports three intentional imported names and no lost names.
+Its exit code is one because additions count as changes, not because a declaration disappeared.
+
+Source execution and protected screen capture remain prohibited without a verified rights grant.
+The original application's full test cycle and interactive exploration remain unperformed for that reason.
+Exact source temporal, raw-sample percentile, weighting, retention, capacity, historical completeness, and backfill contracts remain prerequisites.
+The SLE endpoint does not supply these facts. Its missing SDK pagination arguments prevent complete large-result traversal.
+The independently defined table ordering and CSV format do not establish original ordering or export equivalence.
+Protected workflow paths, dependency pins, baseline files, entry points, registry files, and the feature pointer remain unchanged.
+No publication, hosted check, readiness change, or merge occurred.
+
 **Date**: 2026-11-05
 
 This record maps requirements to the new execution sequence.

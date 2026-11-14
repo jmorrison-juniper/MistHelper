@@ -90,13 +90,25 @@ class SummaryValidation:
         if len({record.provenance for record in records}) > 1:
             logger.error("Rejected calendar summaries with mixed provenance")
             raise ValueError("Calendar summaries cannot mix provenance.")
+        SummaryValidation._units(records)
+
+    @staticmethod
+    def _units(records: tuple[HourlyMeasurement, ...]) -> None:
+        """Validate measured units while preserving old missing unknown placeholders."""
         units: dict[str, str] = {}
         for record in records:
             for name, metric in record.metrics.items():
+                if metric.value is None and metric.unit == "unknown":
+                    continue
                 if name in units and units[name] != metric.unit:
                     logger.error("Rejected calendar metric %s with incompatible units", name)
                     raise ValueError("Calendar summaries cannot mix metric units.")
                 units[name] = metric.unit
+
+    @staticmethod
+    def unit(units: list[str]) -> str:
+        """Prefer documented units without changing retained unknown measurements."""
+        return next((unit for unit in units if unit != "unknown"), units[0])
 
 
 class CalendarSummaries:
@@ -183,7 +195,7 @@ class CalendarSummaries:
         means = [value[0] for value in values if value[0] is not None]
         maxima = [value[1] for value in values if value[1] is not None]
         percentiles = [value[2] for value in values if value[2] is not None]
-        merged = cls._values(means, maxima, percentiles, name, values[0][3])
+        merged = cls._values(means, maxima, percentiles, name, SummaryValidation.unit([value[3] for value in values]))
         period_p95 = round(max(percentiles), 4 if "loss" in name else 2) if percentiles else None
         return merged[0], merged[1], period_p95, merged[3]
 
@@ -196,7 +208,8 @@ class CalendarSummaries:
         for name in sorted({name for record in members for name in record.metrics}):
             values = [record.metrics[name] for record in members if name in record.metrics]
             present = [float(metric.value) for metric in values if metric.value is not None]
-            metrics[name] = cls._values(present, present, present, name, values[0].unit)
+            unit = SummaryValidation.unit([metric.unit for metric in values])
+            metrics[name] = cls._values(present, present, present, name, unit)
         return metrics
 
     @staticmethod

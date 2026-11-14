@@ -25,9 +25,11 @@ from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement,
 from src.interfaces.wan_performance.domain.summary import CalendarSummaries, PeriodSummary
 from src.interfaces.wan_performance.integration.history_repository import HistoryRepository, HistorySelection
 from src.interfaces.wan_performance.integration.refresh_store import RefreshStore
+from src.interfaces.wan_performance.presentation.inspection.sle_routes import SlePages
+from src.interfaces.wan_performance.presentation.inspection.table import RecordTable, TableOptions
 
 logger = logging.getLogger(__name__)
-live_bp = Blueprint("live", __name__, url_prefix="/live")
+live_bp = Blueprint("live", __name__, url_prefix="/live", template_folder="inspection/templates")
 STORE_ERRORS = (ConnectionError, OSError, RedisError, ArangoError, sqlite3.Error, ValueError, KeyError, TypeError)
 
 
@@ -36,10 +38,10 @@ class LiveHistory:
 
     @staticmethod
     def read(
-        service: LiveService, records: tuple[HourlyMeasurement, ...], kind: str
+        service: LiveService, records: tuple[HourlyMeasurement, ...], kind: str, cache_only: bool = False
     ) -> tuple[tuple[PeriodSummary, ...], str | None]:
         """Read bounded persisted observations only for a selected detail identity."""
-        if kind not in {"gateway", "port", "peer"}:
+        if cache_only or kind not in {"gateway", "port", "peer"}:
             return (), None
         identity = LiveHistory._select_identity(service, records, kind)
         if identity is None:
@@ -112,17 +114,20 @@ class LivePages:
         return LiveService(session, org_id, RefreshStore.connect(DatabaseConfig.from_env()), history)
 
     @classmethod
-    def render(cls, kind: str, filters: dict[str, str] | None = None, error: str | None = None) -> str:
+    def render(cls, kind: str, filters: dict[str, str] | None = None, error: str | None = None) -> str | Response:
         """Read cached data, validate route membership, and never start a Mist request."""
         records: tuple[HourlyMeasurement, ...] = ()
         summaries: tuple[PeriodSummary, ...] = ()
         states: dict[tuple[str, ...], dict[str, str]] = {}
         gateways: tuple[GatewayIdentity, ...] = ()
         history_error, instant, partial = None, None, False
+        options = TableOptions.from_request()
         try:
             service = cls.service()
             snapshot = service.store.cached(service.org_id)
             if snapshot is not None:
+                if snapshot.get("org_id") != service.org_id:
+                    raise ValueError("The cached WAN organization does not match the portal.")
                 records = SnapshotRecords.build(snapshot)
                 states = SnapshotStates.build(snapshot, records)
                 gateways = SnapshotStates.gateways(records)
@@ -131,16 +136,19 @@ class LivePages:
             records = cls.select(records, kind, filters)
             if filters and not records:
                 abort(404, description="The requested WAN identity is absent from the cached organization.")
-            summaries, history_error = LiveHistory.read(service, records, kind)
+            summaries, history_error = LiveHistory.read(service, records, kind, request.args.get("download") == "csv")
         except STORE_ERRORS:
             logger.exception("The WAN live view is unavailable.")
-            error = error or "Live data is unavailable. Check the configured session, cache, and history store."
-            if current_app.config.get("APISESSION") is None and not current_app.config.get("WAN_LIVE_SERVICE"):
-                error = "The portal has no configured Mist session."
+            error = cls.unavailable(error)
+        table = RecordTable.build(records, options)
+        exported = table.export(error)
+        if exported is not None:
+            return exported
         return render_template(
             "wan_performance/live.html",
             kind=kind,
             records=records,
+            table=table,
             summaries=summaries,
             states=states,
             gateways=gateways,
@@ -151,6 +159,13 @@ class LivePages:
             filters=filters or {},
             stale=instant is not None and datetime.now(UTC) - instant > timedelta(minutes=5),
         )
+
+    @staticmethod
+    def unavailable(error: str | None) -> str:
+        """Preserve actionable session errors without exposing exception content."""
+        if current_app.config.get("APISESSION") is None and not current_app.config.get("WAN_LIVE_SERVICE"):
+            return "The portal has no configured Mist session."
+        return error or "Live data is unavailable. Check the configured session, cache, and history store."
 
     @staticmethod
     def refresh_target(org_id: str) -> GatewayIdentity | None:
@@ -180,20 +195,23 @@ class LivePages:
         return all(record.identity.to_dict().get(name) == value for name, value in filters.items())
 
 
+live_bp.add_url_rule("/sle", endpoint="sle", view_func=SlePages(LivePages.service).render, methods=["GET", "POST"])
+
+
 @live_bp.get("/")
-def overview() -> str:
+def overview() -> str | Response:
     """Show the server-selected organization without automatic live calls."""
     return LivePages.render("overview")
 
 
 @live_bp.get("/gateway/<gateway_id>")
-def gateway(gateway_id: str) -> str:
+def gateway(gateway_id: str) -> str | Response:
     """Show only gateway identities found in the selected organization's cache."""
     return LivePages.render("gateway", {"gateway_id": gateway_id, "site_id": request.args.get("site_id", "")})
 
 
 @live_bp.get("/port/<site_id>/<path:port_name>")
-def port(site_id: str, port_name: str) -> str:
+def port(site_id: str, port_name: str) -> str | Response:
     """Keep exact port names and the gateway/site query context."""
     return LivePages.render(
         "port", {"site_id": site_id, "port_name": port_name, "gateway_id": request.args.get("gateway_id", "")}
@@ -201,7 +219,7 @@ def port(site_id: str, port_name: str) -> str:
 
 
 @live_bp.get("/vpn/<site_id>/<peer_mac>")
-def peer(site_id: str, peer_mac: str) -> str:
+def peer(site_id: str, peer_mac: str) -> str | Response:
     """Show distinct VPN paths rather than selecting an arbitrary same-MAC tunnel."""
     filters = {"site_id": site_id, "peer_mac": peer_mac}
     if request.args.get("path_key"):
@@ -210,7 +228,7 @@ def peer(site_id: str, peer_mac: str) -> str:
 
 
 @live_bp.post("/refresh")
-def refresh() -> tuple[str, int] | Response:
+def refresh() -> tuple[str | Response, int] | Response:
     """Run an explicit protected refresh, preserving previous cache on failure."""
     try:
         service = LivePages.service()
@@ -232,7 +250,7 @@ def refresh() -> tuple[str, int] | Response:
 
 
 @live_bp.post("/refresh-port")
-def refresh_port() -> tuple[str, int] | Response:
+def refresh_port() -> tuple[str | Response, int] | Response:
     """Collect one selected port insight hour through existing CSRF and shared ownership."""
     try:
         service = LivePages.service()
@@ -260,7 +278,7 @@ def refresh_port() -> tuple[str, int] | Response:
 
 
 @live_bp.post("/refresh-peer")
-def refresh_peer() -> tuple[str, int] | Response:
+def refresh_peer() -> tuple[str | Response, int] | Response:
     """Collect one selected peer quality hour through portal and shared API controls."""
     try:
         service = LivePages.service()

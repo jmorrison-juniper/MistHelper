@@ -105,6 +105,15 @@ Independent test: negative cases stop safely and unrelated portal journeys still
 - [X] T046 Update documentation/wan-performance.md and changelog.d/pr-4208.md with verified behavior and unresolved blockers.
 - [ ] T047 Prepare owner acceptance evidence in analysis.md and the existing PR template without enabling auto-merge or closing issue #4200.
 
+## Independent destination increments
+
+These tasks do not replace source-parity acceptance or authorize source execution.
+
+- [X] T048 Repair mixed retained missing-unit and new MOS history in domain/summary.py, with calendar and route regressions.
+- [X] T049 Add a bounded catalog-validated SLE inspection page under presentation/inspection/, with mocked scope, admission, failure, and browser tests.
+- [X] T050 Add cached identity filtering, lexical sorting, and ten-row pagination without changing route or history scope.
+- [X] T051 Add a full-identity cached CSV export with explicit missing values, scope preservation, and spreadsheet-formula protection.
+
 ## Dependencies and execution order
 
 T001-T004 establish evidence before implementation.

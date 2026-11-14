@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}WAN SLE inspection{% endblock %}
+{% block content %}
+<section class="container-fluid" data-testid="wan-sle">
+    <h1>Site SLE inspection</h1>
+    <p>This independent view is not a WAN history or source-parity report.
+        No API request runs on page navigation. Only cached sites in the selected organization appear.</p>
+    {% if error %}<p role="alert" data-testid="wan-sle-error">SLE inspection is unavailable: {{ error }}</p>{% endif %}
+    <form method="post">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <label for="wan-sle-site">Cached site</label>
+        <select id="wan-sle-site" name="site_id" data-testid="wan-sle-site" required>
+            {% for site in sites %}<option value="{{ site }}"{% if site == site_id %} selected{% endif %}>{{ site }}</option>{% endfor %}
+        </select>
+        <label for="wan-sle-metric">Enabled metric identifier</label>
+        <input id="wan-sle-metric" name="metric" value="{{ metric }}" list="wan-sle-choices" maxlength="128" data-testid="wan-sle-metric">
+        <datalist id="wan-sle-choices">{% if result %}{% for choice in result.metrics %}<option value="{{ choice }}"></option>{% endfor %}{% endif %}</datalist>
+        <button type="submit" class="btn btn-primary" data-testid="wan-sle-submit">Read SLE data</button>
+    </form>
+    <p>Leave the metric empty to read enabled catalog choices only.
+        Each submission uses the shared 300-second organization cooldown.
+        A selected metric permits two SDK requests at most. The fixed query duration is one hour.</p>
+    {% if result %}
+    <p data-testid="wan-sle-catalog">Enabled supported metrics: {{ result.metrics|join(", ") if result.metrics else "None returned" }}.</p>
+    {% if metric %}
+    <p data-testid="wan-sle-coverage">Returned rows: {{ result.gateways|length }}.
+        Reported total: {{ result.total if result.total is not none else "Unknown" }}.
+        {% if result.total is not none and result.total > result.gateways|length %}Partial page.{% endif %}
+        Completeness remains unverified. The installed SDK has no pagination arguments for this endpoint.</p>
+    <p>Values below preserve source numbers. Duration units, aggregation, and temporal coverage remain unknown.
+        This view does not calculate performance scores or store history.</p>
+    <div class="table-responsive"><table class="table" data-testid="wan-sle-results">
+        <thead><tr><th>Gateway MAC</th><th>Name</th><th>Model</th><th>Degraded (source units unknown)</th><th>Total (source units unknown)</th><th>Duration (source units unknown)</th></tr></thead>
+        <tbody>{% for row in result.gateways %}<tr>
+            <td>{{ row.gateway_mac }}</td><td>{{ row.name|default("Unknown", true) }}</td><td>{{ row.gateway_model|default("Unknown", true) }}</td>
+            <td>{{ row.degraded if row.degraded is defined and row.degraded is not none else "Unknown" }}</td>
+            <td>{{ row.total if row.total is defined and row.total is not none else "Unknown" }}</td>
+            <td>{{ row.duration if row.duration is defined and row.duration is not none else "Unknown" }}</td>
+        </tr>{% else %}<tr><td colspan="6">No gateway rows returned. This does not establish healthy service.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% endif %}{% endif %}
+    <a href="{{ url_for('wan_performance.live.overview') }}" data-testid="wan-sle-back">Return to the WAN overview</a>
+</section>
+{% endblock %}

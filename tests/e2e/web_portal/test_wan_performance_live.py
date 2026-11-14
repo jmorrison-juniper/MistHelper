@@ -89,6 +89,291 @@ def test_unknown_gateway_returns_not_found(client, live_service):
     assert response.status_code == 404
 
 
+@pytest.fixture
+def sle_api():
+    """Return independent synthetic SDK results without opening any network connection."""
+    namespace = "src.interfaces.wan_performance.presentation.inspection.sle"
+    with (
+        patch(f"{namespace}.listSiteSlesMetrics") as catalog,
+        patch(f"{namespace}.listSiteSleImpactedGateways") as impacted,
+    ):
+        catalog.return_value = MagicMock(
+            status_code=200, data={"supported": ["application_health", "disabled"], "enabled": ["application_health"]}
+        )
+        impacted.return_value = MagicMock(
+            status_code=200,
+            data={
+                "gateways": [
+                    {
+                        "gateway_mac": "aabbccddeeff",
+                        "name": "Synthetic gateway",
+                        "gateway_model": "SRX",
+                        "degraded": 0,
+                        "total": 120,
+                        "duration": None,
+                    }
+                ],
+                "total_count": 2,
+            },
+        )
+        yield catalog, impacted
+
+
+def test_sle_get_is_cache_only_and_post_uses_supported_signature(client, live_service, sle_api):
+    """Keep live requests explicit, tenant-scoped, admitted, and separate from retained history."""
+    catalog, impacted = sle_api
+    response = client.get("/wan-performance/live/sle")
+    assert response.status_code == 200
+    catalog.assert_not_called()
+    live_service.store.acquire.assert_not_called()
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', response.get_data(as_text=True))[0]
+    response = client.post(
+        "/wan-performance/live/sle", data={"csrf_token": token, "site_id": "site-one", "metric": "application_health"}
+    )
+    assert response.status_code == 200
+    assert "Partial page." in response.get_data(as_text=True)
+    assert "source units unknown" in response.get_data(as_text=True)
+    assert "Synthetic gateway" in response.get_data(as_text=True)
+    catalog.assert_called_once_with(live_service.session, "site-one", "site", "site-one")
+    impacted.assert_called_once_with(
+        live_service.session, "site-one", "site", "site-one", "application_health", duration="1h"
+    )
+    live_service.store.acquire.assert_called_once_with("org-one")
+    assert live_service.store.acquire.return_value.check.call_count == 2
+    live_service.history.upsert.assert_not_called()
+
+
+@pytest.mark.parametrize("phase", ["catalog", "gateways"])
+@pytest.mark.parametrize("status", [403, 429, 500])
+@pytest.mark.usefixtures("live_service")
+def test_sle_reports_upstream_errors(client, sle_api, phase, status, caplog):
+    """Preserve authorization, quota, and server failures instead of showing healthy empty data."""
+    catalog, impacted = sle_api
+    (catalog if phase == "catalog" else impacted).return_value.status_code = status
+    page = client.get("/wan-performance/live/sle").get_data(as_text=True)
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', page)[0]
+    response = client.post(
+        "/wan-performance/live/sle", data={"csrf_token": token, "site_id": "site-one", "metric": "application_health"}
+    )
+    assert response.status_code == 503
+    assert f"HTTP {status}" in caplog.text
+    assert 'data-testid="wan-sle-results"' not in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize(
+    "site,metric", [("other-site", "application_health"), ("site-one", "disabled"), ("site-one", "unsupported")]
+)
+def test_sle_rejects_unscoped_or_disabled_inputs(client, live_service, sle_api, site, metric):
+    """Do not query another site or invent supported metric identifiers."""
+    catalog, impacted = sle_api
+    page = client.get("/wan-performance/live/sle").get_data(as_text=True)
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', page)[0]
+    response = client.post("/wan-performance/live/sle", data={"csrf_token": token, "site_id": site, "metric": metric})
+    assert response.status_code == 503
+    impacted.assert_not_called()
+    if site == "other-site":
+        catalog.assert_not_called()
+        live_service.store.acquire.assert_not_called()
+
+
+def test_sle_checks_ownership_again_before_impacted_query(client, live_service, sle_api, caplog):
+    """A lost lease between requests prevents the second API operation."""
+    _, impacted = sle_api
+    live_service.store.acquire.return_value.check.side_effect = [
+        None,
+        ConnectionError("Ownership lost."),
+    ]
+    page = client.get("/wan-performance/live/sle").get_data(as_text=True)
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', page)[0]
+    response = client.post(
+        "/wan-performance/live/sle", data={"csrf_token": token, "site_id": "site-one", "metric": "application_health"}
+    )
+    assert response.status_code == 503
+    assert "Ownership lost" in caplog.text
+    impacted.assert_not_called()
+
+
+def test_sle_catalog_only_and_csrf_protection(client, live_service, sle_api):
+    """Read choices without an impacted query and reject unprotected submissions."""
+    catalog, impacted = sle_api
+    assert client.post("/wan-performance/live/sle", data={"site_id": "site-one"}).status_code == 400
+    catalog.assert_not_called()
+    page = client.get("/wan-performance/live/sle").get_data(as_text=True)
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', page)[0]
+    response = client.post("/wan-performance/live/sle", data={"csrf_token": token, "site_id": "site-one"})
+    assert response.status_code == 200
+    assert "application_health" in response.get_data(as_text=True)
+    assert 'data-testid="wan-sle-results"' not in response.get_data(as_text=True)
+    impacted.assert_not_called()
+
+
+def test_sle_uses_actual_refresh_lease_without_releasing_cooldown(client, live_service, sle_api):
+    """Exercise the actual lease protocol rather than inventing a mock context manager."""
+    from src.interfaces.wan_performance.integration.refresh_store import RefreshLease
+    from src.interfaces.wan_performance.presentation.inspection.sle import SleReader
+
+    redis_client = MagicMock()
+    redis_client.get.return_value = "synthetic-owner"
+    redis_client.ttl.return_value = 300
+    live_service.store.acquire.return_value = RefreshLease(redis_client, "org-one", "synthetic-owner")
+
+    result = SleReader.read(live_service, "site-one", "application_health")
+
+    assert result.total == 2
+    assert redis_client.get.call_count == 2
+    redis_client.get.assert_called_with("misthelper:wan:v1:refresh:org-one")
+    redis_client.delete.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"gateways": "not-an-array"},
+        {"gateways": [{}]},
+        {"gateways": [{"gateway_mac": "aabbccddeeff", "duration": -1}]},
+        {"gateways": [{"gateway_mac": "aabbccddeeff", "total": True}]},
+        {"gateways": [{"gateway_mac": "aabbccddeeff", "degraded": float("nan")}]},
+        {"gateways": [], "total_count": -1},
+        {"gateways": [], "total_count": True},
+        {"gateways": [], "metric": "another_metric"},
+        {"gateways": [{"gateway_mac": "aabbccddeeff", "name": {"not": "a label"}}]},
+        {"gateways": [{"gateway_mac": "aabbccddeeff"}] * 1001},
+    ],
+)
+def test_sle_invalid_responses_remain_unavailable(client, live_service, sle_api, body):
+    """Reject malformed rows and invented totals rather than converting them into evidence."""
+    _, impacted = sle_api
+    impacted.return_value.data = body
+    page = client.get("/wan-performance/live/sle").get_data(as_text=True)
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', page)[0]
+    response = client.post(
+        "/wan-performance/live/sle", data={"csrf_token": token, "site_id": "site-one", "metric": "application_health"}
+    )
+    assert response.status_code == 503
+    assert 'data-testid="wan-sle-error"' in response.get_data(as_text=True)
+
+
+def test_table_filter_keeps_full_scoped_history_and_csv_identity(client, live_service):
+    """Filtering the table must not hide persisted detail history or widen CSV scope."""
+    import csv
+    import io
+
+    path = "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff"
+    response = client.get(path + "&q=NO-MATCH")
+    assert response.status_code == 200
+    assert "0 matching cached observations" in response.get_data(as_text=True)
+    live_service.history.read.assert_called_once()
+    live_service.history.read.reset_mock()
+    response = client.get(path + "&download=csv")
+    assert response.status_code == 200
+    rows = list(csv.DictReader(io.StringIO(response.get_data(as_text=True))))
+    assert {row["port_name"] for row in rows} == {"ge-0/0/0"}
+    assert {row["peer_mac"] for row in rows} == {""}
+    assert {row["org_id"] for row in rows} == {"org-one"}
+    assert {row["gateway_id"] for row in rows} == {"aabbccddeeff"}
+    assert any(row["value"] == "" and row["missing_reason"] for row in rows)
+    assert "observation_hour_utc" in rows[0]
+    assert response.headers["Cache-Control"] == "no-store"
+    live_service.history.read.assert_not_called()
+    live_service.store.acquire.assert_not_called()
+
+
+def test_cached_controls_preserve_scope_and_reject_foreign_cache(client, live_service):
+    """Keep canonical route arguments and refuse a cache from another organization."""
+    response = client.get(
+        "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&site_id=wrong&endpoint=wrong&q=NO-MATCH"
+    )
+    assert response.status_code == 200
+    assert "gateway_id=aabbccddeeff" in response.get_data(as_text=True)
+    live_service.store.cached.return_value["org_id"] = "other-org"
+    response = client.get("/wan-performance/live/?download=csv")
+    assert response.status_code == 503
+    assert response.mimetype != "text/csv"
+    live_service.store.acquire.assert_not_called()
+
+
+def test_table_paginates_and_exports_all_matching_rows(client, live_service):
+    """Use deterministic identity order and export the complete filtered cached set."""
+    import csv
+    import io
+
+    snapshot = live_service.store.cached.return_value
+    snapshot["ports"] = [{**snapshot["ports"][0], "port_id": f"ge-0/0/{number:02}"} for number in reversed(range(12))]
+    response = client.get("/wan-performance/live/?sort=port_name&direction=asc")
+    assert response.status_code == 200
+    text = response.get_data(as_text=True)
+    assert text.count('data-testid="wan-live-port-link"') == 10
+    assert "Page 1 of 2" in text
+    second = client.get("/wan-performance/live/?sort=port_name&direction=asc&page=2").get_data(as_text=True)
+    assert second.count('data-testid="wan-live-port-link"') == 3
+    response = client.get("/wan-performance/live/?q=GE-0%2F0%2F&sort=port_name&direction=desc&download=csv")
+    rows = list(csv.DictReader(io.StringIO(response.get_data(as_text=True))))
+    ports = list(dict.fromkeys(row["port_name"] for row in rows))
+    assert ports == sorted(ports, key=str.casefold, reverse=True)
+    assert len(ports) == 13
+    live_service.store.acquire.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "query", ["sort=rx_bps", "direction=fast", "page=0", "page=2", "page=not-a-number", "q=" + "a" * 129]
+)
+def test_table_rejects_invalid_controls(client, live_service, query):
+    """Reject invalid table inputs without making an API request."""
+    assert client.get("/wan-performance/live/?" + query).status_code == 400
+    live_service.store.acquire.assert_not_called()
+
+
+@pytest.mark.parametrize("text", ["=1+1", " +SUM(1,2)", "-1+2", "@SUM(1)", "\t=1"])
+def test_cached_csv_neutralizes_text_formulas(text):
+    """Do not let text cells become spreadsheet formulas."""
+    from src.interfaces.wan_performance.presentation.inspection.table import CachedCsv
+
+    assert CachedCsv.cell(text) == "'" + text
+    assert CachedCsv.cell(None) == ""
+    assert CachedCsv.cell(4.2) == 4.2
+
+
+@pytest.mark.parametrize("viewport", [(1440, 1100), (1280, 800), (390, 844)])
+def test_browser_sle_explicit_inspection(page: Page, live_browser_url: str, live_service, sle_api, viewport):
+    """Use an independently designed SLE form with only mocked SDK responses."""
+    catalog, impacted = sle_api
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.goto(live_browser_url + "/wan-performance/live/")
+    page.get_by_test_id("wan-live-sle-link").click()
+    expect(page.get_by_test_id("wan-sle")).to_be_visible()
+    catalog.assert_not_called()
+    page.get_by_test_id("wan-sle-metric").fill("application_health")
+    page.get_by_test_id("wan-sle-submit").click()
+    expect(page.get_by_test_id("wan-sle-results")).to_contain_text("Synthetic gateway")
+    expect(page.get_by_test_id("wan-sle-coverage")).to_contain_text("Partial page")
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    assert impacted.call_count == 1
+    page.get_by_test_id("wan-sle-back").click()
+    expect(page.get_by_test_id("wan-live-overview")).to_be_visible()
+
+
+@pytest.mark.parametrize("viewport", [(1440, 1100), (1280, 800), (390, 844)])
+def test_browser_cached_table_controls(page: Page, live_browser_url: str, live_service, viewport):
+    """Navigate pages, sort identifiers, filter rows, and download the scoped cached CSV."""
+    snapshot = live_service.store.cached.return_value
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    snapshot["ports"] = [{**snapshot["ports"][0], "port_id": f"ge-0/0/{number:02}"} for number in range(12)]
+    page.goto(live_browser_url + "/wan-performance/live/")
+    expect(page.get_by_test_id("wan-table-page")).to_contain_text("Page 1 of 2")
+    page.get_by_test_id("wan-table-next").click()
+    expect(page.get_by_test_id("wan-table-page")).to_contain_text("Page 2 of 2")
+    page.get_by_test_id("wan-table-filter").fill("ge-0/0/11")
+    page.get_by_test_id("wan-table-sort").select_option("port_name")
+    page.get_by_test_id("wan-table-direction").select_option("desc")
+    page.get_by_test_id("wan-table-apply").click()
+    expect(page.get_by_test_id("wan-table-page")).to_contain_text("1 matching cached observations")
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    with page.expect_download() as downloaded:
+        page.get_by_test_id("wan-table-export").click()
+    assert downloaded.value.suggested_filename == "cached-wan-observations.csv"
+    live_service.store.acquire.assert_not_called()
+
+
 def test_second_gateway_refresh_keeps_selected_site_and_gateway(client, live_service):
     """The gateway journey can refresh another cached gateway rather than the first discovered device."""
     from src.interfaces.wan_performance.domain.identity import GatewayIdentity, SiteIdentity
@@ -163,6 +448,34 @@ def test_peer_current_state_and_uptime_are_distinct_from_availability(client, li
     assert "Gateway-reported uptime (s): 0" in text
     assert "Last observed (UTC): 2024-01-01T12:34:00+00:00" in text
     assert "Current cached state does not establish availability duration" in text
+
+
+def test_peer_history_keeps_old_missing_mos_readable_after_new_poll(client, live_service):
+    """Render retained unknown MOS beside a new score without changing old records."""
+    from dataclasses import replace
+    from datetime import timedelta
+
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
+    from src.interfaces.wan_performance.domain.measurement import MetricMeasurement
+
+    snapshot = live_service.store.cached.return_value
+    snapshot["peers"][0]["mos"] = 4.2
+    current = SnapshotRecords.build(snapshot)[1]
+    retained = replace(
+        current,
+        hour_start_utc=current.hour_start_utc - timedelta(days=1),
+        collected_at_utc=current.collected_at_utc - timedelta(days=1),
+        metrics={"mos": MetricMeasurement(None, "unknown", missing_reason="Unit unknown.")},
+    )
+    live_service.history.read.return_value = (retained, current)
+
+    response = client.get("/wan-performance/live/vpn/site-one/11:22:33:44:55:66")
+
+    assert response.status_code == 200
+    text = response.get_data(as_text=True)
+    assert "mos: mean 4.2, maximum 4.2, observed p95 4.2 score" in text
+    assert "History is unavailable." not in text
+    assert retained.metrics["mos"].unit == "unknown"
 
 
 def test_missing_session_is_explicit_unavailable(client):

@@ -339,6 +339,64 @@ def test_summary_without_matching_records_is_empty() -> None:
     assert summaries == ()
 
 
+@pytest.mark.parametrize("hour_gap", [1, 24])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_peer_mos_summary_preserves_retained_missing_units(hour_gap: int, reverse: bool, tmp_path) -> None:
+    """Keep pre-change missing MOS records readable beside documented scores."""
+    import sqlite3
+
+    from src.interfaces.wan_performance.collection.snapshot_records import PeerSnapshotMetrics
+    from src.interfaces.wan_performance.integration.record_codec import RecordCodec
+    from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
+
+    dashboard = OfflinePreviewFactory.build()
+    peer = replace(
+        next(record for record in dashboard.measurements if record.identity == dashboard.peer_path),
+        provenance="live",
+    )
+    retained = replace(peer, metrics={"mos": MetricMeasurement(None, "unknown", missing_reason="Unit unknown.")})
+    retained = RecordCodec.decode(RecordCodec.encode(retained))
+    current = replace(
+        peer,
+        hour_start_utc=peer.hour_start_utc + timedelta(hours=hour_gap),
+        collected_at_utc=peer.collected_at_utc + timedelta(hours=hour_gap),
+        metrics=PeerSnapshotMetrics.parse({"mos": 4.2}),
+    )
+    path = tmp_path / "retained-mos.sqlite"
+    sqlite3.connect(path).close()
+    history = SQLiteHistory(path)
+    history.upsert((retained,))
+    history.upsert((current,))
+    records = history.read(
+        peer.identity, retained.hour_start_utc - timedelta(hours=1), current.hour_start_utc + timedelta(hours=1)
+    )
+    records = tuple(reversed(records)) if reverse else records
+
+    summaries = CalendarSummaries.build(records, peer.identity)
+
+    for summary in summaries:
+        if summary.metrics["mos"][0] is not None:
+            assert summary.metrics["mos"] == (4.2, 4.2, 4.2, "score")
+    assert retained.metrics["mos"].value is None
+    assert retained.metrics["mos"].unit == "unknown"
+    assert len(records) == 2
+    assert any(record.metrics["mos"].value is None and record.metrics["mos"].unit == "unknown" for record in records)
+
+
+def test_peer_mos_summary_rejects_incompatible_present_units() -> None:
+    """Do not reinterpret an actual measured value with an unknown unit."""
+    dashboard = OfflinePreviewFactory.build()
+    peer = next(record for record in dashboard.measurements if record.identity == dashboard.peer_path)
+    first = replace(peer, metrics={"mos": MetricMeasurement(4, "unknown")})
+    second = replace(
+        first,
+        hour_start_utc=first.hour_start_utc - timedelta(hours=1),
+        metrics={"mos": MetricMeasurement(5, "score")},
+    )
+    with pytest.raises(ValueError, match="units"):
+        CalendarSummaries.build((first, second), peer.identity)
+
+
 def test_threshold_counts_break_runs_at_missing_and_unknown_hours() -> None:
     """Count retained observations rather than inferred time above a threshold."""
     dashboard = OfflinePreviewFactory.build()

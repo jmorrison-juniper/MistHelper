@@ -66,8 +66,49 @@ Loss uses percent, from 0 through 100.
 The schema bounds MOS from zero through five without quality categories. The preview displays a scalar score without a categorized gauge.
 The validator preserves measured zero and rejects invalid values.
 An absent value remains unknown.
+Retained missing MOS values with unknown units remain readable beside later scores.
+Summaries use the documented score unit when one exists. Incompatible measured units still cause an error.
+This repair does not rewrite retained records.
 The validator does not infer an hourly interval, coverage, utilization, or availability.
 This boundary makes no API call and is not connected to the preview.
+
+## Cached table controls
+
+The live table filters cached identity text without an API request.
+The filter matches site, gateway, port, peer, and path identifiers without case sensitivity.
+Sort by site, gateway, port, or peer identifier in either lexical direction.
+The complete identity supplies the tie key.
+Each page shows at most ten rows.
+These independent controls do not establish inventory completeness or performance ranking.
+Table controls do not change the selected detail identity or its persisted history.
+
+Select **Export all matching cached observations as CSV** to export every matching row across the table pages.
+Each metric row includes the full identity, UTC observation hour, collection time, provenance, value, unit, and missing reason.
+The observation hour identifies the cached hourly projection, not a raw metric sample timestamp.
+An empty value means missing data, not zero.
+Text formula prefixes receive an apostrophe to prevent spreadsheet execution.
+The export excludes stored historical records and does not provide backfill.
+
+## Site SLE inspection
+
+Select **Inspect cached-site SLE data** from a live WAN page.
+Only cached sites in the selected organization appear.
+Navigation makes no API request.
+Submit the protected form to read the supported and enabled metric catalog.
+Leave the metric empty for catalog choices only.
+Supply an enabled catalog identifier to request impacted gateways.
+Each submission uses the shared 300-second organization cooldown, including catalog-only reads.
+A selected metric permits two SDK requests at most, with ownership checked before each request.
+The query requests a one-hour duration and at most one response page.
+The view rejects a response above 1000 rows.
+The installed SDK exposes no pagination arguments for this endpoint.
+
+The table preserves source values for degraded, total, and duration.
+Their units, aggregation, and temporal completeness remain unverified.
+An absent field stays unknown, and a measured zero stays zero.
+A reported total above the returned count marks a partial page.
+An empty result does not establish healthy service.
+This independent inspection does not calculate performance scores, store history, or establish source parity.
 
 ## Live integration limits
 

@@ -145,3 +145,31 @@ The first independent increment validates the bundled peer-schema MOS bounds of 
 Display a dimensionless score without invented health categories, source sample time, or historical aggregation.
 This changes no storage schema, retention policy, network request, or existing record.
 Subsequent increments require verified inputs and expected results for each existing task pair.
+
+## Independent destination increments
+
+These increments do not claim source parity and do not close the existing acceptance tasks.
+New presentation code enters a compliant `presentation/inspection/` package.
+The existing presentation directory has four counted children. This package is its fifth child.
+Existing large route and summary modules remain structural debt.
+Limit changes there to integration points and the missing-unit repair. Track further module division separately.
+
+Preserve missing unknown-unit records during summary validation and choose a documented display unit when one exists.
+Reject genuinely incompatible measured units. Do not rewrite retained records.
+
+The SLE page makes no API call on GET.
+An explicit CSRF-protected POST validates site membership from the selected organization's cached records.
+Use the existing session transport, organization cooldown, and admission checks before each request.
+Read the site catalog first and accept only an enabled supported metric.
+A blank metric returns catalog choices only. A selected metric permits one additional impacted-gateway request.
+The fixed duration is one hour. Return only the first response page and label completeness as unverified.
+Do not calculate scores or infer units for degraded, duration, or total.
+Do not persist SLE results or start background collection.
+
+The cached table uses independent destination policies.
+Filter identity text with a case-insensitive substring. Sort site, gateway, port, or peer identifiers lexically.
+Use full identity as the deterministic tie key. Default to site ascending and ten rows per page.
+Keep route identity and history scope unchanged when table controls change.
+CSV exports include all matching cached rows, not just the visible page.
+Include full identity, UTC observation hour, collection time, metric value, unit, missing reason, and provenance.
+Neutralize spreadsheet formulas in text fields. Do not export credentials, new API data, or stored historical records.
