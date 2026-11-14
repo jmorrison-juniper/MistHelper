@@ -26,7 +26,7 @@ from src.interfaces.wan_performance.domain.summary import CalendarSummaries, Per
 from src.interfaces.wan_performance.integration.history_repository import HistoryRepository, HistorySelection
 from src.interfaces.wan_performance.integration.refresh_store import RefreshStore
 from src.interfaces.wan_performance.presentation.inspection.sle_routes import SlePages
-from src.interfaces.wan_performance.presentation.inspection.table import RecordTable, TableOptions
+from src.interfaces.wan_performance.presentation.inspection.table import GatewayStatistics, RecordTable, TableOptions
 from src.interfaces.wan_performance.presentation.inspection.windows import (
     ObservationWindow,
     RetainedPlot,
@@ -156,6 +156,7 @@ class LivePages:
         states: dict[tuple[str, ...], dict[str, str]] = {}
         gateways: tuple[GatewayIdentity, ...] = ()
         retained: RetainedWindow | None = None
+        gateway_statistics: GatewayStatistics | None = None
         history_error, instant, partial = None, None, False
         options = TableOptions.from_request()
         window = ObservationWindow.from_request()
@@ -173,6 +174,9 @@ class LivePages:
             records = cls.select(records, kind, filters)
             if filters and not records:
                 abort(404, description="The requested WAN identity is absent from the cached organization.")
+            gateway_statistics = GatewayStatistics.build(
+                snapshot, service.org_id, filters if kind == "gateway" else None
+            )
             retained = LiveHistory.window(service, records, kind, window, request.args.get("download") == "csv")
             summaries, history_error = LiveHistory.read(
                 service, records, kind, request.args.get("download") == "csv", window
@@ -195,6 +199,7 @@ class LivePages:
             summaries=summaries,
             states=states,
             gateways=gateways,
+            gateway_statistics=gateway_statistics,
             error=error,
             history_error=history_error,
             instant=instant,

@@ -121,6 +121,7 @@ These tasks do not replace source-parity acceptance or authorize source executio
 - [X] T057 Add independent local raw SLE identity-text sorting and five-row display pagination, preserving missing values, response scope, and completeness labels without additional API requests.
 - [X] T058 Examine remaining authorized source legends, sharing, clipboard boundaries, and selection modes. Add independent retained metric visibility controls with keyboard, no-script, figure-isolation, zoom/reset, PNG, and no-request browser tests.
 - [X] T059 Verify the original site-selector provider shape with independent isolated data. Add accessible independent retained-point rectangle selection with exact identity, zero/missing, bounds, pointer cancellation, keyboard, figure-isolation, and no-query browser tests.
+- [X] T060 Display only documented cached gateway CPU/memory usage, device uptime, and last observation in the existing inspection table module and live route/template, with unit, scope, missing/invalid, no-query, and three-viewport browser tests.
 
 ## Dependencies and execution order
 

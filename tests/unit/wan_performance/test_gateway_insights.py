@@ -16,6 +16,97 @@ DEVICE_ID = "00000000-0000-0000-0000-000000000001"
 TARGET = GatewayIdentity(SiteIdentity("org-one", "site-one"), "aabbccddeeff")
 
 
+class TestCachedGatewayStatistics:
+    """Verify only independently documented discovery fields without transport or history."""
+
+    @staticmethod
+    def snapshot() -> tuple[dict[str, object], dict[str, object]]:
+        """Create independent gateway metadata with exact zero and percentage values."""
+        device: dict[str, object] = {
+            **{"org_id": "org-one", "site_id": "site-one", "mac": TARGET.gateway_id, "type": "gateway"},
+            "cpu_stat": {"usage": 125.25},
+            "memory_stat": {"usage": 0},
+            "uptime": 0,
+            "last_seen": 0,
+        }
+        return {"org_id": "org-one", "provenance": "live", "insights": {"gateway": device}}, device
+
+    def test_documented_units_preserve_zero_and_do_not_infer_percentage_bounds(self) -> None:
+        """Retain reported numbers and separate observation time from metric sampling."""
+        from src.interfaces.wan_performance.presentation.inspection.table import GatewayStatistics
+
+        snapshot, _ = self.snapshot()
+        statistics = GatewayStatistics.build(snapshot, "org-one", TARGET.to_dict())
+        assert statistics is not None
+        assert statistics.rows == (
+            ("Reported CPU usage", "125.25 %"),
+            ("Reported memory usage", "0 %"),
+            ("Reported device uptime", "0 seconds"),
+            ("Gateway last observed", "1970-01-01T00:00:00+00:00 (0 epoch seconds)"),
+        )
+
+    @pytest.mark.parametrize(
+        ("field", "value", "index"),
+        [
+            ("cpu_stat", {"usage": True}, 0),
+            ("cpu_stat", {"usage": float("nan")}, 0),
+            ("memory_stat", {"usage": float("inf")}, 1),
+            ("memory_stat", "invalid", 1),
+            ("uptime", -1, 2),
+            ("uptime", 10**400, 2),
+            ("last_seen", True, 3),
+            ("last_seen", 1e20, 3),
+        ],
+    )
+    def test_invalid_field_preserves_other_valid_statistics(self, field: str, value: object, index: int) -> None:
+        """Reject malformed values without removing unrelated valid cached fields."""
+        from src.interfaces.wan_performance.presentation.inspection.table import GatewayStatistics
+
+        snapshot, device = self.snapshot()
+        baseline = GatewayStatistics.build(snapshot, "org-one", TARGET.to_dict())
+        assert baseline is not None
+        device[field] = value
+        statistics = GatewayStatistics.build(snapshot, "org-one", TARGET.to_dict())
+        assert statistics is not None
+        rows = statistics.rows
+        assert rows[index][1].startswith("Unavailable:")
+        assert all(row == baseline.rows[position] for position, row in enumerate(rows) if position != index)
+
+    @pytest.mark.parametrize("snapshot", [None, {}, {"insights": {}}, {"insights": {"gateway": None}}])
+    def test_absent_discovery_does_not_create_metrics(self, snapshot: dict[str, object] | None) -> None:
+        """Report absent selected-gateway discovery without fabricating zero values."""
+        from src.interfaces.wan_performance.presentation.inspection.table import GatewayStatistics
+
+        statistics = GatewayStatistics.build(snapshot, "org-one", TARGET.to_dict())
+        assert statistics is not None
+        rows = statistics.rows
+        assert len(rows) == 4
+        assert all(value == "Unavailable: no matching cached gateway discovery." for _, value in rows)
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("org_id", "other-org"),
+            ("site_id", "other-site"),
+            ("mac", "other"),
+            ("type", "ap"),
+            ("snapshot.org_id", "other-org"),
+            ("snapshot.provenance", "synthetic"),
+        ],
+    )
+    def test_foreign_discovery_cannot_expose_its_fields(self, field: str, value: str) -> None:
+        """Require exact tenant, site, gateway, and device-type membership."""
+        from src.interfaces.wan_performance.presentation.inspection.table import GatewayStatistics
+
+        snapshot, device = self.snapshot()
+        (snapshot if field.startswith("snapshot.") else device)[field.removeprefix("snapshot.")] = value
+        statistics = GatewayStatistics.build(snapshot, "org-one", TARGET.to_dict())
+        assert statistics is not None
+        rows = statistics.rows
+        assert all(value.startswith("Unavailable:") for _, value in rows)
+        assert not any("125.25" in value for _, value in rows)
+
+
 @pytest.fixture(autouse=True)
 def device_quality_response():
     """Keep selected-port stats tests on bounded synthetic responses."""

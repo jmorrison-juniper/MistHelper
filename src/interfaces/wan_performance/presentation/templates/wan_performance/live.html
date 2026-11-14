@@ -111,6 +111,23 @@
         <p>This list reflects bounded pages, not a complete organization inventory. Use the optional fields for another known gateway.</p>
     </details>
     {% endif %}
+    {% if gateway_statistics %}
+    <section class="portal-card mt-3" data-testid="wan-gateway-statistics">
+        <h2>Cached gateway discovery fields</h2>
+        <div class="table-responsive">
+            <table class="table">
+                <thead><tr><th>Reported field</th><th>Cached value</th></tr></thead>
+                <tbody>{% for label, value in gateway_statistics.rows %}
+                    <tr><th scope="row">{{ label }}</th><td>{{ value }}</td></tr>
+                {% endfor %}</tbody>
+            </table>
+        </div>
+        <p>These fields require matching selected-gateway discovery in the cache.
+            CPU and memory sample times are not supplied. Device uptime is not link availability.
+            Gateway last observed is not a metric sample time.
+            No new request, history record, or availability calculation supplies these fields.</p>
+    </section>
+    {% endif %}
     <div class="row g-3 mt-3">
         <article class="col-sm-4 portal-card" data-testid="wan-live-utilization"><h2 class="h6">Utilization</h2><p>Directional point-in-time samples appear below. Mbps link speed supplies capacity. Missing or invalid values remain unknown.</p></article>
         <article class="col-sm-4 portal-card"><h2 class="h6">Congestion duration</h2><p>Summaries count complete 10-minute sample intervals above each threshold. Missing samples remain unknown.</p></article>

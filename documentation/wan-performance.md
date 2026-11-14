@@ -73,6 +73,21 @@ This repair does not rewrite retained records.
 The validator does not infer an hourly interval, coverage, utilization, or availability.
 This boundary makes no API call and is not connected to the preview.
 
+## Cached gateway statistics
+
+The selected gateway page shows documented fields from its existing cached gateway discovery.
+Reported CPU and memory usage use percentages. Device uptime uses seconds since boot.
+Gateway observation time includes UTC and the exact reported epoch seconds.
+That time does not identify a CPU or memory sample timestamp.
+The table requires the selected organization, site, gateway MAC, and gateway device type.
+Missing discovery, missing fields, and invalid values remain explicitly unavailable.
+Valid sibling fields stay visible. Measured zero remains zero, and supplied numbers are not rounded.
+These fields make no additional API request, history read, or write.
+They remain outside hourly history, raw samples, and cached-observation CSV.
+The table does not change with retained UTC windows or cached-row text filters.
+It does not calculate availability, historical CPU/memory behavior, complete port/peer counts, or HA roles.
+Independent cached statistics do not establish source equivalence.
+
 ## Retained projection plots
 
 Select one detail identity and a retained UTC window to view discrete observation plots.

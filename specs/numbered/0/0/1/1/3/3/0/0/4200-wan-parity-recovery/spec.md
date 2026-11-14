@@ -168,6 +168,10 @@ This specification authorizes no new transport or live request.
   Pointer dragging and keyboard percentage inputs must use the same bounds and preserve exact bucket, collection, metric, unit, and identity metadata.
   Keep all table rows, missing values, other figures, and request counts unchanged. Do not calculate an aggregate or infer source polygon semantics.
   Clear the selection when the UTC view or visibility changes. Reject invalid bounds explicitly, without replacing a previous valid selection.
+- A selected gateway may display already cached discovery fields for CPU usage, memory usage, device uptime, and last observation.
+  Use documented percentages, seconds since boot, and observation epoch seconds. Do not derive CPU usage from idle time.
+  Require exact organization, site, gateway, and device-type membership. Preserve zero and explicit missing or invalid fields.
+  These fields have no source metric sampling time and do not enter hourly projections, samples, exports, or availability calculations.
 - Independent raw SLE controls may sort gateway MAC, name, or model text and display five returned rows per page.
   Preserve response order for equal text, missing numeric values, site/metric scope, and explicit unknown units and completeness.
   Source order remains available. Display controls must not submit the form or request additional API pages.

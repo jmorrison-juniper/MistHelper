@@ -1,5 +1,18 @@
 # Source comparison and end-to-end contract
 
+## Independently supported gateway discovery fields
+
+T060 uses the gateway already returned by the existing `listOrgDevicesStats` discovery call.
+That call requests one selected organization, site, and gateway MAC. The existing cache retains its response under `insights.gateway`.
+The local OpenAPI `stats_gateway` schema defines `cpu_stat` and `memory_stat`.
+Their referenced `usage` fields are percentages. `uptime` is elapsed device time since boot in seconds.
+`last_seen` is when Mist observed the gateway in epoch seconds, not a CPU or memory sample timestamp.
+Display only supplied non-negative finite numbers, retaining zero without rounding.
+No documented upper percentage bound is added. Do not calculate usage from idle time or combine HA-node statistics.
+Require an exact organization/site/MAC match and `type="gateway"`. An absent or invalid field remains explicitly unavailable.
+Keep these discovery fields outside hourly history, raw samples, cached-observation CSV, and availability calculations.
+Complete port/peer counts, device-metric history, source layout equivalence, and full P36-P37 acceptance remain unverified.
+
 ## Site input and independent rectangle examination
 
 T059 records fourteen additional private source observation/action entries, not fourteen successful test assertions.
@@ -387,8 +400,8 @@ They do not establish source runtime behavior or visual parity.
 | P33 | D07, active overview code | SLE summary, histogram, and classifiers | `wan-live-sle-link`, `wan-sle-site`, `wan-sle-metric`, and bounded request tests | Independent catalog-validated inspection exists. Source scores, histograms, classifier calculations, and equivalence remain unverified. |
 | P34 | D07, active overview code | Impacted gateways, interfaces, applications, and peers | `wan-sle-results`, `wan-sle-coverage`, local text sorting, and display-page controls | Bounded raw gateway inspection exists. Other entity impacts, unknown units, and source-specific semantics remain unverified. |
 | P35 | D08, active overview code | CSV export for congestion, alerts, and degraded SLE | `wan-table-export`, scoped CSV/formula/browser tests | Independent cached-observation CSV exists. Three source downloads were observed privately. Export/report equivalence remains unverified. |
-| P36 | D09, active gateway page | Gateway ID, site, status, and last-seen time | `wan-gateway-health`, `wan-gateway-kpis` | Offline values are synthetic. Live field units and time meaning remain unverified. |
-| P37 | D09, active gateway page | Port and peer counts, CPU, memory, and uptime | `wan-gateway-kpis`, `wan-port-table`, `wan-peer-table` | Source lists these fields. The destination does not show them or verify their units. |
+| P36 | D09, active gateway page | Gateway ID, site, status, and last-seen time | `wan-gateway-health`, `wan-gateway-kpis`, `wan-gateway-statistics` | T060 displays scoped cached gateway observation time as UTC and exact epoch seconds. It is not a metric timestamp or availability proof. Source status and time equivalence remain unverified. |
+| P37 | D09, active gateway page | Port and peer counts, CPU, memory, and uptime | `wan-gateway-statistics`, `wan-port-table`, `wan-peer-table` | T060 displays documented cached CPU/memory percentages and device uptime in seconds. Complete port/peer counts, device metric history, HA interpretation, and source equivalence remain unverified. |
 | P38 | D10, active gateway page | WAN-port and VPN-peer tables and detail links | `wan-port-table`, `wan-peer-table`, `wan-port-link`, `wan-peer-link` | Synthetic navigation is tested. Full identity and source row coverage remain unverified. |
 | P39 | D10, active gateway page | Gateway bandwidth and device-metric charts with 24-hour coverage | Synthetic gateway chart plus independent retained plots, point/zoom/PNG controls | Scoped retained projections and controls exist. Source device-metric equivalence and complete 24-hour coverage remain unverified. |
 | P40 | D11, active port page | Port status and utilization gauge | `wan-port-kpis`, `wan-port-gauges` | Offline values are synthetic. The live scalar contract does not establish utilization units. |
@@ -400,8 +413,8 @@ They do not establish source runtime behavior or visual parity.
 | P46 | D14, active peer page | Peer path identity, addresses, type, tunnel name, and MTU | `wan-peer-details` | Synthetic fields exist. The live response does not verify each source field. |
 | P47 | D14, active peer page | Uptime, bytes, and packets | `wan-peer-statistics` | Synthetic fields exist. Live field contracts and counter semantics remain unknown. |
 | P48 | D14, active route code | Peer route and tunnel-path identity | Live peer links include site, MAC, and path key. Offline peer route tests cover site and MAC. | Full path identity is retained in live scope. The source field mapping remains unverified. |
-| P49 | `tests/test_detail_pages.py:217-366`, source test intent | Populated, missing, raising-provider, gateway lookup, duplicate-peer, and encoded-link cases | `test_wan_performance_offline.py`, `test_wan_performance_live.py` | Source tests were inspected, not run. Destination tests use independent data. |
-| P50 | `tests/test_views.py:48-347`, source test intent | Ranking, availability ranking, chronic offenders, current alerts, and serialized fields | `test_wan_performance_live.py` and offline preview tests | Source tests were inspected, not run. Destination ranking and availability parity remain blocked. |
+| P49 | `tests/test_detail_pages.py:217-366`, source test intent | Populated, missing, raising-provider, gateway lookup, duplicate-peer, and encoded-link cases | Original JUnit and independent destination route tests | Initial static inspection was superseded by T054. All eleven detail-page tests passed within the 137-test isolated source cycle. Destination data stays independently authored. |
+| P50 | `tests/test_views.py:48-347`, source test intent | Ranking, availability ranking, chronic offenders, current alerts, and serialized fields | Original JUnit and independent destination live/offline tests | T054 passed twelve view tests: seven ranking, four current-state, and one serialization case. These tests do not establish SDK portability or destination ranking/availability parity. |
 
 ### Audience requirements for T031
 

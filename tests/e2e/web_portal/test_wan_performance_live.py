@@ -91,6 +91,73 @@ def test_unknown_gateway_returns_not_found(client, live_service):
 
 
 @pytest.fixture
+def cached_gateway_statistics(live_service: LiveService) -> LiveService:
+    """Add independently authored discovery fields without collecting or persisting them."""
+    live_service.store.cached.return_value["insights"] = {
+        "gateway": {
+            "org_id": "org-one",
+            "site_id": "site-one",
+            "mac": "aabbccddeeff",
+            "type": "gateway",
+            "cpu_stat": {"usage": 0},
+            "memory_stat": {"usage": 35.5},
+            "uptime": 0,
+            "last_seen": 0,
+        },
+        "samples": [],
+    }
+    return live_service
+
+
+def test_cached_gateway_statistics_use_existing_scope_and_leave_csv_unchanged(client, cached_gateway_statistics):
+    """Display documented metadata without adding it to observations or CSV history."""
+    path = "/wan-performance/live/gateway/aabbccddeeff?site_id=site-one"
+    text = client.get(path).get_data(as_text=True)
+    assert 'data-testid="wan-gateway-statistics"' in text
+    assert "35.5 %" in text and "0 seconds" in text
+    assert "1970-01-01T00:00:00+00:00" in text
+    exported = client.get(path + "&download=csv").get_data(as_text=True)
+    assert "rx_bps" in exported and "Reported CPU usage" not in exported
+    assert "35.5" not in exported
+    cached_gateway_statistics.store.acquire.assert_not_called()
+    cached_gateway_statistics.history.upsert.assert_not_called()
+    cached_gateway_statistics.session.assert_not_called()
+
+
+@pytest.mark.parametrize("field", ["org_id", "site_id", "mac", "type"])
+def test_gateway_discovery_scope_failure_preserves_other_cached_records(client, cached_gateway_statistics, field):
+    """Hide mismatched discovery metadata while retaining valid circuit observations."""
+    cached_gateway_statistics.store.cached.return_value["insights"]["gateway"][field] = "foreign"
+    text = client.get("/wan-performance/live/gateway/aabbccddeeff?site_id=site-one").get_data(as_text=True)
+    assert "Unavailable: no matching cached gateway discovery." in text
+    assert "35.5 %" not in text
+    assert "rx_bps: 40 bit/s" in text
+    cached_gateway_statistics.store.acquire.assert_not_called()
+
+
+@pytest.mark.parametrize("viewport", [(1440, 1100), (1280, 800), (390, 844)])
+def test_browser_cached_gateway_statistics_remain_read_only(
+    page: Page, live_browser_url: str, cached_gateway_statistics: LiveService, viewport, wan_browser_artifacts: Path
+) -> None:
+    """Keep exact units and zero readable at all sizes without additional requests."""
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.goto(live_browser_url + "/wan-performance/live/gateway/aabbccddeeff?site_id=site-one")
+    statistics = page.get_by_test_id("wan-gateway-statistics")
+    expect(statistics).to_contain_text("Reported CPU usage")
+    expect(statistics).to_contain_text("0 %")
+    expect(statistics).to_contain_text("35.5 %")
+    expect(statistics).to_contain_text("0 seconds")
+    expect(statistics).to_contain_text("1970-01-01T00:00:00+00:00")
+    expect(statistics).to_contain_text("not link availability")
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    assert cached_gateway_statistics.history.read.call_count == 1
+    cached_gateway_statistics.history.upsert.assert_not_called()
+    cached_gateway_statistics.store.acquire.assert_not_called()
+    cached_gateway_statistics.session.assert_not_called()
+    page.screenshot(path=str(wan_browser_artifacts / f"cached-gateway-statistics-{viewport[0]}.png"), full_page=True)
+
+
+@pytest.fixture
 def retained_history(live_service):
     """Return one independent retained observation inside each requested window."""
     from datetime import datetime, timedelta

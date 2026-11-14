@@ -122,6 +122,14 @@ This record does not claim that the complete Spec Kit command pipeline ran.
 
 ## Renewed parity investigation
 
+T060 addresses the independently supported portion of P36-P37.
+The existing selected-gateway discovery retains the `stats_gateway` payload in the snapshot cache.
+Display `cpu_stat.usage` and `memory_stat.usage` as reported percentages, `uptime` as seconds since boot, and `last_seen` as gateway observation time.
+Keep these fields outside historic metrics and CSV exports. Do not derive sampling times, complete counts, HA roles, or CPU histories.
+Validate exact tenant/site/MAC/type scope and each optional numeric field independently.
+Use the existing inspection table module, live route/template, gateway tests, and browser tests.
+No new SDK request, request budget, cache format, database schema, service, or dependency is required.
+
 T059 investigates the original selector's expected site input without copying fixtures or changing original source.
 Use independently authored dictionary rows only in a declared private scenario after recording the existing model-input result.
 Keep the original methods intact. Record signature failures instead of fabricating missing gateway, port, or peer arguments.
