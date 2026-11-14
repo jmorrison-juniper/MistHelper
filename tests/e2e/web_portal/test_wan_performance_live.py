@@ -153,6 +153,157 @@ def test_operator_declaration_route_requires_confirmation_and_cached_membership(
     live_service.history.upsert.assert_not_called()
 
 
+def test_replacement_route_rejects_unsupported_action_without_mutation(client, live_service, operator_json):
+    """Reject an unsupported action even when the submitted declaration otherwise meets admission."""
+    path = "/wan-performance/live/replacements"
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', client.get(path).get_data(as_text=True))[0]
+    response = client.post(
+        path,
+        data={"csrf_token": token, "action": "unsupported", "declaration": operator_json, "confirmation": "DECLARE"},
+    )
+    assert response.status_code == 400
+    assert client.get(path + "?download=declarations").json["declarations"] == []
+    live_service.history.upsert.assert_not_called()
+    live_service.session.assert_not_called()
+
+
+@pytest.fixture
+def synthetic_archive_json(client, live_service):
+    """Provide independent synthetic bytes and restore only this test's process namespace."""
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
+
+    previous = client.application.extensions.pop("wan_synthetic_archives", None)
+    identity = SnapshotRecords.build(live_service.store.cached.return_value)[0].identity.to_dict()
+    body = {
+        "version": 1,
+        "provenance": "synthetic",
+        "identity": identity,
+        "window": {"start_utc": "2024-01-01T12:00:00+00:00", "end_utc": "2024-01-01T13:00:00+00:00", "complete": False},
+        "records": [
+            {
+                "identity": identity,
+                "provenance": "synthetic",
+                "hour_start_utc": "2024-01-01T12:00:00+00:00",
+                "collected_at_utc": "2024-01-01T12:34:00+00:00",
+                "is_up_observation": None,
+                "metrics": {"loss": {"value": None, "unit": "%", "missing_reason": "No synthetic value."}},
+            }
+        ],
+    }
+    try:
+        yield json.dumps(body).encode()
+    finally:
+        client.application.extensions.pop("wan_synthetic_archives", None)
+        if previous is not None:
+            client.application.extensions["wan_synthetic_archives"] = previous
+
+
+def test_synthetic_archive_route_exports_original_bytes_without_history(client, live_service, synthetic_archive_json):
+    """Import and export exact synthetic provenance and bounds without application history writes."""
+    import hashlib
+    from io import BytesIO
+
+    path = "/wan-performance/live/replacements"
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', client.get(path).get_data(as_text=True))[0]
+    response = client.post(
+        path,
+        data={
+            "csrf_token": token,
+            "action": "archive",
+            "archive_confirmation": "IMPORT_SYNTHETIC",
+            "archive": (BytesIO(synthetic_archive_json), "independent.json"),
+        },
+    )
+    digest = hashlib.sha256(synthetic_archive_json).hexdigest()
+    assert response.status_code == 200 and digest in response.get_data(as_text=True)
+    exported = client.get(path, query_string={"download": "synthetic", "digest": digest})
+    assert exported.status_code == 200 and exported.data == synthetic_archive_json
+    assert exported.json["window"]["complete"] is False and exported.json["provenance"] == "synthetic"
+    live_service.history.upsert.assert_not_called()
+    live_service.history.read.assert_not_called()
+    live_service.store.acquire.assert_not_called()
+    live_service.session.assert_not_called()
+
+
+@pytest.mark.parametrize("kind", ["declaration", "archive"])
+@pytest.mark.parametrize("malformation", ["deep", "duplicate", "duplicate-nested"])
+def test_replacement_routes_reject_parser_depth_and_duplicate_fields_without_mutation(
+    client,
+    live_service,
+    operator_json,
+    synthetic_archive_json,
+    kind,
+    malformation,
+):
+    """Convert parser depth and duplicate-field failures to invalid input without losing prior state."""
+    from io import BytesIO
+
+    path = "/wan-performance/live/replacements"
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', client.get(path).get_data(as_text=True))[0]
+    accepted = client.post(path, data={"csrf_token": token, "declaration": operator_json, "confirmation": "DECLARE"})
+    assert accepted.status_code == 200
+    original = operator_json if kind == "declaration" else synthetic_archive_json.decode()
+    malformed = (
+        "[" * 3000 + "0" + "]" * 3000
+        if malformation == "deep"
+        else original.replace('"version": 1', '"version": 1, "version": 1')
+    )
+    if malformation == "duplicate-nested":
+        malformed = original.replace('"org_id": "org-one"', '"org_id": "org-one", "org_id": "org-one"')
+    assert malformed != original
+    data = (
+        {"csrf_token": token, "declaration": malformed, "confirmation": "DECLARE"}
+        if kind == "declaration"
+        else {
+            "csrf_token": token,
+            "action": "archive",
+            "archive_confirmation": "IMPORT_SYNTHETIC",
+            "archive": (BytesIO(malformed.encode()), "invalid.json"),
+        }
+    )
+    response = client.post(path, data=data)
+    assert response.status_code == 400 and 'data-testid="wan-replacement-error"' in response.get_data(as_text=True)
+    assert client.get(path + "?download=declarations").json["declarations"] == [json.loads(operator_json)]
+    assert client.application.extensions["wan_synthetic_archives"].entries == {}
+    live_service.history.upsert.assert_not_called()
+    live_service.session.assert_not_called()
+
+
+@pytest.mark.parametrize("viewport", [(1440, 900), (1280, 800), (390, 844)])
+def test_browser_synthetic_archive_import_and_export(
+    page: Page,
+    live_browser_url: str,
+    synthetic_archive_json,
+    viewport,
+    wan_browser_artifacts: Path,
+    live_service,
+):
+    """Exercise actual file upload, typed confirmation, and exact synthetic download with responsive evidence."""
+    import hashlib
+
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.goto(live_browser_url + "/wan-performance/live/replacements")
+    expect(page.get_by_test_id("wan-live-import-policy")).to_contain_text("Live import is unavailable by default.")
+    page.screenshot(path=str(wan_browser_artifacts / f"archive-before-{viewport[0]}.png"), full_page=True)
+    page.get_by_test_id("wan-archive-file").set_input_files(
+        {"name": "independent.json", "mimeType": "application/json", "buffer": synthetic_archive_json}
+    )
+    page.get_by_test_id("wan-archive-confirmation").fill("IMPORT_SYNTHETIC")
+    page.get_by_test_id("wan-archive-confirmation").press("Enter")
+    digest = hashlib.sha256(synthetic_archive_json).hexdigest()
+    expect(page.get_by_test_id("wan-replacement-result")).to_contain_text(digest)
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth") is True
+    page.get_by_test_id("wan-archive-digest").fill(digest)
+    with page.expect_download() as download:
+        page.get_by_test_id("wan-archive-export").click()
+    artifact = wan_browser_artifacts / f"synthetic-archive-{viewport[0]}.json"
+    download.value.save_as(str(artifact))
+    assert artifact.read_bytes() == synthetic_archive_json
+    page.screenshot(path=str(wan_browser_artifacts / f"archive-after-{viewport[0]}.png"), full_page=True)
+    live_service.history.upsert.assert_not_called()
+    live_service.session.assert_not_called()
+
+
 @pytest.mark.parametrize("viewport", [(1440, 900), (1280, 800), (390, 844)])
 def test_browser_operator_declaration_and_export(
     page: Page,

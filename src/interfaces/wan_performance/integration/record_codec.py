@@ -6,6 +6,7 @@ import math
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
+from src.interfaces.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS
 from src.interfaces.wan_performance.domain.identity import (
     CircuitIdentity,
     GatewayIdentity,
@@ -29,7 +30,7 @@ class DeclarationCodec:
         logging.getLogger(__name__).info("Validate a bounded WAN metadata declaration.")
         if len(payload) > 65536:
             raise ValueError("A declaration must not exceed 64 KiB.")
-        value = json.loads(payload)
+        value = ArchiveCodec._json(payload)
         if not isinstance(value, dict) or set(value) != {"version", "provenance", "identity", "effective", "values"}:
             raise ValueError("A declaration must contain only its five required fields.")
         if type(value["version"]) is not int or value["version"] != 1 or value["provenance"] != "operator-declaration":
@@ -100,6 +101,122 @@ class DeclarationCodec:
             text = result[name]
             if not isinstance(text, str) or not text.strip() or not text.isprintable() or len(text) > 128:
                 raise ValueError("Declared region and role require 1 through 128 printable characters.")
+        return result
+
+
+class ArchiveCodec:
+    """Validate independent projection archives without synthesizing source history or weakening live codecs."""
+
+    @staticmethod
+    def _json(payload: bytes) -> Any:
+        """Require bounded UTF-8 JSON with unique object fields before interpreting any archive record."""
+        if not isinstance(payload, bytes) or len(payload) > 8 * 1024 * 1024:
+            raise ValueError("An archive must contain at most eight MiB of UTF-8 JSON.")
+
+        def unique_fields(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            """Reject duplicate JSON keys instead of silently selecting a later provenance or value."""
+            result = dict(pairs)
+            if len(result) != len(pairs):
+                raise ValueError("Archive JSON contains duplicate object fields.")
+            return result
+
+        logging.getLogger(__name__).info("Parse bounded independent WAN replacement JSON.")
+        try:
+            value = json.loads(payload.decode("utf-8"), object_pairs_hook=unique_fields)
+        except RecursionError as error:
+            raise ValueError("Replacement JSON nesting exceeds the supported parser limit.") from error
+        logging.getLogger(__name__).debug("Parsed bounded replacement JSON without duplicate fields.")
+        return value
+
+    @classmethod
+    def decode(cls, payload: bytes) -> dict[str, Any]:
+        """Require exact version, identity, provenance, and explicitly incomplete half-open UTC bounds."""
+        value = cls._json(payload)
+        if not isinstance(value, dict) or set(value) != {"version", "provenance", "identity", "window", "records"}:
+            raise ValueError("An archive must contain only its five required fields.")
+        if any(
+            (type(value["version"]) is not int, value["version"] != 1, value["provenance"] not in ("live", "synthetic"))
+        ):
+            raise ValueError("An archive requires version 1 and explicit live or synthetic provenance.")
+        window = value["window"]
+        if not isinstance(window, dict):
+            raise ValueError("An archive window must be an object.")
+        if set(window) != {"start_utc", "end_utc", "complete"}:
+            raise ValueError("An archive window must contain exact UTC bounds and completeness.")
+        if window["complete"] is not False:
+            raise ValueError("An archive window must explicitly declare complete: false.")
+        bounds = DeclarationCodec.window({name: window[name] for name in ("start_utc", "end_utc")})
+        if (bounds[1] - bounds[0]).total_seconds() > MAX_HISTORY_WINDOW_DAYS * 86400:
+            raise ValueError("An archive window must span at most 397 days.")
+        identity = DeclarationCodec.identity(value["identity"])
+        records = cls._records(value["records"], identity, bounds, value["provenance"])
+        logging.getLogger(__name__).debug("Validated %s archive projections without a history write.", len(records))
+        return {**value, "identity": identity, "window": bounds, "records": records}
+
+    @classmethod
+    def _records(
+        cls,
+        values: Any,
+        identity: MeasurementIdentity,
+        bounds: tuple[datetime, datetime],
+        provenance: Literal["live", "synthetic"],
+    ) -> tuple[HourlyMeasurement, ...]:
+        """Reject duplicate, foreign, or out-of-window hours before any storage decision."""
+        if not isinstance(values, list) or not 1 <= len(values) <= MAX_HISTORY_RECORDS:
+            raise ValueError("An archive requires 1 through 9528 projection records.")
+        records = tuple(cls._record(value, identity, provenance) for value in values)
+        if len({record.natural_key for record in records}) != len(records):
+            raise ValueError("An archive contains duplicate full-identity hour keys.")
+        if any(not bounds[0] <= record.hour_start_utc < bounds[1] for record in records):
+            raise ValueError("An archive contains an out-of-window hour.")
+        return records
+
+    @classmethod
+    def _record(
+        cls, value: Any, identity: MeasurementIdentity, provenance: Literal["live", "synthetic"]
+    ) -> HourlyMeasurement:
+        """Preserve exact identities, declared provenance, timestamps, values, and missing states."""
+        fields = {"identity", "provenance", "metrics", "hour_start_utc", "collected_at_utc", "is_up_observation"}
+        if not isinstance(value, dict) or set(value) != fields:
+            raise ValueError("Each archive record must contain exactly its six projection fields.")
+        if value["identity"] != identity.to_dict() or value["provenance"] != provenance:
+            raise ValueError("Archive record identity or provenance does not match its envelope.")
+        if not all(isinstance(value[name], str) for name in ("hour_start_utc", "collected_at_utc")):
+            raise ValueError("Archive record timestamps must be ISO 8601 strings.")
+        return HourlyMeasurement(
+            identity,
+            datetime.fromisoformat(value["hour_start_utc"]),
+            datetime.fromisoformat(value["collected_at_utc"]),
+            cls._metrics(value["metrics"]),
+            provenance,
+            value["is_up_observation"],
+        )
+
+    @staticmethod
+    def _metrics(value: Any) -> dict[str, MetricMeasurement]:
+        """Validate projection-only fields and reject raw arrays or unsafe metric labels."""
+        if not isinstance(value, dict):
+            raise ValueError("Archive metrics must be a nonempty object.")
+        fields = {"value", "unit", "sample_count", "coverage_fraction", "missing_reason", "raw_values"}
+        result = {}
+        for name, metric in value.items():
+            if not isinstance(name, str):
+                raise ValueError("Archive metric names require 1 through 128 printable characters.")
+            if any((not name.isprintable(), not 1 <= len(name) <= 128)):
+                raise ValueError("Archive metric names require 1 through 128 printable characters.")
+            if not isinstance(metric, dict):
+                raise ValueError("Archive metrics contain unsupported fields.")
+            if any((set(metric) - fields, not {"value", "unit"} <= metric.keys())):
+                raise ValueError("Archive metrics contain unsupported or missing fields.")
+            unit = metric.get("unit")
+            if not isinstance(unit, str):
+                raise ValueError("Archive metric units require printable strings.")
+            if any((not unit.isprintable(), not 1 <= len(unit) <= 128, metric.get("raw_values") is not None)):
+                raise ValueError("Archive units must remain bounded and raw-sample import is unsupported.")
+            try:
+                result[name] = RecordCodec._metric(metric)
+            except OverflowError as error:
+                raise ValueError("An archive metric exceeds the finite numeric range.") from error
         return result
 
 

@@ -9,7 +9,7 @@ from typing import cast
 
 from arango.client import ArangoClient
 from arango.cursor import Cursor
-from arango.database import StandardDatabase
+from arango.database import StandardDatabase, TransactionDatabase
 from arango.exceptions import ArangoError
 
 from src.foundation.persistence.db import DatabaseConfig
@@ -20,10 +20,93 @@ from src.interfaces.wan_performance.domain.measurement import (
     SampleMeasurement,
 )
 from src.interfaces.wan_performance.integration.record_codec import RecordCodec, SampleRecordCodec, SampleReplayPolicy
+from src.interfaces.wan_performance.integration.sqlite_history import ProjectionReplay
 
 logger = logging.getLogger(__name__)
 HOURS_COLLECTION = "wan_performance_hours"
 SAMPLES_COLLECTION = "wan_performance_samples"
+
+
+class ArangoArchive:
+    """Append scoped projection documents with bounded inspection and explicit transaction acknowledgments."""
+
+    @classmethod
+    def append(cls, repository: ArangoHistory, documents: tuple[dict[str, str], ...]) -> int:
+        """Require every key and commit acknowledgment before reporting an atomic append."""
+        logger.info("Append WAN projections in one bounded Arango transaction.")
+        transaction = repository.database.begin_transaction(
+            write=[HOURS_COLLECTION], lock_timeout=2, max_size=64 * 1024 * 1024, allow_implicit=False
+        )
+        try:
+            additions = cls._inspect(transaction, documents)
+            cls._insert(transaction, additions)
+        except (ArangoError, ValueError, TypeError, KeyError, OSError):
+            logger.exception("WAN Arango archive append did not confirm a commit.")
+            cls._abort(transaction)
+            raise
+        logger.debug("Committed %s new projection records without replacement.", len(additions))
+        return len(additions)
+
+    @staticmethod
+    def _inspect(transaction: TransactionDatabase, documents: tuple[dict[str, str], ...]) -> list[dict[str, str]]:
+        """Read only requested keys and reject incomplete, invalid, or conflicting replay results."""
+        logger.info("Inspect exact Arango archive replay keys.")
+        cursor = transaction.aql.execute(
+            "FOR key IN @keys RETURN DOCUMENT(@@collection, key)",
+            bind_vars={"@collection": HOURS_COLLECTION, "keys": [document["_key"] for document in documents]},
+        )
+        if not isinstance(cursor, Cursor):
+            raise TypeError("Archive replay inspection requires a synchronous bounded Arango cursor.")
+        additions = []
+        try:
+            for document, previous in zip(documents, cursor, strict=True):
+                if ProjectionReplay.requires_new(previous, document):
+                    additions.append(document)
+        finally:
+            cursor.close()
+        logger.debug("Checked %s requested keys and selected %s new documents.", len(documents), len(additions))
+        return additions
+
+    @classmethod
+    def _insert(cls, transaction: TransactionDatabase, additions: list[dict[str, str]]) -> None:
+        """Request one non-overwriting bulk append and validate its receipts before commit."""
+        logger.info("Append %s new Arango projection documents without replacement.", len(additions))
+        receipts = (
+            transaction.collection(HOURS_COLLECTION).insert_many(
+                additions, overwrite=False, raise_on_document_error=True
+            )
+            if additions
+            else []
+        )
+        cls._finish(transaction, additions, receipts)
+        logger.debug("Confirmed the bulk append and commit for %s new documents.", len(additions))
+
+    @staticmethod
+    def _finish(transaction: TransactionDatabase, additions: list[dict[str, str]], receipts: object) -> None:
+        """Validate acknowledgment cardinality, exact keys, error flags, and confirmed commit status."""
+        if not isinstance(receipts, list):
+            raise TypeError("Archive append requires complete synchronous document acknowledgments.")
+        for document, receipt in zip(additions, receipts, strict=True):
+            if (
+                not isinstance(receipt, dict)
+                or receipt.get("_key") != document["_key"]
+                or receipt.get("error", False) is not False
+            ):
+                raise ValueError("Archive append acknowledgment does not match its requested key.")
+        if transaction.commit_transaction() is not True:
+            raise ConnectionError("Archive append did not confirm its transaction commit.")
+
+    @staticmethod
+    def _abort(transaction: TransactionDatabase) -> None:
+        """Attempt cleanup without hiding the original failure or asserting an unconfirmed rollback."""
+        logger.info("Abort the unconfirmed Arango archive transaction.")
+        try:
+            if transaction.abort_transaction() is not True:
+                logger.error("WAN Arango archive rollback did not confirm its result.")
+            else:
+                logger.debug("Confirmed the Arango archive transaction abort.")
+        except (ArangoError, OSError):
+            logger.exception("WAN Arango archive rollback could not be confirmed.")
 
 
 class ArangoHistory:

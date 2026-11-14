@@ -13,9 +13,80 @@ from src.interfaces.wan_performance.domain.measurement import (
     MeasurementIdentity,
     SampleMeasurement,
 )
-from src.interfaces.wan_performance.integration.record_codec import RecordCodec, SampleRecordCodec, SampleReplayPolicy
+from src.interfaces.wan_performance.integration.record_codec import (
+    ArchiveCodec,
+    DeclarationCodec,
+    RecordCodec,
+    SampleRecordCodec,
+    SampleReplayPolicy,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class ProjectionReplay:
+    """Validate immutable archive projection decisions independently of either datastore."""
+
+    @staticmethod
+    def requires_new(previous: object, document: dict[str, str]) -> bool:
+        """Reject invalid stored metadata or changed payloads before accepting replay or a new key."""
+        if previous is None:
+            return True
+        if not isinstance(previous, dict) or any(
+            previous.get(name) != document[name] for name in ("_key", "identity", "hour")
+        ):
+            raise ValueError("Existing archive row metadata conflicts with its requested identity and hour.")
+        payload = previous.get("payload")
+        if not isinstance(payload, str):
+            raise ValueError("An existing archive row has an invalid payload.")
+        value = ArchiveCodec._json(payload.encode())
+        if not isinstance(value, dict):
+            raise ValueError("An existing archive payload must be an object.")
+        ArchiveCodec._record(value, DeclarationCodec.identity(value["identity"]), value["provenance"])
+        if json.dumps(value, sort_keys=True, allow_nan=False) != document["payload"]:
+            raise ValueError("Archive projection conflicts with an existing full-identity hour.")
+        return False
+
+
+class SQLiteArchive:
+    """Append reviewed projection documents without creating schema or replacing existing rows."""
+
+    @classmethod
+    def append(cls, repository: SQLiteHistory, documents: tuple[dict[str, str], ...]) -> int:
+        """Commit all new rows in one existing-file transaction or surface an unconfirmed commit."""
+        logger.info("Append WAN projections under an existing SQLite write transaction.")
+        try:
+            with closing(repository._connect()) as connection, connection:
+                connection.execute("BEGIN IMMEDIATE")
+                additions = cls._new_rows(connection, documents)
+                connection.executemany(
+                    "INSERT INTO wan_performance_hours (identity,hour,payload) VALUES (?, ?, ?)", additions
+                )
+        except (sqlite3.Error, ValueError, TypeError, KeyError, OSError):
+            logger.exception("WAN SQLite archive append did not confirm a commit.")
+            raise
+        logger.debug("Committed %s new projection records without replacement.", len(additions))
+        return len(additions)
+
+    @staticmethod
+    def _new_rows(connection: sqlite3.Connection, documents: tuple[dict[str, str], ...]) -> list[tuple[str, str, str]]:
+        """Inspect exact existing keys before any insert so one conflict rejects the full batch."""
+        logger.info("Inspect exact SQLite archive replay keys.")
+        additions = []
+        for document in documents:
+            row = connection.execute(
+                "SELECT identity,hour,payload FROM wan_performance_hours WHERE identity=? AND hour=?",
+                (document["identity"], document["hour"]),
+            ).fetchone()
+            previous = (
+                {**dict(zip(("identity", "hour", "payload"), row, strict=True)), "_key": document["_key"]}
+                if row is not None
+                else None
+            )
+            if ProjectionReplay.requires_new(previous, document):
+                additions.append((document["identity"], document["hour"], document["payload"]))
+        logger.debug("Checked %s requested rows and selected %s new rows.", len(documents), len(additions))
+        return additions
 
 
 class SQLiteHistory:

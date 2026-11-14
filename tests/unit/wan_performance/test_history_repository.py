@@ -12,9 +12,9 @@ from arango.cursor import Cursor
 
 from src.interfaces.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS, CalendarWindow
 from src.interfaces.wan_performance.domain.measurement import MetricMeasurement, SampleMeasurement
-from src.interfaces.wan_performance.integration.arango_history import ArangoHistory
+from src.interfaces.wan_performance.integration.arango_history import ArangoArchive, ArangoHistory
 from src.interfaces.wan_performance.integration.history_repository import HistorySelection
-from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
+from src.interfaces.wan_performance.integration.sqlite_history import SQLiteArchive, SQLiteHistory
 from src.interfaces.wan_performance.presentation.offline_preview import OfflinePreviewFactory
 
 
@@ -29,6 +29,442 @@ def history(tmp_path):
 def live_record():
     """Use independent synthetic inputs labeled live only in an isolated test."""
     return replace(OfflinePreviewFactory.build().measurements[0], provenance="live")
+
+
+@pytest.fixture
+def archive_payload():
+    """Construct a strict synthetic archive independently of source fixtures and live history."""
+    record = OfflinePreviewFactory.build().measurements[0]
+    return {
+        "version": 1,
+        "provenance": "synthetic",
+        "identity": record.identity.to_dict(),
+        "window": {
+            "start_utc": record.hour_start_utc.isoformat(),
+            "end_utc": (record.hour_start_utc + timedelta(hours=1)).isoformat(),
+            "complete": False,
+        },
+        "records": [record.to_dict()],
+    }
+
+
+@pytest.fixture
+def archive_documents(archive_payload):
+    """Prepare validated synthetic rows only for native append-primitive tests, not live admission."""
+    import hashlib
+
+    from src.interfaces.wan_performance.integration.record_codec import ArchiveCodec
+
+    archive = ArchiveCodec.decode(json.dumps(archive_payload).encode())
+    documents = tuple(
+        {
+            "_key": hashlib.sha256(json.dumps(record.natural_key).encode()).hexdigest(),
+            "identity": json.dumps(record.identity.natural_key),
+            "hour": record.hour_start_utc.isoformat(),
+            "payload": json.dumps(record.to_dict(), sort_keys=True, allow_nan=False),
+        }
+        for record in archive["records"]
+    )
+    return archive, documents
+
+
+def test_native_sqlite_archive_append_replay_conflict_and_synthetic_rejection(history, archive_documents):
+    """Exercise native append semantics while proving application history still rejects synthetic payloads."""
+
+    archive, documents = archive_documents
+    with sqlite3.connect(history.path) as connection:
+        connection.execute(
+            "CREATE TABLE wan_performance_hours (identity TEXT, hour TEXT, payload TEXT, PRIMARY KEY(identity,hour))"
+        )
+    assert SQLiteArchive.append(history, documents) == 1
+    assert SQLiteArchive.append(history, documents) == 0
+    changed = json.loads(documents[0]["payload"])
+    next(iter(changed["metrics"].values()))["value"] = 999
+    with pytest.raises(ValueError, match="conflict"):
+        SQLiteArchive.append(history, ({**documents[0], "payload": json.dumps(changed, sort_keys=True)},))
+    with sqlite3.connect(history.path) as connection:
+        assert connection.execute("SELECT payload FROM wan_performance_hours").fetchall() == [
+            (documents[0]["payload"],)
+        ]
+    with pytest.raises(ValueError, match="live"):
+        history.read(archive["identity"], *archive["window"])
+
+
+def test_native_sqlite_archive_batch_constraint_failure_rolls_back_all_new_rows(history, archive_documents):
+    """Prove a real SQLite failure after an insert cannot leave a partially appended archive."""
+    import hashlib
+
+    archive, documents = archive_documents
+    original = archive["records"][0]
+    second = replace(
+        original,
+        hour_start_utc=original.hour_start_utc + timedelta(hours=1),
+        collected_at_utc=original.collected_at_utc + timedelta(hours=1),
+        metrics={"missing": MetricMeasurement(None, "ms", missing_reason="x" * 3000)},
+    )
+    extra = {
+        "_key": hashlib.sha256(json.dumps(second.natural_key).encode()).hexdigest(),
+        "identity": json.dumps(second.identity.natural_key),
+        "hour": second.hour_start_utc.isoformat(),
+        "payload": json.dumps(second.to_dict(), sort_keys=True, allow_nan=False),
+    }
+    assert len(documents[0]["payload"]) < 2048 < len(extra["payload"])
+    with sqlite3.connect(history.path) as connection:
+        connection.execute(
+            "CREATE TABLE wan_performance_hours (identity TEXT, hour TEXT, "
+            "payload TEXT CHECK(length(payload)<2048), PRIMARY KEY(identity,hour))"
+        )
+    with pytest.raises(sqlite3.IntegrityError):
+        SQLiteArchive.append(history, (*documents, extra))
+    with sqlite3.connect(history.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM wan_performance_hours").fetchone() == (0,)
+
+
+@pytest.mark.parametrize("damage", ["boolean-value", "duplicate-field"])
+def test_native_sqlite_archive_rejects_invalid_stored_payload_without_replacement(history, archive_documents, damage):
+    """Reject invalid stored types and duplicate fields even when permissive parsing could hide a conflict."""
+
+    _, documents = archive_documents
+    damaged = json.loads(documents[0]["payload"])
+    next(iter(damaged["metrics"].values()))["value"] = True
+    payload = (
+        json.dumps(damaged)
+        if damage == "boolean-value"
+        else documents[0]["payload"].replace(
+            '"provenance": "synthetic"', '"provenance": "synthetic", "provenance": "synthetic"'
+        )
+    )
+    with sqlite3.connect(history.path) as connection:
+        connection.execute(
+            "CREATE TABLE wan_performance_hours (identity TEXT, hour TEXT, payload TEXT, PRIMARY KEY(identity,hour))"
+        )
+        connection.execute(
+            "INSERT INTO wan_performance_hours VALUES (?,?,?)",
+            (documents[0]["identity"], documents[0]["hour"], payload),
+        )
+    with pytest.raises(ValueError):
+        SQLiteArchive.append(history, documents)
+    with sqlite3.connect(history.path) as connection:
+        assert connection.execute("SELECT payload FROM wan_performance_hours").fetchall() == [(payload,)]
+
+
+def test_native_sqlite_archive_requires_existing_table_without_schema_creation(history, archive_documents):
+    """Return the existing-schema prerequisite rather than create a production-like history table."""
+
+    _, documents = archive_documents
+    with sqlite3.connect(history.path):
+        pass
+    with pytest.raises(sqlite3.OperationalError, match="no such table"):
+        SQLiteArchive.append(history, documents)
+    with sqlite3.connect(history.path) as connection:
+        assert connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall() == []
+
+
+@pytest.fixture
+def reviewed_live_archive():
+    """Provide live-shaped bytes only to mocked admission boundaries, never a real datastore."""
+    from src.interfaces.wan_performance.integration.record_codec import DeclarationCodec
+
+    identity = {"org_id": "org-one", "site_id": "site-one", "gateway_id": "aabbccddeeff", "port_name": "ge-0/0/0"}
+    body = {
+        "version": 1,
+        "provenance": "live",
+        "identity": identity,
+        "window": {"start_utc": "2024-01-01T12:00:00+00:00", "end_utc": "2024-01-01T13:00:00+00:00", "complete": False},
+        "records": [
+            {
+                "identity": identity,
+                "provenance": "live",
+                "hour_start_utc": "2024-01-01T12:00:00+00:00",
+                "collected_at_utc": "2024-01-01T12:34:00+00:00",
+                "is_up_observation": None,
+                "metrics": {"rx_bps": {"value": 40, "unit": "bit/s"}},
+            }
+        ],
+    }
+    return json.dumps(body).encode(), DeclarationCodec.identity(identity)
+
+
+@pytest.mark.parametrize("state", ["missing", "wrong-bytes", "foreign-review", "bad-map", "membership", "confirmation"])
+def test_live_archive_admission_refuses_untrusted_evidence_before_repository_acquisition(reviewed_live_archive, state):
+    """Keep unreviewed bytes and foreign scopes away from any database connection."""
+    import hashlib
+
+    from src.interfaces.wan_performance.integration.history_repository import ArchiveImporter
+
+    payload, identity = reviewed_live_archive
+    digest = hashlib.sha256(payload).hexdigest()
+    reviews = {} if state == "missing" else {identity.natural_key: frozenset({digest})}
+    if state == "foreign-review":
+        reviews = {("foreign", *identity.natural_key[1:]): frozenset({digest})}
+    if state == "bad-map":
+        reviews = {identity.natural_key: {digest}}
+    provider = MagicMock()
+    with pytest.raises((ValueError, TypeError)):
+        ArchiveImporter(provider, reviews).apply(
+            payload + b" " if state == "wrong-bytes" else payload,
+            () if state == "membership" else (identity,),
+            "import" if state == "confirmation" else "IMPORT",
+        )
+    provider.assert_not_called()
+
+
+def test_live_archive_review_requires_an_available_backend(reviewed_live_archive):
+    """Report an unavailable reviewed backend without creating a store or claiming an append."""
+    import hashlib
+
+    from src.interfaces.wan_performance.integration.history_repository import ArchiveImporter
+
+    payload, identity = reviewed_live_archive
+    provider = MagicMock(return_value=None)
+    with pytest.raises(ConnectionError, match="available"):
+        ArchiveImporter(provider, {identity.natural_key: frozenset({hashlib.sha256(payload).hexdigest()})}).apply(
+            payload, (identity,), "IMPORT"
+        )
+    provider.assert_called_once_with()
+
+
+def test_live_archive_review_admission_uses_only_a_mocked_append_boundary(reviewed_live_archive):
+    """Verify exact-byte approval without persisting an invented live-shaped record."""
+    import hashlib
+
+    from src.interfaces.wan_performance.integration.history_repository import ArchiveImporter
+
+    payload, identity = reviewed_live_archive
+    repository = MagicMock(spec=SQLiteHistory)
+    provider = MagicMock(return_value=repository)
+    with patch.object(SQLiteArchive, "append", return_value=1) as append:
+        message = ArchiveImporter(
+            provider, {identity.natural_key: frozenset({hashlib.sha256(payload).hexdigest()})}
+        ).apply(payload, (identity,), "IMPORT")
+    assert "Appended 1 reviewed live projection" in message and "completeness remains unknown" in message
+    provider.assert_called_once_with()
+    assert json.loads(append.call_args.args[1][0]["payload"])["provenance"] == "live"
+    repository._connect.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        "new",
+        "replay",
+        "missing-receipt",
+        "wrong-key",
+        "commit-false",
+        "cursor-count",
+        "concurrent-duplicate",
+        "abort-false",
+        "abort-error",
+        "error-receipt",
+    ],
+)
+def test_mocked_arango_archive_acknowledgments_and_transaction_failures(archive_documents, state, caplog):
+    """Require complete synchronous acknowledgments and abort uncertain or conflicting streaming transactions."""
+
+    _, documents = archive_documents
+    database = MagicMock()
+    transaction = database.begin_transaction.return_value
+    cursor = MagicMock(spec=Cursor)
+    cursor.__iter__.return_value = iter(documents if state == "replay" else [] if state == "cursor-count" else [None])
+    transaction.aql.execute.return_value = cursor
+    collection = transaction.collection.return_value
+    collection.insert_many.return_value = (
+        []
+        if state in {"missing-receipt", "abort-false", "abort-error"}
+        else [{"_key": "wrong" if state == "wrong-key" else documents[0]["_key"]}]
+    )
+    transaction.commit_transaction.return_value = state != "commit-false"
+    transaction.abort_transaction.return_value = state != "abort-false"
+    if state == "error-receipt":
+        collection.insert_many.return_value = [{"_key": documents[0]["_key"], "error": True}]
+    if state == "abort-error":
+        transaction.abort_transaction.side_effect = OSError("Synthetic abort uncertainty.")
+    if state == "concurrent-duplicate":
+        collection.insert_many.side_effect = ValueError("Concurrent duplicate insert.")
+    if state in {"new", "replay"}:
+        assert ArangoArchive.append(ArangoHistory(database), documents) == (1 if state == "new" else 0)
+        transaction.commit_transaction.assert_called_once_with()
+        transaction.abort_transaction.assert_not_called()
+    else:
+        with pytest.raises((ValueError, TypeError, ConnectionError)):
+            ArangoArchive.append(ArangoHistory(database), documents)
+        transaction.abort_transaction.assert_called_once_with()
+        if state in {"abort-false", "abort-error"}:
+            assert "rollback" in caplog.text and (
+                "did not confirm" in caplog.text or "could not be confirmed" in caplog.text
+            )
+    cursor.close.assert_called_once_with()
+    if state == "new":
+        collection.insert_many.assert_called_once_with(list(documents), overwrite=False, raise_on_document_error=True)
+    if state == "replay":
+        collection.insert_many.assert_not_called()
+
+
+@pytest.mark.parametrize("extra_byte", [0, 1])
+def test_archive_codec_exact_upload_byte_bound(archive_payload, extra_byte):
+    """Exercise the actual eight-MiB boundary independently of record-count validation."""
+    from src.interfaces.wan_performance.integration.record_codec import ArchiveCodec
+
+    original = json.dumps(archive_payload).encode()
+    payload = original + b" " * (8 * 1024 * 1024 - len(original) + extra_byte)
+    if extra_byte:
+        with pytest.raises(ValueError, match="eight MiB"):
+            ArchiveCodec.decode(payload)
+    else:
+        assert len(ArchiveCodec.decode(payload)["records"]) == 1
+
+
+@pytest.mark.parametrize("extra_byte", [0, 1])
+def test_declaration_codec_exact_input_byte_bound(declaration_payload, extra_byte):
+    """Exercise the actual 64-KiB declaration boundary with otherwise valid input."""
+    from src.interfaces.wan_performance.integration.record_codec import DeclarationCodec
+
+    _, declaration = declaration_payload
+    original = json.dumps(declaration).encode()
+    payload = original + b" " * (65536 - len(original) + extra_byte)
+    if extra_byte:
+        with pytest.raises(ValueError, match="64 KiB"):
+            DeclarationCodec.decode(payload)
+    else:
+        assert DeclarationCodec.decode(payload)["values"] == declaration["values"]
+
+
+def test_synthetic_archive_exact_record_cap_and_append_rejection():
+    """Validate 9528 independent hours below the byte cap and reject a 9529th process-state hour."""
+    from src.interfaces.wan_performance.integration.history_repository import SyntheticArchiveStore
+    from src.interfaces.wan_performance.integration.record_codec import ArchiveCodec
+
+    identity = {"org_id": "o", "site_id": "s", "gateway_id": "g", "port_name": "p"}
+    start = datetime(2024, 1, 1, tzinfo=UTC)
+    end = start + timedelta(days=397)
+    records = [
+        {
+            "identity": identity,
+            "provenance": "synthetic",
+            "is_up_observation": None,
+            "hour_start_utc": (start + timedelta(hours=offset)).isoformat(),
+            "collected_at_utc": (start + timedelta(hours=offset)).isoformat(),
+            "metrics": {"m": {"value": 1, "unit": "%"}},
+        }
+        for offset in range(9528)
+    ]
+    body = {
+        "version": 1,
+        "provenance": "synthetic",
+        "identity": identity,
+        "window": {"start_utc": start.isoformat(), "end_utc": end.isoformat(), "complete": False},
+        "records": records,
+    }
+    payload = json.dumps(body).encode()
+    archive = ArchiveCodec.decode(payload)
+    assert len(archive["records"]) == 9528 and len(payload) < 8 * 1024 * 1024
+    store = SyntheticArchiveStore()
+    digest = store.accept(payload, (archive["identity"],), "IMPORT_SYNTHETIC")
+    body["records"] = [*records, records[0]]
+    assert len(json.dumps(body).encode()) < 8 * 1024 * 1024
+    with pytest.raises(ValueError, match="9528"):
+        ArchiveCodec.decode(json.dumps(body).encode())
+    body["window"] = {
+        "start_utc": end.isoformat(),
+        "end_utc": (end + timedelta(hours=1)).isoformat(),
+        "complete": False,
+    }
+    body["records"] = [{**records[0], "hour_start_utc": end.isoformat(), "collected_at_utc": end.isoformat()}]
+    with pytest.raises(ValueError, match="9528"):
+        store.accept(json.dumps(body).encode(), (archive["identity"],), "IMPORT_SYNTHETIC")
+    assert store.export("o", digest) == payload
+
+
+@pytest.mark.parametrize("extra_byte", [0, 1])
+def test_synthetic_archive_exact_combined_state_byte_bound(archive_payload, extra_byte):
+    """Reject one byte beyond the real combined archive and projection-state limit without eviction."""
+    from src.interfaces.wan_performance.integration.history_repository import SyntheticArchiveStore
+    from src.interfaces.wan_performance.integration.record_codec import ArchiveCodec
+
+    original = json.dumps(archive_payload).encode()
+    archive = ArchiveCodec.decode(original)
+    row_bytes = json.dumps(archive["records"][0].to_dict(), sort_keys=True, allow_nan=False).encode()
+    payload = original + b" " * (8 * 1024 * 1024 - len(original) - len(row_bytes) + extra_byte)
+    store = SyntheticArchiveStore()
+    if extra_byte:
+        with pytest.raises(ValueError, match="eight MiB"):
+            store.accept(payload, (archive["identity"],), "IMPORT_SYNTHETIC")
+        assert store.entries == {}
+    else:
+        digest = store.accept(payload, (archive["identity"],), "IMPORT_SYNTHETIC")
+        assert store.export(archive["identity"].to_dict()["org_id"], digest) == payload
+
+
+def test_synthetic_archive_import_export_and_live_codec_isolation(archive_payload):
+    """Retain exact archive bytes and provenance without enabling application history admission."""
+    import hashlib
+
+    from src.interfaces.wan_performance.integration.history_repository import SyntheticArchiveStore
+    from src.interfaces.wan_performance.integration.record_codec import ArchiveCodec, RecordCodec
+
+    payload = json.dumps(archive_payload).encode()
+    archive = ArchiveCodec.decode(payload)
+    store = SyntheticArchiveStore()
+    digest = store.accept(payload, (archive["identity"],), "IMPORT_SYNTHETIC")
+    assert digest == hashlib.sha256(payload).hexdigest()
+    assert store.accept(payload, (archive["identity"],), "IMPORT_SYNTHETIC") == digest
+    assert store.export(archive["identity"].to_dict()["org_id"], digest) == payload
+    with pytest.raises(ValueError, match="synthetic"):
+        RecordCodec.encode(archive["records"][0])
+    with pytest.raises(ValueError, match="unavailable"):
+        store.export("foreign", digest)
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        "extra",
+        "boolean-version",
+        "complete",
+        "missing-window",
+        "duplicate",
+        "foreign",
+        "provenance",
+        "outside",
+        "raw",
+        "boolean-value",
+        "naive",
+        "overlong",
+        "too-many",
+    ],
+)
+def test_archive_codec_rejects_invalid_records_before_storage(archive_payload, state):
+    """Reject ambiguous envelope or record evidence rather than construct successful incomplete imports."""
+    from src.interfaces.wan_performance.integration.record_codec import ArchiveCodec
+
+    if state == "extra":
+        archive_payload["extra"] = "Unsupported"
+    if state == "boolean-version":
+        archive_payload["version"] = True
+    if state == "complete":
+        archive_payload["window"]["complete"] = True
+    if state == "missing-window":
+        archive_payload["window"].pop("end_utc")
+    if state == "duplicate":
+        archive_payload["records"] *= 2
+    if state == "foreign":
+        archive_payload["records"][0]["identity"] = {**archive_payload["identity"], "org_id": "foreign"}
+    if state == "provenance":
+        archive_payload["records"][0]["provenance"] = "live"
+    if state == "outside":
+        archive_payload["window"]["start_utc"] = archive_payload["window"]["end_utc"]
+    if state == "raw":
+        next(iter(archive_payload["records"][0]["metrics"].values()))["raw_values"] = [1]
+    if state == "boolean-value":
+        next(iter(archive_payload["records"][0]["metrics"].values()))["value"] = True
+    if state == "naive":
+        archive_payload["records"][0]["collected_at_utc"] = "2024-01-01T12:34:00"
+    if state == "overlong":
+        archive_payload["window"]["end_utc"] = "2028-01-01T00:00:00+00:00"
+    if state == "too-many":
+        archive_payload["records"] *= 9529
+    with pytest.raises((ValueError, KeyError)):
+        ArchiveCodec.decode(json.dumps(archive_payload).encode())
 
 
 @pytest.fixture

@@ -133,6 +133,11 @@ The inspection directory keeps five children. Existing SLE classes retain their 
 Use existing integration/record_codec.py and integration/history_repository.py for archive and declaration classes.
 Do not add an integration-directory child. Preserve existing live codec and history behavior.
 Live archive writes use atomic non-replacing inserts, not a read-then-overwrite transaction.
+Keep archive admission and document construction in history_repository.py.
+Put native append transactions in the existing sqlite_history.py and arango_history.py modules.
+Use a shared pure projection-replay decision in sqlite_history.py, without a database connection or compatibility alias.
+Divide transaction inspection, acknowledgment, and abort responsibilities into bounded methods before commit.
+These new subjects preserve the five-name module limits and the existing configured history behavior.
 The declaration and synthetic archive stores remain isolated process-lifetime state with downloadable artifacts.
 No production operation, service, dependency, workflow, or publication change forms part of these increments.
 

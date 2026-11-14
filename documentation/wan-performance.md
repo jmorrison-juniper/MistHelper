@@ -16,8 +16,42 @@ Each declaration permits 64 KiB. Each organization permits 1000 declarations.
 Identical replay changes nothing. Changed metadata at an existing identity and effective interval is rejected.
 Export metadata before a restart. The isolated store lasts only for the application process.
 These declarations change neither Mist configuration nor observed metrics.
-It does not claim raw-sample statistics, elapsed coverage, or source equivalence.
+Neither report claims raw-sample statistics, elapsed coverage, or source equivalence.
 The [replacement contract](../specs/numbered/0/0/1/1/3/3/0/0/4200-wan-parity-recovery/design/contracts/replacements.md) defines calculation rules and evidence limits.
+
+## Independently designed projection archives
+
+The same replacement page accepts UTF-8 JSON archives for one current cached full identity.
+Required envelope fields are `version`, `provenance`, `identity`, `window`, and `records`.
+Version is integer one. Provenance is `synthetic` or reviewed `live`.
+Window fields are `start_utc`, `end_utc`, and `complete: false`.
+Bounds use explicit UTC and an increasing half-open interval. Completeness remains unknown.
+Each row requires matching identity and provenance, `hour_start_utc`, `collected_at_utc`, `metrics`, and `is_up_observation`.
+Preserve supplied hour buckets and collection times. They do not establish source metric sample times.
+Each metric requires a finite value or an explained absence, and an exact unit.
+Raw arrays, duplicate JSON fields, excessive parser depth, unsupported fields, and duplicate hour keys are rejected.
+Limits are eight MiB per archive, 1 through 9528 unique hours, and 397 days.
+
+Type `IMPORT_SYNTHETIC` to retain original bytes in a separate process namespace.
+Export the original archive through its displayed SHA-256 digest before a restart.
+Synthetic organization state permits 9528 distinct hour keys and eight MiB of combined archive and record bytes.
+Conflicting overlapping hours reject without changing state. Exact replay changes nothing.
+This namespace never opens application history or becomes live data.
+
+Live import is unavailable by default. An upload cannot approve itself.
+Trusted `WAN_ARCHIVE_REVIEWS` configuration maps full `MeasurementIdentity.natural_key` tuples to immutable `frozenset` digest sets.
+Each digest must identify the exact reviewed genuine archive bytes. Request fields cannot supply approvals.
+After review, exact `IMPORT` permits append-only storage in an existing supported synchronous history backend.
+SQLite requires its existing file and hourly table. Import creates no schema.
+Arango requires complete synchronous key acknowledgments and a confirmed transaction commit.
+Identical projections remain unchanged. Conflicting stored projections reject the complete transaction.
+Storage errors remain explicit. An unconfirmed commit requires datastore review rather than an assumed rollback.
+These operations never write into Mist, retrieve historical Mist data, delete records, or manufacture missing hours.
+
+Native validation uses temporary SQLite and synthetic payloads only. The live application codec still rejects those payloads.
+Live admission and Arango transactions use mocks. They do not prove actual live history or executed Arango persistence.
+Deployment must also bound complete HTTP bodies and multipart parsing before CSRF processing.
+The archive stream limit alone does not establish a web-server resource limit.
 
 Select **WAN Performance** in the existing portal navigation.
 The tab opens the read-only live overview.

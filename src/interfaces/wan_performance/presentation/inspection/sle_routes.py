@@ -1,16 +1,22 @@
 """Serve explicit tenant-scoped SLE requests through existing portal protections."""
 
 import logging
+import sqlite3
 from collections.abc import Callable
 
-from flask import Response, current_app, render_template, request
+from arango.exceptions import ArangoError
+from flask import Response, abort, current_app, render_template, request
 from redis.exceptions import RedisError
 from requests.exceptions import RequestException
 
 from src.interfaces.wan_performance.collection.live_service import LiveService
 from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
 from src.interfaces.wan_performance.domain.measurement import MeasurementIdentity
-from src.interfaces.wan_performance.integration.history_repository import OperatorDeclarations
+from src.interfaces.wan_performance.integration.history_repository import (
+    ArchiveImporter,
+    OperatorDeclarations,
+    SyntheticArchiveStore,
+)
 from src.interfaces.wan_performance.presentation.inspection.reports import SleReader, SleResult
 
 logger = logging.getLogger(__name__)
@@ -27,6 +33,10 @@ class ReplacementPages:
         """Keep metadata operations isolated from network requests and observation writes."""
         identities: tuple[MeasurementIdentity, ...] = ()
         message, error, status = None, None, 200
+        if request.method == "POST" and (
+            request.content_length is None or request.content_length > 8 * 1024 * 1024 + 65536
+        ):
+            abort(413, description="A replacement upload must have a bounded content length.")
         try:
             identities, org_id = self._membership()
             result = self._action(identities, org_id)
@@ -36,10 +46,16 @@ class ReplacementPages:
         except (ValueError, TypeError, KeyError):
             logger.exception("Rejected independent WAN replacement input.")
             error, status = "Check exact identity, supported JSON fields, UTC bounds, and the confirmation word.", 400
-        except (ConnectionError, OSError, RedisError, RequestException):
-            logger.exception("Independent WAN replacement cache membership is unavailable.")
-            error, status = "Cached tenant membership is unavailable. No replacement action ran.", 503
-        return self._page(identities, message, error), status
+        except (ConnectionError, OSError, RedisError, RequestException, sqlite3.Error, ArangoError):
+            logger.exception("Independent WAN replacement storage or membership is unavailable.")
+            error, status = (
+                "Replacement storage or membership failed. Check the action logs. Commit status may be unknown.",
+                503,
+            )
+        return (
+            render_template("wan_performance/replacements.html", identities=identities, message=message, error=error),
+            status,
+        )
 
     def _membership(self) -> tuple[tuple[MeasurementIdentity, ...], str]:
         """Require existing cached identities in the selected tenant before exposing metadata state."""
@@ -54,28 +70,50 @@ class ReplacementPages:
             raise ValueError("Cached replacement membership has invalid identity or provenance.")
         return tuple({record.identity.natural_key: record.identity for record in records}.values()), service.org_id
 
-    @staticmethod
-    def _action(identities: tuple[MeasurementIdentity, ...], org_id: str) -> str | Response | None:
+    def _action(self, identities: tuple[MeasurementIdentity, ...], org_id: str) -> str | Response | None:
         """Accept typed metadata confirmation or export existing isolated declarations."""
         store = current_app.extensions.setdefault("wan_operator_declarations", OperatorDeclarations())
+        synthetic = current_app.extensions.setdefault("wan_synthetic_archives", SyntheticArchiveStore())
         if not isinstance(store, OperatorDeclarations):
             raise TypeError("The operator declaration store has an invalid type.")
+        if not isinstance(synthetic, SyntheticArchiveStore):
+            raise TypeError("The synthetic archive store has an invalid type.")
+        if request.method == "POST" and request.form.get("action", "declaration") not in {"declaration", "archive"}:
+            raise ValueError("Select a supported declaration or archive action.")
         if request.args.get("download") == "declarations":
             return Response(
                 store.export(org_id),
                 mimetype="application/json",
                 headers={"Content-Disposition": 'attachment; filename="wan-operator-declarations.json"'},
             )
+        if request.args.get("download") == "synthetic":
+            return Response(
+                synthetic.export(org_id, request.args.get("digest", "")),
+                mimetype="application/json",
+                headers={"Content-Disposition": 'attachment; filename="wan-synthetic-archive.json"'},
+            )
+        if request.method == "POST" and request.form.get("action") == "archive":
+            return self._archive(identities, synthetic)
         if request.method == "POST":
             return store.accept(
                 request.form.get("declaration", "").encode(), identities, request.form.get("confirmation", "")
             )
         return None
 
-    @staticmethod
-    def _page(identities: tuple[MeasurementIdentity, ...], message: str | None, error: str | None) -> str:
-        """Keep declared metadata and process restart loss visibly separate from source measurements."""
-        return render_template("wan_performance/replacements.html", identities=identities, message=message, error=error)
+    def _archive(self, identities: tuple[MeasurementIdentity, ...], synthetic: SyntheticArchiveStore) -> str:
+        """Read one bounded upload and keep synthetic state separate from reviewed live append admission."""
+        upload = request.files.get("archive")
+        if upload is None:
+            raise ValueError("Select one UTF-8 projection archive.")
+        payload = upload.stream.read(8 * 1024 * 1024 + 1)
+        confirmation = request.form.get("archive_confirmation", "")
+        if confirmation == "IMPORT_SYNTHETIC":
+            digest = synthetic.accept(payload, identities, confirmation)
+            return f"Synthetic archive retained in process state. Export digest: {digest}."
+        if confirmation != "IMPORT":
+            raise ValueError("Type IMPORT_SYNTHETIC or IMPORT for the matching archive provenance.")
+        importer = ArchiveImporter(lambda: self.service().history, current_app.config.get("WAN_ARCHIVE_REVIEWS", {}))
+        return importer.apply(payload, identities, confirmation)
 
 
 class SlePages:

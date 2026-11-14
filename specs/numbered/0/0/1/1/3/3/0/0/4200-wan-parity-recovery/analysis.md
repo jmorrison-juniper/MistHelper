@@ -2,6 +2,44 @@
 
 ## User-directed replacement contracts
 
+### T066 projection archives and strict input boundaries
+
+FR-024 and SC-014 now implement bounded archive admission without manufactured history.
+The focused selector passed 55 cases with two existing warnings in 5.69 seconds.
+Forty-four unit cases, eight protected route cases, and three responsive browser cases were added. No existing case was removed.
+Fourteen initial cases failed because the archive implementation did not exist.
+Early lint, optional-history typing, and two complexity failures were corrected before the final focused run.
+One later command stopped at lint before running tests. Its displayed earlier test log did not validate that revision.
+The narrow-screen negative control failed one browser case and passed two.
+Digest wrapping now passes the measured document-width limit at 1440, 1280, and 390 pixels.
+Ignored evidence retains the original overflow capture, corrected images, actual downloads, and failure logs.
+Browser users upload independent JSON, confirm through Enter, and export exactly the original synthetic bytes.
+
+Both input codecs reject duplicate object fields and parser depth failures as invalid input.
+Protected declaration and archive routes return 400 for deep, duplicate-root, and duplicate-nested JSON without losing prior declarations.
+Synthetic state remains separate and no application history or session request occurs.
+Exact codec boundaries cover 64 KiB declarations and eight-MiB archives.
+Synthetic state tests exercise exact combined byte limits, 9528 accepted hours, and rejection without eviction.
+Unknown fields, provenance, identities, timestamps, raw arrays, completeness claims, and conflicting hours reject explicitly.
+Live admission requires exact bytes, full identity, immutable trusted approval, typed confirmation, and an available backend.
+Live-shaped success reaches only a mocked append boundary. It never enters a native datastore in these new tests.
+
+Five native SQLite cases use only synthetic payloads in temporary existing files.
+They prove append, replay, conflict rejection, preserved damaged rows, and rollback after an eligible first insert and a rejected second insert.
+An absent hourly table remains absent. The application codec still rejects the synthetic rows.
+Ten mocked Arango cases cover replay, cursor cardinality, receipt cardinality, wrong keys, error flags, concurrent insertion, and unconfirmed commit or abort.
+They do not establish executed Arango persistence.
+
+The read-only consistency review examined 24 functional requirements, fourteen success criteria, and 66 actual task rows.
+Its four new method-length violations were repaired by separating admission, native append, replay, inspection, acknowledgment, and abort responsibilities.
+The 21 archive production methods now have at most 25 lines. Existing oversized route and test debt remains separate tracked work.
+Ruff, mypy on 29 sources, complexity, Bandit, compilation, and the 26-case structural selector passed.
+The exact committed-head complete selector and remote SHA receive separate coordinator evidence after commit.
+Forty-three of 66 tasks are checked. The original 23 acceptance tasks and reviewer markers remain open.
+T064-T066 implement designed replacements, not original source equivalence or production acceptance.
+Actual archives, authoritative declarations, endpoint history, production capacity, Arango execution, and deployment approval remain external facts.
+The guide also separates the bounded stream from deployment-level HTTP and multipart parsing limits.
+
 ### T064 observation ranking
 
 FR-022 and SC-012 now define independently designed ranking over existing cached or selected retained observations.
@@ -16,7 +54,7 @@ Browser controls passed at 1440, 1280, and 390 pixels. Captures remain in the ig
 The SLE module moved to inspection/reports.py. Its logger and three existing class module names intentionally changed.
 No compatibility alias remains. Existing SLE behavior and tests remain intact.
 The ranking displays at most twenty observations and starts no additional acquisition or storage read.
-T065 declarations and T066 archive import remain the next implementation increments.
+T065 and T066 follow this ranking increment. Their sections record their separate validation.
 The original acceptance and reviewer markers remain unchanged.
 
 ### T065 operator declarations
@@ -31,14 +69,15 @@ State exists only in the application process. JSON export identifies declaration
 Browser tests retain before and after images and actual downloaded declaration JSON in the ignored destination evidence directory.
 Ruff, Black, mypy on 29 sources, complexity, Bandit, compilation, and language checks passed.
 The two structural guards passed 26 cases with one existing warning. Thirteen tracked-file link checks found no broken targets.
-T066 archive validation and append-only storage remain the next increment.
+The complete selector passed 573 cases on `36f72b08d6eb9b0b7de2dae319d4d593050b6be3` with two existing warnings in 63.23 seconds.
+T066 adds archive validation and append-only storage under its separate replacement contract.
 
 The later user direction authorizes independently designed replacements and bounded synthetic validation.
 T061 defines [version-one contracts](design/contracts/replacements.md) without changing original acceptance states.
-T062 will implement observation statistics and configurable threshold counts over existing bounded retained projections.
-T063 will validate native temporary SQLite payload storage and mocked Arango guards with explicit synthetic provenance.
+T062 implements observation statistics and configurable threshold counts over existing bounded retained projections.
+T063 validates native temporary SQLite payload storage and mocked Arango guards with explicit synthetic provenance.
 Neither increment manufactures production data or establishes source equivalence.
-Future ranking, declarations, event, SLE, backfill, visual, and acceptance policies now have explicit replacement definitions.
+Ranking, declarations, event, SLE, recovery, visual, and acceptance policies have explicit replacement definitions.
 Actual network declarations, actual archives, production environment evidence, and owner deployment acceptance remain external facts.
 Unsupported original semantics no longer prevent the independently defined observation report or synthetic validation.
 The existing reviewer checklist remains unchanged. It is not a replacement-implementation completion checklist.
@@ -83,7 +122,7 @@ The selected horizon checks passed nine cases, including three existing cases, w
 The complete WAN, browser, and SDK regression selection passed 533 cases with two existing warnings in 57.78 seconds.
 T061-T063 add 28 cases and remove none. Forty of 63 implementation tasks are checked.
 The original 23 source acceptance tasks remain open. Reviewer acceptance markers remain unchanged.
-Designed ranking, declaration, and historical-import implementations remain future work. Their policies are defined, not falsely marked implemented.
+At this checkpoint, ranking, declarations, and historical import remained planned. Later T064-T066 sections record their implementations.
 Actual source metric semantics, retained production data, deployment capacity, authoritative network declarations, and source-equivalence acceptance remain external facts.
 
 ## Final bounded remainder and acceptance dependencies

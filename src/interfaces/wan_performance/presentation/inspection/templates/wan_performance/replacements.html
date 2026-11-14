@@ -1,16 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Independent WAN replacement policies{% endblock %}
 {% block content %}
-<section class="container-fluid" data-testid="wan-replacements">
+<section class="container-fluid" data-testid="wan-replacements" style="overflow-wrap: anywhere;">
     <h1>Designed replacement v1: operator declarations</h1>
     <p>Declared capacity uses bit/s. Region and role are operator text, not inferred network facts.
         These actions change neither Mist configuration nor observed measurements.</p>
     <p role="status" data-testid="wan-replacement-lifetime">This isolated state lasts only for this application process.
-        A restart removes declarations. Export records before a restart. Export does not establish live historical evidence.</p>
+        A restart removes declarations and synthetic archives. Export records before a restart.
+        Export does not establish live historical evidence.</p>
     {% if error %}<p role="alert" data-testid="wan-replacement-error">{{ error }}</p>{% endif %}
     {% if message %}<p role="status" data-testid="wan-replacement-result">{{ message }}</p>{% endif %}
     <details><summary>Current cached full identities</summary>
-        {% for identity in identities %}<pre>{{ identity.to_dict()|tojson }}</pre>
+        {% for identity in identities %}<pre style="white-space: pre-wrap; overflow-wrap: anywhere;">{{ identity.to_dict()|tojson }}</pre>
         {% else %}<p>No cached identity is available.</p>{% endfor %}
     </details>
     <form method="post">
@@ -27,6 +28,38 @@
     <p>Each organization permits at most 1000 declarations. Identical replay changes nothing.
         Changed metadata at an existing identity and effective interval is rejected.</p>
     <a href="{{ url_for('wan_performance.live.replacements', download='declarations') }}" data-testid="wan-declaration-export">Export declared metadata JSON</a>
+    <section data-testid="wan-archive-policy">
+        <h2>Designed replacement v1: projection archive import</h2>
+        <p>Supply UTF-8 JSON with exactly version 1, provenance, full identity, window, and records.
+            Window fields are start_utc, end_utc, and complete: false. Bounds use explicit UTC.
+            Each projection preserves exact identity, provenance, hour_start_utc, collected_at_utc, metrics, and is_up_observation.
+            Each metric requires value and unit. Missing values require a reason. Raw arrays are unsupported.</p>
+        <p>Limits: eight MiB per upload, 1 through 9528 unique hours, and 397 days.
+            Synthetic organization state also caps combined archive and record bytes at eight MiB.
+            Synthetic import changes only separate process state. It never enters the live history codec.</p>
+        <p data-testid="wan-live-import-policy">Live import is unavailable by default.
+            It requires a trusted server-side review map for the exact uploaded-byte SHA-256 and full identity.
+            An upload cannot approve itself. Review establishes admission, not real retention or source completeness.</p>
+        <form method="post" enctype="multipart/form-data">
+            {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+            <input type="hidden" name="action" value="archive">
+            <label for="wan-archive-file">Projection archive JSON</label>
+            <input id="wan-archive-file" name="archive" type="file" accept=".json,application/json" data-testid="wan-archive-file" required>
+            <label for="wan-archive-confirmation">Type IMPORT_SYNTHETIC or IMPORT for matching provenance</label>
+            <input id="wan-archive-confirmation" name="archive_confirmation" data-testid="wan-archive-confirmation" required>
+            <button type="submit" data-testid="wan-archive-submit">Validate and import archive</button>
+        </form>
+        <p>Reviewed live import appends new hours atomically and preserves identical replay.
+            Changed existing keys reject the transaction. SQLite requires its existing hourly table.
+            These operations never write into Mist, remove existing records, or manufacture missing hours.
+            They do not retrieve historical Mist data.</p>
+        <form method="get">
+            <input type="hidden" name="download" value="synthetic">
+            <label for="wan-archive-digest">Synthetic export digest from the import result</label>
+            <input id="wan-archive-digest" name="digest" data-testid="wan-archive-digest" class="form-control" required>
+            <button type="submit" data-testid="wan-archive-export">Export original synthetic archive</button>
+        </form>
+    </section>
     <a href="{{ url_for('wan_performance.live.overview') }}">Return to cached WAN observations</a>
 </section>
 {% endblock %}

@@ -75,18 +75,24 @@ This feature changes neither Mist configuration nor observed metric values.
 ### Version-one archive import
 
 Accept at most eight MiB and 9528 unique projection records, spanning at most 397 days.
+Require at least one projection record. Limit each printable metric name and unit to 128 characters.
 Require version, provenance, full identity, half-open UTC bounds with `complete: false`, and records.
 Validate every record, exact identity, matching provenance, unique hour, finite values, units, and UTC timestamps before storage.
 Reject unknown envelope fields, incomplete identities, out-of-window rows, duplicate hours, and unsupported completeness claims.
 Synthetic import requires exact `IMPORT_SYNTHETIC` and uses only a separate process-lifetime synthetic store.
 Synthetic export preserves provenance and original bounds. It does not enable the live history codec.
+The synthetic process store caps combined archive and record bytes at eight MiB per organization and distinct hour keys at 9528.
+Preserve full-identity hour keys across overlapping synthetic archives. Reject conflicting values before changing any state.
 Live import requires exact `IMPORT` and an uploaded-byte SHA-256 digest present in a trusted server-side review map for the full identity.
 An archive cannot approve its own digest. No review map exists by default.
 This approval establishes reviewed input admission, not endpoint retention or source sampling completeness.
 Atomically append new live hour keys. Preserve identical replay and reject changed existing keys without replacing any record.
 SQLite executes this decision under one write transaction. Arango uses non-overwriting inserts in one streaming transaction.
+The SQLite append primitive requires an existing hourly table. It creates no schema or database.
+Arango performs one bounded existing-key query and one bulk append. Every document acknowledgment must match its requested key.
 No raw-sample import, Mist write, historical synthesis, deletion, or schema migration occurs.
 Tests use temporary SQLite, isolated synthetic state, or mocked live-shaped inputs and Arango transactions.
+Native SQLite tests exercise the generic append primitive with synthetic payloads. The application read codec still rejects them.
 No invented fixture becomes real live history.
 
 Gateway insight start/end/interval/page controls establish query capability only.
