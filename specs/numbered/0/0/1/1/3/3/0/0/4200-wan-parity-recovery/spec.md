@@ -157,6 +157,12 @@ This specification authorizes no new transport or live request.
   Keep missing hours as gaps and missing values absent. Preserve measured zero and separate incompatible units.
   Label the UTC bucket axis, collection time, and unknown measurement completeness.
   Do not imply source metric timestamps, continuous measurements, source-equivalent charts, or interpolated history.
+- Independent retained-plot controls may zoom and move the visible UTC bucket interval, inspect exact points, reset the view, and download a local PNG.
+  Keep the original retained interval, metric units, raw values, and accessible table unchanged.
+  Client-side controls must make no collection or history request and must show rendering failures explicitly.
+- Independent raw SLE controls may sort gateway MAC, name, or model text and display five returned rows per page.
+  Preserve response order for equal text, missing numeric values, site/metric scope, and explicit unknown units and completeness.
+  Source order remains available. Display controls must not submit the form or request additional API pages.
 - Organization and site windows do not combine identity histories. They report unavailable history until the operator selects one gateway, port, or peer.
 - New per-poll sample storage is additive. Existing hourly records remain available, and hourly values derive from samples.
 - The existing hourly projection keeps its current calculations. A stored hour does not replace timestamped samples or prove complete coverage.

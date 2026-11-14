@@ -200,12 +200,32 @@
                 The table preserves exact values, collection times, and missing reasons.</p>
             {% for plot in plots %}
             {% set values = plot.points|map(attribute=3)|list %}
-            <figure class="wan-panel">
+            <figure class="wan-panel" data-testid="wan-retained-chart">
                 <figcaption class="text-break">{{ plot.name }} ({{ plot.unit }}).
                     Plot extent: {{ values|min }} to {{ values|max }}.
                     Measurement completeness remains unknown.</figcaption>
+                <div style="display:flex;flex-wrap:wrap;gap:.5rem" aria-label="Retained plot controls">
+                    {% for action, label in [("zoom-in", "Zoom in"), ("zoom-out", "Zoom out"), ("earlier", "Earlier UTC"), ("later", "Later UTC"), ("reset", "Reset view"), ("png", "Download PNG")] %}
+                    <button type="button" class="btn btn-sm btn-secondary" disabled
+                            data-plot-action="{{ action }}" data-testid="wan-retained-{{ action }}">{{ label }}</button>
+                    {% endfor %}
+                </div>
+                <label class="d-block">Inspect an exact retained observation
+                    <select data-testid="wan-retained-point-selection" style="width:100%;max-width:100%" disabled>
+                        <option value="">Select an observation</option>
+                        {% for x_position, y_position, hour, value, collected in plot.points %}
+                        <option value="{{ loop.index0 }}">{{ plot.name }}: {{ value }} {{ plot.unit }}. UTC bucket {{ hour }}. Collected {{ collected }}.</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <p role="status" class="text-break" data-testid="wan-retained-point-details">Select an observation.
+                    Exact values remain in the table.</p>
+                <p role="status" class="text-break" data-testid="wan-retained-chart-status">Chart controls need JavaScript.
+                    Exact values remain in the table.</p>
                 <svg class="wan-chart" viewBox="0 0 640 230" role="img"
                      style="--wan-series-color: var(--bs-info, #0dcaf0);"
+                     data-window-start="{{ retained.window.start.isoformat() }}"
+                     data-window-end="{{ retained.window.end.isoformat() }}"
                      data-testid="wan-retained-plot"
                      aria-label="{{ plot.name }}: {{ plot.unit }}. Discrete retained hourly projections.">
                     <path class="wan-chart-gridline" d="M32 35H620 M32 100H620 M32 165H620"/>
@@ -213,12 +233,13 @@
                     <text class="wan-chart-axis-label" x="620" y="182">{{ values|min }}</text>
                     {% for x_position, y_position, hour, value, collected in plot.points %}
                     <circle class="wan-chart-point" cx="{{ x_position }}" cy="{{ y_position }}" r="4"
+                            data-plot-x="{{ x_position }}"
                             data-testid="wan-retained-point" data-hour="{{ hour }}" data-value="{{ value }}">
                         <title>{{ hour }} UTC bucket: {{ value }} {{ plot.unit }}. Collected at {{ collected }}.</title>
                     </circle>
                     {% endfor %}
-                    <text class="wan-chart-label" x="95" y="214">Window start UTC</text>
-                    <text class="wan-chart-label" x="555" y="214">Window end UTC</text>
+                    <text class="wan-chart-label" x="135" y="214" data-window-start>Window start UTC</text>
+                    <text class="wan-chart-label" x="505" y="214" data-window-end>Window end UTC</text>
                 </svg>
             </figure>
             {% else %}
@@ -315,4 +336,151 @@
     <a data-testid="wan-live-back-link" href="{{ url_for('wan_performance.live.overview', window=window.key if window else none) }}">Return to the WAN overview</a>
     <a data-testid="wan-offline-link" href="{{ url_for('wan_performance.overview') }}">Open the isolated synthetic preview</a>
 </section>
+{% if plots %}
+<script>
+(() => {
+    /** Operate only on already rendered hourly projections and their UTC view interval. */
+    class RetainedChart {
+        static initialize(figure) {
+            figure.addEventListener("click", event => RetainedChart.activate(figure, event));
+            const selection = figure.querySelector("select");
+            selection.disabled = false;
+            selection.addEventListener("change", () => RetainedChart.inspect(figure, selection));
+            RetainedChart.adjust(figure, "reset");
+        }
+        static activate(figure, event) {
+            const point = event.target.closest("[data-testid=wan-retained-point]");
+            if (point) {
+                const selection = figure.querySelector("select");
+                selection.value = [...figure.querySelectorAll("circle")].indexOf(point);
+                RetainedChart.inspect(figure, selection);
+                return;
+            }
+            const button = event.target.closest("[data-plot-action]");
+            if (!button || button.disabled) return;
+            if (button.dataset.plotAction === "png") {
+                RetainedImage.download(button, figure.querySelector("svg"), figure.querySelector("[data-testid=wan-retained-chart-status]"));
+            } else {
+                RetainedChart.adjust(figure, button.dataset.plotAction);
+            }
+        }
+        static range(svg, action) {
+            let scale = Number(svg.dataset.plotScale || 1);
+            let offset = Number(svg.dataset.plotOffset || 0);
+            if (action === "reset") return [1, 0];
+            if (action === "zoom-in" || action === "zoom-out") {
+                const center = offset + 0.5 / scale;
+                scale = Math.max(1, Math.min(8, scale * (action === "zoom-in" ? 2 : 0.5)));
+                offset = center - 0.5 / scale;
+            } else {
+                offset += (action === "earlier" ? -0.5 : 0.5) / scale;
+            }
+            return [scale, Math.max(0, Math.min(1 - 1 / scale, offset))];
+        }
+        static adjust(figure, action) {
+            console.info("Adjust a retained WAN projection view.");
+            const svg = figure.querySelector("svg");
+            const [scale, offset] = RetainedChart.range(svg, action);
+            svg.dataset.plotScale = scale;
+            svg.dataset.plotOffset = offset;
+            const points = [...svg.querySelectorAll("circle")];
+            for (const point of points) {
+                const position = 32 + ((Number(point.dataset.plotX) - 32) / 588 - offset) * 588 * scale;
+                point.setAttribute("cx", position);
+                point.style.display = position < 32 || position > 620 ? "none" : "";
+            }
+            for (const button of figure.querySelectorAll("[data-plot-action]")) {
+                button.disabled = button.dataset.rendering === "true" || {"zoom-in": scale === 8, "zoom-out": scale === 1,
+                    earlier: offset === 0, later: offset >= 1 - 1 / scale, reset: scale === 1}[button.dataset.plotAction] || false;
+            }
+            const start = Date.parse(svg.dataset.windowStart), duration = Date.parse(svg.dataset.windowEnd) - start;
+            for (const [selector, fraction] of [["[data-window-start]", offset], ["[data-window-end]", offset + 1 / scale]]) {
+                svg.querySelector(selector).textContent = new Date(start + duration * fraction).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+            }
+            figure.querySelector("[data-testid=wan-retained-chart-status]").textContent =
+                `${points.filter(point => !point.style.display).length} of ${points.length} retained points visible. Measurement completeness remains unknown.`;
+            console.debug("Adjusted the retained projection view.", scale, offset);
+        }
+        static inspect(figure, selection) {
+            figure.querySelector("[data-testid=wan-retained-point-details]").textContent = selection.value
+                ? selection.selectedOptions[0].textContent : "Select an observation. Exact values remain in the table.";
+            figure.querySelectorAll("circle").forEach((point, index) => {
+                point.setAttribute("r", selection.value !== "" && index === Number(selection.value) ? 6 : 4);
+            });
+        }
+    }
+    /** Export the destination's own rendered chart without requests or external assets. */
+    class RetainedImage {
+        static snapshot(svg) {
+            const clone = svg.cloneNode(true);
+            clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+            clone.setAttribute("width", "1280");
+            clone.setAttribute("height", "460");
+            const originals = [svg, ...svg.querySelectorAll("*")], copies = [clone, ...clone.querySelectorAll("*")];
+            originals.forEach((element, index) => {
+                const styles = getComputedStyle(element);
+                for (const property of ["fill", "stroke", "stroke-width", "font-family", "font-size", "text-anchor", "opacity", "display"]) {
+                    copies[index].style.setProperty(property, styles.getPropertyValue(property));
+                }
+            });
+            return new XMLSerializer().serializeToString(clone);
+        }
+        static async raster(svg) {
+            const image = new Image();
+            await new Promise((resolve, reject) => {
+                image.onload = resolve;
+                image.onerror = () => reject(new Error("The retained chart image could not load."));
+                // The portal permits local data images, not blob image sources.
+                image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(RetainedImage.snapshot(svg));
+            });
+            return RetainedImage.paint(svg, image);
+        }
+        static paint(svg, image) {
+            const canvas = document.createElement("canvas");
+            canvas.width = 1280;
+            canvas.height = 600;
+            const context = canvas.getContext("2d");
+            if (!context) throw new Error("The browser cannot create an image canvas.");
+            context.fillStyle = "#ffffff";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = getComputedStyle(document.body).backgroundColor;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = getComputedStyle(svg).color;
+            context.font = "18px sans-serif";
+            context.fillText(svg.getAttribute("aria-label"), 20, 30, 1240);
+            context.drawImage(image, 0, 50, 1280, 460);
+            context.fillText("Hourly projections are not source metric sample times. Completeness remains unknown.", 20, 550, 1240);
+            context.fillText("Exact collection times and missing reasons remain in the retained table.", 20, 580, 1240);
+            return canvas;
+        }
+        static async download(button, svg, output) {
+            let address;
+            button.dataset.rendering = "true";
+            button.disabled = true;
+            console.info("Render a retained WAN projection PNG.");
+            try {
+                const canvas = await RetainedImage.raster(svg);
+                const image = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+                if (!image) throw new Error("The browser returned no encoded PNG.");
+                address = URL.createObjectURL(image);
+                const link = document.createElement("a");
+                link.href = address;
+                link.download = "wan-retained-projection.png";
+                link.click();
+                output.textContent = "PNG download requested. Exact collection times remain in the table.";
+                console.debug("Requested one locally rendered retained projection PNG.");
+            } catch (failure) {
+                console.error("Retained WAN PNG rendering failed.", failure);
+                output.textContent = "PNG could not be rendered. The retained table remains available.";
+            } finally {
+                delete button.dataset.rendering;
+                button.disabled = false;
+                if (address) setTimeout(() => URL.revokeObjectURL(address), 1000);
+            }
+        }
+    }
+    document.querySelectorAll("[data-testid=wan-retained-chart]").forEach(RetainedChart.initialize);
+})();
+</script>
+{% endif %}
 {% endblock %}

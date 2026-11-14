@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Locator, Page, expect
 from werkzeug.serving import make_server
 
 from src.interfaces.wan_performance.collection.live_service import LiveService
@@ -324,6 +324,146 @@ def test_browser_cached_site_and_retained_window_journey(page: Page, live_browse
     assert retained_history.read.call_count == reads
 
 
+class RetainedPlotJourney:
+    """Keep distinct browser interaction assertions small and independently readable."""
+
+    @staticmethod
+    def inspect(chart: Locator) -> None:
+        """Verify pointer and keyboard/touch selectors expose exact retained metadata."""
+        chart.get_by_test_id("wan-retained-point").click()
+        expect(chart.get_by_test_id("wan-retained-point-details")).to_contain_text("rx_bps: 40 bit/s")
+        chart.get_by_test_id("wan-retained-point-selection").select_option("")
+        chart.get_by_test_id("wan-retained-point-selection").select_option("0")
+        expect(chart.get_by_test_id("wan-retained-point-details")).to_contain_text("rx_bps: 40 bit/s")
+
+    @staticmethod
+    def movement(page: Page, chart: Locator) -> None:
+        """Verify keyboard zoom changes UTC bounds and reset restores them."""
+        plot = chart.get_by_test_id("wan-retained-plot")
+        initial = plot.locator("[data-window-start]").text_content()
+        chart.get_by_test_id("wan-retained-zoom-in").focus()
+        page.keyboard.press("Enter")
+        expect(plot).to_have_attribute("data-plot-scale", "2")
+        assert plot.locator("[data-window-start]").text_content() != initial
+        chart.get_by_test_id("wan-retained-earlier").click()
+        expect(plot).to_have_attribute("data-plot-offset", "0")
+        expect(chart.get_by_test_id("wan-retained-earlier")).to_be_disabled()
+        chart.get_by_test_id("wan-retained-later").click()
+        expect(plot).to_have_attribute("data-plot-offset", "0.25")
+        chart.get_by_test_id("wan-retained-reset").click()
+        expect(plot).to_have_attribute("data-plot-scale", "1")
+        assert plot.locator("[data-window-start]").text_content() == initial
+        expect(chart.get_by_test_id("wan-retained-zoom-out")).to_be_disabled()
+
+    @staticmethod
+    def bounds(chart: Locator) -> None:
+        """Verify both UTC boundaries, maximum zoom, and visible-point counts."""
+        plot = chart.get_by_test_id("wan-retained-plot")
+        for _ in range(3):
+            chart.get_by_test_id("wan-retained-zoom-in").click()
+        expect(plot).to_have_attribute("data-plot-scale", "8")
+        expect(chart.get_by_test_id("wan-retained-zoom-in")).to_be_disabled()
+        expect(chart.get_by_test_id("wan-retained-chart-status")).to_contain_text("0 of 1 retained points visible")
+        for _ in range(7):
+            chart.get_by_test_id("wan-retained-earlier").click()
+        expect(plot).to_have_attribute("data-plot-offset", "0")
+        expect(chart.get_by_test_id("wan-retained-earlier")).to_be_disabled()
+        expect(chart.get_by_test_id("wan-retained-chart-status")).to_contain_text("1 of 1 retained points visible")
+        for _ in range(14):
+            chart.get_by_test_id("wan-retained-later").click()
+        expect(plot).to_have_attribute("data-plot-offset", "0.875")
+        expect(chart.get_by_test_id("wan-retained-later")).to_be_disabled()
+        chart.get_by_test_id("wan-retained-reset").click()
+        expect(chart.get_by_test_id("wan-retained-point")).to_have_attribute("data-value", "40")
+
+    @staticmethod
+    def download(page: Page, chart: Locator, directory: Path, width: int) -> None:
+        """Save a real browser download and report rendering errors without a timeout."""
+        browser_errors = []
+        page.on("console", lambda message: browser_errors.append(message.text) if message.type == "error" else None)
+        with page.expect_download() as downloaded:
+            chart.get_by_test_id("wan-retained-png").click()
+            expect(chart.get_by_test_id("wan-retained-chart-status")).to_contain_text(
+                re.compile(r"PNG (download requested|could not be rendered)")
+            )
+            assert (
+                "PNG download requested" in chart.get_by_test_id("wan-retained-chart-status").inner_text()
+            ), browser_errors
+        destination = directory / f"retained-controls-{width}.png"
+        downloaded.value.save_as(destination)
+        RetainedPlotJourney.verify_png(destination)
+        expect(chart.get_by_test_id("wan-retained-point-details")).to_contain_text("UTC bucket")
+        expect(chart.get_by_test_id("wan-retained-point-details")).to_contain_text("Collected")
+
+    @staticmethod
+    def verify_png(destination: Path) -> None:
+        """Verify encoded image type and the bounded raster dimensions."""
+        encoded = destination.read_bytes()
+        assert encoded.startswith(b"\x89PNG\r\n\x1a\n")
+        assert int.from_bytes(encoded[16:20], "big") == 1280
+        assert int.from_bytes(encoded[20:24], "big") == 600
+
+
+@pytest.mark.parametrize("viewport", [(1440, 1100), (1280, 800), (390, 844)])
+def test_browser_retained_plot_controls_are_local_and_keyboard_accessible(
+    page: Page, live_browser_url: str, retained_history, viewport, wan_browser_artifacts
+):
+    """Inspect, zoom, move, reset, and download without a second history request."""
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.goto(live_browser_url + "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=6h")
+    chart = page.get_by_test_id("wan-retained-chart")
+    RetainedPlotJourney.inspect(chart)
+    requests = []
+    page.on("request", lambda request: requests.append(request.url) if "/wan-performance/" in request.url else None)
+    RetainedPlotJourney.movement(page, chart)
+    RetainedPlotJourney.bounds(chart)
+    RetainedPlotJourney.download(page, chart, wan_browser_artifacts, viewport[0])
+    expect(page.get_by_test_id("wan-retained-records")).to_contain_text("rx_bps: 40 bit/s")
+    assert requests == []
+    retained_history.read.assert_called_once()
+    retained_history.read_samples.assert_not_called()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    chart.screenshot(path=str(wan_browser_artifacts / f"retained-chart-{viewport[0]}.png"))
+
+
+@pytest.fixture
+def wan_browser_artifacts() -> Path:
+    """Keep destination-only screenshots and PNG downloads in ignored test evidence."""
+    directory = Path(__file__).resolve().parents[3] / "test-artifacts" / "wan-performance" / "destination-interactions"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+@pytest.mark.browser_context_args(java_script_enabled=False)
+def test_browser_retained_table_survives_without_javascript(page: Page, live_browser_url: str, retained_history):
+    """Retain exact values and static points without browser interaction support."""
+    page.goto(live_browser_url + "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=6h")
+    expect(page.get_by_test_id("wan-retained-records")).to_contain_text("rx_bps: 40 bit/s")
+    expect(page.get_by_test_id("wan-retained-point")).to_be_visible()
+    expect(page.get_by_test_id("wan-retained-zoom-in")).to_be_disabled()
+    expect(page.get_by_test_id("wan-retained-png")).to_be_disabled()
+    expect(page.get_by_test_id("wan-retained-chart-status")).to_contain_text("need JavaScript")
+    retained_history.read.assert_called_once()
+
+
+def test_browser_retained_png_failure_remains_explicit(page: Page, live_browser_url: str, retained_history):
+    """Keep the original table available when the browser cannot encode a PNG."""
+    page.goto(live_browser_url + "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=6h")
+    page.evaluate(
+        "() => { HTMLCanvasElement.prototype.toBlob = callback => { window.wanEncodeComplete = callback; }; }"
+    )
+    page.get_by_test_id("wan-retained-png").click()
+    expect(page.get_by_test_id("wan-retained-png")).to_be_disabled()
+    page.get_by_test_id("wan-retained-zoom-in").click()
+    expect(page.get_by_test_id("wan-retained-png")).to_be_disabled()
+    page.wait_for_function("typeof window.wanEncodeComplete === 'function'")
+    page.evaluate("() => window.wanEncodeComplete(null)")
+    expect(page.get_by_test_id("wan-retained-chart-status")).to_contain_text("PNG could not be rendered")
+    expect(page.get_by_test_id("wan-retained-records")).to_contain_text("rx_bps: 40 bit/s")
+    expect(page.get_by_test_id("wan-retained-png")).to_be_enabled()
+    retained_history.read.assert_called_once()
+
+
 @pytest.fixture
 def sle_api():
     """Return independent synthetic SDK results without opening any network connection."""
@@ -585,6 +725,127 @@ def test_browser_sle_explicit_inspection(page: Page, live_browser_url: str, live
     assert impacted.call_count == 1
     page.get_by_test_id("wan-sle-back").click()
     expect(page.get_by_test_id("wan-live-overview")).to_be_visible()
+
+
+@pytest.fixture
+def sle_display_rows(sle_api):
+    """Provide an independent bounded response with ties, zero, and missing values."""
+    catalog, impacted = sle_api
+    order = [7, 2, 6, 1, 5, 3, 4]
+    impacted.return_value.data = {
+        "gateways": [
+            {
+                "gateway_mac": f"aa00000000{number:02x}",
+                "name": "Same name",
+                "gateway_model": "SRX" if number % 2 else "SSR",
+                "degraded": 0,
+                "total": None,
+                "duration": None,
+            }
+            for number in order
+        ],
+        "total_count": 12,
+    }
+    return catalog, impacted, [f"aa00000000{number:02x}" for number in order]
+
+
+class SleDisplayJourney:
+    """Keep local SLE page and sorting expectations separate from transport assertions."""
+
+    @staticmethod
+    def pages(page: Page, rows: Locator, source_order: list[str]) -> None:
+        """Verify the first page, next boundary, and return to the first page."""
+        expect(page.get_by_test_id("wan-sle-page")).to_contain_text("Page 1 of 2. 7 returned rows")
+        expect(rows).to_have_count(5)
+        assert rows.locator("td:first-child").all_text_contents() == source_order[:5]
+        page.get_by_test_id("wan-sle-next").click()
+        expect(rows).to_have_count(2)
+        expect(page.get_by_test_id("wan-sle-next")).to_be_disabled()
+        page.get_by_test_id("wan-sle-first").click()
+        expect(page.get_by_test_id("wan-sle-previous")).to_be_disabled()
+
+    @staticmethod
+    def sorting(page: Page, rows: Locator, source_order: list[str]) -> None:
+        """Verify every identity column, stable ties, and response-order restoration."""
+        page.get_by_test_id("wan-sle-sort").select_option("mac")
+        assert rows.locator("td:first-child").all_text_contents() == sorted(source_order)[:5]
+        page.get_by_test_id("wan-sle-direction").select_option("desc")
+        assert rows.locator("td:first-child").all_text_contents() == sorted(source_order, reverse=True)[:5]
+        page.get_by_test_id("wan-sle-sort").select_option("model")
+        assert rows.locator("td:first-child").all_text_contents() == [
+            f"aa00000000{number:02x}" for number in [2, 6, 4, 7, 1]
+        ]
+        page.get_by_test_id("wan-sle-sort").select_option("name")
+        assert rows.locator("td:first-child").all_text_contents() == source_order[:5]
+        page.get_by_test_id("wan-sle-sort").select_option("source")
+        expect(page.get_by_test_id("wan-sle-direction")).to_be_disabled()
+        assert rows.locator("td:first-child").all_text_contents() == source_order[:5]
+
+    @staticmethod
+    def scope(page: Page, rows: Locator, source_order: list[str]) -> None:
+        """Verify last-page values, partial coverage, and unchanged site/metric scope."""
+        page.get_by_test_id("wan-sle-last").click()
+        assert rows.locator("td:first-child").all_text_contents() == source_order[5:]
+        expect(rows.first).to_contain_text("Unknown")
+        expect(rows.first.locator("td").nth(3)).to_have_text("0")
+        expect(page.get_by_test_id("wan-sle-coverage")).to_contain_text("Partial page")
+        expect(page.get_by_test_id("wan-sle-site")).to_have_value("site-one")
+        expect(page.get_by_test_id("wan-sle-metric")).to_have_value("application_health")
+
+
+@pytest.mark.parametrize("viewport", [(1440, 1100), (1280, 800), (390, 844)])
+def test_browser_sle_local_sorting_and_display_pages(
+    page: Page, live_browser_url: str, sle_display_rows, viewport, wan_browser_artifacts
+):
+    """Sort and page only returned rows without another scoped API submission."""
+    catalog, impacted, source_order = sle_display_rows
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.goto(live_browser_url + "/wan-performance/live/sle")
+    page.get_by_test_id("wan-sle-metric").fill("application_health")
+    page.get_by_test_id("wan-sle-submit").click()
+    rows = page.get_by_test_id("wan-sle-results").locator("tbody tr:not([hidden])")
+    requests = []
+    page.on("request", lambda request: requests.append(request.url) if "/wan-performance/" in request.url else None)
+    SleDisplayJourney.pages(page, rows, source_order)
+    SleDisplayJourney.sorting(page, rows, source_order)
+    SleDisplayJourney.scope(page, rows, source_order)
+    catalog.assert_called_once()
+    impacted.assert_called_once()
+    assert requests == []
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    page.screenshot(path=str(wan_browser_artifacts / f"sle-display-{viewport[0]}.png"), full_page=True)
+
+
+@pytest.mark.parametrize("count", [0, 5])
+def test_browser_sle_display_page_boundaries(page: Page, live_browser_url: str, sle_display_rows, count):
+    """Disable every paging boundary for empty and exactly full responses."""
+    catalog, impacted, _ = sle_display_rows
+    impacted.return_value.data["gateways"] = impacted.return_value.data["gateways"][:count]
+    page.goto(live_browser_url + "/wan-performance/live/sle")
+    page.get_by_test_id("wan-sle-metric").fill("application_health")
+    page.get_by_test_id("wan-sle-submit").click()
+    expect(page.get_by_test_id("wan-sle-page")).to_contain_text(f"Page 1 of 1. {count} returned rows")
+    for control in ["first", "previous", "next", "last"]:
+        expect(page.get_by_test_id(f"wan-sle-{control}")).to_be_disabled()
+    if count == 0:
+        expect(page.get_by_test_id("wan-sle-results")).to_contain_text("This does not establish healthy service")
+    catalog.assert_called_once()
+    impacted.assert_called_once()
+
+
+@pytest.mark.browser_context_args(java_script_enabled=False)
+def test_browser_sle_all_rows_survive_without_javascript(page: Page, live_browser_url: str, sle_display_rows):
+    """Leave the entire bounded raw response available without client-side scripts."""
+    catalog, impacted, _ = sle_display_rows
+    page.goto(live_browser_url + "/wan-performance/live/sle")
+    page.get_by_test_id("wan-sle-metric").fill("application_health")
+    page.get_by_test_id("wan-sle-submit").click()
+    expect(page.get_by_test_id("wan-sle-results").locator("tbody tr")).to_have_count(7)
+    expect(page.get_by_test_id("wan-sle-next")).to_be_disabled()
+    expect(page.get_by_test_id("wan-sle-sort")).to_be_disabled()
+    expect(page.get_by_test_id("wan-sle-page")).to_contain_text("All returned rows remain in the table")
+    catalog.assert_called_once()
+    impacted.assert_called_once()
 
 
 @pytest.mark.parametrize("viewport", [(1440, 1100), (1280, 800), (390, 844)])

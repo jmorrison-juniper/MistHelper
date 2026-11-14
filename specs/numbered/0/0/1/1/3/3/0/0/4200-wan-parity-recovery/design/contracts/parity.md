@@ -40,14 +40,17 @@ The final harness corrected its impacted-table response keys before populated ta
 None of these setup corrections changed the original checkout or entered the product.
 No source implementation, fixture, screenshot, or protected asset entered tracked destination files.
 
-### Actionable remaining work
+### Current interaction coverage and remaining work
 
-T012/T032/T036 still include buildable destination interaction work.
-Implement independent zoom/reset, visible point inspection, and optional PNG controls over verified retained projections.
-Use failing keyboard/browser tests and preserve exact gaps, scope, units, and accessible tables.
-Add independently labeled sorting and display pagination to bounded raw SLE results without guessing API pagination or score ordering.
-These items need destination design and implementation, not a new rights grant or live service.
-Do not classify them as external blockers.
+T056-T057 complete the requested bounded T012/T032/T036 interaction increments.
+Retained plots provide independent bounded zoom, UTC movement, reset, pointer/keyboard point inspection, and local PNG download.
+Raw SLE gateway results provide independent text sorting and five-row display pages without API pagination or score ordering.
+Failing tests preceded implementation. Eleven new browser cases cover three viewports, boundaries, failures, and no-script access.
+The exact table, values, units, missing states, tenant/route scope, and API/history request counts remain unchanged.
+These independent controls do not establish complete source visual, audience, or interaction equivalence.
+
+The source legend remains obscured by its toolbar during the recorded attempts.
+Share, clipboard, and external Plotly navigation remain untested, not silently completed or blocked by absent execution rights.
 
 Region aggregates, role/failover ranking, SLE score meanings, and source-equivalent quality statistics still need exact contracts.
 Real historical inventory, 13-month history, retention/capacity/completeness, and backfill still lack proof.
@@ -55,6 +58,21 @@ Live production dependency testing and hosted/owner acceptance remain outside th
 Keep issue #4200 open and the publication hold unchanged.
 
 ## Latest independent destination coverage
+
+T056 adds plot controls that operate only on existing rendered observations.
+`test_browser_retained_plot_controls_are_local_and_keyboard_accessible` exercises pointer selection, keyboard zoom, bounded movement, reset, and actual PNG downloads.
+The three viewport cases check 1x-to-8x limits, both UTC boundaries, preserved exact values, image dimensions, and no additional requests.
+The selector and persistent readout preserve hour-bucket and collection-time distinctions.
+An empty visible interval reports its visible-point count without fabricating a zero.
+`test_browser_retained_png_failure_remains_explicit` verifies null encoding, restored controls, and the unchanged exact table.
+The existing CSP rejects blob image sources. The renderer uses its permitted local data-image path without weakening the policy.
+The no-script case leaves static points and exact values available.
+
+T057 adds display-only controls over the one validated raw SLE response.
+`test_browser_sle_local_sorting_and_display_pages` checks every text column, both directions, stable ties, response-order restoration, and five-to-two pagination.
+The three viewport cases preserve missing numeric values, zero, partial labels, site/metric scope, and exactly two mocked SDK calls.
+Separate cases check empty/full page boundaries and all rows remaining accessible without JavaScript.
+Source-equivalent SLE filtering, metric ranking, classifiers, and interface/application/peer impacts remain unverified.
 
 T055 adds independently designed discrete plots to the retained views.
 `test_retained_plots_preserve_gaps_zero_missing_values_and_unit_boundaries` verifies bucket offsets, measured zero, absent metrics, and exact unit groups.
@@ -258,27 +276,27 @@ They do not establish source runtime behavior or visual parity.
 | P22 | D01, active overview code | Gateway state, circuit summary, and failovers | `wan-overview-kpis`, `wan-top-congested-circuits`; live state tests | Live snapshots exist. Historical failover behavior remains unverified. |
 | P23 | D01, D03, active overview code | Current alerts and degraded sites | `wan-active-alerts`, `wan-sle-degraded-sites`; offline route tests | Selectors exist in synthetic preview. Scope and alert rules remain unknown. |
 | P24 | D02, active overview code | Ranked table with rank, site, port, speed, utilization, and status | `wan-top-congested-circuits`, `wan-gateway-link`, `wan-port-link` | Destination renders a synthetic table and links. Ranking and precision are not accepted. |
-| P25 | D02, active overview code | Ten-row pagination | No destination pagination selector or control | Not implemented. No live pagination behavior is claimed. |
+| P25 | D02, active overview code | Ten-row pagination | `wan-table-next`, `wan-table-previous`; cached page tests | Independent ten-row cached pages exist. Source ranking-table equivalence remains unverified. |
 | P26 | D03, active overview code | Alert and degraded-SLE tables | `wan-active-alerts`, `wan-sle-degraded-sites` | Synthetic panels exist. Live SLE data is not established. |
-| P27 | D03, active overview code | SLE table sorting and filtering | No destination sorting or filtering control | Not implemented. Source scope and classifier rules remain unknown. |
-| P28 | D04, active overview code | Region, utilization, trends, throughput, gateway bandwidth, and VPN quality charts | `wan-region-summary-chart`, `wan-utilization-distribution-chart`, `wan-overview-trends`, `wan-site-charts` | Synthetic charts exist. Source axes, units, series, and missing-history rules remain unverified. |
-| P29 | D05, active overview code | Site selector | `wan-site-controls` contains a disabled synthetic selector. Live gateway form has `wan-live-gateway-site` text input. | A live site identifier input exists, but it does not match the source selector. |
-| P30 | D05, active overview code | 6-hour, 12-hour, 24-hour, and 7-day range controls with a 24-hour default | `wan-site-controls` contains a disabled 24-hour synthetic value | Source ranges are documented. Live controls are not implemented. Keep the 3-hour goal separate. |
+| P27 | D03, active overview code | SLE table sorting and filtering | `wan-sle-sort`, `wan-sle-direction`, `wan-sle-page`; cached identity filter | Independent raw SLE text sorting/display pages and cached filtering exist. SLE peer filtering and full source equivalence remain unverified. |
+| P28 | D04, active overview code | Region, utilization, trends, throughput, gateway bandwidth, and VPN quality charts | Synthetic chart selectors plus `wan-retained-plot`, point inspection, zoom/reset, and PNG controls | Independent retained plots preserve exact units and gaps. Source aggregate chart semantics and visual equivalence remain unverified. |
+| P29 | D05, active overview code | Site selector | `wan-cached-site`, exact cached-site route, and scoped browser tests | Independent cached-site choices exist. Complete organization inventory and source selector equivalence remain unverified. |
+| P30 | D05, active overview code | 6-hour, 12-hour, 24-hour, and 7-day range controls with a 24-hour default | `wan-retained-selection` and four-range route/browser tests | Independent retained UTC views exist for one identity. Source aggregation, time semantics, and default-view equivalence remain unverified. |
 | P31 | D05, D15, active overview code | Overview auto-refresh and status interval | `wan-site-controls`; background worker tests | Source intervals are 60 and 10 seconds. Destination worker uses bounded 300-second refresh and 10-second lease retry. |
-| P32 | D06, active route code | Region-to-site-to-circuit drilldown and breadcrumbs | `wan-gateway-link`, `wan-port-link`, `wan-peer-link`, `wan-back-link` | Gateway, port, and peer routes exist. Region and site list transitions do not. |
-| P33 | D07, active overview code | SLE summary, histogram, and classifiers | `wan-sle-degraded-sites` only | No destination SLE detail route or verified data contract exists. |
-| P34 | D07, active overview code | Impacted gateways, interfaces, applications, and peers | No destination impact-detail selector | Not implemented. SDK and field contracts remain unverified. |
-| P35 | D08, active overview code | CSV export for congestion, alerts, and degraded SLE | No destination export control | Not implemented. Source callback presence does not prove a working download. |
+| P32 | D06, active route code | Region-to-site-to-circuit drilldown and breadcrumbs | Cached organization/site/gateway/port/peer links and selected-window browser journeys | Independent scoped site/detail navigation exists. Region routing and source navigation equivalence remain unverified. |
+| P33 | D07, active overview code | SLE summary, histogram, and classifiers | `wan-live-sle-link`, `wan-sle-site`, `wan-sle-metric`, and bounded request tests | Independent catalog-validated inspection exists. Source scores, histograms, classifier calculations, and equivalence remain unverified. |
+| P34 | D07, active overview code | Impacted gateways, interfaces, applications, and peers | `wan-sle-results`, `wan-sle-coverage`, local text sorting, and display-page controls | Bounded raw gateway inspection exists. Other entity impacts, unknown units, and source-specific semantics remain unverified. |
+| P35 | D08, active overview code | CSV export for congestion, alerts, and degraded SLE | `wan-table-export`, scoped CSV/formula/browser tests | Independent cached-observation CSV exists. Three source downloads were observed privately. Export/report equivalence remains unverified. |
 | P36 | D09, active gateway page | Gateway ID, site, status, and last-seen time | `wan-gateway-health`, `wan-gateway-kpis` | Offline values are synthetic. Live field units and time meaning remain unverified. |
 | P37 | D09, active gateway page | Port and peer counts, CPU, memory, and uptime | `wan-gateway-kpis`, `wan-port-table`, `wan-peer-table` | Source lists these fields. The destination does not show them or verify their units. |
 | P38 | D10, active gateway page | WAN-port and VPN-peer tables and detail links | `wan-port-table`, `wan-peer-table`, `wan-port-link`, `wan-peer-link` | Synthetic navigation is tested. Full identity and source row coverage remain unverified. |
-| P39 | D10, active gateway page | Gateway bandwidth and device-metric charts with 24-hour coverage | `wan-gateway-charts` | Synthetic charts exist. Source units and 24-hour completeness remain unknown. |
+| P39 | D10, active gateway page | Gateway bandwidth and device-metric charts with 24-hour coverage | Synthetic gateway chart plus independent retained plots, point/zoom/PNG controls | Scoped retained projections and controls exist. Source device-metric equivalence and complete 24-hour coverage remain unverified. |
 | P40 | D11, active port page | Port status and utilization gauge | `wan-port-kpis`, `wan-port-gauges` | Offline values are synthetic. The live scalar contract does not establish utilization units. |
 | P41 | D11, active port page | Current statistics and port configuration | `wan-port-current-statistics`, `wan-port-configuration` | Synthetic panels exist. Capacity, role, provider, address, and MTU mappings remain unverified. |
 | P42 | D11, active route code | Encoded interface path and gateway/site query scope | `/wan-performance/port/{site}/{encoded-port}`; `test_port_route_preserves_an_encoded_slash_and_bandwidth_units` | Encoded slash preservation and fixture scope have offline assertions. Source and live field parity remain open. |
-| P43 | D12, active port page | Receive and transmit bandwidth history | `wan-port-charts` | Offline charts exist. The supported SDK does not provide the source historical method. |
+| P43 | D12, active port page | Receive and transmit bandwidth history | Offline port charts plus independent retained plots and local controls | Verified retained values have independent plots. Source historical methods, complete rate history, and equivalence remain unsupported. |
 | P44 | D12, active port page | Unicast, multicast, broadcast, drops, and CRC counters | `wan-port-packet-statistics`, `wan-port-error-counters`; destination-only `wan-calendar-summaries` | Synthetic panels exist. Counter semantics and any source equivalent for calendar summaries remain unknown. |
-| P45 | D13, active peer page | Loss, latency, jitter, and MOS gauges and history | `wan-peer-kpis`, `wan-peer-gauges`, `wan-peer-charts` | Current scalar units and MOS bounds are documented. MOS quality categories and source history remain unknown. |
+| P45 | D13, active peer page | Loss, latency, jitter, and MOS gauges and history | Peer preview selectors plus unit-separated retained plots and local controls | Scalar units and MOS bounds are documented. Independent retained plots exist. MOS categories, quality weighting, source history, and parity remain unknown. |
 | P46 | D14, active peer page | Peer path identity, addresses, type, tunnel name, and MTU | `wan-peer-details` | Synthetic fields exist. The live response does not verify each source field. |
 | P47 | D14, active peer page | Uptime, bytes, and packets | `wan-peer-statistics` | Synthetic fields exist. Live field contracts and counter semantics remain unknown. |
 | P48 | D14, active route code | Peer route and tunnel-path identity | Live peer links include site, MAC, and path key. Offline peer route tests cover site and MAC. | Full path identity is retained in live scope. The source field mapping remains unverified. |

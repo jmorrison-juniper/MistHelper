@@ -29,9 +29,33 @@
         Completeness remains unverified. The installed SDK has no pagination arguments for this endpoint.</p>
     <p>Values below preserve source numbers. Duration units, aggregation, and temporal coverage remain unknown.
         This view does not calculate performance scores or store history.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+        <label>Sort returned identity text
+            <select data-testid="wan-sle-sort" disabled>
+                <option value="source">Response order</option>
+                <option value="mac">Gateway MAC</option>
+                <option value="name">Name</option>
+                <option value="model">Model</option>
+            </select>
+        </label>
+        <label>Text direction
+            <select data-testid="wan-sle-direction" disabled>
+                <option value="asc">Ascending</option><option value="desc">Descending</option>
+            </select>
+        </label>
+    </div>
+    <p>Text order is case-sensitive. Equal values keep response order. Measurements are not ranked.
+        Display pages contain five returned rows and do not request additional API pages.</p>
+    <p role="status" data-testid="wan-sle-page">Display controls need JavaScript. All returned rows remain in the table.</p>
+    <nav aria-label="Returned SLE rows" style="display:flex;flex-wrap:wrap;gap:.5rem">
+        {% for step, label in [("first", "First"), ("previous", "Previous"), ("next", "Next"), ("last", "Last")] %}
+        <button type="button" class="btn btn-sm btn-secondary" disabled
+                data-sle-step="{{ step }}" data-testid="wan-sle-{{ step }}">{{ label }}</button>
+        {% endfor %}
+    </nav>
     <div class="table-responsive"><table class="table" data-testid="wan-sle-results">
         <thead><tr><th>Gateway MAC</th><th>Name</th><th>Model</th><th>Degraded (source units unknown)</th><th>Total (source units unknown)</th><th>Duration (source units unknown)</th></tr></thead>
-        <tbody>{% for row in result.gateways %}<tr>
+        <tbody>{% for row in result.gateways %}<tr data-sle-row>
             <td>{{ row.gateway_mac }}</td><td>{{ row.name|default("Unknown", true) }}</td><td>{{ row.gateway_model|default("Unknown", true) }}</td>
             <td>{{ row.degraded if row.degraded is defined and row.degraded is not none else "Unknown" }}</td>
             <td>{{ row.total if row.total is defined and row.total is not none else "Unknown" }}</td>
@@ -41,4 +65,58 @@
     {% endif %}{% endif %}
     <a href="{{ url_for('wan_performance.live.overview') }}" data-testid="wan-sle-back">Return to the WAN overview</a>
 </section>
+{% if result and metric %}
+<script>
+(() => {
+    /** Page the validated response locally without changing API or tenant scope. */
+    class SleTable {
+        static initialize(section) {
+            const rows = [...section.querySelectorAll("[data-sle-row]")];
+            for (const select of section.querySelectorAll("[data-testid=wan-sle-sort], [data-testid=wan-sle-direction]")) {
+                select.addEventListener("change", () => SleTable.draw(section, rows, 0));
+            }
+            section.addEventListener("click", event => SleTable.move(section, rows, event));
+            SleTable.draw(section, rows, 0);
+        }
+        static sorted(section, rows) {
+            const key = section.querySelector("[data-testid=wan-sle-sort]").value;
+            if (key === "source") return [...rows];
+            const column = {mac: 0, name: 1, model: 2}[key];
+            const direction = section.querySelector("[data-testid=wan-sle-direction]").value === "asc" ? 1 : -1;
+            return [...rows].sort((left, right) => {
+                const first = left.cells[column].textContent, second = right.cells[column].textContent;
+                return (first < second ? -1 : first > second ? 1 : 0) * direction;
+            });
+        }
+        static draw(section, original, page) {
+            console.info("Sort and display returned WAN SLE rows.");
+            const rows = SleTable.sorted(section, original), pages = Math.max(1, Math.ceil(rows.length / 5));
+            const body = section.querySelector("tbody");
+            rows.forEach((row, index) => {
+                row.hidden = index < page * 5 || index >= (page + 1) * 5;
+                body.append(row);
+            });
+            section.dataset.slePage = page;
+            for (const button of section.querySelectorAll("[data-sle-step]")) {
+                button.disabled = ["first", "previous"].includes(button.dataset.sleStep) ? page === 0 : page === pages - 1;
+            }
+            section.querySelector("[data-testid=wan-sle-sort]").disabled = rows.length === 0;
+            section.querySelector("[data-testid=wan-sle-direction]").disabled =
+                rows.length === 0 || section.querySelector("[data-testid=wan-sle-sort]").value === "source";
+            section.querySelector("[data-testid=wan-sle-page]").textContent =
+                `Page ${page + 1} of ${pages}. ${rows.length} returned rows. API completeness remains unverified.`;
+            console.debug("Displayed returned WAN SLE rows.", rows.length, page + 1, pages);
+        }
+        static move(section, rows, event) {
+            const button = event.target.closest("[data-sle-step]");
+            if (!button || button.disabled) return;
+            const page = Number(section.dataset.slePage), last = Math.max(0, Math.ceil(rows.length / 5) - 1);
+            const target = {first: 0, previous: page - 1, next: page + 1, last}[button.dataset.sleStep];
+            SleTable.draw(section, rows, Math.max(0, Math.min(last, target)));
+        }
+    }
+    SleTable.initialize(document.querySelector("[data-testid=wan-sle]"));
+})();
+</script>
+{% endif %}
 {% endblock %}

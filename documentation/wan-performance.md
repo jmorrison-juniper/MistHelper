@@ -86,7 +86,20 @@ The table preserves exact values and missing reasons.
 Bucket times do not identify source metric sample times.
 Measurement completeness and elapsed coverage remain unknown.
 These plots reuse the existing single scoped history read without collection, raw-sample reads, or writes.
-They do not provide source-equivalent zoom, pan, legends, PNG export, aggregation, or backfill.
+Select **Zoom in** or **Zoom out** to change the displayed UTC interval without changing retained values.
+Zoom is bounded from one through eight times. The vertical value extent remains unchanged.
+Select **Earlier UTC** or **Later UTC** to move within the original retained interval.
+Select **Reset view** to restore the complete interval.
+The visible-point count describes the display, not measurement coverage.
+Click a point or select an observation to display its exact value, unit, UTC bucket, and collection time.
+Keyboard and touch users can use the observation selector.
+Select **Download PNG** to request a local image of the current view.
+The image includes its metric, unit, UTC labels, and completeness limits.
+Rendering errors remain visible, and the exact table remains available.
+These controls make no collection or history requests.
+Without JavaScript, the static plot and exact table remain available, but the controls stay disabled.
+These independently designed controls do not establish source chart equivalence.
+Legends, aggregation, and backfill remain unavailable.
 
 ## Cached table controls
 
@@ -124,6 +137,13 @@ Their units, aggregation, and temporal completeness remain unverified.
 An absent field stays unknown, and a measured zero stays zero.
 A reported total above the returned count marks a partial page.
 An empty result does not establish healthy service.
+Sort returned gateway MAC, name, or model text in either direction.
+Text order is case-sensitive. Equal values keep response order.
+Select **Response order** to restore the returned order.
+The display pages show five returned rows. First, previous, next, and last controls stay within that response.
+These controls make no additional API request and do not change the selected site or metric.
+They do not rank measurements or establish source table equivalence.
+Without JavaScript, all bounded returned rows remain visible.
 This independent inspection does not calculate performance scores, store history, or establish source parity.
 
 ## Live integration limits

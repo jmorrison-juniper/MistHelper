@@ -129,6 +129,17 @@ Reuse the destination SVG chart classes without importing synthetic preview type
 Do not connect points across gaps or merge different units.
 Use the existing single scoped history read without collection, raw-sample reads, writes, or new aggregates.
 
+T056 adds independent browser-only controls within the same retained-plot template and existing live browser tests.
+The existing live browser test module exceeds five module-level names.
+Small semantic journey classes keep new checks readable without dividing unrelated existing tests.
+A separate approved follow-up must divide that test module after ownership reconciliation.
+Zoom only the visible UTC bucket interval. Bound movement to the selected retained window.
+Preserve point values, units, missing buckets, exact collection metadata, and the accessible table.
+Offer keyboard controls, reset, exact point inspection, and a local PNG download without a new library or asset.
+Do not call the server or change history selection when these controls operate.
+Render failures as explicit messages. If JavaScript is unavailable, keep the exact table and a visible limitation.
+The operator guide, fragment, and existing evidence records document the change.
+
 The later direct authorization permits isolated original execution and internal captures, not proprietary code or fixture copying.
 Use a pinned source archive and independently seeded application provider in an ignored review directory.
 Verify absent network egress, absent credential variables, read-only source, and bounded resources before every source process.
@@ -207,3 +218,13 @@ Keep route identity and history scope unchanged when table controls change.
 CSV exports include all matching cached rows, not just the visible page.
 Include full identity, UTC observation hour, collection time, metric value, unit, missing reason, and provenance.
 Neutralize spreadsheet formulas in text fields. Do not export credentials, new API data, or stored historical records.
+
+T057 adds display-only controls in `presentation/inspection/templates/wan_performance/sle.html`.
+The existing SLE reader validates at most 1,000 returned rows. Its SDK method provides no page arguments.
+Keep that request limit unchanged. Sort only gateway MAC, name, and model text in the browser.
+Use case-sensitive lexical order and preserve response order for ties. Keep the original response-order option.
+Do not rank or sort unknown-unit measurements.
+Display five returned rows per page, with first, previous, next, and last controls.
+Keep the complete bounded table accessible when JavaScript is unavailable.
+Add responsive browser regressions to `tests/e2e/web_portal/test_wan_performance_live.py`.
+Verify unchanged cached organization/site/metric scope, missing values, partial-page labels, and exactly two mocked SDK calls.
