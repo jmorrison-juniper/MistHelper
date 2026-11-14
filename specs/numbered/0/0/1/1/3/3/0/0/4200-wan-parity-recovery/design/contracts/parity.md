@@ -1,5 +1,56 @@
 # Source comparison and end-to-end contract
 
+## Site input and independent rectangle examination
+
+T059 records fourteen additional private source observation/action entries, not fourteen successful test assertions.
+The source selector callback reads dictionary fields `id` and `name`.
+Its constructor accepts `DimSite` records, and the production loader also assigns those records.
+The initial independent fixture followed that model contract. The selector returned no options.
+This is a verified mismatch between source component contracts, not proof of every deployed configuration.
+
+A declared private scenario replaced only the provider's site collection with independently authored dictionaries.
+The original source, callbacks, methods, and fixtures stayed unchanged.
+Three synthetic choices appeared in name order: Synthetic Empty, Synthetic North, and Synthetic South.
+A fourth synthetic row without an identifier was absent from the choices.
+Each choice activated without changing the overview URL or filtering the other overview panels.
+The control was a native button with `tabindex="-1"`.
+After explicit focus, ArrowDown, Home, and Enter selected Synthetic Empty.
+This does not prove ordinary Tab accessibility or a complete organization inventory.
+
+Both source overview charts rejected the selected-site call before obtaining measurements.
+`DashboardDataProvider.get_gateway_port_timeseries()` reported missing `device_mac` and `port_id`.
+`DashboardDataProvider.get_vpn_peer_timeseries()` reported missing `device_mac` and `peer_mac`.
+The original callback supplies only site and time arguments. The existing provider requires the additional identity arguments.
+The resulting error titles contained no plotted observations.
+Do not fabricate default gateway, port, peer, or aggregate scope to conceal this failure.
+The private server log retains the exact error messages.
+
+The first two browser attempts used incorrect descendant focus locators.
+A direct DOM inspection identified the actual root button. The corrected driver completed the examination.
+The container verified denied egress before imports, read-only mounts, no credential variables, and no published ports.
+External browser requests and cloud/clipboard actions remained disabled.
+The exact container and loopback relay stopped after the review.
+Evidence remains private under `test-artifacts/wan-performance/original-review/runtime/`.
+Files include `browser-site-selector.json`, both first-attempt JSON files, `t059-source-selector-complete.log`, and `original-selector-server.log`.
+Source option and before/after captures remain private. No protected material entered the destination.
+
+T059 independently selects visible retained point centers inside inclusive rectangular plot bounds.
+Four keyboard inputs use percentages of the current plot, not metric values.
+Reversed pointer drags use the same validated bounds. Pointer coordinates clamp to the plot edges.
+Pointer percentages use 0.001 percentage-point precision to avoid browser coordinate noise. No measurement value is rounded.
+Escape and pointer cancellation clear the gesture. A canceled gesture produces no partial result.
+The selected list preserves the exact existing metric, unit, UTC bucket, and collection time within the displayed identity.
+Measured zero remains selectable. Missing values and hours remain in the unchanged table.
+Other figures remain unchanged. UTC or visibility changes clear the geometric selection.
+Invalid or reversed keyboard bounds preserve the previous valid selection and produce an explicit error.
+No aggregate, polygon interpretation, extra query, storage change, or invented metric is introduced.
+
+The interaction inventory has no further justified measurement or external-service increment from this examination.
+Site names and complete inventory need a destination cache contract before use.
+Region, ranking, capacity, SLE interpretation, weighted quality, and long-term history retain their existing evidence gates.
+Cloud upload, generated links, and clipboard continuation still require prohibited external-service interaction.
+Rectangle selection does not complete source chart or visual equivalence.
+
 ## Authorized original runtime examination
 
 T054 executed the pinned original at `2d1c2199fa1e31c129ef1e051c5389349a207785`.
@@ -83,8 +134,8 @@ Both recorded eight selected synthetic bar indices.
 The captured events reported rectangular ranges without a lasso-point payload, so polygon-specific semantics remain unverified.
 Autoscale and reset were also activated. These observations do not establish distribution or aggregation formulas.
 Previously verified navigation, ranges, refresh toggles, table actions, CSV downloads, and missing-state scenarios remain separate evidence.
-The site selector still has no choices under the independent production-shaped site collection.
-Its complete populated behavior needs a verified site-provider contract, not invented data or a live store.
+The model-based site collection exposed no choices during this earlier pass.
+T059 now records the expected dictionary shape, populated control behavior, and rejected chart identity calls above.
 
 Final evidence files under `test-artifacts/wan-performance/original-review/runtime/`:
 `browser-controls.json`, `browser-sle-controls.json`, `browser-external-controls.json`, `browser-share-matrix.json`, and `browser-sle-share-matrix.json`.
@@ -328,8 +379,8 @@ They do not establish source runtime behavior or visual parity.
 | P25 | D02, active overview code | Ten-row pagination | `wan-table-next`, `wan-table-previous`; cached page tests | Independent ten-row cached pages exist. Source ranking-table equivalence remains unverified. |
 | P26 | D03, active overview code | Alert and degraded-SLE tables | `wan-active-alerts`, `wan-sle-degraded-sites` | Synthetic panels exist. Live SLE data is not established. |
 | P27 | D03, active overview code | SLE table sorting and filtering | `wan-sle-sort`, `wan-sle-direction`, `wan-sle-page`; cached identity filter | Independent raw SLE text sorting/display pages and cached filtering exist. SLE peer filtering and full source equivalence remain unverified. |
-| P28 | D04, active overview code | Region, utilization, trends, throughput, gateway bandwidth, and VPN quality charts | Synthetic chart selectors plus `wan-retained-plot`, point inspection, zoom/reset, and PNG controls | Independent retained plots preserve exact units and gaps. Source aggregate chart semantics and visual equivalence remain unverified. |
-| P29 | D05, active overview code | Site selector | `wan-cached-site`, exact cached-site route, and scoped browser tests | Independent cached-site choices exist. Complete organization inventory and source selector equivalence remain unverified. |
+| P28 | D04, active overview code | Region, utilization, trends, throughput, gateway bandwidth, and VPN quality charts | Synthetic chart selectors plus retained point, rectangle, zoom/reset, and PNG controls | Independent retained plots and rectangular selection preserve exact units and gaps. Source aggregate chart semantics and visual equivalence remain unverified. |
+| P29 | D05, active overview code | Site selector | `wan-cached-site`, exact cached-site route, and scoped browser tests | Independent cached-site choices exist. Three source dictionary choices were exercised. Source charts rejected missing identity arguments. Complete inventory and source equivalence remain unverified. |
 | P30 | D05, active overview code | 6-hour, 12-hour, 24-hour, and 7-day range controls with a 24-hour default | `wan-retained-selection` and four-range route/browser tests | Independent retained UTC views exist for one identity. Source aggregation, time semantics, and default-view equivalence remain unverified. |
 | P31 | D05, D15, active overview code | Overview auto-refresh and status interval | `wan-site-controls`; background worker tests | Source intervals are 60 and 10 seconds. Destination worker uses bounded 300-second refresh and 10-second lease retry. |
 | P32 | D06, active route code | Region-to-site-to-circuit drilldown and breadcrumbs | Cached organization/site/gateway/port/peer links and selected-window browser journeys | Independent scoped site/detail navigation exists. Region routing and source navigation equivalence remain unverified. |

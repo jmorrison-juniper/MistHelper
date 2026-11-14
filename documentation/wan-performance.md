@@ -130,6 +130,22 @@ PNG rendering preserves the captured visibility state if the operator changes th
 This independent control is not a multi-series source legend or a filter of retained records.
 No cloud service, external sharing link, or clipboard action is added.
 
+## Select retained points
+
+For one retained metric plot, open **Select existing points in a rectangle**.
+Enter ordered left, right, top, and bottom percentages from zero through 100.
+Select **Apply bounds** to list exact visible point centers within those bounds.
+These percentages describe the visible plot, not metric values.
+For pointer selection, enable **Drag rectangle**, then drag across the plot.
+Select **Clear selection**, or press Escape, to remove the selection.
+
+The list preserves exact values, units, UTC buckets, and collection times.
+Missing measurements and hours remain in the table, and measured zero remains selectable.
+Changing the UTC view or point visibility clears the selection.
+Invalid bounds preserve the previous selection and show an error.
+Selection does not calculate an aggregate, request more records, or reproduce source polygon behavior.
+The PNG includes the displayed outline. Exact selected metadata remains in the page list.
+
 ## Site SLE inspection
 
 Select **Inspect cached-site SLE data** from a live WAN page.

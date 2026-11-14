@@ -574,8 +574,219 @@ def test_browser_retained_table_survives_without_javascript(page: Page, live_bro
     expect(page.get_by_test_id("wan-retained-zoom-in")).to_be_disabled()
     expect(page.get_by_test_id("wan-retained-png")).to_be_disabled()
     expect(page.get_by_test_id("wan-retained-toggle-points")).to_be_disabled()
+    page.get_by_test_id("wan-retained-rectangle-controls").locator("summary").click()
+    expect(page.get_by_test_id("wan-retained-rectangle-apply")).to_be_disabled()
     expect(page.get_by_test_id("wan-retained-chart-status")).to_contain_text("need JavaScript")
     retained_history.read.assert_called_once()
+
+
+@pytest.fixture
+def rectangle_history(live_service: LiveService) -> MagicMock:
+    """Keep three exact hourly records, including zero and missing measurements."""
+    from datetime import timedelta
+
+    from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement, MetricMeasurement
+
+    def read(identity, start, end):
+        """Return independent scoped observations without an aggregate or extra query."""
+        return tuple(
+            HourlyMeasurement(
+                identity,
+                start + timedelta(hours=index),
+                start + timedelta(hours=index, minutes=1),
+                {
+                    "rx_bps": MetricMeasurement(value, "bit/s"),
+                    "tx_bps": MetricMeasurement(10, "bit/s"),
+                    "loss": MetricMeasurement(None, "%", missing_reason="No rectangle fixture sample."),
+                },
+                "live",
+            )
+            for index, value in enumerate((0, 40, 80))
+        )
+
+    live_service.history.read.side_effect = read
+    return live_service.history
+
+
+class RetainedRectangleJourney:
+    """Verify actual rectangle interactions without changing retained observations."""
+
+    @staticmethod
+    def open(page: Page, base: str) -> Locator:
+        """Open the existing scoped port view and the independent selection controls."""
+        page.goto(base + "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=6h")
+        chart = page.get_by_test_id("wan-retained-chart").first
+        expect(chart.get_by_test_id("wan-retained-rectangle-controls")).to_have_count(1)
+        chart.get_by_test_id("wan-retained-rectangle-controls").locator("summary").click()
+        return chart
+
+    @staticmethod
+    def keyboard(page: Page, chart: Locator, bounds: tuple[str, ...]) -> None:
+        """Apply percentage bounds through keyboard-accessible controls."""
+        for name, value in zip(("left", "right", "top", "bottom"), bounds, strict=True):
+            chart.get_by_test_id(f"wan-retained-rectangle-{name}").fill(value)
+        chart.get_by_test_id("wan-retained-rectangle-apply").focus()
+        page.keyboard.press("Enter")
+
+    @staticmethod
+    def drag(page: Page, chart: Locator) -> None:
+        """Reverse a real pointer drag across two existing retained point centers."""
+        chart.get_by_test_id("wan-retained-rectangle-mode").click()
+        plot = chart.get_by_test_id("wan-retained-plot")
+        plot.scroll_into_view_if_needed()
+        corners = plot.evaluate(
+            "svg => [[25,100],[0,45]].map(([x,y])=>{"
+            "const point=new DOMPoint(32+x*5.88,35+y*1.3).matrixTransform(svg.getScreenCTM());"
+            "return [point.x,point.y];})"
+        )
+        page.mouse.move(*corners[0])
+        page.mouse.down()
+        try:
+            page.mouse.move(*corners[1], steps=8)
+        finally:
+            page.mouse.up()
+
+    @staticmethod
+    def selected(chart: Locator) -> None:
+        """Check exact zero, units, bucket, and collection metadata without aggregation."""
+        rows = chart.get_by_test_id("wan-retained-rectangle-results").locator("li").all_text_contents()
+        assert len(rows) == 2
+        assert rows[0].startswith("rx_bps: 0 bit/s. UTC bucket")
+        assert rows[1].startswith("rx_bps: 40 bit/s. UTC bucket")
+        assert all("Collected" in row for row in rows)
+        records = chart.locator("xpath=ancestor::details[@data-testid='wan-retained-window']").get_by_test_id(
+            "wan-retained-records"
+        )
+        for index, row in enumerate(rows):
+            cells = records.locator("tbody tr").nth(index).locator("td")
+            assert cells.nth(0).inner_text() in row
+            assert cells.nth(1).inner_text() in row
+        assert chart.get_by_test_id("wan-retained-point").evaluate_all(
+            "points=>points.map(point=>point.getAttribute('data-rectangle-selected'))"
+        ) == ["true", "true", None]
+
+    @staticmethod
+    def unchanged(page: Page, history: MagicMock, table: str, requests: list[str]) -> None:
+        """Keep all records, missing reasons, tenant scope, and read counts unchanged."""
+        assert page.get_by_test_id("wan-retained-records").inner_text() == table
+        assert "No rectangle fixture sample." in table
+        assert "org-one" in page.get_by_test_id("wan-retained-window").inner_text()
+        assert "ge-0/0/0" in page.get_by_test_id("wan-retained-window").inner_text()
+        identity = history.read.call_args.args[0].to_dict()
+        assert {key: identity[key] for key in ("org_id", "site_id", "gateway_id", "port_name")} == {
+            "org_id": "org-one",
+            "site_id": "site-one",
+            "gateway_id": "aabbccddeeff",
+            "port_name": "ge-0/0/0",
+        }
+        assert history.read.call_count == 1
+        history.read_samples.assert_not_called()
+        history.upsert.assert_not_called()
+        assert requests == []
+
+
+@pytest.mark.parametrize("viewport", [(1440, 1100), (1280, 800), (390, 844)])
+def test_browser_retained_rectangle_is_local_and_accessible(
+    page: Page, live_browser_url: str, rectangle_history: MagicMock, viewport, wan_browser_artifacts: Path
+):
+    """Select exact retained points by keyboard and pointer at each supported size."""
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    chart = RetainedRectangleJourney.open(page, live_browser_url)
+    table = page.get_by_test_id("wan-retained-records").inner_text()
+    requests = []
+    page.on("request", lambda request: requests.append(request.url))
+    RetainedRectangleJourney.keyboard(page, chart, ("0", "20", "45", "100"))
+    RetainedRectangleJourney.selected(chart)
+    expect(
+        page.get_by_test_id("wan-retained-chart").last.get_by_test_id("wan-retained-rectangle-results")
+    ).to_be_empty()
+    chart.get_by_test_id("wan-retained-rectangle-clear").click()
+    RetainedRectangleJourney.drag(page, chart)
+    RetainedRectangleJourney.selected(chart)
+    RetainedRectangleJourney.unchanged(page, rectangle_history, table, requests)
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    page.evaluate("window.scrollTo(0,0)")
+    page.screenshot(path=str(wan_browser_artifacts / f"retained-rectangle-{viewport[0]}.png"), full_page=True)
+
+
+@pytest.mark.parametrize("bounds", [("", "100", "0", "100"), ("80", "20", "0", "100"), ("0", "101", "0", "100")])
+def test_browser_retained_rectangle_rejects_invalid_bounds(
+    page: Page, live_browser_url: str, rectangle_history: MagicMock, bounds
+):
+    """Preserve an existing selection when empty, reversed, or excessive bounds fail."""
+    chart = RetainedRectangleJourney.open(page, live_browser_url)
+    RetainedRectangleJourney.keyboard(page, chart, ("0", "20", "45", "100"))
+    RetainedRectangleJourney.keyboard(page, chart, bounds)
+    expect(chart.get_by_test_id("wan-retained-rectangle-status")).to_contain_text("Invalid rectangle")
+    RetainedRectangleJourney.selected(chart)
+    assert rectangle_history.read.call_count == 1
+
+
+def test_browser_retained_rectangle_clears_after_view_or_visibility_change(
+    page: Page, live_browser_url: str, rectangle_history: MagicMock
+):
+    """Clear geometric selections while retaining all exact records and missing values."""
+    chart = RetainedRectangleJourney.open(page, live_browser_url)
+    for action in ("zoom-in", "toggle-points"):
+        RetainedRectangleJourney.keyboard(page, chart, ("0", "100", "0", "100"))
+        expect(chart.get_by_test_id("wan-retained-rectangle-results").locator("li")).not_to_have_count(0)
+        chart.get_by_test_id(f"wan-retained-{action}").click()
+        expect(chart.get_by_test_id("wan-retained-rectangle-results")).to_be_empty()
+        if action == "zoom-in":
+            chart.get_by_test_id("wan-retained-reset").click()
+    RetainedRectangleJourney.keyboard(page, chart, ("0", "100", "0", "100"))
+    expect(chart.get_by_test_id("wan-retained-rectangle-status")).to_contain_text("0 existing visible points selected")
+    assert rectangle_history.read.call_count == 1
+
+
+@pytest.mark.parametrize("cancellation", ["escape", "pointercancel"])
+def test_browser_retained_rectangle_cancels_pointer_capture(
+    page: Page, live_browser_url: str, rectangle_history: MagicMock, cancellation: str
+):
+    """Cancel a real gesture with Escape or a browser pointer-cancellation event."""
+    chart = RetainedRectangleJourney.open(page, live_browser_url)
+    chart.get_by_test_id("wan-retained-rectangle-mode").click()
+    point = chart.get_by_test_id("wan-retained-point").nth(1)
+    point.scroll_into_view_if_needed()
+    bounds = point.bounding_box()
+    page.mouse.move(bounds["x"] + bounds["width"] / 2, bounds["y"] + bounds["height"] / 2)
+    page.mouse.down()
+    try:
+        if cancellation == "escape":
+            page.keyboard.press("Escape")
+        else:
+            chart.get_by_test_id("wan-retained-plot").evaluate(
+                "svg=>svg.dispatchEvent(new PointerEvent('pointercancel', {pointerId:svg.wanRectangleStart.pointerId}))"
+            )
+    finally:
+        page.mouse.up()
+    expect(chart.get_by_test_id("wan-retained-rectangle-results")).to_be_empty()
+    expect(chart.get_by_test_id("wan-retained-rectangle-status")).to_contain_text("No rectangle")
+    assert chart.get_by_test_id("wan-retained-plot").evaluate("svg=>svg.wanRectangleStart === undefined")
+    assert rectangle_history.read.call_count == 1
+
+
+def test_browser_retained_rectangle_rejects_plot_margin_start(
+    page: Page, live_browser_url: str, rectangle_history: MagicMock
+):
+    """Reject a gesture outside the plotted area without selecting retained records."""
+    chart = RetainedRectangleJourney.open(page, live_browser_url)
+    chart.get_by_test_id("wan-retained-rectangle-mode").click()
+    plot = chart.get_by_test_id("wan-retained-plot")
+    plot.scroll_into_view_if_needed()
+    positions = plot.evaluate(
+        "svg=>[[10,100],[326,100]].map(([x,y])=>{"
+        "const point=new DOMPoint(x,y).matrixTransform(svg.getScreenCTM());return [point.x,point.y];})"
+    )
+    page.mouse.move(*positions[0])
+    page.mouse.down()
+    try:
+        assert plot.evaluate("svg=>svg.wanRectangleStart === undefined")
+        page.mouse.move(*positions[1], steps=5)
+    finally:
+        page.mouse.up()
+    expect(chart.get_by_test_id("wan-retained-rectangle-results")).to_be_empty()
+    assert rectangle_history.read.call_count == 1
 
 
 def test_browser_retained_png_failure_remains_explicit(page: Page, live_browser_url: str, retained_history):

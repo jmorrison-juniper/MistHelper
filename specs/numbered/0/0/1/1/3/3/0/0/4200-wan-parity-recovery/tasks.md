@@ -120,6 +120,7 @@ These tasks do not replace source-parity acceptance or authorize source executio
 - [X] T056 Add independently designed browser-only retained-plot zoom, bounded movement, reset, exact point inspection, and local PNG download with keyboard and no-request tests.
 - [X] T057 Add independent local raw SLE identity-text sorting and five-row display pagination, preserving missing values, response scope, and completeness labels without additional API requests.
 - [X] T058 Examine remaining authorized source legends, sharing, clipboard boundaries, and selection modes. Add independent retained metric visibility controls with keyboard, no-script, figure-isolation, zoom/reset, PNG, and no-request browser tests.
+- [X] T059 Verify the original site-selector provider shape with independent isolated data. Add accessible independent retained-point rectangle selection with exact identity, zero/missing, bounds, pointer cancellation, keyboard, figure-isolation, and no-query browser tests.
 
 ## Dependencies and execution order
 
@@ -138,6 +139,7 @@ E2 and T033-T035 block T036. Missing rights blocks protected comparison, not des
 T037-T038 and E8 block T039.
 T041-T042 depend on the verified story increments, not unsupported substitute values.
 T043-T047 follow all required comparison rows. A blocked required row prevents acceptance.
+T054 establishes source isolation for T059. T055-T058 establish the retained geometry and visibility contracts before T059.
 
 ## Parallel opportunities
 

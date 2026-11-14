@@ -164,6 +164,10 @@ This specification authorizes no new transport or live request.
   Keep the UTC view, vertical extent, other plots, exact table, and missing reasons unchanged.
   View reset must not override the operator's visibility choice. A hidden plot and its PNG must state that the operator hid its points.
   This is not a multi-series source legend, a data filter, or a claim that observations are absent.
+- Independent rectangle selection may identify already rendered visible points within inclusive plot-coordinate boundaries.
+  Pointer dragging and keyboard percentage inputs must use the same bounds and preserve exact bucket, collection, metric, unit, and identity metadata.
+  Keep all table rows, missing values, other figures, and request counts unchanged. Do not calculate an aggregate or infer source polygon semantics.
+  Clear the selection when the UTC view or visibility changes. Reject invalid bounds explicitly, without replacing a previous valid selection.
 - Independent raw SLE controls may sort gateway MAC, name, or model text and display five returned rows per page.
   Preserve response order for equal text, missing numeric values, site/metric scope, and explicit unknown units and completeness.
   Source order remains available. Display controls must not submit the form or request additional API pages.

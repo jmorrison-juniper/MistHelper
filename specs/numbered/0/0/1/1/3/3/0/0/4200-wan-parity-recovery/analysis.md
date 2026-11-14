@@ -1,5 +1,75 @@
 # Recovery coverage and execution status
 
+## Site selector and independent rectangle increment
+
+T059 increases the ledger to 36 checked tasks of 59. The original acceptance audit remains 24 checked tasks of 47.
+The read-only reviewer checklist remains ten checked and four unchecked.
+Optional commit hooks remain skipped for explicit validated commits. Disabled companion hooks remain disabled.
+The real portable prerequisite returned this feature without changing the feature pointer.
+
+The [site and rectangle record](design/contracts/parity.md#site-input-and-independent-rectangle-examination) records fourteen new source observation/action entries.
+Three independently authored dictionary choices populated the source selector. A row without an identifier did not appear.
+The original model-based collection did not populate that selector.
+The actual source root button has `tabindex="-1"`. Explicit focus enabled ArrowDown, Home, and Enter.
+Site choices did not change the overview URL or filter its other panels.
+Both source charts rejected missing gateway/port or gateway/peer arguments before obtaining data.
+The original methods and source remained unchanged. No arbitrary identity or aggregate scope concealed the errors.
+Two incorrect browser descendant locators failed before direct DOM inspection identified the root button.
+The first attempts and complete fourteen-entry record remain separate private evidence.
+Expected source initialization attempts to its isolated local Redis socket failed. No real Redis service was reached.
+The original relay and exact temporary container stopped. The source test cycle was not repeated.
+
+The destination independently selects visible point centers through pointer rectangles or four keyboard percentage bounds.
+The selected list retains exact metric units, UTC buckets, collection times, and the full existing identity.
+It preserves measured zero, missing values, all table rows, other figures, and the single scoped history read.
+Invalid bounds preserve the previous valid selection. View or visibility changes clear geometric selection.
+Escape and a browser pointer-cancellation event clear pointer capture without a partial result.
+The event case verifies the browser protocol, not physical touchscreen behavior.
+No aggregate, interpolation, polygon interpretation, new query, or storage change is added.
+
+Ten browser cases were added and none removed. The no-script regression also checks disabled rectangle controls.
+The first bounded assertion failed because no rectangle controls existed.
+The initial production attempt had a class-scope error. The next pointer test found endpoint precision noise.
+Both defects were repaired. Pointer percentages use 0.001 percentage-point precision without rounding measurements.
+A final review removed premature coordinate clamping, which hid invalid gesture starts in the plot margin.
+A real pointer regression now verifies that margin starts do not capture or select points.
+A later test incorrectly clicked an already disabled reset button and used `port_id` instead of the existing `port_name` identity key.
+Those test errors were corrected without changing production identity or reset behavior.
+Private logs preserve each failed assertion and the passing result.
+Destination screenshots remain under `test-artifacts/wan-performance/destination-interactions/`.
+Full-page captures preserve the normal navigation instead of placing its fixed bar over a cropped figure.
+
+### T059 validation
+
+| Command or check | Actual result |
+| --- | --- |
+| `rtk bypass .venv/bin/python test-artifacts/wan-performance/original-review/runtime/bridge.py` | Source became ready after denied egress and read-only checks. Loopback HTTP returned 200. |
+| `rtk bypass .venv/bin/python test-artifacts/wan-performance/original-review/runtime/site_selector_review.py` | Fourteen complete entries after correcting the focus locators. Three options, explicit-focus keyboard action, and rejected chart calls recorded. |
+| `rtk bypass .venv/bin/python -m pytest -x -q tests/e2e/web_portal/test_wan_performance_live.py -k retained_rectangle --tb=short --show-capture=no` | One missing-control failure before production changes. |
+| `rtk bypass .venv/bin/python -m pytest -q tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_offline.py tests/e2e/web_portal/test_wan_performance_live.py tests/integration/test_mistapi_sdk_compatibility.py --tb=short --show-capture=no --screenshot=only-on-failure --output=test-artifacts/wan-performance/rectangle-final-failures` | 478 passed, two existing warnings, 55.90 seconds after the final margin-start repair. |
+| `rtk bypass .venv/bin/python -m ruff check src/interfaces/wan_performance tests/e2e/web_portal/test_wan_performance_live.py` | All checks passed. |
+| `rtk bypass .venv/bin/python -m black --check tests/e2e/web_portal/test_wan_performance_live.py` | One file unchanged after formatting. |
+| `rtk bypass .venv/bin/python -m mypy src/interfaces/wan_performance --config-file pyproject.toml` | Success, 29 source files. |
+| `rtk bypass .venv/bin/python -m compileall -q src/interfaces/wan_performance` | Exit zero. |
+| `rtk bypass .venv/bin/bandit -c pyproject.toml -r src/interfaces/wan_performance -q` | Exit zero, no finding. |
+| `rtk bypass .venv/bin/radon cc src/interfaces/wan_performance -j` into `rtk bypass .venv/bin/complexity-gate --max 10` | All functions within the threshold. |
+| `rtk bypass .venv/bin/python -m pytest -q tests/guardrails/test_process_folder_structure.py --tb=short` | Eleven passed, one existing warning. |
+| `rtk bypass .venv/bin/symbol-diff --base df83c353b0efe35b1cfd4436133455ff9c2fc7c0 tests/e2e/web_portal/test_wan_performance_live.py` | Zero lost names, seven intended additions. Exit one reports additions. |
+| `rtk bypass .venv/bin/markdown-link-check --root .` with the feature root, operator guide, and fragment | Twelve tracked Markdown files examined, zero broken links. |
+| `rtk bypass .venv/bin/ste-linter --config .ste-linter.toml --min-score 80` with all seven changed Markdown paths | Scores 90, 90, 92, 95, 97, 88, and 83. All pass. |
+| `rtk bypass .venv/bin/speckit-task-audit --root <temporary-root>` | One faithful ledger copy, one feature, 59 markers, 36 checked, 23 open, zero malformed. Temporary input removed. |
+| Direct template and new Python function-size checks | Twenty-two JavaScript methods and twelve new Python functions fit the 25-line limit. |
+
+The private evidence root is `test-artifacts/wan-performance/original-review/runtime/`.
+Source files include `browser-site-selector.json`, `t059-source-selector-complete.log`, and `original-selector-server.log`.
+Destination logs include `t059-rectangle-first-failure.log`, `t059-rectangle-after.log`, `t059-rectangle-scope-repair.log`, and `t059-rectangle-boundary-repair.log`.
+The complete suite logs are `t059-full-tests.log` and `t059-full-tests-final.log`.
+The final rectangle and margin regression log is `t059-final-validation.log`.
+The first unbounded missing-locator run was stopped. The bounded first-failure run provides the actual assertion.
+Remaining metric, identity, history, source visual, audience, and external-service gates remain open.
+Source chart signature errors are separate evidence, not destination behavior to reproduce.
+No publication, hosted action, or protected-path change occurred.
+
 ## Remaining source controls and independent visibility
 
 T058 supersedes the earlier unexamined legend/sharing statements below.
@@ -712,7 +782,7 @@ An explicit test gap means the behavior remains unaccepted.
 | --- | --- | --- | --- |
 | FR-001 | T003, T007-T010 | P01-P50 inventory and offline browser tests | Static inventory is complete. Runtime parity is not. |
 | FR-002 | T002-T003, T043 | Source classifications in `parity.md` and `discovery.md` | Goals, TODOs, and implemented-but-unverified methods remain separate. |
-| FR-003 | T007-T012, T033-T036, T049-T057 | Core, SLE, cached-site, selected-window, pointer/keyboard chart, PNG, and table browser journeys | Independent navigation and responsive interactions pass. Complete source visual and interaction parity remain unverified. |
+| FR-003 | T007-T012, T033-T036, T049-T059 | Core, SLE, cached-site, selected-window, point/rectangle, PNG, and table browser journeys | Independent navigation and responsive interactions pass. Complete source visual and interaction parity remain unverified. |
 | FR-004 | T013-T016, T021-T022 | Threshold and duration tests in the live module | Source calculations and thresholds remain unverified. |
 | FR-005 | T017-T022 | Calendar event and live state tests | Flap, failover, and availability parity remains open. |
 | FR-006 | T023-T024, T048 | Peer snapshot, history, retained-MOS SQLite, and displayed-unit tests | Missing-unit compatibility passes without rewriting data. Poll-sample statistics do not prove source history. |
@@ -724,15 +794,15 @@ An explicit test gap means the behavior remains unaccepted.
 | FR-012 | T042, T045 | Changed-file inventory and offline tests | No extra service, port, or credential store was added. |
 | FR-013 | T005-T006, T040-T042 | Synthetic isolation and provenance tests | Offline data remains separate from live collection. |
 | FR-014 | T005, T038-T042, T048-T049, T053 | Missing-unit, empty, stale, denied, store, session, SLE, and retained-window failure tests | Missing buckets and values remain explicit. Failed or unsupported history never appears as healthy empty data. |
-| FR-015 | T033-T036, T041, T043, T054-T055 | Authorized private source captures, original test logs, mapped observations, and independent plot assertions | Runtime evidence now exists. Complete visual/interaction review remains open without a false rights blocker. |
+| FR-015 | T033-T036, T041, T043, T054-T059 | Authorized source captures, original tests, site-input errors, mapped observations, and independent plot assertions | Runtime evidence now exists. Complete visual/interaction review remains open without a false rights blocker. |
 | FR-016 | T043-T047 | Exact local candidate and check records | Hosted and owner acceptance remain pending. |
 | SC-001 | T003, T007-T010, T043 | P01-P50 classifications | All inventory rows have a decision, including explicit unknowns. |
 | SC-002 | T011-T042, T043 | Focused tests and blocked-row decisions | Full source behavior is not complete. |
 | SC-003 | T014-T030, T040, T048-T049, T053 | Unknown-value, missing-unit, raw SLE, and retained-window assertions | Unavailable values remain explicit. Missing buckets remain absent, and bucket presence does not establish measurement completeness. |
 | SC-004 | T014-T030 | Domain expected-value tests | Supported calculations pass. Unsupported source formulas remain open. |
-| SC-005 | T011, T021, T026, T032, T035, T040-T042, T049-T053 | Core, SLE, cached-control, site, and retained-window browser tests at three viewports | Tested independent destination journeys pass. Source interaction equivalence remains unverified. |
+| SC-005 | T011, T021, T026, T032, T035, T040-T042, T049-T059 | Core, SLE, cached-control, site, retained-window, and rectangle browser tests at three viewports | Tested independent destination journeys pass. Source interaction equivalence remains unverified. |
 | SC-006 | T033-T036, T043, T054-T057 | Authorized private captures, descriptive inventory, and independent responsive chart/table controls | Complete source visual acceptance remains unreviewed, not blocked by absent execution rights. |
-| SC-007 | T005-T006, T037-T042, T049-T053 | Offline, scoped-store, admission, SLE, CSV, site, and bounded-window tests | No live Mist call or production store was used. |
+| SC-007 | T005-T006, T037-T042, T049-T059 | Offline, scoped-store, admission, SLE, CSV, site, retained-window, and no-query rectangle tests | No live Mist call or production store was used. |
 | SC-008 | T043-T047 | Local validation record and parent review hold | Parent review is pending. |
 
 ### Frozen-head defect regressions

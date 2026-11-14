@@ -122,6 +122,20 @@ This record does not claim that the complete Spec Kit command pipeline ran.
 
 ## Renewed parity investigation
 
+T059 investigates the original selector's expected site input without copying fixtures or changing original source.
+Use independently authored dictionary rows only in a declared private scenario after recording the existing model-input result.
+Keep the original methods intact. Record signature failures instead of fabricating missing gateway, port, or peer arguments.
+The original production launcher remains outside the isolated examination.
+
+T059 also adds independent rectangular point selection in the existing live template and browser test module.
+Use visible plot coordinates, not invented metric conversions. Four keyboard bounds describe percentages of the visible plot.
+Pointer capture supports reversed drags and cancellation. Both input paths select inclusive point centers with unchanged metadata.
+Keep exact missing values and all table rows. A selected list does not constitute a new metric, aggregate, or history query.
+Selection stays within one metric/unit figure. UTC or visibility changes clear it without changing the underlying observation set.
+Separate rectangle interaction and selection rendering into two classes with at most five methods each.
+The existing figure and test module have structural debt. Do not add files or divide unrelated tests during this increment.
+Their future division remains a separate ownership-approved task.
+
 The next bounded destination increment adds independent discrete plots to the existing retained-window view.
 It changes `presentation/inspection/windows.py`, `presentation/live_routes.py`, the existing live template, and their existing tests.
 The existing feature records, operator guide, and PR fragment record the behavior and evidence.

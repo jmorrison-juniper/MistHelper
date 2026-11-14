@@ -225,6 +225,29 @@
                     Exact values remain in the table.</p>
                 <p role="status" class="text-break" data-testid="wan-retained-chart-status">Chart controls need JavaScript.
                     Exact values remain in the table.</p>
+                <details data-testid="wan-retained-rectangle-controls">
+                    <summary>Select existing points in a rectangle</summary>
+                    <fieldset>
+                        <legend class="fs-6">Bounds are percentages of the visible plot, not metric values.
+                            Missing values and hours remain in the table.</legend>
+                        {% for edge, default in [("left", 0), ("right", 100), ("top", 0), ("bottom", 100)] %}
+                        <label class="d-block">{{ edge|capitalize }} edge (%)
+                            <input type="number" min="0" max="100" step="any" value="{{ default }}" disabled
+                                   style="width:6rem" data-testid="wan-retained-rectangle-{{ edge }}">
+                        </label>
+                        {% endfor %}
+                    </fieldset>
+                    <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+                        {% for action, label in [("mode", "Drag rectangle"), ("apply", "Apply bounds"), ("clear", "Clear selection")] %}
+                        <button type="button" class="btn btn-sm btn-secondary" disabled data-rectangle-action="{{ action }}"
+                                {% if action == "mode" %}aria-pressed="false"{% endif %}
+                                data-testid="wan-retained-rectangle-{{ action }}">{{ label }}</button>
+                        {% endfor %}
+                    </div>
+                    <p role="status" class="text-break" data-testid="wan-retained-rectangle-status">Rectangle controls need JavaScript.
+                        No aggregate or source polygon behavior is implied.</p>
+                    <ul class="text-break" data-testid="wan-retained-rectangle-results"></ul>
+                </details>
                 <svg class="wan-chart" viewBox="0 0 640 230" role="img"
                      style="--wan-series-color: var(--bs-info, #0dcaf0);"
                      data-window-start="{{ retained.window.start.isoformat() }}"
@@ -234,6 +257,8 @@
                     <path class="wan-chart-gridline" d="M32 35H620 M32 100H620 M32 165H620"/>
                     <text class="wan-chart-axis-label" x="620" y="30">{{ values|max }}</text>
                     <text class="wan-chart-axis-label" x="620" y="182">{{ values|min }}</text>
+                    <rect fill="none" stroke="currentColor" style="display:none;pointer-events:none"
+                          data-testid="wan-retained-rectangle-outline"/>
                     {% for x_position, y_position, hour, value, collected in plot.points %}
                     <circle class="wan-chart-point" cx="{{ x_position }}" cy="{{ y_position }}" r="4"
                             data-plot-x="{{ x_position }}"
@@ -354,6 +379,7 @@
         static activate(figure, event) {
             const point = event.target.closest("[data-testid=wan-retained-point]");
             if (point) {
+                if (figure.querySelector("[data-rectangle-action=mode]").getAttribute("aria-pressed") === "true") return;
                 const selection = figure.querySelector("select");
                 selection.value = [...figure.querySelectorAll("circle")].indexOf(point);
                 RetainedPoints.inspect(figure, selection);
@@ -383,18 +409,14 @@
         }
         static adjust(figure, action) {
             console.info("Adjust a retained WAN projection view.");
+            RetainedRectangle.reset(figure);
             const svg = figure.querySelector("svg");
             svg.dataset.pointsVisible = String(action === "toggle-points" ? svg.dataset.pointsVisible === "false" : svg.dataset.pointsVisible !== "false");
             const [scale, offset] = RetainedChart.range(svg, action);
             svg.dataset.plotScale = scale;
             svg.dataset.plotOffset = offset;
             const points = RetainedPoints.adjust(svg, scale, offset);
-            for (const button of figure.querySelectorAll("[data-plot-action]")) {
-                if (button.dataset.plotAction === "toggle-points") button.setAttribute("aria-pressed", svg.dataset.pointsVisible);
-                button.disabled = button.dataset.rendering === "true" || {"zoom-in": scale === 8, "zoom-out": scale === 1,
-                    earlier: offset === 0, later: offset >= 1 - 1 / scale, reset: scale === 1}[button.dataset.plotAction] || false;
-            }
-            figure.querySelector("[data-plot-action=toggle-points]").classList.toggle("active", svg.dataset.pointsVisible !== "false");
+            RetainedPoints.controls(figure, svg, scale, offset);
             const start = Date.parse(svg.dataset.windowStart), duration = Date.parse(svg.dataset.windowEnd) - start;
             for (const [selector, fraction] of [["[data-window-start]", offset], ["[data-window-end]", offset + 1 / scale]]) {
                 svg.querySelector(selector).textContent = new Date(start + duration * fraction).toISOString().slice(0, 16).replace("T", " ") + " UTC";
@@ -407,6 +429,14 @@
     }
     /** Keep point visibility and exact inspection separate from UTC window controls. */
     class RetainedPoints {
+        static controls(figure, svg, scale, offset) {
+            for (const button of figure.querySelectorAll("[data-plot-action]")) {
+                if (button.dataset.plotAction === "toggle-points") button.setAttribute("aria-pressed", svg.dataset.pointsVisible);
+                button.disabled = button.dataset.rendering === "true" || {"zoom-in": scale === 8, "zoom-out": scale === 1,
+                    earlier: offset === 0, later: offset >= 1 - 1 / scale, reset: scale === 1}[button.dataset.plotAction] || false;
+            }
+            figure.querySelector("[data-plot-action=toggle-points]").classList.toggle("active", svg.dataset.pointsVisible !== "false");
+        }
         static adjust(svg, scale, offset) {
             const points = [...svg.querySelectorAll("circle")];
             svg.closest("figure").querySelector("[data-testid=wan-retained-visibility-status]").textContent =
@@ -424,6 +454,152 @@
             figure.querySelectorAll("circle").forEach((point, index) => {
                 point.setAttribute("r", selection.value !== "" && index === Number(selection.value) ? 6 : 4);
             });
+        }
+    }
+    /** Capture a local plot rectangle without changing the retained record set. */
+    class RetainedRectangle {
+        static initialize(figure) {
+            const svg = figure.querySelector("svg");
+            svg.setAttribute("tabindex", "0");
+            figure.querySelectorAll("input,[data-rectangle-action]").forEach(control => control.disabled = false);
+            figure.addEventListener("click", event => {
+                const button = event.target.closest("[data-rectangle-action]");
+                if (button && !button.disabled) RetainedSelection.command(figure, button.dataset.rectangleAction);
+            });
+            for (const name of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) {
+                svg.addEventListener(name, event => RetainedRectangle.handle(figure, event));
+            }
+            figure.addEventListener("keydown", event => {
+                if (event.key === "Escape") RetainedRectangle.reset(figure);
+            });
+        }
+        static coordinates(svg, event) {
+            const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.getScreenCTM().inverse());
+            // Browser pointer precision must not exclude a point on the plot boundary.
+            return [(point.x - 32) / 5.88, (point.y - 35) / 1.3].map(value =>
+                Math.round(value * 1000) / 1000);
+        }
+        static handle(figure, event) {
+            const svg = figure.querySelector("svg"), start = svg.wanRectangleStart;
+            if (event.type === "pointerdown") {
+                if (event.button !== 0 || !event.isPrimary ||
+                    figure.querySelector("[data-rectangle-action=mode]").getAttribute("aria-pressed") !== "true") return;
+                const point = RetainedRectangle.coordinates(svg, event);
+                if (point.some(value => value < 0 || value > 100)) return;
+                svg.wanRectangleStart = {point, pointerId: event.pointerId};
+                svg.setPointerCapture(event.pointerId);
+                svg.focus();
+                event.preventDefault();
+                console.info("Start a local retained-point rectangle.");
+            } else if (!start || start.pointerId !== event.pointerId) return;
+            else if (event.type === "pointermove") {
+                const point = RetainedRectangle.coordinates(svg, event);
+                RetainedSelection.outline(svg, [start.point[0], point[0], start.point[1], point[1]]);
+            } else RetainedRectangle.finish(figure, event);
+        }
+        static finish(figure, event) {
+            const svg = figure.querySelector("svg"), start = svg.wanRectangleStart;
+            delete svg.wanRectangleStart;
+            if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+            if (event.type === "pointercancel") {
+                RetainedRectangle.reset(figure);
+                return;
+            }
+            const point = RetainedRectangle.coordinates(svg, event);
+            const bounds = RetainedSelection.outline(svg, [start.point[0], point[0], start.point[1], point[1]]);
+            ["left", "right", "top", "bottom"].forEach((edge, index) => {
+                figure.querySelector(`[data-testid=wan-retained-rectangle-${edge}]`).value = bounds[index];
+            });
+            RetainedSelection.command(figure, "apply");
+        }
+        static reset(figure) {
+            console.info("Clear the local retained-point rectangle.");
+            const svg = figure.querySelector("svg"), start = svg.wanRectangleStart;
+            delete svg.wanRectangleStart;
+            if (start && svg.hasPointerCapture(start.pointerId)) svg.releasePointerCapture(start.pointerId);
+            figure.querySelector("[data-testid=wan-retained-rectangle-results]").replaceChildren();
+            svg.querySelector("[data-testid=wan-retained-rectangle-outline]").style.display = "none";
+            for (const point of svg.querySelectorAll("circle")) {
+                delete point.dataset.rectangleSelected;
+                point.style.removeProperty("stroke");
+                point.style.removeProperty("stroke-width");
+            }
+            const status = figure.querySelector("[data-testid=wan-retained-rectangle-status]");
+            status.setAttribute("role", "status");
+            status.textContent = "No rectangle applied. Exact values and missing reasons remain in the table.";
+            console.debug("Cleared the local retained-point rectangle.");
+        }
+    }
+    /** Validate keyboard bounds and list exact existing points without aggregation. */
+    class RetainedSelection {
+        static command(figure, action) {
+            console.info("Apply a retained rectangle control.", action);
+            if (action === "clear") return RetainedRectangle.reset(figure);
+            if (action === "mode") {
+                const button = figure.querySelector("[data-rectangle-action=mode]");
+                const enabled = button.getAttribute("aria-pressed") !== "true";
+                button.setAttribute("aria-pressed", String(enabled));
+                button.classList.toggle("active", enabled);
+                figure.querySelector("svg").style.touchAction = enabled ? "none" : "auto";
+                console.debug("Changed the retained rectangle gesture mode.", enabled);
+                return;
+            }
+            const bounds = RetainedSelection.bounds(figure);
+            if (!bounds) {
+                console.error("Invalid retained rectangle percentage bounds.");
+                const status = figure.querySelector("[data-testid=wan-retained-rectangle-status]");
+                status.setAttribute("role", "alert");
+                status.textContent = "Invalid rectangle. Use ordered bounds from 0 through 100. The previous selection remains unchanged.";
+                return;
+            }
+            RetainedSelection.apply(figure, bounds);
+        }
+        static bounds(figure) {
+            const inputs = [...figure.querySelectorAll("[data-testid^=wan-retained-rectangle-]")].filter(element => element.tagName === "INPUT");
+            const values = inputs.map(input => input.valueAsNumber);
+            if (inputs.some(input => !input.validity.valid) || values.some(value => !Number.isFinite(value)) ||
+                values[0] > values[1] || values[2] > values[3]) return null;
+            return values;
+        }
+        static outline(svg, values) {
+            const bounded = values.map(value => Math.max(0, Math.min(100, value)));
+            const bounds = [Math.min(...bounded.slice(0, 2)), Math.max(...bounded.slice(0, 2)),
+                Math.min(...bounded.slice(2)), Math.max(...bounded.slice(2))];
+            const rectangle = svg.querySelector("[data-testid=wan-retained-rectangle-outline]");
+            for (const [name, value] of Object.entries({x: 32 + bounds[0] * 5.88, y: 35 + bounds[2] * 1.3,
+                width: (bounds[1] - bounds[0]) * 5.88, height: (bounds[3] - bounds[2]) * 1.3})) {
+                rectangle.setAttribute(name, value);
+            }
+            rectangle.style.display = "";
+            return bounds;
+        }
+        static apply(figure, bounds) {
+            console.info("Select existing visible retained points within a rectangle.");
+            RetainedRectangle.reset(figure);
+            const svg = figure.querySelector("svg");
+            RetainedSelection.outline(svg, bounds);
+            const selected = [...svg.querySelectorAll("circle")].filter(point => {
+                const horizontal = (Number(point.getAttribute("cx")) - 32) / 5.88;
+                const vertical = (Number(point.getAttribute("cy")) - 35) / 1.3;
+                return point.style.display !== "none" && horizontal >= bounds[0] && horizontal <= bounds[1] &&
+                    vertical >= bounds[2] && vertical <= bounds[3];
+            });
+            RetainedSelection.render(figure, selected);
+            console.debug("Selected existing visible retained points.", selected.length);
+        }
+        static render(figure, selected) {
+            const points = [...figure.querySelectorAll("circle")], options = figure.querySelector("select").options;
+            const results = figure.querySelector("[data-testid=wan-retained-rectangle-results]");
+            for (const point of selected) {
+                point.dataset.rectangleSelected = "true";
+                point.style.stroke = "currentColor";
+                point.style.strokeWidth = "3px";
+                const row = document.createElement("li");
+                row.textContent = options[points.indexOf(point) + 1].textContent;
+                results.append(row);
+            }
+            figure.querySelector("[data-testid=wan-retained-rectangle-status]").textContent =
+                `${selected.length} existing visible points selected. No aggregate or source polygon behavior is implied.`;
         }
     }
     /** Export the destination's own rendered chart without requests or external assets. */
@@ -503,7 +679,10 @@
             }
         }
     }
-    document.querySelectorAll("[data-testid=wan-retained-chart]").forEach(RetainedChart.initialize);
+    document.querySelectorAll("[data-testid=wan-retained-chart]").forEach(figure => {
+        RetainedChart.initialize(figure);
+        RetainedRectangle.initialize(figure);
+    });
 })();
 </script>
 {% endif %}
