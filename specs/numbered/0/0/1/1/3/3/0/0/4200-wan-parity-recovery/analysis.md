@@ -43,6 +43,30 @@ The independently defined table ordering and CSV format do not establish origina
 Protected workflow paths, dependency pins, baseline files, entry points, registry files, and the feature pointer remain unchanged.
 No publication, hosted check, readiness change, or merge occurred.
 
+### Committed validation evidence
+
+Implementation commit: `2326357014930504e0c6fb68e741f142dbccb106`.
+Its merge base remains `2a6a5844698aeb180fea353e0243034890774565`.
+The following commands ran locally. No dependency manifest changed.
+
+| Command | Actual result |
+| - | - |
+| `rtk .venv/bin/python -m pytest -q tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_offline.py tests/e2e/web_portal/test_wan_performance_live.py tests/integration/test_mistapi_sdk_compatibility.py` | 404 passed, two existing plugin warnings. |
+| `rtk .venv/bin/python -m ruff check src/interfaces/wan_performance tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_live.py` | All checks passed. |
+| `rtk .venv/bin/python -m black --check src/interfaces/wan_performance tests/unit/wan_performance/test_calendar_summaries.py tests/e2e/web_portal/test_wan_performance_live.py` | 30 files unchanged. |
+| `rtk .venv/bin/python -m mypy src/interfaces/wan_performance --config-file pyproject.toml` | Success, 28 source files. |
+| `rtk .venv/bin/python -m compileall -q src/interfaces/wan_performance` | Exit zero, no output. |
+| `rtk .venv/bin/bandit -c pyproject.toml -r src/interfaces/wan_performance -q` | Exit zero, no findings. |
+| `rtk .venv/bin/radon cc src/interfaces/wan_performance -j \| rtk .venv/bin/complexity-gate --max 10` | All functions within the threshold. |
+| `rtk .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | One passed, four input reads and validations. |
+| `rtk .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` | 15 files checked, zero findings, two skipped, zero parse errors, zero new findings. |
+| `rtk git diff --check` | Exit zero. |
+
+STE checks passed on all seven changed Markdown records, with scores from 84 through 97.
+The Markdown link check examined seven files and found zero broken links.
+The implementation hooks contain only optional active commit hooks. The companion hooks remain disabled.
+The implementation commit preserves all original test names and protected paths.
+
 **Date**: 2026-11-05
 
 This record maps requirements to the new execution sequence.
