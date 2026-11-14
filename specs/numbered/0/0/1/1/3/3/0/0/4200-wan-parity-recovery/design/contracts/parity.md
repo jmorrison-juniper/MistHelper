@@ -62,7 +62,8 @@ Store those port values as raw poll samples and do not assign units.
 The installed SDK exposes `searchOrgPeerPathStats` with gateway, site, type, time-bound, duration, limit, and cursor filters.
 It does not expose a peer-port filter, so filter the returned bounded rows by the full peer identity.
 The `vpn_peer_stat` schema defines scalar `loss` in percent and `latency` and `jitter` in milliseconds.
-The schema defines MOS as a quality measure without a scale and gives `last_seen` as peer observation time.
+The schema bounds MOS from zero through five and gives `last_seen` as peer observation time.
+These bounds do not define quality categories, metric sample time, or historical aggregation.
 Store each selected peer scalar at poll time and keep `last_seen` separate.
 Reject duplicate rows for one full peer identity because the schema gives no metric timestamp.
 These contracts support current scalar samples, not source time series, complete history, or backfill.
@@ -168,7 +169,7 @@ They do not establish source runtime behavior or visual parity.
 | P42 | D11, active route code | Encoded interface path and gateway/site query scope | `/wan-performance/port/{site}/{encoded-port}`; `test_port_route_preserves_an_encoded_slash_and_bandwidth_units` | Encoded slash preservation and fixture scope have offline assertions. Source and live field parity remain open. |
 | P43 | D12, active port page | Receive and transmit bandwidth history | `wan-port-charts` | Offline charts exist. The supported SDK does not provide the source historical method. |
 | P44 | D12, active port page | Unicast, multicast, broadcast, drops, and CRC counters | `wan-port-packet-statistics`, `wan-port-error-counters`; destination-only `wan-calendar-summaries` | Synthetic panels exist. Counter semantics and any source equivalent for calendar summaries remain unknown. |
-| P45 | D13, active peer page | Loss, latency, jitter, and MOS gauges and history | `wan-peer-kpis`, `wan-peer-gauges`, `wan-peer-charts` | Current scalar loss, latency, and jitter are supported with verified units. MOS scale and source history remain unknown. |
+| P45 | D13, active peer page | Loss, latency, jitter, and MOS gauges and history | `wan-peer-kpis`, `wan-peer-gauges`, `wan-peer-charts` | Current scalar units and MOS bounds are documented. MOS quality categories and source history remain unknown. |
 | P46 | D14, active peer page | Peer path identity, addresses, type, tunnel name, and MTU | `wan-peer-details` | Synthetic fields exist. The live response does not verify each source field. |
 | P47 | D14, active peer page | Uptime, bytes, and packets | `wan-peer-statistics` | Synthetic fields exist. Live field contracts and counter semantics remain unknown. |
 | P48 | D14, active route code | Peer route and tunnel-path identity | Live peer links include site, MAC, and path key. Offline peer route tests cover site and MAC. | Full path identity is retained in live scope. The source field mapping remains unverified. |
@@ -205,6 +206,32 @@ Source captures were not opened, copied, or compared because written rights are 
 
 These bounds are observed in MistHelper code and tests.
 They do not authorize a new request rate or prove source scheduling parity.
+
+## Original-application exploration plan
+
+The renewed request requires original-application execution, not only a static inventory.
+Source runtime and capture rights remain unverified. Every row below is unexecuted.
+Use independently authored data after rights approval and a verified outbound network block.
+Record each observed result and retained evidence beside its comparison row.
+
+| Surface | Required interactions and states | Existing implementation tasks |
+| --- | --- | --- |
+| Overview | Select every site and time range. Toggle refresh. Follow health, circuit, region, gateway, and alert links. Check empty and failed states. | T007, T011-T012, T021-T022 |
+| Tables and reports | Sort and filter each column. Traverse first, last, and empty pages. Export each supported table. Verify selected scope and spreadsheet-safe text. | T019-T022, T031-T032 |
+| Charts | Hover each series. Select and reset ranges. Toggle legends. Compare empty, partial, missing, and stale series without inferred coverage. | T013-T016, T023-T024, T027-T028 |
+| Region and site | Traverse region, site, circuit, and breadcrumb links. Verify reverse navigation, selected time, and absent membership. | T012-T014, T027-T028 |
+| Gateway | Inspect identity, CPU, memory, uptime, port and peer tables, bandwidth, and device charts. Follow every detail link. | T008, T011-T012, T021 |
+| Encoded port | Inspect status, capacity, role, utilization, configuration, rates, packet counters, and errors. Test encoded slashes and invalid scope. | T009, T014-T022 |
+| VPN peer | Inspect path identity, quality, MOS, tunnel details, counters, uptime, and history. Separate observed values from unavailable metric timestamps. | T010, T023-T024 |
+| SLE | Inspect summaries, histograms, classifiers, impacted entities, and each detail transition. Verify scope, units, errors, and absent contracts. | T025-T026 |
+| Accessibility | Traverse each control with Tab and activate it with Enter. Use browser Back and Forward. Repeat all three documented viewport sizes. | T034-T036, T040-T042 |
+| Refresh and failures | Repeat refresh, induce read and store failures, verify stale labels, and stop all workers. Do not initialize production clients. | T037-T042 |
+
+For each interaction, record the initial state, action, visible result, local request, error, and evidence path.
+A visible button without a working callback is a failed or unavailable option.
+Do not translate source defaults or fallback zeros into accepted measurement contracts.
+Implement verified differences with failing independent tests through the existing task pairs.
+Keep rights, data semantics, historical acceptance, and publication as separate decisions.
 
 | Behavior | Current MistHelper policy | Evidence |
 | --- | --- | --- |

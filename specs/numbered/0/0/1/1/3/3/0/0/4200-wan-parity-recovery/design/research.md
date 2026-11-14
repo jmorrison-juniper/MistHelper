@@ -76,6 +76,48 @@ Use pinned, read-only descriptions and independently authored tests as the evide
 Do not run the source or copy its code, images, screenshots, or fixtures.
 This method does not prove runtime or visual parity.
 
+## Renewed original-application investigation
+
+On 2026-11-14, the user requested source execution, complete operator exploration, and further parity implementation.
+Read-only inspection again used source revision `2d1c2199fa1e31c129ef1e051c5389349a207785`.
+Its `pyproject.toml` explicitly declares `Proprietary` and `License :: Other/Proprietary License`.
+GitHub reports `license: null`. The recursive pinned tree contains no LICENSE, LICENCE, COPYING, or NOTICE file.
+Repository administrative access does not establish execution, copying, or visual reproduction rights.
+A verified grant and its permitted scope remain prerequisites for source execution and captures.
+This is a current evidence boundary, not a claim that the source cannot run.
+
+### Dependency and startup observations
+
+The source requires Python 3.13 or later and uses Dash, Plotly, Dash Bootstrap Components, and Gunicorn.
+Its runtime dependencies also include the Mist SDK, Redis, and the Snowflake connector.
+The production launcher initializes cache and API clients and can start background collection workers.
+Do not use that launcher for an isolated comparison.
+
+The source Compose configuration publishes ports 8050 and 6379, uses named persistent volumes, and reads `.env`.
+Its build declares host networking. Those defaults do not meet this investigation's isolation requirements.
+No source container, process, volume, network, or dependency environment was created.
+
+The source screen guide describes a test-only launcher at `tests.fixtures.offline_dashboard`, using source-authored fixtures.
+It states that the launcher creates no API or database clients and starts no collection worker.
+Those are documentation claims, not independently executed results.
+The optional Darkly stylesheet normally requires a separate download.
+Browser isolation must block external requests, including remote theme and font loads.
+Do not copy the existing fixture or protected captures into MistHelper.
+
+### Execution and exploration decision
+
+After rights approval, inspect imports and fixture boundaries before installing or launching source code.
+Use a private temporary directory, independent synthetic data, no inherited credentials, and a verified outbound network block.
+Verify that startup cannot contact Mist, Snowflake, or existing Redis services before any import.
+Run source unit tests with those boundaries, and record passed, failed, skipped, and unavailable tests separately.
+Inspect an available loopback port before starting the preview.
+Do not use the source Compose defaults or source persistent volumes.
+
+The exploration matrix is in [the comparison contract](contracts/parity.md#original-application-exploration-plan).
+Until execution is authorized, every runtime result in that matrix remains unexecuted.
+Independent destination tests and documented SDK contracts can support separate increments.
+They cannot replace the requested original-application test cycle.
+
 ## Current destination observations
 
 The local product matches remote PR head `1a408c9511d8b32662d201068f2f54196f643450`.

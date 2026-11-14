@@ -146,6 +146,7 @@ This specification authorizes no new transport or live request.
 - Written copying rights remain absent. Read-only source comparison does not grant reproduction rights.
 - A fresh plan does not authorize merge, deployment, production requests, or automatic implementation of blocked contracts.
 - Each scalar poll uses its UTC collection time as its sample timestamp. Time-series responses retain their API timestamps.
+- The peer schema bounds MOS from zero through five. Retain the scalar score without quality categories or inferred metric timestamps.
 - New per-poll sample storage is additive. Existing hourly records remain available, and hourly values derive from samples.
 - The existing hourly projection keeps its current calculations. A stored hour does not replace timestamped samples or prove complete coverage.
 - Retention, capacity, historical completeness, and backfill remain unverified. No 13-month history guarantee is claimed.

@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class PeerSnapshotMetrics:
     """Map peer scalar fields only where the schema defines their units."""
 
-    FIELDS: Mapping[str, str] = MappingProxyType({"loss": "%", "latency": "ms", "jitter": "ms"})
+    FIELDS: Mapping[str, str] = MappingProxyType({"loss": "%", "latency": "ms", "jitter": "ms", "mos": "score"})
 
     @classmethod
     def parse(cls, row: Mapping[str, object]) -> Mapping[str, MetricMeasurement]:
@@ -38,18 +38,13 @@ class PeerSnapshotMetrics:
     def _metric(cls, name: str, row: Mapping[str, object]) -> MetricMeasurement:
         """Retain scalar metrics only when the schema defines their units."""
         value = row.get(name)
-        unit = cls.FIELDS.get(name)
-        if unit is None:
-            reason = (
-                "The API snapshot has no value."
-                if value is None
-                else "The VPN peer stats schema does not define this field's unit."
-            )
-            return MetricMeasurement(None, "unknown", missing_reason=reason)
+        unit = cls.FIELDS[name]
         if value is None:
             return MetricMeasurement(None, unit, missing_reason="The API snapshot has no value.")
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
             raise ValueError(f"VPN peer source field {name} must be a non-negative finite number.")
+        if name == "mos" and value > 5:
+            raise ValueError("VPN peer source field mos must be between zero and five.")
         return MetricMeasurement(value, unit, sample_count=1)
 
     @staticmethod

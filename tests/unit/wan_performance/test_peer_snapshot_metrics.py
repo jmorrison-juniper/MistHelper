@@ -6,7 +6,7 @@ from src.interfaces.wan_performance.collection.snapshot_records import PeerSnaps
 
 
 def test_peer_schema_scalars_use_only_documented_units() -> None:
-    """Map loss, latency, and jitter units while retaining MOS as a raw scalar."""
+    """Map documented scalar units without assigning MOS quality categories."""
     row = {"latency": 0, "mos": 4.2, "loss": 0.25, "jitter": 2.5, "last_seen": 1470417522}
     metrics = PeerSnapshotMetrics.parse(row)
 
@@ -17,8 +17,9 @@ def test_peer_schema_scalars_use_only_documented_units() -> None:
     assert metrics["latency"].value == 0
     assert metrics["jitter"].unit == "ms"
     assert metrics["jitter"].value == 2.5
-    assert metrics["mos"].unit == "unknown"
-    assert metrics["mos"].missing_reason == "The VPN peer stats schema does not define this field's unit."
+    assert metrics["mos"].unit == "score"
+    assert metrics["mos"].value == 4.2
+    assert metrics["mos"].missing_reason is None
     assert PeerSnapshotMetrics.raw_fields(row) == {
         "loss": 0.25,
         "latency": 0,
@@ -79,3 +80,19 @@ def test_metrics_are_immutable() -> None:
     metrics = PeerSnapshotMetrics.parse({"loss": 1})
     with pytest.raises(TypeError):
         metrics["loss"] = metrics["loss"]  # type: ignore[index]
+
+
+@pytest.mark.parametrize("value", [0, 5])
+def test_mos_preserves_documented_boundary_scores(value: int) -> None:
+    """Keep both schema boundaries without inventing score interpretations."""
+    metric = PeerSnapshotMetrics.parse({"mos": value})["mos"]
+    assert metric.value == value
+    assert metric.unit == "score"
+    assert metric.coverage_fraction is None
+
+
+@pytest.mark.parametrize("value", [-0.01, 5.01, True, float("nan")])
+def test_mos_rejects_scores_outside_the_documented_contract(value: object) -> None:
+    """Reject invalid MOS inputs before they become retained samples."""
+    with pytest.raises(ValueError, match="mos"):
+        PeerSnapshotMetrics.parse({"mos": value})

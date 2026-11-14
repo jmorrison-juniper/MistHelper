@@ -47,7 +47,7 @@ Source rights and comparison evidence remain unverified, so these images do not 
 | Overview | 1440 x 2352 | The 25 KPI cards, three tables, charts, and site controls show 12.5 percent utilization and 1.0 Gbps total bandwidth. |
 | Gateway | 1440 x 1100 | Six KPI cards, two tables, and two charts show 125 Mbps receive, 50 Mbps transmit, 0.25 percent loss, 33.3 ms latency, and 4.5 ms jitter. |
 | WAN port | 1440 x 1377 | Six KPI cards, a utilization gauge, detail tables, a bandwidth chart, and collapsed history show the selected port and its synthetic values. |
-| VPN peer | 1440 x 1378 | Six KPI cards, three scale-defined gauges, a quality chart, and two detail tables show peer identity and an unscaled MOS value. |
+| VPN peer | 1440 x 1378 | Six KPI cards, three scale-defined gauges, a quality chart, and two detail tables show peer identity and a scalar MOS value. |
 
 The MistHelper shell and synthetic-state banner add shared navigation and state labels.
 The sample data does not establish live connectivity, availability, or congestion duration.
@@ -63,7 +63,7 @@ The collection boundary validates fields from the bundled
 [VPN peer API schema](api/orgs/GET_orgs_org_id_stats_vpn_peers_search.md).
 Latency and jitter use milliseconds.
 Loss uses percent, from 0 through 100.
-The schema defines no MOS scale, so the preview displays MOS as a raw value and does not use a gauge.
+The schema bounds MOS from zero through five without quality categories. The preview displays a scalar score without a categorized gauge.
 The validator preserves measured zero and rejects invalid values.
 An absent value remains unknown.
 The validator does not infer an hourly interval, coverage, utilization, or availability.
@@ -255,7 +255,8 @@ The peer detail has a separate CSRF-protected refresh for one cached peer path.
 It searches `searchOrgPeerPathStats` with the supported gateway and site filters.
 The collector follows at most five `search_after` pages, then matches the full peer identity locally.
 The API schema defines scalar peer `loss` in percent and `latency` and `jitter` in milliseconds.
-The schema describes MOS as a quality measure but gives no display scale or metric timestamp.
+The schema bounds MOS from zero through five but gives no quality categories or metric timestamp.
+The collector validates these bounds and retains the dimensionless score without inferred history or health labels.
 The collector stores each scalar as a raw poll sample and keeps epoch-second `last_seen` separate.
 It preserves a partial state when the page limit leaves results unseen.
 It rejects duplicate rows for one full path because the response has no sample timestamp to disambiguate them.
@@ -311,7 +312,7 @@ VPN peer search supports `start`, `end`, and `duration`.
 The collector already requests `duration="1h"` within its existing call ceiling.
 The resolved `vpn_peer_stat` schema defines scalar `loss`, `latency`, `jitter`, and `mos` fields.
 It gives percent units for loss and millisecond units for latency and jitter.
-It describes MOS as a quality measure but gives no scale.
+It bounds MOS from zero through five but defines no quality categories.
 Its rows have epoch-second `last_seen`, but no metric `timestamp`.
 The public `VpnPeersStatsExample` has no measurement timestamp either.
 Peer observation time does not establish the sample time of each metric.

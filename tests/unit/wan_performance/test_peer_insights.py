@@ -73,8 +73,9 @@ def test_collect_uses_only_supported_peer_filters_and_retains_raw_fields() -> No
     assert samples[0].metrics["latency"].value == 33.3
     assert samples[0].metrics["jitter"].unit == "ms"
     assert samples[0].metrics["jitter"].value == 4.5
-    assert samples[0].metrics["mos"].unit == "unknown"
-    assert samples[0].metrics["mos"].missing_reason == ("The VPN peer stats schema does not define this field's unit.")
+    assert samples[0].metrics["mos"].unit == "score"
+    assert samples[0].metrics["mos"].value == 4.2
+    assert samples[0].metrics["mos"].missing_reason is None
 
 
 def test_collect_filters_multiple_paths_by_complete_identity() -> None:

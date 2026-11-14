@@ -57,3 +57,17 @@ Run source-to-task and source-to-test coverage checks.
 A missing source contract, rights decision, or accepted deviation remains a blocker.
 Keep PR #4208 draft until the owner accepts the complete evidence.
 Record recovery progress on issue #4200. Do not create another issue for the same subject.
+
+## Original-application cycle prerequisites
+
+Verify a rights grant for pinned source execution and the permitted evidence scope before any source import or capture.
+Use [the exploration matrix](contracts/parity.md#original-application-exploration-plan) to cover every accessible control.
+Do not use source fixture data, existing `.env` files, production clients, or default persistent volumes.
+Prepare dependencies separately from execution. Verify the execution environment blocks outbound traffic before starting any source process.
+Run the browser inside that isolated environment when a host browser would require exposing an additional network path.
+Record a successful local connectivity check and a failed outbound connectivity check before the application cycle.
+Use independent synthetic scenarios and record unimplemented controls separately from working controls.
+Run each source test module, then each browser journey, without treating skipped tests as passed.
+Keep exact test output, application errors, interaction notes, and permitted captures in the session artifact directory.
+Stop each started process and verify exact temporary-resource cleanup before reporting completion.
+If rights or isolation cannot be verified, record the missing prerequisite and do not claim source execution.

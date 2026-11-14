@@ -119,3 +119,29 @@ Managed-route allocation and setup scripts remain unexecuted.
 The mandatory branch hook was loaded but not executed because this app already owns the feature branch.
 Optional commit hooks were not executed.
 This record does not claim that the complete Spec Kit command pipeline ran.
+
+## Renewed parity investigation
+
+The 2026-11-14 request adds an original-application test cycle and complete operator exploration before further parity acceptance.
+The source package explicitly declares a proprietary license. Repository administration does not establish copying or reproduction rights.
+Record the rights grant before source execution, fixture imports, or protected captures.
+Dependency inspection and independently authored tests can proceed without those actions.
+
+Use the existing comparison rows as the exploration checklist.
+After rights approval, replace source fixtures with independently authored normal, empty, missing, stale, and error scenarios.
+Block outbound connections before importing source modules. Do not initialize Mist, Snowflake, or production Redis clients.
+Run source unit tests separately from the interactive application.
+Reject fixtures that require real credentials or connect to an external store.
+Bind an authorized preview only to an inspected free loopback port.
+Stop each temporary process and remove its exact temporary resources after capture.
+
+Record each control's enabled state, selection, resulting request, navigation, download, chart change, and error.
+Record nonfunctional options as failures, not as successful parity.
+Cover overview, gateway, encoded port, peer, region, site, SLE, filters, sorting, pagination, exports, and refresh.
+Repeat keyboard and browser-history journeys at the three documented viewport sizes.
+Keep static observations separate from executed results.
+
+The first independent increment validates the bundled peer-schema MOS bounds of zero through five.
+Display a dimensionless score without invented health categories, source sample time, or historical aggregation.
+This changes no storage schema, retention policy, network request, or existing record.
+Subsequent increments require verified inputs and expected results for each existing task pair.

@@ -128,7 +128,7 @@ Keep these values as raw poll samples and do not assign units.
 
 The bundled `vpn_peer_stat` schema defines scalar `loss`, `latency`, `jitter`, and `mos` fields.
 It defines loss in percent and latency and jitter in milliseconds.
-It describes MOS as a quality measure without a scale.
+It bounds MOS from zero through five without defining quality categories or a metric sample timestamp.
 Its `last_seen` field uses epoch seconds and describes peer observation time, not metric sample time.
 Do not treat these scalar fields as a peer time series or as historical backfill.
 

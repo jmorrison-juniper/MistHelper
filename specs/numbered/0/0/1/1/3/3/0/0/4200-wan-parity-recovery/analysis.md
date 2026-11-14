@@ -196,6 +196,31 @@ The existing 13-month history, backfill, retention capacity, and completeness al
 
 ## Current candidate task audit
 
+The 2026-11-14 continuation adds a rights and dependency investigation and a bounded MOS correction.
+The original application remains unexecuted because its package explicitly declares a proprietary license.
+The renewed request does not establish a rights grant.
+See [research](design/research.md#renewed-original-application-investigation) for the current boundary and dependency findings.
+See [the exploration matrix](design/contracts/parity.md#original-application-exploration-plan) for the complete interaction plan.
+
+The bundled `vpn_peer_stat` schema bounds MOS from zero through five.
+Independent red tests reproduced missing score support and absent bound validation: eight failed and 19 passed.
+The collector now retains the score, accepts both bounds, and rejects invalid values.
+It infers no quality category, metric timestamp, or historical aggregation.
+The existing replay policy still rejects changed payloads at an existing sample key.
+This increment does not rewrite retained records.
+
+| Continuation check | Exact command or scope | Result |
+| --- | --- | --- |
+| Destination regression | `rtk .venv/bin/python -m pytest -q tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_offline.py tests/e2e/web_portal/test_wan_performance_live.py tests/integration/test_mistapi_sdk_compatibility.py` | 355 passed, two existing warnings. No original-source test ran. |
+| Style | `ruff check` and `black --check` on `snapshot_records.py`, `test_peer_snapshot_metrics.py`, and `test_peer_insights.py` | Both passed. Black examined three files. |
+| Types | `rtk .venv/bin/mypy src/interfaces/wan_performance --config-file pyproject.toml` | Passed on 24 source files. |
+| Compilation | `rtk .venv/bin/python -m py_compile src/interfaces/wan_performance/collection/snapshot_records.py` | Passed. |
+| Plan setup | Session-local PowerShell `setup-plan.ps1 -Json` with the explicit feature directory and telemetry disabled | Resolved the existing plan without replacing it. |
+
+These are destination results, not a full original-application cycle.
+Source startup, control interaction, visualization changes, downloads, failure behavior, and cleanup remain unexecuted.
+No new environment, process, container, volume, or network was started for the source.
+
 The current candidate starts from main `2a6a5844698aeb180fea353e0243034890774565`.
 Its starting head was `07b7751fb9e6c0e8d285d2adb9b0273bc5aae4fc`.
 The 47 task IDs below were checked against current code, tests, and evidence.
@@ -306,7 +331,7 @@ An explicit test gap means the behavior remains unaccepted.
 | P42 | T009, T011 | Encoded-slash route test | Offline encoded route behavior passes. |
 | P43 | T009, T023 | Selected-port history and SDK compatibility tests | Source historical method is not portable to the installed SDK. |
 | P44 | T009 | Packet and error-counter selectors | Synthetic counters only. No source counter semantics are accepted. |
-| P45 | T010, T023-T024 | Peer quality and snapshot tests | Scalar units are known. Source history and MOS scale remain unknown. |
+| P45 | T010, T023-T024 | Peer quality and snapshot tests | Scalar units and MOS bounds are known. Source history and MOS quality categories remain unknown. |
 | P46 | T010 | Peer detail selector and explicit contract gap | Live field mapping remains unverified. |
 | P47 | T010 | Peer statistics selector and explicit contract gap | Live uptime and counter semantics remain unknown. |
 | P48 | T010, T040 | Scoped live peer route and path-key tests | MistHelper identity is tested. Source identity equivalence remains open. |
