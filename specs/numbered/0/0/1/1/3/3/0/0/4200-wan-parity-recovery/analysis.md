@@ -287,9 +287,9 @@ This increment does not rewrite retained records.
 These are destination results, not a full original-application cycle.
 Source startup, control interaction, visualization changes, downloads, failure behavior, and cleanup remain unexecuted.
 No new environment, process, container, volume, or network was started for the source.
-Independent SDK inspection also confirmed a site-scoped SLE impacted-gateway operation and its metric catalog.
-A mocked SDK call verified request forwarding only.
-The [SLE contract note](design/contracts/parity.md#supported-sle-gateway-drilldown-candidate) records remaining units, paging, response, and source-equivalence prerequisites.
+Initial SDK inspection confirmed a site-scoped SLE impacted-gateway operation and its metric catalog.
+That initial mocked call verified forwarding only. T049 now adds application scope, admission, response, failure, and browser tests.
+The [SLE contract note](design/contracts/parity.md#supported-sle-gateway-drilldown-candidate) retains the source-unit, paging, and source-equivalence limits.
 
 The current candidate starts from main `2a6a5844698aeb180fea353e0243034890774565`.
 Its starting head was `07b7751fb9e6c0e8d285d2adb9b0273bc5aae4fc`.
@@ -324,14 +324,14 @@ The 47 task IDs below were checked against current code, tests, and evidence.
 | T022 | Blocked E3/E4 | Do not wire unverified role, ranking, or availability calculations into presentation pages. |
 | T023 | Blocked E5 | Peer statistics have scalar values and no metric timestamp. Source averaging, maximum, and p95 rules remain unknown. |
 | T024 | Blocked E5 | Poll samples are tested and retained, but they do not prove source quality history or raw-sample percentiles. |
-| T025 | Blocked E6 | SLE score meanings, supported metrics, classifier values, and impact fields are not verified. |
-| T026 | Blocked E6 | Do not add SLE calls or drilldowns without verified score and entity contracts. |
+| T025 | Blocked E6 | T049 verifies enabled catalog choices, gateway identity fields, and bounded raw-response handling. Source score meanings, classifier mappings, duration units, and source-equivalent impact semantics remain unverified. |
+| T026 | Blocked E6 | T049 implements independent catalog-validated site inspection and raw impacted-gateway results. Source-specific score calculations and equivalent drilldowns remain blocked by missing contracts. |
 | T027 | Blocked E3/E7 | Region membership, circuit weights, canonical source hours, and source coverage rules remain unknown. |
 | T028 | Blocked E3/E7 | Local 3h, 12h, 24h, and calendar tests pass. Source aggregation and coverage acceptance remain blocked. |
 | T029 | Blocked E7 | Existing 13-month data, backfill, retention, capacity, and completeness have no proof. |
 | T030 | Blocked E7 | Both stores pass append-only replay tests. No retention or backfill policy is approved. |
-| T031 | Complete | The audience table maps executive, engineering, and SLE goals to existing selectors and records missing controls as unimplemented. |
-| T032 | Blocked E1/E3/E6 | Audience filters and exports depend on incomplete source controls, dimensions, and SLE mappings. |
+| T031 | Complete | The audience table maps executive, engineering, and SLE goals to selectors or explicit gaps. T049-T051 add independent SLE, cached-table, and export controls without claiming audience parity. |
+| T032 | Blocked E1/E3/E6 | Independent cached filters and CSV export now exist under T050-T051. Source-specific audience dimensions, controls, export formats, and SLE score mappings remain unverified. |
 | T033 | Complete | `design/research.md` records absent written rights and permits descriptive static comparison only. Runtime and visual parity remain blocked. |
 | T034 | Complete | The descriptive inventory covers hierarchy, type, colors, charts, tables, and responsive behavior. Source captures remain unopened and visual approval remains blocked by E2. |
 | T035 | Complete | Offline browser tests check stable selectors at 1440x1100, 1280x800, and 390x844, plus horizontal overflow, sibling overlap, Tab focus, and Enter activation. |
@@ -345,7 +345,7 @@ The 47 task IDs below were checked against current code, tests, and evidence.
 | T043 | Complete | The coverage matrices below map all 50 inventory rows and 24 FR/SC entries to tasks, tests or explicit test gaps, evidence, and decisions. |
 | T044 | Complete | The feature-specific prerequisite, consistency review, task format audit, link scan, structure tests, and STE checks passed. The broader route contract has one unrelated failure, recorded below. |
 | T045 | Blocked by assignment scope | Local gates can run. Hosted exact-head CI is not authorized before parent review. |
-| T046 | Complete | `documentation/wan-performance.md` and `changelog.d/pr-4208.md` now describe replay, unknown event coverage, gateway scope, and issues #4793-#4795. |
+| T046 | Complete | `documentation/wan-performance.md` and `changelog.d/pr-4208.md` describe replay, unknown event coverage, gateway scope, issues #4793-#4795, retained MOS compatibility, and the independent SLE and table controls. |
 | T047 | Blocked by assignment scope | Parent review must precede PR metadata or acceptance changes. No PR template or hosted state was changed. |
 
 ### Source inventory and requirement coverage for T043
@@ -368,30 +368,30 @@ An explicit test gap means the behavior remains unaccepted.
 | P09 | T019-T022 | No primary/secondary parity assertion exists | Blocked by missing role and failover contracts. |
 | P10 | T023-T024 | Peer snapshot and history tests | Poll samples do not establish source mean, maximum, or p95. |
 | P11 | T003, T004, T023 | SDK compatibility test and pinned source discovery | Source methods exist, but required SDK symbols or arguments are unsupported. |
-| P12 | T025-T026 | No accepted SLE score test exists | Blocked by missing field and scale mapping. |
-| P13 | T025-T026 | No accepted impact drilldown test exists | Blocked by missing source and SDK contracts. |
+| P12 | T025-T026, T049 | Catalog-choice, raw-value, and SLE browser tests in `test_wan_performance_live.py` | Independent inspection passes. Source score normalization, duration units, and equivalence remain unverified. |
+| P13 | T025-T026, T049 | Scoped impacted-gateway request, response-validation, admission, and browser tests | Bounded raw gateway inspection passes. Source-specific classifiers and impact semantics remain unverified. |
 | P14 | T013, T027-T028 | No region-to-circuit metric test exists | Region mapping and effective dates remain unknown. |
 | P15 | T027-T028 | Calendar summary domain and offline route tests | Local observation windows pass. Source aggregation parity remains open. |
 | P16 | T029-T030 | Append-only history tests for both stores | Retention, capacity, completeness, and backfill remain unverified. |
-| P17 | T031-T032 | Audience goal matrix in `parity.md` | Goal mapping is complete. Audience behavior is not implemented. |
-| P18 | T003, T031-T032 | Source callback inventory and destination selector scan | No destination export control is accepted. |
+| P17 | T031-T032, T049-T051 | Audience goal matrix and independent SLE, cached-table, and CSV tests | Independent controls exist. Source-specific audience behavior remains unverified. |
+| P18 | T003, T031-T032, T051 | `wan-table-export` and scoped cached CSV tests | Full filtered cached export passes. Source export fields, format, and audience equivalence remain unverified. |
 | P19 | T007-T012 | Offline journey and keyboard navigation browser tests | Gateway, port, and peer routes pass. Region and site list routes remain absent. |
 | P20 | T034-T036 | Responsive browser tests and rights record | Destination layout passes. Source visual approval remains blocked. |
 | P21 | T007, T011 | Offline overview status, KPI, and route tests | Synthetic population only. |
 | P22 | T007, T011 | Live snapshot route tests | Current states pass. Historical failover remains unverified. |
-| P23 | T007, T011 | Offline alert and SLE selector assertions | Live alert rules and SLE data remain unknown. |
+| P23 | T007, T011, T049 | Offline alert selectors and independent SLE request/browser tests | Catalog and raw-impact handling pass with mocked data. Source alert rules and SLE score normalization remain unknown. |
 | P24 | T007, T011 | Offline top-circuit table selector and link tests | Rank and precision parity remain untested. |
-| P25 | T007 | No destination pagination control exists | Source pagination remains unimplemented. |
-| P26 | T007, T011 | Offline alert and degraded-SLE selector assertions | Synthetic panels only. |
-| P27 | T007 | No destination sort or filter control exists | Source table behavior remains unimplemented. |
+| P25 | T007, T050 | `wan-table-next`, `wan-table-previous`, and cached pagination route/browser tests | Independent ten-row pagination passes. Source pagination behavior and equivalence remain unverified. |
+| P26 | T007, T011, T049 | Offline degraded-SLE selectors and separate raw SLE inspection tests | Overview panels remain synthetic. Independent raw inspection does not establish source degraded-score panel parity. |
+| P27 | T007, T050 | `wan-table-filter`, `wan-table-sort`, `wan-table-direction`, and route/browser tests | Independent identity filtering and lexical sorting pass. Source ordering, filters, and ranking semantics remain unverified. |
 | P28 | T007, T011, T035 | Offline chart selectors and responsive-region assertions | Layout passes. Source chart semantics remain unknown. |
-| P29 | T007 | Disabled offline site selector and live gateway site-ID input | The live text input does not match the source selector. |
+| P29 | T007, T049 | Disabled offline site selector, live gateway site-ID input, and `wan-sle-site` browser test | Cached-site SLE selection passes. Organization-wide source selector behavior remains unverified. |
 | P30 | T007 | Disabled offline time-range selector | Live source ranges are not implemented. |
 | P31 | T037-T039 | Background worker retry, ownership, failure, and start-gate tests | Local scheduling policy is bounded and passes. |
-| P32 | T007-T011 | Offline route, direct-link, and keyboard navigation tests | Tested routes pass. Region and site transitions remain absent. |
-| P33 | T007 | No destination SLE detail selector exists | SLE detail remains unimplemented. |
-| P34 | T007 | No destination impact-detail selector exists | SLE impact analysis remains unimplemented. |
-| P35 | T007 | No destination export selector exists | Export behavior remains unimplemented. |
+| P32 | T007-T011, T049 | Core journey, direct-link, keyboard, and SLE return-navigation browser tests | Tested destination routes pass. Source region and site-list transitions remain absent. |
+| P33 | T007, T049 | `wan-live-sle-link`, `wan-sle-metric`, `wan-sle-results`, and SLE browser tests | Independent site/metric inspection passes. Source SLE-detail behavior and score equivalence remain unverified. |
+| P34 | T007, T049 | `wan-sle-site`, `wan-sle-results`, `wan-sle-coverage`, and scoped request tests | Raw impacted-gateway rows and partial-page labels pass. Source impact-detail interactions, units, and classifier equivalence remain unverified. |
+| P35 | T007, T051 | `wan-table-export`, CSV scope/formula tests, and browser download tests | Independent full filtered cached CSV export passes. Source export format and equivalence remain unverified. |
 | P36 | T008, T011 | Gateway live and offline route tests | Offline identity is synthetic. Live field units remain unverified. |
 | P37 | T008 | Gateway selector and explicit field-gap record | CPU, memory, and uptime have no destination assertion. |
 | P38 | T008, T011 | Gateway port/peer table and link tests | Synthetic navigation passes. Full identity parity remains open. |
@@ -401,7 +401,7 @@ An explicit test gap means the behavior remains unaccepted.
 | P42 | T009, T011 | Encoded-slash route test | Offline encoded route behavior passes. |
 | P43 | T009, T023 | Selected-port history and SDK compatibility tests | Source historical method is not portable to the installed SDK. |
 | P44 | T009 | Packet and error-counter selectors | Synthetic counters only. No source counter semantics are accepted. |
-| P45 | T010, T023-T024 | Peer quality and snapshot tests | Scalar units and MOS bounds are known. Source history and MOS quality categories remain unknown. |
+| P45 | T010, T023-T024, T048 | Peer scalar tests plus retained-MOS SQLite, calendar, and route regressions | Scalar units, MOS bounds, and missing-unit compatibility pass. Source history and MOS quality categories remain unknown. |
 | P46 | T010 | Peer detail selector and explicit contract gap | Live field mapping remains unverified. |
 | P47 | T010 | Peer statistics selector and explicit contract gap | Live uptime and counter semantics remain unknown. |
 | P48 | T010, T040 | Scoped live peer route and path-key tests | MistHelper identity is tested. Source identity equivalence remains open. |
@@ -412,27 +412,27 @@ An explicit test gap means the behavior remains unaccepted.
 | --- | --- | --- | --- |
 | FR-001 | T003, T007-T010 | P01-P50 inventory and offline browser tests | Static inventory is complete. Runtime parity is not. |
 | FR-002 | T002-T003, T043 | Source classifications in `parity.md` and `discovery.md` | Goals, TODOs, and implemented-but-unverified methods remain separate. |
-| FR-003 | T007-T012, T033-T036 | Four-route browser journeys and responsive tests | Destination routes pass. Source visual parity remains blocked. |
+| FR-003 | T007-T012, T033-T036, T049-T051 | Four core journeys plus independent SLE and cached-control browser tests | Destination navigation and responsive checks pass. Source visual and interaction parity remain unverified. |
 | FR-004 | T013-T016, T021-T022 | Threshold and duration tests in the live module | Source calculations and thresholds remain unverified. |
 | FR-005 | T017-T022 | Calendar event and live state tests | Flap, failover, and availability parity remains open. |
-| FR-006 | T023-T024 | Peer snapshot and history tests | Poll-sample statistics do not prove source history. |
-| FR-007 | T025-T026 | SLE source/API contract record | No destination SLE mapping is accepted. |
+| FR-006 | T023-T024, T048 | Peer snapshot, history, retained-MOS SQLite, and displayed-unit tests | Missing-unit compatibility passes without rewriting data. Poll-sample statistics do not prove source history. |
+| FR-007 | T025-T026, T049 | Catalog, cached-site scope, raw impacted-gateway, failure, and browser tests | Independent bounded SLE inspection passes. Source score, classifier, duration-unit, and impact equivalence remain unverified. |
 | FR-008 | T013, T027-T028 | UTC calendar and rolling-window tests | Local windows pass. Region and source weighting remain unknown. |
 | FR-009 | T029-T030 | SQLite and Arango append-only tests | Retention and backfill evidence is missing. |
-| FR-010 | T031-T032 | Audience goal matrix | Goals are inventoried. Audience controls are not implemented. |
-| FR-011 | T004-T006, T037-T042 | Admission, live service, worker, Redis, and browser tests | Local scope and failure controls pass. |
+| FR-010 | T031-T032, T049-T051 | Audience goal matrix plus independent SLE, cached-filter, and CSV tests | Independent destination controls exist. Source-specific audience dimensions and export equivalence remain unverified. |
+| FR-011 | T004-T006, T037-T042, T049 | Admission, live service, worker, Redis protocol, SLE scope, and browser tests | Local scope and failure controls pass. No live Redis or multi-process proof is claimed. |
 | FR-012 | T042, T045 | Changed-file inventory and offline tests | No extra service, port, or credential store was added. |
 | FR-013 | T005-T006, T040-T042 | Synthetic isolation and provenance tests | Offline data remains separate from live collection. |
-| FR-014 | T005, T038-T042 | Empty, stale, denied, store, session, and API error tests | Current unsupported states remain explicit. |
+| FR-014 | T005, T038-T042, T048-T049 | Missing-unit, empty, stale, denied, store, session, and SLE response-error tests | Missing retained values and unsupported response states remain explicit. |
 | FR-015 | T033-T036, T041, T043 | Descriptive comparison, browser evidence, and rights record | Runtime comparison remains blocked by missing rights. |
 | FR-016 | T043-T047 | Exact local candidate and check records | Hosted and owner acceptance remain pending. |
 | SC-001 | T003, T007-T010, T043 | P01-P50 classifications | All inventory rows have a decision, including explicit unknowns. |
 | SC-002 | T011-T042, T043 | Focused tests and blocked-row decisions | Full source behavior is not complete. |
-| SC-003 | T014-T030, T040 | Unknown and missing-state assertions | Unavailable values remain explicit where tested. |
+| SC-003 | T014-T030, T040, T048-T049 | Unknown-value, retained missing-unit, and raw SLE response assertions | Unavailable values remain explicit. Missing MOS records remain unchanged beside later scores. |
 | SC-004 | T014-T030 | Domain expected-value tests | Supported calculations pass. Unsupported source formulas remain open. |
-| SC-005 | T011, T021, T026, T032, T035, T040-T042 | Four-route browser tests | Destination journeys pass. |
+| SC-005 | T011, T021, T026, T032, T035, T040-T042, T049-T051 | Four core journeys plus SLE and cached-control browser tests at three viewports | Tested independent destination journeys pass. Source interaction equivalence remains unverified. |
 | SC-006 | T033-T036, T043 | Descriptive layout inventory and rights record | Source visual acceptance remains blocked. |
-| SC-007 | T005-T006, T037-T042 | Offline, scoped-store, and admission tests | No live Mist call or production store was used. |
+| SC-007 | T005-T006, T037-T042, T049-T051 | Offline, scoped-store, admission, SLE, and CSV tests | No live Mist call or production store was used. |
 | SC-008 | T043-T047 | Local validation record and parent review hold | Parent review is pending. |
 
 ### Frozen-head defect regressions
