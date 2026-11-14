@@ -1,15 +1,17 @@
 """Check WAN history against the existing SQLite file without live credentials."""
 
+import json
 import sqlite3
+from contextlib import closing
 from dataclasses import replace
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 from arango.cursor import Cursor
 
-from src.interfaces.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS
-from src.interfaces.wan_performance.domain.measurement import SampleMeasurement
+from src.interfaces.wan_performance.domain.calendar import MAX_HISTORY_RECORDS, MAX_HISTORY_WINDOW_DAYS, CalendarWindow
+from src.interfaces.wan_performance.domain.measurement import MetricMeasurement, SampleMeasurement
 from src.interfaces.wan_performance.integration.arango_history import ArangoHistory
 from src.interfaces.wan_performance.integration.history_repository import HistorySelection
 from src.interfaces.wan_performance.integration.sqlite_history import SQLiteHistory
@@ -27,6 +29,108 @@ def history(tmp_path):
 def live_record():
     """Use independent synthetic inputs labeled live only in an isolated test."""
     return replace(OfflinePreviewFactory.build().measurements[0], provenance="live")
+
+
+@pytest.fixture(
+    params=[
+        (datetime(2025, 3, 1, tzinfo=UTC), 9456, 9455),
+        (datetime(2025, 1, 1, tzinfo=UTC), 9528, 9527),
+        (datetime(2025, 1, 1, tzinfo=UTC), 9528, 9528),
+    ]
+)
+def synthetic_horizon(request):
+    """Generate independent synthetic hour keys, including the 397-day leap-year maximum."""
+    end, expected_hours, expected_records = request.param
+    start, end = CalendarWindow.thirteen_months_ending(end)
+    original = OfflinePreviewFactory.build().measurements[0]
+    records = tuple(
+        replace(
+            original,
+            hour_start_utc=start + timedelta(hours=index),
+            collected_at_utc=start + timedelta(hours=index, minutes=1),
+            metrics={"loss": MetricMeasurement(index % 101, "%")},
+            provenance="synthetic",
+            is_up_observation=None,
+        )
+        for index in range(expected_hours)
+        if expected_records == expected_hours or index != 24
+    )
+    return start, end, expected_hours, expected_records, records
+
+
+@pytest.fixture
+def synthetic_sqlite_rows(synthetic_horizon):
+    """Encode synthetic payloads without invoking or changing the application codec."""
+    start, end, _, _, records = synthetic_horizon
+    boundaries = tuple(
+        replace(records[0], hour_start_utc=hour, collected_at_utc=hour + timedelta(minutes=1))
+        for hour in (start - timedelta(hours=1), end)
+    )
+    other = replace(records[0], identity=replace(records[0].identity, port_name="other-synthetic-port"))
+    other_tenant = replace(
+        records[0],
+        identity=replace(
+            records[0].identity,
+            gateway=replace(
+                records[0].identity.gateway,
+                site=replace(records[0].identity.gateway.site, org_id="other-synthetic-org"),
+            ),
+        ),
+    )
+    return tuple(
+        (json.dumps(record.identity.natural_key), record.hour_start_utc.isoformat(), json.dumps(record.to_dict()))
+        for record in (*records, *boundaries, other, other_tenant)
+    )
+
+
+def test_synthetic_thirteen_month_sqlite_payload_scope_and_gaps(history, synthetic_horizon, synthetic_sqlite_rows):
+    """Exercise real temporary SQLite storage without claiming application acceptance or production history."""
+    start, end, expected_hours, expected_records, records = synthetic_horizon
+    history.upsert(())
+    statement = (
+        "INSERT INTO wan_performance_hours VALUES (?, ?, ?) "
+        "ON CONFLICT(identity,hour) DO UPDATE SET payload=excluded.payload"
+    )
+    with closing(sqlite3.connect(history.path)) as connection, connection:
+        connection.executemany(statement, synthetic_sqlite_rows)
+        connection.executemany(statement, synthetic_sqlite_rows)
+        rows = connection.execute(
+            "SELECT payload FROM wan_performance_hours WHERE identity=? AND hour>=? AND hour<? ORDER BY hour LIMIT ?",
+            (json.dumps(records[0].identity.natural_key), start.isoformat(), end.isoformat(), MAX_HISTORY_RECORDS),
+        ).fetchall()
+        total = connection.execute("SELECT COUNT(*) FROM wan_performance_hours").fetchone()[0]
+    assert (end - start).total_seconds() == expected_hours * 3600
+    assert len(rows) == expected_records and total == expected_records + 4
+    assert tuple(json.loads(row[0]) for row in rows) == tuple(record.to_dict() for record in records)
+    with pytest.raises(ValueError, match="must contain a live"):
+        history.read(records[0].identity, start, end)
+    with pytest.raises(ValueError, match="synthetic"):
+        history.upsert(records)
+
+
+def test_synthetic_thirteen_month_mocked_arango_keeps_query_bounds_and_codec_guard(synthetic_horizon):
+    """Verify mocked query scope and rejection, not actual Arango persistence or capacity."""
+    start, end, expected_hours, expected_records, records = synthetic_horizon
+    database, cursor = MagicMock(), MagicMock(spec=Cursor)
+    cursor.__iter__.return_value = iter(json.dumps(record.to_dict()) for record in records)
+    database.aql.execute.return_value = cursor
+    history = ArangoHistory(database)
+    with pytest.raises(ValueError, match="must contain a live"):
+        history.read(records[0].identity, start, end)
+    bindings = database.aql.execute.call_args.kwargs["bind_vars"]
+    assert bindings == {
+        "@collection": "wan_performance_hours",
+        "identity": json.dumps(records[0].identity.natural_key),
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "limit": MAX_HISTORY_RECORDS,
+    }
+    assert len(records) == expected_records and records[-1].provenance == "synthetic"
+    assert (end - start).total_seconds() == expected_hours * 3600
+    cursor.close.assert_called_once_with()
+    with pytest.raises(ValueError, match="synthetic"):
+        history.upsert(records)
+    database.begin_transaction.assert_not_called()
 
 
 def live_sample(record, minute_offset=0):

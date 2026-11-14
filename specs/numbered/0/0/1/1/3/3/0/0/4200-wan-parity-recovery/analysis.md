@@ -38,6 +38,23 @@ The first full quality scan included temporary foreign tests and failed with 151
 After that ignored tree moved intact outside the checkout, the unchanged full gate checked 1260 repository files with zero new findings.
 No analyzer exclusion, baseline, configuration, or detector changed.
 
+### T063 synthetic horizon evidence
+
+FR-020 and SC-011 now have six new synthetic horizon cases in the existing history test module.
+Native temporary SQLite checks exercise a 394-day horizon with 9455 of 9456 synthetic hour keys.
+The leap-year maximum exercises 397 days with both 9527 of 9528 keys and all 9528 keys.
+Two identical native writes preserve exact payloads, tenant identity, port identity, and half-open boundaries.
+Four foreign or boundary records remain outside each selected result.
+The application codec still rejects synthetic reads and writes. No fixture becomes a live record.
+Mocked Arango checks verify exact query bindings, synthetic rejection, cursor closure, and no transaction admission.
+They do not prove executed Arango persistence or production capacity.
+The selected horizon checks passed nine cases, including three existing cases, with one existing warning in 0.89 seconds.
+The complete WAN, browser, and SDK regression selection passed 533 cases with two existing warnings in 57.78 seconds.
+T061-T063 add 28 cases and remove none. Forty of 63 implementation tasks are checked.
+The original 23 source acceptance tasks remain open. Reviewer acceptance markers remain unchanged.
+Designed ranking, declaration, and historical-import implementations remain future work. Their policies are defined, not falsely marked implemented.
+Actual source metric semantics, retained production data, deployment capacity, authoritative network declarations, and source-equivalence acceptance remain external facts.
+
 ## Final bounded remainder and acceptance dependencies
 
 T060 adds the remaining justified cached gateway fields without a new acquisition or metric calculation.
