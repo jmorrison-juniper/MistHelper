@@ -75,6 +75,11 @@ This feature changes neither Mist configuration nor observed metric values.
 ### Version-one archive import
 
 Accept at most eight MiB and 9528 unique projection records, spanning at most 397 days.
+Before CSRF processing, replacement POST requests require a known content length of at most eight MiB plus 64 KiB.
+Unknown lengths return HTTP 411 without reading the stream, including server-terminated streams.
+Excessive declared lengths return HTTP 413 before form parsing or membership access.
+Per-request multipart parsing permits five parts and 128 KiB of field memory, without increasing stricter application limits.
+The parser bounds file spooling through the complete body limit. Unrelated requests keep their existing limits and CSRF behavior.
 Require at least one projection record. Limit each printable metric name and unit to 128 characters.
 Require version, provenance, full identity, half-open UTC bounds with `complete: false`, and records.
 Validate every record, exact identity, matching provenance, unique hour, finite values, units, and UTC timestamps before storage.

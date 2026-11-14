@@ -26,7 +26,11 @@ from src.interfaces.wan_performance.domain.summary import CalendarSummaries, Per
 from src.interfaces.wan_performance.integration.history_repository import HistoryRepository, HistorySelection
 from src.interfaces.wan_performance.integration.refresh_store import RefreshStore
 from src.interfaces.wan_performance.presentation.inspection.reports import ObservationRanking
-from src.interfaces.wan_performance.presentation.inspection.sle_routes import ReplacementPages, SlePages
+from src.interfaces.wan_performance.presentation.inspection.sle_routes import (
+    ReplacementAdmission,
+    ReplacementPages,
+    SlePages,
+)
 from src.interfaces.wan_performance.presentation.inspection.table import GatewayStatistics, RecordTable, TableOptions
 from src.interfaces.wan_performance.presentation.inspection.windows import (
     ObservationStatistics,
@@ -37,6 +41,7 @@ from src.interfaces.wan_performance.presentation.inspection.windows import (
 
 logger = logging.getLogger(__name__)
 live_bp = Blueprint("live", __name__, url_prefix="/live", template_folder="inspection/templates")
+live_bp.url_value_preprocessor(ReplacementAdmission.apply)  # URL preprocessing runs before application CSRF hooks.
 STORE_ERRORS = (ConnectionError, OSError, RedisError, ArangoError, sqlite3.Error, ValueError, KeyError, TypeError)
 
 

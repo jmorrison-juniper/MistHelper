@@ -4,6 +4,17 @@
 
 ### T066 projection archives and strict input boundaries
 
+The follow-up admission correction bounds replacement POST requests before application CSRF hooks.
+The live blueprint URL preprocessor rejects unknown lengths with 411 and excessive declared lengths with 413 without form or stream reads.
+Per-request body, field-memory, and multipart-part limits preserve stricter application settings and unrelated uploads.
+Four corrected raw-request cases fail when the early admission registration is removed. They pass after restoration.
+The first request fixture reconstructed content length. The corrected fixture passes the original WSGI environment without reconstruction.
+Two assertions initially expected the wrong CSRF message. They now verify the actual invalid-token response.
+Fourteen new route cases cover early rejection, unchanged nonempty stores, parser limits, stricter settings, CSRF, and bounded large files.
+The 37-case replacement selector passes with two existing warnings. No existing case was removed.
+The terminated-stream case bounds actual reads despite an understated content length.
+The exact committed-head combined selector and recovery SHA receive separate coordinator evidence.
+
 FR-024 and SC-014 now implement bounded archive admission without manufactured history.
 The focused selector passed 55 cases with two existing warnings in 5.69 seconds.
 Forty-four unit cases, eight protected route cases, and three responsive browser cases were added. No existing case was removed.
@@ -38,7 +49,7 @@ The exact committed-head complete selector and remote SHA receive separate coord
 Forty-three of 66 tasks are checked. The original 23 acceptance tasks and reviewer markers remain open.
 T064-T066 implement designed replacements, not original source equivalence or production acceptance.
 Actual archives, authoritative declarations, endpoint history, production capacity, Arango execution, and deployment approval remain external facts.
-The guide also separates the bounded stream from deployment-level HTTP and multipart parsing limits.
+The guide now documents application admission before CSRF and separate server buffering limits outside the application.
 
 ### T064 observation ranking
 

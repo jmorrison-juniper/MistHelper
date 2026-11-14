@@ -225,6 +225,183 @@ def test_synthetic_archive_route_exports_original_bytes_without_history(client, 
     live_service.session.assert_not_called()
 
 
+@pytest.fixture
+def admitted_replacements(client, live_service, operator_json, synthetic_archive_json):
+    """Preserve nonempty independent process stores while testing rejected requests."""
+    from io import BytesIO
+
+    path = "/wan-performance/live/replacements"
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', client.get(path).get_data(as_text=True))[0]
+    declaration = client.post(path, data={"csrf_token": token, "declaration": operator_json, "confirmation": "DECLARE"})
+    archive = client.post(
+        path,
+        data={
+            "csrf_token": token,
+            "action": "archive",
+            "archive_confirmation": "IMPORT_SYNTHETIC",
+            "archive": (BytesIO(synthetic_archive_json), "independent.json"),
+        },
+    )
+    assert declaration.status_code == archive.status_code == 200
+    declarations = client.application.extensions["wan_operator_declarations"]
+    archives = client.application.extensions["wan_synthetic_archives"]
+    live_service.store.cached.reset_mock()
+    return declarations, declarations.export("org-one"), archives, dict(archives.entries)
+
+
+@pytest.mark.parametrize("length", [8 * 1024 * 1024 + 65537, None])
+@pytest.mark.parametrize("terminated", [False, True])
+def test_replacement_upload_rejected_before_csrf_parsing(
+    client, live_service, admitted_replacements, length, terminated
+):
+    """Reject oversized or unbounded real requests before stream reads, CSRF parsing, or state access."""
+    from io import BytesIO
+
+    from werkzeug.test import EnvironBuilder
+    from werkzeug.wrappers import Request as WsgiRequest
+
+    path = "/wan-performance/live/replacements"
+    stream = BytesIO(b"unread multipart input")
+    builder = EnvironBuilder(path=path, method="POST", input_stream=stream, content_type="multipart/form-data")
+    environ = builder.get_environ()
+    environ["wsgi.input_terminated"] = terminated
+    if length is None:
+        environ.pop("CONTENT_LENGTH", None)
+    else:
+        environ["CONTENT_LENGTH"] = str(length)
+    previous = dict(client.application.extensions)
+    with (
+        patch.object(client.application.request_class, "_load_form_data", side_effect=AssertionError("Form parsed.")),
+        patch.object(stream, "read", side_effect=AssertionError("Stream read.")),
+        patch.object(stream, "readinto", side_effect=AssertionError("Stream read.")),
+    ):
+        response = client.open(WsgiRequest(environ))
+    assert response.status_code == (411 if length is None else 413)
+    assert client.application.extensions == previous
+    declarations, original, archives, entries = admitted_replacements
+    assert declarations.export("org-one") == original
+    assert archives.entries == entries
+    live_service.store.cached.assert_not_called()
+    assert live_service.history.mock_calls == []
+    assert live_service.session.mock_calls == []
+
+
+@pytest.mark.parametrize("excess", ["parts", "field"])
+def test_replacement_multipart_limits_precede_membership(client, live_service, admitted_replacements, excess):
+    """Exercise real multipart parsing limits without replacing the CSRF hook or parsing implementation."""
+    from io import BytesIO
+
+    data = {"archive": (BytesIO(b"unused"), "independent.json")}
+    data.update(
+        {f"field-{position}": "x" for position in range(5)} if excess == "parts" else {"field": "x" * (128 * 1024 + 1)}
+    )
+    response = client.post("/wan-performance/live/replacements", data=data)
+    assert response.status_code == 413
+    declarations, original, archives, entries = admitted_replacements
+    assert declarations.export("org-one") == original
+    assert archives.entries == entries
+    live_service.store.cached.assert_not_called()
+    assert live_service.history.mock_calls == []
+    assert live_service.session.mock_calls == []
+
+
+def test_replacement_terminated_stream_cannot_exceed_body_limit(client, live_service, admitted_replacements):
+    """Bound actual multipart reads even when a terminated stream exceeds its declared length."""
+    from io import BytesIO
+
+    from werkzeug.test import EnvironBuilder
+    from werkzeug.wrappers import Request as WsgiRequest
+
+    bound = 8 * 1024 * 1024 + 65536
+    builder = EnvironBuilder(
+        path="/wan-performance/live/replacements",
+        method="POST",
+        data={"archive": (BytesIO(b"x" * (bound + 1)), "independent.json")},
+    )
+    environ = builder.get_environ()
+    environ["CONTENT_LENGTH"] = "128"
+    environ["wsgi.input_terminated"] = True
+    response = client.open(WsgiRequest(environ))
+    assert response.status_code == 413
+    assert environ["wsgi.input"].tell() <= bound
+    declarations, original, archives, entries = admitted_replacements
+    assert declarations.export("org-one") == original
+    assert archives.entries == entries
+    live_service.store.cached.assert_not_called()
+    assert live_service.history.mock_calls == []
+    builder.close()
+
+
+@pytest.mark.parametrize(
+    ("setting", "value", "data"),
+    [
+        ("MAX_CONTENT_LENGTH", 32, {"field": "x" * 100}),
+        ("MAX_FORM_MEMORY_SIZE", 32, {"field": "x" * 100}),
+        ("MAX_FORM_PARTS", 1, {"first": "x", "second": "y"}),
+    ],
+)
+def test_replacement_preserves_stricter_application_limits(client, live_service, monkeypatch, setting, value, data):
+    """Retain each stricter configured bound through the actual application and parser."""
+    monkeypatch.setitem(client.application.config, setting, value)
+    response = client.post("/wan-performance/live/replacements", data=data, content_type="multipart/form-data")
+    assert response.status_code == 413
+    live_service.store.cached.assert_not_called()
+    assert live_service.history.mock_calls == []
+
+
+@pytest.mark.parametrize(
+    ("path", "status", "message"),
+    [
+        ("/wan-performance/live/replacements", 413, "Request Entity Too Large"),
+        ("/wan-performance/live/sle", 400, "The CSRF token is invalid."),
+    ],
+)
+def test_replacement_admission_preserves_csrf_and_unrelated_limits(client, live_service, path, status, message):
+    """Reject an invalid CSRF token while unrelated multipart uploads retain their larger field bound."""
+    response = client.post(
+        path, data={"csrf_token": "invalid", "field": "x" * 150000}, content_type="multipart/form-data"
+    )
+    assert response.status_code == status
+    assert message in response.get_data(as_text=True)
+    live_service.store.cached.assert_not_called()
+    assert live_service.history.mock_calls == []
+
+
+def test_replacement_bounded_upload_still_requires_csrf(client, live_service, operator_json):
+    """Keep the actual CSRF hook active for an admissible replacement request."""
+    response = client.post(
+        "/wan-performance/live/replacements",
+        data={"csrf_token": "invalid", "declaration": operator_json, "confirmation": "DECLARE"},
+    )
+    assert response.status_code == 400 and "The CSRF token is invalid." in response.get_data(as_text=True)
+    live_service.store.cached.assert_not_called()
+    assert live_service.history.mock_calls == []
+
+
+def test_replacement_accepts_bounded_file_larger_than_parser_memory(client, live_service, synthetic_archive_json):
+    """Allow a bounded streamed file beyond field memory without relaxing parser or archive admission."""
+    import hashlib
+    from io import BytesIO
+
+    payload = synthetic_archive_json + b" " * (1024 * 1024)
+    path = "/wan-performance/live/replacements"
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', client.get(path).get_data(as_text=True))[0]
+    response = client.post(
+        path,
+        data={
+            "csrf_token": token,
+            "action": "archive",
+            "archive_confirmation": "IMPORT_SYNTHETIC",
+            "archive": (BytesIO(payload), "independent.json"),
+        },
+    )
+    assert response.status_code == 200
+    exported = client.get(path, query_string={"download": "synthetic", "digest": hashlib.sha256(payload).hexdigest()})
+    assert exported.status_code == 200 and exported.data == payload
+    assert live_service.history.mock_calls == []
+    assert live_service.session.mock_calls == []
+
+
 @pytest.mark.parametrize("kind", ["declaration", "archive"])
 @pytest.mark.parametrize("malformation", ["deep", "duplicate", "duplicate-nested"])
 def test_replacement_routes_reject_parser_depth_and_duplicate_fields_without_mutation(

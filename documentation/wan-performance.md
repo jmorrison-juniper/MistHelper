@@ -50,8 +50,11 @@ These operations never write into Mist, retrieve historical Mist data, delete re
 
 Native validation uses temporary SQLite and synthetic payloads only. The live application codec still rejects those payloads.
 Live admission and Arango transactions use mocks. They do not prove actual live history or executed Arango persistence.
-Deployment must also bound complete HTTP bodies and multipart parsing before CSRF processing.
-The archive stream limit alone does not establish a web-server resource limit.
+Before CSRF reads the form, replacement POST admission bounds the body to eight MiB plus 64 KiB.
+Unknown lengths return HTTP 411 without stream reads. Excessive declared lengths return HTTP 413 before parsing or cache access.
+Multipart parsing permits five parts and 128 KiB of field memory. Stricter application limits remain effective.
+Accepted uploads still require CSRF protection. Unrelated upload routes keep their existing behavior.
+Deployment limits remain useful for server buffering outside the application.
 
 Select **WAN Performance** in the existing portal navigation.
 The tab opens the read-only live overview.

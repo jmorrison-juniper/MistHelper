@@ -141,6 +141,13 @@ These new subjects preserve the five-name module limits and the existing configu
 The declaration and synthetic archive stores remain isolated process-lifetime state with downloadable artifacts.
 No production operation, service, dependency, workflow, or publication change forms part of these increments.
 
+T066 correction applies replacement POST admission in the live blueprint URL preprocessor, before every application `before_request` hook.
+Reject missing content length with HTTP 411 and excessive declared length with HTTP 413 before CSRF can parse the body.
+Set per-request body, multipart memory, and part limits without increasing stricter application limits.
+Bound bodies to eight MiB plus 64 KiB, multipart field memory to 128 KiB, and multipart parts to five.
+Keep CSRF enabled and preserve unrelated routes and uploads.
+Verify the real application path, absent stream/form reads, unchanged state, parser limits, and accepted protected uploads.
+
 The later user direction permits defensible replacements instead of waiting for absent source evidence.
 Use [version-one contracts](design/contracts/replacements.md), and preserve original acceptance states.
 T061 records replacement requirements, evidence labels, and future ranking/declaration/backfill policies.

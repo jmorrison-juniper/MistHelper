@@ -22,6 +22,36 @@ from src.interfaces.wan_performance.presentation.inspection.reports import SleRe
 logger = logging.getLogger(__name__)
 
 
+class ReplacementAdmission:
+    """Bound replacement bodies before CSRF reads fields or spools files."""
+
+    BODY_BYTES = 8 * 1024 * 1024 + 65536
+    FIELD_BYTES = 128 * 1024
+    PARTS = 5
+
+    @staticmethod
+    def apply(endpoint: str | None, _values: dict[str, object] | None) -> None:
+        """Use URL preprocessing to protect only replacement POST requests."""
+        if endpoint is None or not endpoint.endswith(".replacements") or request.method != "POST":
+            return
+        logger.info("Checking replacement request admission.")
+        existing = request.max_content_length
+        bound = ReplacementAdmission.BODY_BYTES if existing is None else min(existing, ReplacementAdmission.BODY_BYTES)
+        if request.content_length is None:
+            logger.warning("Rejected replacement request with unknown content length.")
+            abort(411, description="A replacement upload requires a known content length.")
+        if request.content_length > bound:
+            logger.warning("Rejected replacement request exceeding %d bytes.", bound)
+            abort(413, description="The replacement request exceeds the body limit.")
+        request.max_content_length = bound
+        memory, parts = request.max_form_memory_size, request.max_form_parts
+        request.max_form_memory_size = (
+            ReplacementAdmission.FIELD_BYTES if memory is None else min(memory, ReplacementAdmission.FIELD_BYTES)
+        )
+        request.max_form_parts = ReplacementAdmission.PARTS if parts is None else min(parts, ReplacementAdmission.PARTS)
+        logger.debug("Admitted replacement body of %d bytes with bounded multipart parsing.", request.content_length)
+
+
 class ReplacementPages:
     """Expose independent operator policies through existing tenant and CSRF protections."""
 
@@ -33,10 +63,6 @@ class ReplacementPages:
         """Keep metadata operations isolated from network requests and observation writes."""
         identities: tuple[MeasurementIdentity, ...] = ()
         message, error, status = None, None, 200
-        if request.method == "POST" and (
-            request.content_length is None or request.content_length > 8 * 1024 * 1024 + 65536
-        ):
-            abort(413, description="A replacement upload must have a bounded content length.")
         try:
             identities, org_id = self._membership()
             result = self._action(identities, org_id)
