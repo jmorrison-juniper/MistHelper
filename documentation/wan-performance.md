@@ -118,6 +118,18 @@ An empty value means missing data, not zero.
 Text formula prefixes receive an apostrophe to prevent spreadsheet execution.
 The export excludes stored historical records and does not provide backfill.
 
+Each retained plot has a **Show points** button.
+Its pressed state enables point display. Select it to hide or restore that plot's points.
+The visibility message stays visible after a PNG download.
+Other plots, metric values, missing reasons, fixed vertical extent, UTC interval, and exact table stay unchanged.
+
+**Reset view** restores the UTC interval without changing the visibility choice.
+A hidden plot's PNG states that the operator hid its points.
+PNG rendering preserves the captured visibility state if the operator changes the plot while its image loads.
+
+This independent control is not a multi-series source legend or a filter of retained records.
+No cloud service, external sharing link, or clipboard action is added.
+
 ## Site SLE inspection
 
 Select **Inspect cached-site SLE data** from a live WAN page.

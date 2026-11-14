@@ -228,3 +228,17 @@ Display five returned rows per page, with first, previous, next, and last contro
 Keep the complete bounded table accessible when JavaScript is unavailable.
 Add responsive browser regressions to `tests/e2e/web_portal/test_wan_performance_live.py`.
 Verify unchanged cached organization/site/metric scope, missing values, partial-page labels, and exactly two mocked SDK calls.
+
+T058 follows the authorized source legend and sharing examination.
+Change only the existing live template, live browser module, operator guide, PR fragment, and this feature's spec, plan, tasks, analysis, and comparison contract.
+Add one independent visibility control per existing retained metric/unit plot.
+Use a stable button with an explicit pressed state, keyboard operation, and a disabled no-script state.
+Hide only rendered circles. Preserve values, missing reasons, fixed vertical extent, UTC zoom, other figures, and the exact table.
+
+Do not treat operator-hidden points as missing observations.
+Reset changes only the UTC view. A hidden plot's PNG identifies the operator's visibility choice.
+Move point rendering and inspection into a small subject class to keep the existing chart methods within 25 lines.
+Test two separate metric figures, measured zero, missing values, keyboard operation, zoom/reset, actual PNG output, and unchanged requests.
+
+The source cloud workflow requires an external service and remains unexecuted beyond the intercepted launch.
+Do not add cloud sharing, external links, clipboard actions, or source implementation to the destination.

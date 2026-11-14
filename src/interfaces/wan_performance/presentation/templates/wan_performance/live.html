@@ -205,11 +205,14 @@
                     Plot extent: {{ values|min }} to {{ values|max }}.
                     Measurement completeness remains unknown.</figcaption>
                 <div style="display:flex;flex-wrap:wrap;gap:.5rem" aria-label="Retained plot controls">
+                    <button type="button" class="btn btn-sm btn-secondary active" disabled aria-pressed="true"
+                            data-plot-action="toggle-points" data-testid="wan-retained-toggle-points">Show points</button>
                     {% for action, label in [("zoom-in", "Zoom in"), ("zoom-out", "Zoom out"), ("earlier", "Earlier UTC"), ("later", "Later UTC"), ("reset", "Reset view"), ("png", "Download PNG")] %}
                     <button type="button" class="btn btn-sm btn-secondary" disabled
                             data-plot-action="{{ action }}" data-testid="wan-retained-{{ action }}">{{ label }}</button>
                     {% endfor %}
                 </div>
+                <p role="status" data-testid="wan-retained-visibility-status">Point display is enabled.</p>
                 <label class="d-block">Inspect an exact retained observation
                     <select data-testid="wan-retained-point-selection" style="width:100%;max-width:100%" disabled>
                         <option value="">Select an observation</option>
@@ -345,7 +348,7 @@
             figure.addEventListener("click", event => RetainedChart.activate(figure, event));
             const selection = figure.querySelector("select");
             selection.disabled = false;
-            selection.addEventListener("change", () => RetainedChart.inspect(figure, selection));
+            selection.addEventListener("change", () => RetainedPoints.inspect(figure, selection));
             RetainedChart.adjust(figure, "reset");
         }
         static activate(figure, event) {
@@ -353,7 +356,7 @@
             if (point) {
                 const selection = figure.querySelector("select");
                 selection.value = [...figure.querySelectorAll("circle")].indexOf(point);
-                RetainedChart.inspect(figure, selection);
+                RetainedPoints.inspect(figure, selection);
                 return;
             }
             const button = event.target.closest("[data-plot-action]");
@@ -367,6 +370,7 @@
         static range(svg, action) {
             let scale = Number(svg.dataset.plotScale || 1);
             let offset = Number(svg.dataset.plotOffset || 0);
+            if (action === "toggle-points") return [scale, offset];
             if (action === "reset") return [1, 0];
             if (action === "zoom-in" || action === "zoom-out") {
                 const center = offset + 0.5 / scale;
@@ -380,26 +384,39 @@
         static adjust(figure, action) {
             console.info("Adjust a retained WAN projection view.");
             const svg = figure.querySelector("svg");
+            svg.dataset.pointsVisible = String(action === "toggle-points" ? svg.dataset.pointsVisible === "false" : svg.dataset.pointsVisible !== "false");
             const [scale, offset] = RetainedChart.range(svg, action);
             svg.dataset.plotScale = scale;
             svg.dataset.plotOffset = offset;
-            const points = [...svg.querySelectorAll("circle")];
-            for (const point of points) {
-                const position = 32 + ((Number(point.dataset.plotX) - 32) / 588 - offset) * 588 * scale;
-                point.setAttribute("cx", position);
-                point.style.display = position < 32 || position > 620 ? "none" : "";
-            }
+            const points = RetainedPoints.adjust(svg, scale, offset);
             for (const button of figure.querySelectorAll("[data-plot-action]")) {
+                if (button.dataset.plotAction === "toggle-points") button.setAttribute("aria-pressed", svg.dataset.pointsVisible);
                 button.disabled = button.dataset.rendering === "true" || {"zoom-in": scale === 8, "zoom-out": scale === 1,
                     earlier: offset === 0, later: offset >= 1 - 1 / scale, reset: scale === 1}[button.dataset.plotAction] || false;
             }
+            figure.querySelector("[data-plot-action=toggle-points]").classList.toggle("active", svg.dataset.pointsVisible !== "false");
             const start = Date.parse(svg.dataset.windowStart), duration = Date.parse(svg.dataset.windowEnd) - start;
             for (const [selector, fraction] of [["[data-window-start]", offset], ["[data-window-end]", offset + 1 / scale]]) {
                 svg.querySelector(selector).textContent = new Date(start + duration * fraction).toISOString().slice(0, 16).replace("T", " ") + " UTC";
             }
             figure.querySelector("[data-testid=wan-retained-chart-status]").textContent =
-                `${points.filter(point => !point.style.display).length} of ${points.length} retained points visible. Measurement completeness remains unknown.`;
+                svg.dataset.pointsVisible === "false" ? "Plotted points are hidden by the operator. Exact values remain in the table." :
+                    `${points.filter(point => !point.style.display).length} of ${points.length} retained points visible. Measurement completeness remains unknown.`;
             console.debug("Adjusted the retained projection view.", scale, offset);
+        }
+    }
+    /** Keep point visibility and exact inspection separate from UTC window controls. */
+    class RetainedPoints {
+        static adjust(svg, scale, offset) {
+            const points = [...svg.querySelectorAll("circle")];
+            svg.closest("figure").querySelector("[data-testid=wan-retained-visibility-status]").textContent =
+                svg.dataset.pointsVisible === "false" ? "Plotted points are hidden by the operator. Exact values remain in the table." : "Point display is enabled.";
+            for (const point of points) {
+                const position = 32 + ((Number(point.dataset.plotX) - 32) / 588 - offset) * 588 * scale;
+                point.setAttribute("cx", position);
+                point.style.display = svg.dataset.pointsVisible === "false" || position < 32 || position > 620 ? "none" : "";
+            }
+            return points;
         }
         static inspect(figure, selection) {
             figure.querySelector("[data-testid=wan-retained-point-details]").textContent = selection.value
@@ -427,15 +444,16 @@
         }
         static async raster(svg) {
             const image = new Image();
+            const pointsVisible = svg.dataset.pointsVisible !== "false";
             await new Promise((resolve, reject) => {
                 image.onload = resolve;
                 image.onerror = () => reject(new Error("The retained chart image could not load."));
                 // The portal permits local data images, not blob image sources.
                 image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(RetainedImage.snapshot(svg));
             });
-            return RetainedImage.paint(svg, image);
+            return RetainedImage.paint(svg, image, pointsVisible);
         }
-        static paint(svg, image) {
+        static paint(svg, image, pointsVisible) {
             const canvas = document.createElement("canvas");
             canvas.width = 1280;
             canvas.height = 600;
@@ -449,9 +467,15 @@
             context.font = "18px sans-serif";
             context.fillText(svg.getAttribute("aria-label"), 20, 30, 1240);
             context.drawImage(image, 0, 50, 1280, 460);
-            context.fillText("Hourly projections are not source metric sample times. Completeness remains unknown.", 20, 550, 1240);
-            context.fillText("Exact collection times and missing reasons remain in the retained table.", 20, 580, 1240);
+            RetainedImage.labels(context, pointsVisible);
             return canvas;
+        }
+        static labels(context, pointsVisible) {
+            context.fillText("Hourly projections are not source metric sample times. Completeness remains unknown.", 20, 550, 1240);
+            const visibility = pointsVisible
+                ? "Exact collection times and missing reasons remain in the retained table."
+                : "The operator hid plotted points. Exact values remain in the table.";
+            context.fillText(visibility, 20, 580, 1240);
         }
         static async download(button, svg, output) {
             let address;

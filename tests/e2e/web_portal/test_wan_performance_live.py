@@ -434,6 +434,137 @@ def wan_browser_artifacts() -> Path:
     return directory
 
 
+@pytest.fixture
+def visibility_history(retained_history):
+    """Keep two independent measured metrics beside an explicitly missing value."""
+    from dataclasses import replace
+
+    from src.interfaces.wan_performance.domain.measurement import MetricMeasurement
+
+    previous = retained_history.read.side_effect
+
+    def read(identity, start, end):
+        """Use existing scoped synthetic hours with an additional measured zero."""
+        records = previous(identity, start, end)
+        return (replace(records[0], metrics={**records[0].metrics, "tx_bps": MetricMeasurement(0, "bit/s")}),)
+
+    retained_history.read.side_effect = read
+    return retained_history
+
+
+class RetainedVisibilityJourney:
+    """Verify display-only visibility without changing retained observations."""
+
+    @staticmethod
+    def track_labels(page: Page) -> None:
+        """Record actual canvas labels while preserving the native image output."""
+        page.evaluate(
+            "() => { window.wanPaintLabels = []; const paint = CanvasRenderingContext2D.prototype.fillText;"
+            "CanvasRenderingContext2D.prototype.fillText = function(...args) {"
+            "window.wanPaintLabels.push(args[0]); return paint.apply(this, args); }; }"
+        )
+
+    @staticmethod
+    def delay_image(page: Page) -> None:
+        """Pause native SVG image loading so a visibility race is reproducible."""
+        page.evaluate(
+            "() => { const source = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');"
+            "Object.defineProperty(HTMLImageElement.prototype, 'src', {...source, set(value) {"
+            "window.wanImageSource = value; window.wanLoadImage = () => source.set.call(this, value); }}); }"
+        )
+
+    @staticmethod
+    def snapshot_visible(page: Page) -> None:
+        """Match the image's captured display state and annotation, not the current SVG."""
+        assert (
+            page.evaluate(
+                "new DOMParser().parseFromString(decodeURIComponent(window.wanImageSource.split(',')[1]),"
+                "'image/svg+xml').documentElement.getAttribute('data-points-visible')"
+            )
+            == "true"
+        )
+        assert page.evaluate("window.wanPaintLabels.slice(-1)[0]") == (
+            "Exact collection times and missing reasons remain in the retained table."
+        )
+
+    @staticmethod
+    def hide(page: Page, chart: Locator) -> None:
+        """Preserve hidden points through keyboard activation, zoom, and reset."""
+        toggle = chart.get_by_test_id("wan-retained-toggle-points")
+        expect(toggle).to_have_attribute("aria-pressed", "true")
+        toggle.focus()
+        page.keyboard.press("Enter")
+        expect(toggle).to_have_attribute("aria-pressed", "false")
+        chart.get_by_test_id("wan-retained-zoom-in").click()
+        chart.get_by_test_id("wan-retained-reset").click()
+        expect(chart.get_by_test_id("wan-retained-point")).to_be_hidden()
+        expect(toggle).to_have_attribute("aria-pressed", "false")
+        expect(chart.get_by_test_id("wan-retained-chart-status")).to_contain_text("hidden by the operator")
+        chart.get_by_test_id("wan-retained-point-selection").select_option("0")
+        expect(chart.get_by_test_id("wan-retained-point-details")).to_contain_text("40 bit/s")
+
+    @staticmethod
+    def export(page: Page, chart: Locator, directory: Path, width: int) -> None:
+        """Verify an actual hidden-plot PNG carries the explicit display state."""
+        RetainedVisibilityJourney.track_labels(page)
+        with page.expect_download() as downloaded:
+            chart.get_by_test_id("wan-retained-png").click()
+        destination = directory / f"retained-hidden-{width}.png"
+        downloaded.value.save_as(destination)
+        RetainedPlotJourney.verify_png(destination)
+        assert "The operator hid plotted points. Exact values remain in the table." in page.evaluate(
+            "window.wanPaintLabels"
+        )
+        expect(chart.get_by_test_id("wan-retained-visibility-status")).to_contain_text("hidden by the operator")
+
+
+@pytest.mark.parametrize("viewport", [(1440, 1100), (1280, 800), (390, 844)])
+def test_browser_retained_visibility_preserves_other_metrics(
+    page: Page, live_browser_url: str, visibility_history, viewport, wan_browser_artifacts
+):
+    """Hide one metric locally while preserving zero, missing values, and scope."""
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.goto(live_browser_url + "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=6h")
+    charts = page.get_by_test_id("wan-retained-chart")
+    expect(charts).to_have_count(2)
+    table = page.get_by_test_id("wan-retained-records").inner_text()
+    requests = []
+    page.on("request", lambda request: requests.append(request.url))
+    RetainedVisibilityJourney.hide(page, charts.first)
+    expect(charts.last.get_by_test_id("wan-retained-point")).to_be_visible()
+    expect(charts.last.get_by_test_id("wan-retained-point")).to_have_attribute("data-value", "0")
+    RetainedVisibilityJourney.export(page, charts.first, wan_browser_artifacts, viewport[0])
+    charts.first.screenshot(path=str(wan_browser_artifacts / f"retained-hidden-chart-{viewport[0]}.png"))
+    charts.first.get_by_test_id("wan-retained-toggle-points").click()
+    expect(charts.first.get_by_test_id("wan-retained-point")).to_be_visible()
+    assert page.get_by_test_id("wan-retained-records").inner_text() == table
+    assert "No fixture sample." in table
+    assert requests == []
+    assert visibility_history.read.call_count == 1
+    visibility_history.read_samples.assert_not_called()
+    visibility_history.upsert.assert_not_called()
+
+
+def test_browser_retained_png_preserves_visibility_during_image_load(
+    page: Page, live_browser_url: str, retained_history, wan_browser_artifacts
+):
+    """Keep PNG annotations consistent with its snapshot during another interaction."""
+    page.goto(live_browser_url + "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=6h")
+    RetainedVisibilityJourney.track_labels(page)
+    RetainedVisibilityJourney.delay_image(page)
+    with page.expect_download() as downloaded:
+        page.get_by_test_id("wan-retained-png").click()
+        page.wait_for_function("typeof window.wanLoadImage === 'function'")
+        page.get_by_test_id("wan-retained-toggle-points").click()
+        page.evaluate("window.wanLoadImage()")
+    destination = wan_browser_artifacts / "retained-pending-visibility.png"
+    downloaded.value.save_as(destination)
+    RetainedPlotJourney.verify_png(destination)
+    RetainedVisibilityJourney.snapshot_visible(page)
+    expect(page.get_by_test_id("wan-retained-visibility-status")).to_contain_text("hidden by the operator")
+    assert retained_history.read.call_count == 1
+
+
 @pytest.mark.browser_context_args(java_script_enabled=False)
 def test_browser_retained_table_survives_without_javascript(page: Page, live_browser_url: str, retained_history):
     """Retain exact values and static points without browser interaction support."""
@@ -442,6 +573,7 @@ def test_browser_retained_table_survives_without_javascript(page: Page, live_bro
     expect(page.get_by_test_id("wan-retained-point")).to_be_visible()
     expect(page.get_by_test_id("wan-retained-zoom-in")).to_be_disabled()
     expect(page.get_by_test_id("wan-retained-png")).to_be_disabled()
+    expect(page.get_by_test_id("wan-retained-toggle-points")).to_be_disabled()
     expect(page.get_by_test_id("wan-retained-chart-status")).to_contain_text("need JavaScript")
     retained_history.read.assert_called_once()
 

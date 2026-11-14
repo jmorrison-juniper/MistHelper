@@ -160,6 +160,10 @@ This specification authorizes no new transport or live request.
 - Independent retained-plot controls may zoom and move the visible UTC bucket interval, inspect exact points, reset the view, and download a local PNG.
   Keep the original retained interval, metric units, raw values, and accessible table unchanged.
   Client-side controls must make no collection or history request and must show rendering failures explicitly.
+- Each retained metric plot may independently hide or show its rendered points through an accessible button.
+  Keep the UTC view, vertical extent, other plots, exact table, and missing reasons unchanged.
+  View reset must not override the operator's visibility choice. A hidden plot and its PNG must state that the operator hid its points.
+  This is not a multi-series source legend, a data filter, or a claim that observations are absent.
 - Independent raw SLE controls may sort gateway MAC, name, or model text and display five returned rows per page.
   Preserve response order for equal text, missing numeric values, site/metric scope, and explicit unknown units and completeness.
   Source order remains available. Display controls must not submit the form or request additional API pages.

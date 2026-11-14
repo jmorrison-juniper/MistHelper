@@ -26,7 +26,7 @@ This is not a pixel-equivalence baseline or complete production integration proo
 | R03 | P25, P27, P35, P38 | Gateway ports advanced to another page. SLE filtering committed with Enter. Three CSV downloads contained 10 congestion rows, seven alerts, and one degraded site. | Gateway sort controls were absent. Exported fields and ranking are source observations, not accepted SDK semantics. |
 | R04 | P33-P34 | Corrected independent SLE data rendered summary/histogram charts, two classifier entries, seven gateways, seven interfaces, and one peer. Return navigation worked. | Source minute/percentage labels and classifier calculations do not establish API units or valid formulas. |
 | R05 | P27, P33-P34 | Gateway/interface SLE tables changed lexical order and advanced from five rows to two. The peer filter removed its row. | Gateway/interface inputs are page controls, not column filters. A one-row peer table cannot prove meaningful sorting. |
-| R06 | P28, P39, P43, P45 | Overview, gateway, port, and peer chart inventories were captured. Port zoom changed axes, reset restored them, pan changed mode, and a box drag changed bounds. PNG download succeeded. | Legend clicks hit the toolbar. Five tested legend coordinates remained covered. Share, clipboard, and external Plotly navigation were not activated. |
+| R06 | P28, P39, P43, P45 | Overview, gateway, port, and peer chart inventories were captured. Port zoom changed axes, reset restored them, pan changed mode, and a box drag changed bounds. PNG download succeeded. Later legend and sharing outcomes appear below. | The first legend attempts hit the toolbar. Later pointer examination separates native access from temporary overlay changes. |
 | R07 | P21-P23, P40, P45 | Missing detail and partial-peer cases rendered unavailable text alongside zero-shaped fields or gauges. Empty/loading scenarios showed loading text. | These defaults are not valid destination measurement semantics. The cache-metadata stale scenario did not establish a complete source stale-state contract. |
 | R08 | P20, P28, P49-P50 | Desktop/narrow captures, 120 Tab presses across four pages, original test results, and destination browser assertions were recorded separately. | Narrow overview/gateway/port captures overflowed. Peer did not. Focus traversal is not proof that every chart is keyboard-operable. |
 
@@ -49,8 +49,57 @@ Failing tests preceded implementation. Eleven new browser cases cover three view
 The exact table, values, units, missing states, tenant/route scope, and API/history request counts remain unchanged.
 These independent controls do not establish complete source visual, audience, or interaction equivalence.
 
-The source legend remains obscured by its toolbar during the recorded attempts.
-Share, clipboard, and external Plotly navigation remain untested, not silently completed or blocked by absent execution rights.
+### Later legend and sharing examination
+
+T058 records 76 additional observation/action entries across five final private JSON files, not 76 successful assertions.
+The same source revision ran with network mode `none`, read-only source/harness mounts, zero inherited credential variables, and no published ports.
+The driver verified loopback-only interfaces and denied IPv4/IPv6 egress before imports.
+The existing restricted relay used loopback port 9642. Browser requests outside that relay were blocked or served from cached public CSS.
+No cloud request, source-data submission, system clipboard write, or production call occurred.
+
+Seven visible source legends received real pointer actions.
+Four had reachable native coordinates: overview utilization trends, overview throughput, gateway CPU/memory, and peer quality.
+Gateway bandwidth, port bandwidth, and the SLE summary needed a temporary browser-only toolbar pointer override.
+
+All seven changed the first visible trace to `legendonly` and restored it.
+Double-click isolated the first trace in six multi-legend charts and restored the other traces.
+The SLE summary's other traces remained visible. Do not generalize its double-click behavior.
+The temporary toolbar style was restored after each examination.
+
+Six inactive overview plots remained hidden during SLE detail inspection and were not treated as accessible controls.
+The first SLE driver tried to scroll an inactive chart. Its timeout is a driver failure, not an established source defect.
+
+All twelve accessible chart sharing menus displayed a Plotly Cloud upload warning.
+Cancel closed each menu. Confirm attempted `https://cloud.plotly.com/newchart` through the locally intercepted `window.open`.
+The Plotly Cloud and Plotly attribution anchors were activated with navigation prevented.
+The five detail gauges exposed no sharing control.
+
+No accessible menu exposed a copy control, and the clipboard stubs recorded no call.
+Cloud account creation, upload, generated-link copying, and external-page behavior cannot run under the no-external-service boundary.
+Do not fabricate a cloud response or treat a local interception as a successful upload.
+
+Overview Box Select and Lasso Select changed the actual layout modes to `select` and `lasso`.
+Both recorded eight selected synthetic bar indices.
+The captured events reported rectangular ranges without a lasso-point payload, so polygon-specific semantics remain unverified.
+Autoscale and reset were also activated. These observations do not establish distribution or aggregation formulas.
+Previously verified navigation, ranges, refresh toggles, table actions, CSV downloads, and missing-state scenarios remain separate evidence.
+The site selector still has no choices under the independent production-shaped site collection.
+Its complete populated behavior needs a verified site-provider contract, not invented data or a live store.
+
+Final evidence files under `test-artifacts/wan-performance/original-review/runtime/`:
+`browser-controls.json`, `browser-sle-controls.json`, `browser-external-controls.json`, `browser-share-matrix.json`, and `browser-sle-share-matrix.json`.
+Their matching logs preserve exact commands and outcomes. First-attempt files preserve the inactive-chart and selection-driver limitations.
+Legend before/hidden/restored captures and sharing-menu captures remain private.
+The original container and relay stopped. Exact temporary container, volume, network, and listener checks were empty.
+The original 137-test cycle was not repeated because neither original source nor source dependencies changed.
+No protected implementation, fixture, asset, or screenshot entered the product.
+
+T058 adds an independent visibility button to each destination retained metric/unit plot.
+Four new browser cases cover three viewports and an image-load race.
+They preserve the other metric plot, measured zero, missing reasons, exact table, UTC view, and request count.
+The PNG identifies hidden points and keeps its annotation consistent with the captured image during later interactions.
+The no-script regression keeps static points visible and the new control disabled.
+This is not a multi-series source legend, cloud sharing, source visual equivalence, or a data filter.
 
 Region aggregates, role/failover ranking, SLE score meanings, and source-equivalent quality statistics still need exact contracts.
 Real historical inventory, 13-month history, retention/capacity/completeness, and backfill still lack proof.

@@ -119,6 +119,7 @@ These tasks do not replace source-parity acceptance or authorize source executio
 - [X] T055 Add independently designed retained projection plots with discrete points, metric/unit separation, exact UTC bucket placement, and missing-data tests.
 - [X] T056 Add independently designed browser-only retained-plot zoom, bounded movement, reset, exact point inspection, and local PNG download with keyboard and no-request tests.
 - [X] T057 Add independent local raw SLE identity-text sorting and five-row display pagination, preserving missing values, response scope, and completeness labels without additional API requests.
+- [X] T058 Examine remaining authorized source legends, sharing, clipboard boundaries, and selection modes. Add independent retained metric visibility controls with keyboard, no-script, figure-isolation, zoom/reset, PNG, and no-request browser tests.
 
 ## Dependencies and execution order
 

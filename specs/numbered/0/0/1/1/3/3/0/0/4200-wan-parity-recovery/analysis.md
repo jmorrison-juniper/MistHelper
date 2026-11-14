@@ -1,5 +1,85 @@
 # Recovery coverage and execution status
 
+## Remaining source controls and independent visibility
+
+T058 supersedes the earlier unexamined legend/sharing statements below.
+The ledger now has 35 completed tasks of 58. The original acceptance audit remains 24 completed tasks of 47.
+The read-only reviewer checklist stays at ten checked and four unchecked.
+The prior direct continuation approval covers these bounded increments. No reviewer marker was changed.
+
+Optional commit hooks remain skipped in favor of explicit validated commits. Disabled companion hooks remain disabled.
+The portable feature prerequisite returned the exact feature without changing `.specify/feature.json`.
+
+The authorized original ran again under the existing network-free Compose profile and restricted loopback relay.
+Before imports, its driver reported Python 3.13.16, loopback-only interfaces, zero inherited credential variables, and denied source/harness writes.
+Both egress probes returned `ENETUNREACH`.
+Actual container inspection confirmed network mode `none`, read-only root, no privileges, 1 GiB memory, 64 processes, and no published ports.
+
+Browser requests outside the relay were blocked. Public theme CSS remained locally served.
+No source data reached a third party, and clipboard stubs prevented system clipboard changes.
+
+The [later control record](design/contracts/parity.md#later-legend-and-sharing-examination) records 76 new observation/action entries.
+Seven legend workflows ran. Four used native coordinates, and three needed a declared temporary toolbar pointer override.
+Each first trace hid and returned. Six multi-legend charts isolated and restored other traces on double-click.
+The SLE summary's other traces stayed visible.
+
+Twelve sharing menus opened and canceled. Confirm attempted a cloud window through a local stub, without navigation or upload.
+Cloud and attribution links were activated with their navigation prevented.
+No accessible copy button or clipboard call appeared. Cloud upload and later generated-link behavior remain unavailable under isolation.
+
+Overview box/lasso modes and eight selected indices were recorded.
+The events lacked a polygon payload, so polygon-specific selection semantics remain unverified.
+The populated site selector still needs a verified site-provider contract.
+
+All five final source evidence JSON files and their logs remain private under `test-artifacts/wan-performance/original-review/runtime/`.
+The initial SLE driver selected an inactive overview chart and timed out. A visibility check corrected that driver.
+Source code and dependencies stayed unchanged. The existing 137-test original cycle was not repeated.
+The original container, relay, and exact temporary resource searches are stopped or empty.
+No protected implementation, fixtures, assets, or screenshots entered tracked destination files.
+
+The independent destination control hides only one existing metric/unit plot's rendered points.
+It preserves other plots, measured zero, missing values, fixed vertical extent, UTC selection, and the exact table.
+The pressed state, keyboard operation, persistent visibility message, and disabled no-script state remain explicit.
+View reset does not change the visibility choice. PNGs state that the operator hid points.
+
+The image captures visibility before asynchronous loading, so later interactions cannot mislabel that snapshot.
+No new read, request, aggregation, storage change, service, cloud link, or clipboard action is added.
+This is not a multi-series source legend or a source-parity acceptance claim.
+
+The first destination fixture tried to mutate an immutable metric mapping and failed before rendering.
+The corrected independent fixture uses a replacement record without changing existing fixtures or production data.
+`t058-fixture-before.log` preserves that fixture failure.
+`t058-before.log` then records four missing-control failures before production changes.
+`t058-after.log` records eight passing visibility and existing chart-control cases.
+The test inventory adds four browser cases and removes none.
+`t058-png-negative-control.log` proves that the image-load race test fails if PNG labels read the later visibility state.
+The temporary one-line mutation was removed immediately. No mutation remains in the candidate.
+
+### T058 local validation
+
+| Command or check | Actual result |
+| --- | --- |
+| `rtk .venv/bin/python test-artifacts/wan-performance/original-review/runtime/bridge.py` | Original became ready after the pre-import isolation checks. Loopback HTTP returned 200. |
+| `rtk .venv/bin/python test-artifacts/wan-performance/original-review/runtime/control_review.py` | Six legend workflows. Four native coordinates and two declared toolbar overrides. |
+| `rtk .venv/bin/python test-artifacts/wan-performance/original-review/runtime/control_review.py --sle-only` | One SLE legend workflow with a declared toolbar override. Six inactive charts skipped. |
+| `rtk .venv/bin/python test-artifacts/wan-performance/original-review/runtime/external_controls.py` | Share cancel/confirm, intercepted external anchors, box/lasso modes, autoscale, and reset examined. No external connection. |
+| `rtk .venv/bin/python test-artifacts/wan-performance/original-review/runtime/share_matrix.py` | Ten accessible chart menus opened, canceled, and confirmed through a local window stub. No copy controls. |
+| `rtk .venv/bin/python test-artifacts/wan-performance/original-review/runtime/share_matrix.py --sle-only` | Two accessible SLE chart menus had the same local boundary. No copy controls. |
+| `rtk .venv/bin/python -m pytest -q tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_offline.py tests/e2e/web_portal/test_wan_performance_live.py tests/integration/test_mistapi_sdk_compatibility.py --tb=short --show-capture=no --screenshot=only-on-failure --output=test-artifacts/wan-performance/visibility-final-failures` | 468 passed, two existing warnings. |
+| `rtk .venv/bin/python -m ruff check src/interfaces/wan_performance tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_live.py` | All checks passed. |
+| `rtk .venv/bin/python -m black --check src/interfaces/wan_performance tests/unit/wan_performance/test_calendar_summaries.py tests/e2e/web_portal/test_wan_performance_live.py` | 31 files unchanged after formatting the new assertion. |
+| `rtk .venv/bin/python -m mypy src/interfaces/wan_performance --config-file pyproject.toml` | Success, 29 source files. |
+| `rtk .venv/bin/python -m compileall -q src/interfaces/wan_performance` | Exit zero. |
+| `rtk .venv/bin/markdown-link-check --root . specs/numbered/0/0/1/1/3/3/0/0/4200-wan-parity-recovery documentation/wan-performance.md changelog.d/pr-4208.md` | Twelve files, zero broken links. |
+| `rtk .venv/bin/symbol-diff --base 565213a7aed67615a82c2bd92961cce12264ea31 tests/e2e/web_portal/test_wan_performance_live.py` | Zero lost names and four intended additions. Exit one reports additions. |
+| Exact temporary container, volume, network, and port 9642 listener checks | All empty after the original relay stopped. |
+
+The source-control JSON counts are 22, ten, sixteen, nineteen, and nine, totaling 76 final entries.
+Earlier retry files are separate. The inactive-chart timeout and the first selection gestures remain preserved.
+The original 137-test result and the four new destination cases are separate test inventories.
+Complete source semantics, live services, visual/audience acceptance, historical reconciliation, and hosted checks remain open.
+Issue #4200 stays open. No publication or hosted action occurred.
+
 ## Latest independent browser interactions
 
 T056 and T057 complete the requested bounded T012/T032/T036 increments without claiming complete source parity.
@@ -80,8 +160,7 @@ The existing browser module's name-count debt remains recorded separately in the
 The original 137-test isolated cycle and 101 observation/action records remain valid separate evidence.
 Source-equivalent formulas, region/role/ranking rules, SLE score meanings, and quality weighting/p95 still lack exact accepted contracts.
 Actual 13-month history, retention/capacity/completeness, and backfill remain unverified.
-Legend activation remains obscured in the source review. Share, clipboard, and external Plotly navigation were not activated.
-Those are named unreviewed interactions, not completed parity or a renewed execution-rights blocker.
+Those legend and sharing limits applied at T056-T057. The later T058 examination above supersedes them without claiming cloud-upload success.
 Complete visual/audience acceptance, historical task reconciliation, owner review, and hosted checks remain open.
 Keep issue #4200 open. No push, hosted run, PR/readiness change, or merge occurred.
 
