@@ -45,7 +45,7 @@ It distinguishes active overview layout from a separate overview class.
 It records downloads, SLE drilldowns, device charts, MOS, detailed port counters, and peer configuration.
 
 The source has time-series method bodies despite its TODO notes.
-The gateway method calls an absent installed SDK symbol.
+The gateway method calls a symbol absent from the installed SDK's insights namespace.
 The peer method forwards arguments that the installed device-insight function does not accept.
 This corrects the earlier blanket TODO description. It does not establish working history.
 Both methods remain implemented-but-unverified source behavior.

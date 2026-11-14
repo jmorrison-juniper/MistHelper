@@ -233,6 +233,30 @@ Do not translate source defaults or fallback zeros into accepted measurement con
 Implement verified differences with failing independent tests through the existing task pairs.
 Keep rights, data semantics, historical acceptance, and publication as separate decisions.
 
+### Supported SLE gateway drilldown candidate
+
+The installed SDK exposes `sites.sle.listSiteSleImpactedGateways`.
+Its arguments are session, site ID, scope, scope ID, metric, optional start, end, duration, and classifier.
+The bundled OpenAPI restricts this operation to `scope="site"`.
+Use the site ID as scope ID and obtain metric names from `sites.sle.listSiteSlesMetrics`.
+That catalog returns separate `supported` and `enabled` arrays.
+Do not treat example metric names as enabled for every site.
+
+An independent mocked SDK call verified the gateway URL and explicit start, end, and classifier forwarding.
+It returned the mock response unchanged and made no network request.
+This proves SDK request construction only, not application authorization, response validation, or error handling.
+
+The impacted-gateway response includes gateway identity fields, degraded, total, duration, and pagination metadata.
+Its example does not establish duration units, score normalization, historical completeness, or source-equivalent drilldown behavior.
+The SDK signature provides no page or limit argument despite response pagination fields.
+Do not claim complete results or implement guessed pagination arguments.
+T025 can use this supported entry point for further field-contract verification.
+T026 still requires approved interpretation, scoped response validation, failure tests, and source comparison before presentation wiring.
+
+The separate `sites.stats.getSiteGatewayMetrics(session, site_id)` returns configuration-success and version-compliance scores.
+It is not the historical bandwidth operation assumed by the source wrapper.
+The absent `sites.insights.getSiteGatewayMetrics` symbol must not be replaced with this unrelated stats call.
+
 | Behavior | Current MistHelper policy | Evidence |
 | --- | --- | --- |
 | Worker ownership | One organization key uses atomic `NX` acquisition and a 600-second lease. Renew and release scripts compare the owner token. | `test_background_refresh.py::test_worker_threads_follow_shared_organization_lease_protocol`, `test_worker_does_not_release_a_lease_after_ownership_changes` |

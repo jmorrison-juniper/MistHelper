@@ -87,7 +87,7 @@ The `api/mist_client.py` references below are relative to the pinned source tree
 | src/main.py:73-127 | CLI collection and aggregation contain TODO bodies | Do not accept CLI orchestration as working collection |
 | data_provider.py:1426-1490 | Port history reads cache, then invokes a source API method, then can return empty data | Trace the called SDK symbol and distinguish failure from no history |
 | data_provider.py:1492-1549 | Peer history follows a similar provider path | Provider presence does not establish historical peer samples |
-| api/mist_client.py:1197-1290 | A gateway history method body exists and calls `getSiteGatewayMetrics` | The installed destination SDK lacks that symbol |
+| api/mist_client.py:1197-1290 | A gateway history method body exists and calls `getSiteGatewayMetrics` | The SDK insights namespace lacks that symbol. Its stats counterpart does not supply bandwidth history |
 | api/mist_client.py:1292-1394 | A peer history body calls device insights with peer filter arguments | Installed method signature does not accept those peer arguments |
 | api/mist_client.py:1237-1238 | Source derives a device UUID from a MAC | Preserve destination discovery of the actual UUID, not this derivation |
 | pages/detail_data.py:465-531, 593-646 | Several absent metrics become zeros; broad failures become empty page data | Preserve layout intent, but retain explicit missing/error behavior in MistHelper |
@@ -106,7 +106,7 @@ It does not prove a metric exists or that returned fields have the required mean
 
 | SDK surface | Verified signature facts | Remaining evidence |
 | --- | --- | --- |
-| sites.insights.getSiteGatewayMetrics | Symbol absent | Source port-history call is not portable as written |
+| sites.insights.getSiteGatewayMetrics | Symbol absent in `insights`. The `stats` namespace has a different operation with this name. | The stats operation returns configuration and version-compliance scores, not historical bandwidth |
 | sites.insights.getSiteInsightMetricsForGateway | Requires site ID, device ID, and metrics; interval is a string | Supported metric catalog, units, and identity |
 | sites.insights.getSiteInsightMetricsForDevice | Requires site ID, metric, device MAC; no peer_mac or peer_port_id arguments | Do not forward source peer filters; prove a supported alternative or remain blocked |
 | orgs.stats.searchOrgPeerPathStats | Supports org, gateway MAC, site, type, bounds/duration, limit, and search_after; no peer-port filter | Timestamp semantics and historical completeness |

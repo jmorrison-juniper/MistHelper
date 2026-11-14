@@ -220,6 +220,9 @@ This increment does not rewrite retained records.
 These are destination results, not a full original-application cycle.
 Source startup, control interaction, visualization changes, downloads, failure behavior, and cleanup remain unexecuted.
 No new environment, process, container, volume, or network was started for the source.
+Independent SDK inspection also confirmed a site-scoped SLE impacted-gateway operation and its metric catalog.
+A mocked SDK call verified request forwarding only.
+The [SLE contract note](design/contracts/parity.md#supported-sle-gateway-drilldown-candidate) records remaining units, paging, response, and source-equivalence prerequisites.
 
 The current candidate starts from main `2a6a5844698aeb180fea353e0243034890774565`.
 Its starting head was `07b7751fb9e6c0e8d285d2adb9b0273bc5aae4fc`.
