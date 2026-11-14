@@ -19,6 +19,20 @@ The ranking displays at most twenty observations and starts no additional acquis
 T065 declarations and T066 archive import remain the next implementation increments.
 The original acceptance and reviewer markers remain unchanged.
 
+### T065 operator declarations
+
+FR-023 and SC-013 now have fifteen unit cases, two protected route cases, and three responsive browser cases.
+Fourteen initial cases failed because the declaration store did not exist.
+One later route test omitted the existing CSRF token. The corrected test uses the actual protected form token.
+The focused declaration selection passed twenty cases with two existing warnings in 3.71 seconds.
+The exact 1000-declaration cap preserves replay and rejects another append without changing the exported state.
+Typed confirmation, cached tenant membership, UTC effective bounds, finite positive capacity, and printable metadata remain explicit.
+State exists only in the application process. JSON export identifies declaration provenance and process lifetime.
+Browser tests retain before and after images and actual downloaded declaration JSON in the ignored destination evidence directory.
+Ruff, Black, mypy on 29 sources, complexity, Bandit, compilation, and language checks passed.
+The two structural guards passed 26 cases with one existing warning. Thirteen tracked-file link checks found no broken targets.
+T066 archive validation and append-only storage remain the next increment.
+
 The later user direction authorizes independently designed replacements and bounded synthetic validation.
 T061 defines [version-one contracts](design/contracts/replacements.md) without changing original acceptance states.
 T062 will implement observation statistics and configurable threshold counts over existing bounded retained projections.

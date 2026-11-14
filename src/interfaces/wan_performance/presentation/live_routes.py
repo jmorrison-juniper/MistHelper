@@ -26,7 +26,7 @@ from src.interfaces.wan_performance.domain.summary import CalendarSummaries, Per
 from src.interfaces.wan_performance.integration.history_repository import HistoryRepository, HistorySelection
 from src.interfaces.wan_performance.integration.refresh_store import RefreshStore
 from src.interfaces.wan_performance.presentation.inspection.reports import ObservationRanking
-from src.interfaces.wan_performance.presentation.inspection.sle_routes import SlePages
+from src.interfaces.wan_performance.presentation.inspection.sle_routes import ReplacementPages, SlePages
 from src.interfaces.wan_performance.presentation.inspection.table import GatewayStatistics, RecordTable, TableOptions
 from src.interfaces.wan_performance.presentation.inspection.windows import (
     ObservationStatistics,
@@ -252,6 +252,12 @@ class LivePages:
 
 
 live_bp.add_url_rule("/sle", endpoint="sle", view_func=SlePages(LivePages.service).render, methods=["GET", "POST"])
+live_bp.add_url_rule(
+    "/replacements",
+    endpoint="replacements",
+    view_func=ReplacementPages(LivePages.service).render,
+    methods=["GET", "POST"],
+)
 
 
 @live_bp.get("/")

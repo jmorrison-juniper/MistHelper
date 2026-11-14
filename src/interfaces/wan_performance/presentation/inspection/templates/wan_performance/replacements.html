@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Independent WAN replacement policies{% endblock %}
+{% block content %}
+<section class="container-fluid" data-testid="wan-replacements">
+    <h1>Designed replacement v1: operator declarations</h1>
+    <p>Declared capacity uses bit/s. Region and role are operator text, not inferred network facts.
+        These actions change neither Mist configuration nor observed measurements.</p>
+    <p role="status" data-testid="wan-replacement-lifetime">This isolated state lasts only for this application process.
+        A restart removes declarations. Export records before a restart. Export does not establish live historical evidence.</p>
+    {% if error %}<p role="alert" data-testid="wan-replacement-error">{{ error }}</p>{% endif %}
+    {% if message %}<p role="status" data-testid="wan-replacement-result">{{ message }}</p>{% endif %}
+    <details><summary>Current cached full identities</summary>
+        {% for identity in identities %}<pre>{{ identity.to_dict()|tojson }}</pre>
+        {% else %}<p>No cached identity is available.</p>{% endfor %}
+    </details>
+    <form method="post">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <p>Supply JSON with exactly version 1, provenance "operator-declaration", identity, effective, and values.
+            The effective object requires increasing start_utc and end_utc ISO 8601 timestamps with UTC offsets.
+            Values permit capacity_bps, region, and role. Supply at least one value. The size limit is 64 KiB.</p>
+        <label for="wan-declaration-json">Operator declaration JSON</label>
+        <textarea id="wan-declaration-json" name="declaration" data-testid="wan-declaration-json" rows="10" required class="form-control"></textarea>
+        <label for="wan-declaration-confirmation">Type DECLARE to retain metadata in this process</label>
+        <input id="wan-declaration-confirmation" name="confirmation" data-testid="wan-declaration-confirmation" required>
+        <button type="submit" data-testid="wan-declaration-submit">Retain operator declaration</button>
+    </form>
+    <p>Each organization permits at most 1000 declarations. Identical replay changes nothing.
+        Changed metadata at an existing identity and effective interval is rejected.</p>
+    <a href="{{ url_for('wan_performance.live.replacements', download='declarations') }}" data-testid="wan-declaration-export">Export declared metadata JSON</a>
+    <a href="{{ url_for('wan_performance.live.overview') }}">Return to cached WAN observations</a>
+</section>
+{% endblock %}

@@ -9,6 +9,13 @@ Cached ranking uses the route population before lexical filtering. Retained rank
 Select ascending or descending numeric order. Equal values retain ascending full-identity, hour, and collection-time order.
 The report displays at most twenty rows and separates missing metrics, missing values, and incompatible units.
 Ranking starts no additional acquisition or storage read. It does not establish device quality or complete organization inventory.
+The **Operator declarations and replacement policies** link opens a protected metadata page.
+Supply version-one JSON with `operator-declaration` provenance, a cached full identity, increasing UTC effective bounds, and declared values.
+Capacity uses bit/s. Region and role remain operator text. Type `DECLARE` to retain this metadata.
+Each declaration permits 64 KiB. Each organization permits 1000 declarations.
+Identical replay changes nothing. Changed metadata at an existing identity and effective interval is rejected.
+Export metadata before a restart. The isolated store lasts only for the application process.
+These declarations change neither Mist configuration nor observed metrics.
 It does not claim raw-sample statistics, elapsed coverage, or source equivalence.
 The [replacement contract](../specs/numbered/0/0/1/1/3/3/0/0/4200-wan-parity-recovery/design/contracts/replacements.md) defines calculation rules and evidence limits.
 

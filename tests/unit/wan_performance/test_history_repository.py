@@ -31,6 +31,97 @@ def live_record():
     return replace(OfflinePreviewFactory.build().measurements[0], provenance="live")
 
 
+@pytest.fixture
+def declaration_payload():
+    """Describe independently authored metadata only for an isolated operator-state test."""
+    identity = OfflinePreviewFactory.build().measurements[0].identity
+    return identity, {
+        "version": 1,
+        "provenance": "operator-declaration",
+        "identity": identity.to_dict(),
+        "effective": {"start_utc": "2024-01-01T00:00:00+00:00", "end_utc": "2024-02-01T00:00:00+00:00"},
+        "values": {"capacity_bps": 1000, "region": "Synthetic test region", "role": "Declared test role"},
+    }
+
+
+def test_operator_declarations_replay_export_and_conflict_are_isolated(declaration_payload):
+    """Export declared metadata and reject changes without modifying observed records."""
+    from src.interfaces.wan_performance.integration.history_repository import OperatorDeclarations
+
+    identity, payload = declaration_payload
+    store = OperatorDeclarations()
+    encoded = json.dumps(payload).encode()
+    assert store.accept(encoded, (identity,), "DECLARE") == "Declaration accepted."
+    assert store.accept(encoded, (identity,), "DECLARE") == "Identical declaration preserved."
+    changed = {**payload, "values": {"capacity_bps": 2000}}
+    with pytest.raises(ValueError, match="conflict"):
+        store.accept(json.dumps(changed).encode(), (identity,), "DECLARE")
+    exported = json.loads(store.export(identity.to_dict()["org_id"]))
+    assert exported["declarations"] == [payload] and exported["provenance"] == "operator-declaration"
+    assert json.loads(store.export("foreign"))["declarations"] == []
+
+
+@pytest.mark.parametrize("value", [True, 0, -1, float("inf"), None, "1000"])
+def test_operator_declarations_reject_invalid_capacity_before_state_change(declaration_payload, value):
+    """Reject invalid declared numbers without substituting observed capacity."""
+    from src.interfaces.wan_performance.integration.history_repository import OperatorDeclarations
+
+    identity, payload = declaration_payload
+    store = OperatorDeclarations()
+    payload["values"] = {"capacity_bps": value}
+    with pytest.raises(ValueError, match="capacity"):
+        store.accept(json.dumps(payload).encode(), (identity,), "DECLARE")
+    assert json.loads(store.export(identity.to_dict()["org_id"]))["declarations"] == []
+
+
+@pytest.mark.parametrize("state", ["confirmation", "membership", "empty", "unknown", "naive", "reversed", "control"])
+def test_operator_declarations_reject_unverified_input(declaration_payload, state):
+    """Reject missing membership, malformed bounds, and undeclared or unsafe text."""
+    from src.interfaces.wan_performance.integration.history_repository import OperatorDeclarations
+
+    identity, payload = declaration_payload
+    if state == "empty":
+        payload["values"] = {}
+    if state == "unknown":
+        payload["extra"] = "Unsupported"
+    if state == "naive":
+        payload["effective"]["start_utc"] = "2024-01-01T00:00:00"
+    if state == "reversed":
+        payload["effective"]["end_utc"] = "2023-01-01T00:00:00+00:00"
+    if state == "control":
+        payload["values"] = {"region": "unsafe\ntext"}
+    store = OperatorDeclarations()
+    with pytest.raises(ValueError):
+        store.accept(
+            json.dumps(payload).encode(),
+            () if state == "membership" else (identity,),
+            "declare" if state == "confirmation" else "DECLARE",
+        )
+    assert json.loads(store.export(identity.to_dict()["org_id"]))["declarations"] == []
+
+
+def test_operator_declarations_cap_preserves_identical_replay_and_rejects_append(declaration_payload):
+    """Exercise the exact per-organization cap without silently replacing an existing declaration."""
+    from src.interfaces.wan_performance.integration.history_repository import OperatorDeclarations
+
+    identity, payload = declaration_payload
+    store = OperatorDeclarations()
+    start = datetime(2024, 1, 1, tzinfo=UTC)
+    for offset in range(1000):
+        payload["effective"] = {
+            "start_utc": (start + timedelta(hours=offset)).isoformat(),
+            "end_utc": (start + timedelta(hours=offset + 1)).isoformat(),
+        }
+        store.accept(json.dumps(payload).encode(), (identity,), "DECLARE")
+    assert store.accept(json.dumps(payload).encode(), (identity,), "DECLARE") == "Identical declaration preserved."
+    before = store.export(identity.to_dict()["org_id"])
+    payload["effective"]["end_utc"] = (start + timedelta(hours=1001)).isoformat()
+    with pytest.raises(ValueError, match="1000"):
+        store.accept(json.dumps(payload).encode(), (identity,), "DECLARE")
+    assert store.export(identity.to_dict()["org_id"]) == before
+    assert len(json.loads(before)["declarations"]) == 1000
+
+
 @pytest.fixture(
     params=[
         (datetime(2025, 3, 1, tzinfo=UTC), 9456, 9455),

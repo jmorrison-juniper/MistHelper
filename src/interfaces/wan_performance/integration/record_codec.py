@@ -1,8 +1,10 @@
 """Serialize validated WAN records without losing source identities or provenance."""
 
 import json
-from datetime import datetime
-from typing import Literal, cast
+import logging
+import math
+from datetime import UTC, datetime
+from typing import Any, Literal, cast
 
 from src.interfaces.wan_performance.domain.identity import (
     CircuitIdentity,
@@ -12,9 +14,93 @@ from src.interfaces.wan_performance.domain.identity import (
 )
 from src.interfaces.wan_performance.domain.measurement import (
     HourlyMeasurement,
+    MeasurementIdentity,
     MetricMeasurement,
     SampleMeasurement,
 )
+
+
+class DeclarationCodec:
+    """Validate explicit metadata without changing source observations or network configuration."""
+
+    @classmethod
+    def decode(cls, payload: bytes) -> dict[str, Any]:
+        """Admit a bounded version-one declaration and normalize its effective interval."""
+        logging.getLogger(__name__).info("Validate a bounded WAN metadata declaration.")
+        if len(payload) > 65536:
+            raise ValueError("A declaration must not exceed 64 KiB.")
+        value = json.loads(payload)
+        if not isinstance(value, dict) or set(value) != {"version", "provenance", "identity", "effective", "values"}:
+            raise ValueError("A declaration must contain only its five required fields.")
+        if type(value["version"]) is not int or value["version"] != 1 or value["provenance"] != "operator-declaration":
+            raise ValueError("A declaration requires version 1 and operator-declaration provenance.")
+        identity, interval, values = (
+            cls.identity(value["identity"]),
+            cls.window(value["effective"]),
+            cls.values(value["values"]),
+        )
+        logging.getLogger(__name__).debug("Validated one scoped metadata declaration with %s values.", len(values))
+        return {
+            **value,
+            "identity": identity.to_dict(),
+            "effective": {"start_utc": interval[0].isoformat(), "end_utc": interval[1].isoformat()},
+            "values": values,
+        }
+
+    @staticmethod
+    def identity(value: Any) -> MeasurementIdentity:
+        """Require the complete exact identity shape and preserve every validated source identifier."""
+        if not isinstance(value, dict):
+            raise ValueError("A replacement identity must be an object.")
+        identity = RecordCodec._identity(value)
+        if identity.to_dict() != value:
+            raise ValueError("A replacement identity contains unknown or incomplete fields.")
+        if any(not identifier.isprintable() for identifier in value.values()):
+            raise ValueError("A replacement identity must contain printable identifiers.")
+        return identity
+
+    @staticmethod
+    def window(value: Any) -> tuple[datetime, datetime]:
+        """Require two increasing aware UTC timestamps without inferred duration or sampling coverage."""
+        if not isinstance(value, dict) or set(value) != {"start_utc", "end_utc"}:
+            raise ValueError("An effective interval requires exact start_utc and end_utc fields.")
+        if not all(isinstance(timestamp, str) for timestamp in value.values()):
+            raise ValueError("Effective timestamps must be ISO 8601 strings.")
+        start, end = datetime.fromisoformat(value["start_utc"]), datetime.fromisoformat(value["end_utc"])
+        if any(
+            timestamp.tzinfo is None or timestamp.utcoffset() != UTC.utcoffset(timestamp) for timestamp in (start, end)
+        ):
+            raise ValueError("Effective timestamps must use explicit UTC.")
+        if start >= end:
+            raise ValueError("Effective timestamps must define an increasing interval.")
+        return start, end
+
+    @staticmethod
+    def capacity(value: Any) -> float | int:
+        """Reject boolean, absent, nonpositive, and nonfinite capacity values in bit/s."""
+        if isinstance(value, bool) or not isinstance(value, (float, int)):
+            raise ValueError("Declared capacity must be a finite positive number in bit/s.")
+        try:
+            valid = math.isfinite(value) and value > 0
+        except OverflowError as error:
+            raise ValueError("Declared capacity exceeds the finite numeric range.") from error
+        if not valid:
+            raise ValueError("Declared capacity must be a finite positive number in bit/s.")
+        return value
+
+    @classmethod
+    def values(cls, value: Any) -> dict[str, Any]:
+        """Validate explicitly supplied capacity, region, and role without a guessed taxonomy."""
+        if not isinstance(value, dict) or not value or set(value) - {"capacity_bps", "region", "role"}:
+            raise ValueError("Declare at least one supported metadata value.")
+        result = dict(value)
+        if "capacity_bps" in result:
+            result["capacity_bps"] = cls.capacity(result["capacity_bps"])
+        for name in {"region", "role"} & result.keys():
+            text = result[name]
+            if not isinstance(text, str) or not text.strip() or not text.isprintable() or len(text) > 128:
+                raise ValueError("Declared region and role require 1 through 128 printable characters.")
+        return result
 
 
 class RecordCodec:

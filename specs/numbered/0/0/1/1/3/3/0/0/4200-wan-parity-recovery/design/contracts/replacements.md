@@ -63,6 +63,7 @@ Missing cache coverage and source completeness remain unknown. No ranking contro
 ### Version-one declarations
 
 Accept a version-one object with full identity, UTC effective bounds, declared values, and `operator-declaration` provenance.
+Limit each declaration to 64 KiB. Reject every unsupported field rather than retaining undeclared metadata.
 Require capacity in bit/s to be finite and positive. Region and role remain bounded, printable operator text, not inferred taxonomies.
 Require at least one declared value and an increasing UTC effective interval.
 Require exact `DECLARE` before accepting metadata for an identity in the current cached tenant.

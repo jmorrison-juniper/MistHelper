@@ -126,7 +126,7 @@ These tasks do not replace source-parity acceptance or authorize source executio
 - [X] T062 Add scoped hourly-projection observation statistics and configurable percentage-threshold counts in presentation/inspection/windows.py and the existing live route/template, with hand-calculated unit, missing/overflow, scope, no-extra-read, and browser assertions.
 - [X] T063 Validate thirteen calendar months of independently authored synthetic records through temporary SQLite and mocked Arango in tests/unit/wan_performance/test_history_repository.py, preserving provenance, gaps, exact identity, boundaries, and repeat-write behavior.
 - [x] T064 Implement bounded cached/retained observation ranking in inspection/reports.py and the live view, with exact units, stable identity/time ties, missing counts, and unit/browser tests.
-- [ ] T065 Implement scoped operator-declaration validation, process-lifetime storage, and export in the existing integration and inspection modules, with no network changes.
+- [x] T065 Implement scoped operator-declaration validation, process-lifetime storage, and export in the existing integration and inspection modules, with no network changes.
 - [ ] T066 Implement bounded archive validation, isolated synthetic import/export, and trusted-review atomic live append in the existing integration and inspection modules, with native SQLite and mocked Arango tests.
 
 ## Dependencies and execution order

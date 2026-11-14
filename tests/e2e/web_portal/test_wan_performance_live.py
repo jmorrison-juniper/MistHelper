@@ -1,5 +1,6 @@
 """Exercise the live WAN portal using isolated stores and mocked Mist responses."""
 
+import json
 import re
 import threading
 from collections.abc import Iterator
@@ -88,6 +89,96 @@ def test_unknown_gateway_returns_not_found(client, live_service):
     """Reject arbitrary gateway and site combinations outside the cached org."""
     response = client.get("/wan-performance/live/gateway/unknown?site_id=site-one")
     assert response.status_code == 404
+
+
+@pytest.fixture
+def operator_json(client, live_service):
+    """Supply independently authored declarations only to a temporary application-process store."""
+    from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords
+
+    previous = client.application.extensions.pop("wan_operator_declarations", None)
+    identity = SnapshotRecords.build(live_service.store.cached.return_value)[0].identity.to_dict()
+    payload = {
+        "version": 1,
+        "provenance": "operator-declaration",
+        "identity": identity,
+        "effective": {"start_utc": "2024-01-01T00:00:00+00:00", "end_utc": "2024-02-01T00:00:00+00:00"},
+        "values": {"capacity_bps": 1000, "region": "Synthetic operator test region"},
+    }
+    try:
+        yield json.dumps(payload)
+    finally:
+        client.application.extensions.pop("wan_operator_declarations", None)
+        if previous is not None:
+            client.application.extensions["wan_operator_declarations"] = previous
+
+
+def test_operator_declaration_route_exports_without_network_or_history(client, live_service, operator_json):
+    """Accept and export explicit metadata without treating it as network observations."""
+    path = "/wan-performance/live/replacements"
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', client.get(path).get_data(as_text=True))[0]
+    response = client.post(path, data={"csrf_token": token, "declaration": operator_json, "confirmation": "DECLARE"})
+    assert response.status_code == 200 and "Declaration accepted." in response.get_data(as_text=True)
+    replay = client.post(path, data={"csrf_token": token, "declaration": operator_json, "confirmation": "DECLARE"})
+    assert "Identical declaration preserved." in replay.get_data(as_text=True)
+    exported = client.get(path + "?download=declarations")
+    assert exported.status_code == 200
+    assert exported.json["declarations"] == [json.loads(operator_json)]
+    assert exported.json["lifetime"] == "process"
+    live_service.store.acquire.assert_not_called()
+    live_service.history.upsert.assert_not_called()
+    live_service.history.read.assert_not_called()
+    live_service.session.assert_not_called()
+
+
+def test_operator_declaration_route_requires_confirmation_and_cached_membership(client, live_service, operator_json):
+    """Reject a missing typed word and a foreign identity without state admission."""
+    path = "/wan-performance/live/replacements"
+    token = re.findall(r'name="csrf_token" value="([^"]+)"', client.get(path).get_data(as_text=True))[0]
+    assert (
+        client.post(
+            path, data={"csrf_token": token, "declaration": operator_json, "confirmation": "declare"}
+        ).status_code
+        == 400
+    )
+    payload = json.loads(operator_json)
+    payload["identity"]["org_id"] = "foreign"
+    assert (
+        client.post(
+            path, data={"csrf_token": token, "declaration": json.dumps(payload), "confirmation": "DECLARE"}
+        ).status_code
+        == 400
+    )
+    assert client.get(path + "?download=declarations").json["declarations"] == []
+    live_service.history.upsert.assert_not_called()
+
+
+@pytest.mark.parametrize("viewport", [(1440, 900), (1280, 800), (390, 844)])
+def test_browser_operator_declaration_and_export(
+    page: Page,
+    live_browser_url: str,
+    operator_json,
+    viewport,
+    wan_browser_artifacts: Path,
+    live_service,
+):
+    """Use actual declaration controls and download while retaining isolated before and after evidence."""
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.goto(live_browser_url + "/wan-performance/live/replacements")
+    expect(page.get_by_test_id("wan-replacement-lifetime")).to_contain_text("A restart removes declarations")
+    page.screenshot(path=str(wan_browser_artifacts / f"operator-declaration-before-{viewport[0]}.png"), full_page=True)
+    page.get_by_test_id("wan-declaration-json").fill(operator_json)
+    page.get_by_test_id("wan-declaration-confirmation").fill("DECLARE")
+    page.get_by_test_id("wan-declaration-submit").click()
+    expect(page.get_by_test_id("wan-replacement-result")).to_have_text("Declaration accepted.")
+    with page.expect_download() as download:
+        page.get_by_test_id("wan-declaration-export").click()
+    artifact = wan_browser_artifacts / f"operator-declaration-{viewport[0]}.json"
+    download.value.save_as(str(artifact))
+    assert json.loads(artifact.read_text())["declarations"] == [json.loads(operator_json)]
+    page.screenshot(path=str(wan_browser_artifacts / f"operator-declaration-after-{viewport[0]}.png"), full_page=True)
+    live_service.history.upsert.assert_not_called()
+    live_service.session.assert_not_called()
 
 
 @pytest.mark.parametrize(
