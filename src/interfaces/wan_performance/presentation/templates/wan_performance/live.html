@@ -194,6 +194,38 @@
             <dt>{{ name }}</dt><dd class="text-break">{{ value }}</dd>
         {% endfor %}</dl>
         {% endif %}
+        <section data-testid="wan-retained-plots" aria-label="Discrete retained projection plots">
+            <p>Points do not identify source metric sample times. Each point belongs to its labeled UTC hour bucket.
+                Missing values and hours have no points. No line implies continuous measurement.
+                The table preserves exact values, collection times, and missing reasons.</p>
+            {% for plot in plots %}
+            {% set values = plot.points|map(attribute=3)|list %}
+            <figure class="wan-panel">
+                <figcaption class="text-break">{{ plot.name }} ({{ plot.unit }}).
+                    Plot extent: {{ values|min }} to {{ values|max }}.
+                    Measurement completeness remains unknown.</figcaption>
+                <svg class="wan-chart" viewBox="0 0 640 230" role="img"
+                     style="--wan-series-color: var(--bs-info, #0dcaf0);"
+                     data-testid="wan-retained-plot"
+                     aria-label="{{ plot.name }}: {{ plot.unit }}. Discrete retained hourly projections.">
+                    <path class="wan-chart-gridline" d="M32 35H620 M32 100H620 M32 165H620"/>
+                    <text class="wan-chart-axis-label" x="620" y="30">{{ values|max }}</text>
+                    <text class="wan-chart-axis-label" x="620" y="182">{{ values|min }}</text>
+                    {% for x_position, y_position, hour, value, collected in plot.points %}
+                    <circle class="wan-chart-point" cx="{{ x_position }}" cy="{{ y_position }}" r="4"
+                            data-testid="wan-retained-point" data-hour="{{ hour }}" data-value="{{ value }}">
+                        <title>{{ hour }} UTC bucket: {{ value }} {{ plot.unit }}. Collected at {{ collected }}.</title>
+                    </circle>
+                    {% endfor %}
+                    <text class="wan-chart-label" x="95" y="214">Window start UTC</text>
+                    <text class="wan-chart-label" x="555" y="214">Window end UTC</text>
+                </svg>
+            </figure>
+            {% else %}
+            <p data-testid="wan-retained-plots-empty">No present metric values are available to plot.
+                This does not mean zero or healthy service.</p>
+            {% endfor %}
+        </section>
         <div class="table-responsive"><table class="table" data-testid="wan-retained-records">
             <thead><tr><th>Observation hour UTC</th><th>Collected at UTC</th><th>Provenance</th><th>Retained values</th></tr></thead>
             <tbody>{% for record in retained.records %}<tr>

@@ -1,6 +1,69 @@
 # Source comparison and end-to-end contract
 
+## Authorized original runtime examination
+
+T054 executed the pinned original at `2d1c2199fa1e31c129ef1e051c5389349a207785`.
+The later user grant permits isolated execution and internal captures, not protected implementation or asset imports.
+It supersedes earlier unexecuted or rights-blocked observations below.
+Original tests and independent operator scenarios remain separate.
+The full original suite passed 137 tests with five warnings and no skips.
+The final read-only source/harness run took 8.51 seconds.
+No live Mist, Redis, Snowflake, production launcher, or production store was used.
+
+The review recorded 101 observation/action entries across three browser passes, not 101 successful assertions.
+The first 60-entry pass includes a fixture-shape HTTP 500 and three driver/control failures.
+The next 22 entries correct SLE setup and region clicking and inspect chart controls.
+The last 19 entries use populated independent SLE data, table controls, keyboard focus, and actual chart state changes.
+The final pass was repeated with a read-only harness.
+Private captures use 1280x900, 1440x1100, and 390x844 viewports.
+Public theme CSS was served locally. External browser requests and Google Fonts were blocked.
+This is not a pixel-equivalence baseline or complete production integration proof.
+
+| Record | Source rows | Executed action and result | Limit |
+| --- | --- | --- | --- |
+| R01 | P01-P04, P38, P42, P48 | Overview, gateway, encoded port, and peer pages rendered. Gateway/port/peer links and browser history worked. | Source identity mapping and every live field are not accepted. |
+| R02 | P29-P32 | All four ranges were selected on overview, port, and peer. Auto-refresh toggled. A coordinate click selected a region and exposed its breadcrumb. | Selecting a label does not prove complete range data. The site dropdown exposed no choices with the production-shaped `DimSite` collection. |
+| R03 | P25, P27, P35, P38 | Gateway ports advanced to another page. SLE filtering committed with Enter. Three CSV downloads contained 10 congestion rows, seven alerts, and one degraded site. | Gateway sort controls were absent. Exported fields and ranking are source observations, not accepted SDK semantics. |
+| R04 | P33-P34 | Corrected independent SLE data rendered summary/histogram charts, two classifier entries, seven gateways, seven interfaces, and one peer. Return navigation worked. | Source minute/percentage labels and classifier calculations do not establish API units or valid formulas. |
+| R05 | P27, P33-P34 | Gateway/interface SLE tables changed lexical order and advanced from five rows to two. The peer filter removed its row. | Gateway/interface inputs are page controls, not column filters. A one-row peer table cannot prove meaningful sorting. |
+| R06 | P28, P39, P43, P45 | Overview, gateway, port, and peer chart inventories were captured. Port zoom changed axes, reset restored them, pan changed mode, and a box drag changed bounds. PNG download succeeded. | Legend clicks hit the toolbar. Five tested legend coordinates remained covered. Share, clipboard, and external Plotly navigation were not activated. |
+| R07 | P21-P23, P40, P45 | Missing detail and partial-peer cases rendered unavailable text alongside zero-shaped fields or gauges. Empty/loading scenarios showed loading text. | These defaults are not valid destination measurement semantics. The cache-metadata stale scenario did not establish a complete source stale-state contract. |
+| R08 | P20, P28, P49-P50 | Desktop/narrow captures, 120 Tab presses across four pages, original test results, and destination browser assertions were recorded separately. | Narrow overview/gateway/port captures overflowed. Peer did not. Focus traversal is not proof that every chart is keyboard-operable. |
+
+Evidence root: `test-artifacts/wan-performance/original-review/runtime/`.
+The original logs are `original-tests-initial.log`, `original-tests-final-isolation.log`, and `original-tests-readonly-harness.log`.
+Browser records are `browser-observations-first-cycle.json`, `browser-followup.json`, and `browser-remaining.json`.
+Screenshots, three CSVs, and `original-native-plot-download.png` remain private ignored evidence.
+The initial SLE 500 came from the independent harness's incorrect summary shape, not an established application defect.
+An SVG locator could not click the region through Plotly's overlay. Real pointer coordinates resolved that driver limitation.
+The final harness corrected its impacted-table response keys before populated table examination.
+None of these setup corrections changed the original checkout or entered the product.
+No source implementation, fixture, screenshot, or protected asset entered tracked destination files.
+
+### Actionable remaining work
+
+T012/T032/T036 still include buildable destination interaction work.
+Implement independent zoom/reset, visible point inspection, and optional PNG controls over verified retained projections.
+Use failing keyboard/browser tests and preserve exact gaps, scope, units, and accessible tables.
+Add independently labeled sorting and display pagination to bounded raw SLE results without guessing API pagination or score ordering.
+These items need destination design and implementation, not a new rights grant or live service.
+Do not classify them as external blockers.
+
+Region aggregates, role/failover ranking, SLE score meanings, and source-equivalent quality statistics still need exact contracts.
+Real historical inventory, 13-month history, retention/capacity/completeness, and backfill still lack proof.
+Live production dependency testing and hosted/owner acceptance remain outside this local assignment.
+Keep issue #4200 open and the publication hold unchanged.
+
 ## Latest independent destination coverage
+
+T055 adds independently designed discrete plots to the retained views.
+`test_retained_plots_preserve_gaps_zero_missing_values_and_unit_boundaries` verifies bucket offsets, measured zero, absent metrics, and exact unit groups.
+Constant and extreme finite values have separate regression cases.
+Unavailable or entirely missing values produce no fabricated points.
+`test_retained_plot_renders_present_values_without_missing_value_zeros` proves the existing one-read scope and no raw reads or writes.
+The three-viewport retained-window browser journey verifies visible plots, exact values, absent connecting lines, and responsive layout.
+The plot uses collection metadata and UTC bucket positions, not invented source metric timestamps.
+This is a destination-only projection view, not source chart equivalence.
 
 T052 adds exact cached-site navigation, not a complete site catalog or source-equivalent selector.
 `test_cached_site_csv_cannot_include_other_cached_sites` verifies selected-site export scope.

@@ -122,6 +122,22 @@ This record does not claim that the complete Spec Kit command pipeline ran.
 
 ## Renewed parity investigation
 
+The next bounded destination increment adds independent discrete plots to the existing retained-window view.
+It changes `presentation/inspection/windows.py`, `presentation/live_routes.py`, the existing live template, and their existing tests.
+The existing feature records, operator guide, and PR fragment record the behavior and evidence.
+Reuse the destination SVG chart classes without importing synthetic preview types into live views.
+Do not connect points across gaps or merge different units.
+Use the existing single scoped history read without collection, raw-sample reads, writes, or new aggregates.
+
+The later direct authorization permits isolated original execution and internal captures, not proprietary code or fixture copying.
+Use a pinned source archive and independently seeded application provider in an ignored review directory.
+Verify absent network egress, absent credential variables, read-only source, and bounded resources before every source process.
+Use only a named temporary test container in the project Compose group.
+Do not publish container ports or mount production data, credentials, or engine sockets.
+If browser access is needed, use an independently authored loopback HTTP relay to the isolated process.
+The relay must not provide a general outbound proxy or execute instructions from source responses.
+Record original unit-test results separately from independently seeded operator exploration and destination parity tests.
+
 The 2026-11-14 request adds an original-application test cycle and complete operator exploration before further parity acceptance.
 The source package explicitly declares a proprietary license. Repository administration does not establish copying or reproduction rights.
 Record the rights grant before source execution, fixture imports, or protected captures.

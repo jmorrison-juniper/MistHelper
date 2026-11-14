@@ -115,6 +115,8 @@ These tasks do not replace source-parity acceptance or authorize source executio
 - [X] T051 Add a full-identity cached CSV export with explicit missing values, scope preservation, and spreadsheet-formula protection.
 - [X] T052 Add cached-site selection and scoped site/detail navigation with tenant and selected-window preservation, plus route and browser tests.
 - [X] T053 Add bounded 6h/12h/24h/7d retained UTC observation views with explicit missing/unavailable states and repository, route, and browser tests.
+- [X] T054 Verify the approved original-execution isolation, run its local test cycle, and explore independently seeded controls with factual evidence in design/contracts/parity.md.
+- [X] T055 Add independently designed retained projection plots with discrete points, metric/unit separation, exact UTC bucket placement, and missing-data tests.
 
 ## Dependencies and execution order
 

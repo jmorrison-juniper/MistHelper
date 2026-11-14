@@ -40,7 +40,8 @@ Single-chart detail views use the available content width.
 Migrated history summaries stay collapsed until the operator opens them.
 
 These images do not compare the source interface.
-Source rights and comparison evidence remain unverified, so these images do not prove visual parity.
+The user later authorized isolated source execution and internal captures.
+Those separate private captures do not establish visual parity or authorize importing protected assets.
 
 | Page | Destination image size | Visible destination content |
 | - | - | - |
@@ -55,7 +56,7 @@ The sample data does not establish live connectivity, availability, or congestio
 The independent implementation uses behavior reviewed at source commit
 `2d1c2199fa1e31c129ef1e051c5389349a207785`.
 The relevant source files are `docs/screens.md`, `docs/operations.md`, and `src/aggregators/time_aggregator.py`.
-No source code, fixtures, screenshots, or other assets were copied.
+No source implementation, fixtures, screenshots, or protected assets entered the destination product.
 
 ## VPN snapshot validation
 
@@ -71,6 +72,21 @@ Summaries use the documented score unit when one exists. Incompatible measured u
 This repair does not rewrite retained records.
 The validator does not infer an hourly interval, coverage, utilization, or availability.
 This boundary makes no API call and is not connected to the preview.
+
+## Retained projection plots
+
+Select one detail identity and a retained UTC window to view discrete observation plots.
+Each plot separates one metric and unit.
+Points use the actual UTC hour-bucket position, so missing hours remain gaps.
+Missing metric values have no points. Measured zero remains zero.
+Constant values stay visible without an invented zero baseline.
+The plot shows its numeric extent and does not connect or interpolate points.
+Each point identifies the hour bucket, value, unit, and collection time.
+The table preserves exact values and missing reasons.
+Bucket times do not identify source metric sample times.
+Measurement completeness and elapsed coverage remain unknown.
+These plots reuse the existing single scoped history read without collection, raw-sample reads, or writes.
+They do not provide source-equivalent zoom, pan, legends, PNG export, aggregation, or backfill.
 
 ## Cached table controls
 

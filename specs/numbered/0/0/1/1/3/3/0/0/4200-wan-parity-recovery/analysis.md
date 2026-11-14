@@ -1,6 +1,84 @@
 # Recovery coverage and execution status
 
-## Latest independent destination implementation
+## Latest authorized examination and independent plots
+
+T054 and T055 are complete as bounded local increments, not full source acceptance.
+The ledger has 32 completed tasks of 55. The original audit remains 24 completed tasks of 47.
+The user authorized isolated original execution and internal captures after the earlier rights investigation.
+The proprietary declaration still prevents importing protected implementation, fixtures, or assets into the product.
+Earlier no-execution and rights-blocked statements below are historical observations, superseded by this section.
+
+The original pin remains `2d1c2199fa1e31c129ef1e051c5389349a207785`.
+Its full suite passed 137 tests with five warnings and no skips.
+The final source/harness read-only run took 8.51 seconds.
+The first attempt had six missing-dependency collection errors, resolved only in the private Linux target.
+The final process checked denied source/harness writes, zero inherited credential variables, blocked IPv4/IPv6 egress, and zero capabilities before imports.
+The container had no network or published ports and used finite CPU, memory, process, and temporary-file limits.
+The browser used a restricted host loopback relay to the real Flask test client.
+No production launcher, live Mist call, production store, or external runtime service was used.
+The original unit tests used their own isolated vectors. Operator exploration used independently authored data.
+
+The [runtime comparison record](design/contracts/parity.md#authorized-original-runtime-examination) maps 101 observation/action records to P rows.
+Those are not 101 successful assertions.
+It distinguishes fixture errors, driver limitations, missing controls, unavailable contracts, and verified interactions.
+The final populated SLE/chart pass also ran with the read-only harness.
+Private evidence remains under `test-artifacts/wan-performance/original-review/runtime/`.
+No protected implementation, fixture, screenshot, or asset entered the tracked destination.
+
+The destination now plots present retained projections as discrete points.
+Metric/unit groups stay separate. Missing values have no points, measured zero remains zero, and actual UTC bucket gaps remain visible.
+Constant and extreme finite values retain valid plot positions.
+Collection metadata stays separate from hour buckets and source metric timestamps.
+The existing exact history read supplies the plots without raw reads, writes, aggregation, interpolation, or collection.
+All six new regression cases failed before implementation and then passed.
+The full focused WAN/browser/SDK suite passed 453 tests, adding six cases and removing none.
+After final screenshot assertions, all three responsive retained-window journeys passed again.
+
+Current buildable work still includes independent plot zoom/reset, visible point inspection, PNG export, and raw SLE display controls.
+These belong to T012/T032/T036 and do not require new source rights or production access.
+The actionable comparison plan separates them from unsupported source formulas and historical acceptance.
+Source-equivalent aggregation, role/ranking rules, SLE score meanings, 13-month history, retention/capacity/completeness, and backfill remain unverified.
+Hosted checks, PR changes, readiness changes, and merge remain outside the local assignment.
+
+### Current validation
+
+| Command | Actual result |
+| --- | --- |
+| `CAPTURE_SECRET_KEY=synthetic-review-only rtk bypass podman compose --env-file /dev/null -p misthelper -f compose.yml -f test-artifacts/wan-performance/original-review/compose.yml --profile test run --rm --no-deps --name misthelper-tmp-issue4200-original wan-original-review tests` | 137 passed, five warnings, no skips. Final read-only source/harness boundaries passed before imports. |
+| `rtk .venv/bin/python test-artifacts/wan-performance/original-review/runtime/explore.py` | First 60 observation/action records, including the separately classified fixture/driver/control failures. |
+| `rtk .venv/bin/python test-artifacts/wan-performance/original-review/runtime/followup.py` | 22 records. Corrected SLE and region actions worked. Toolbar blocked the legend locator. |
+| `rtk .venv/bin/python test-artifacts/wan-performance/original-review/runtime/remaining.py` | 19 records, including populated SLE sorting/pagination/filtering and actual zoom/reset/pan state changes. Repeated with a read-only harness. |
+| `rtk .venv/bin/python -m pytest -q tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_offline.py tests/e2e/web_portal/test_wan_performance_live.py tests/integration/test_mistapi_sdk_compatibility.py --tb=short --show-capture=no` | 453 passed, two existing plugin warnings. SDK checked 587 signatures, with 10 unresolved sites, 364 unverifiable signatures, and zero known failures. |
+| `rtk .venv/bin/python -m pytest -q tests/e2e/web_portal/test_wan_performance_live.py -k cached_site_and_retained --tb=short --show-capture=no` | Three passed with final plot-visibility and screenshot assertions. |
+| `rtk .venv/bin/python -m ruff check src/interfaces/wan_performance tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_live.py` | All checks passed. |
+| `rtk .venv/bin/python -m black --check src/interfaces/wan_performance tests/unit/wan_performance/test_calendar_summaries.py tests/e2e/web_portal/test_wan_performance_live.py` | 31 files unchanged. |
+| `rtk .venv/bin/python -m mypy src/interfaces/wan_performance --config-file pyproject.toml` | Success, 29 source files. |
+| `rtk .venv/bin/python -m compileall -q src/interfaces/wan_performance` | Exit zero. |
+| `rtk .venv/bin/bandit -c pyproject.toml -r src/interfaces/wan_performance -q` | Exit zero, no finding. |
+| `rtk .venv/bin/radon cc src/interfaces/wan_performance -j \| rtk .venv/bin/complexity-gate --max 10` | All functions within the threshold. |
+
+The feature-specific PowerShell prerequisite passed with `-Json -RequireSpec -RequireTasks -IncludeTasks`.
+It returned this feature directory and did not change `.specify/feature.json`.
+The read-only consistency review mapped all 24 FR/SC entries and all 55 task IDs.
+It found stale rights/runtime evidence, corrected in this continuation, and no new unmapped plotting requirement.
+Optional analysis/implementation commit hooks were not executed. No enabled mandatory hook applied.
+The reviewer-owned checklist remains unchanged, with 10 checked and four unchecked items.
+This continuation does not mark its unresolved acceptance items complete.
+
+The structure guard passed 11 tests and examined 795 children, 262 structural directories, and 104 feature records.
+The isolated task-format audit examined 55 markers: 32 checked, 23 unchecked, and zero malformed.
+The eight changed Markdown files passed STE at scores from 80 through 97.
+Their link scan found zero broken links.
+The symbol comparisons lost no names.
+They report intentional additions of `Decimal` and `RetainedPlot` in `windows.py`, plus the `RetainedPlot` import in `live_routes.py`.
+Each symbol comparison returns one for those additions, not a lost declaration.
+The new tests add 27 browser-module lines and 89 unit-module lines without deleting existing tests.
+The production diff removes one import line only, replacing it with a multiline import.
+Protected paths remain identical to merge base `2a6a5844698aeb180fea353e0243034890774565`.
+The original branch and source checkout remain unchanged.
+No push, hosted run, PR metadata change, readiness change, or merge occurred.
+
+## Earlier independent destination implementation
 
 T052-T053 add independently defined cached-site navigation and retained UTC observation views.
 The task ledger now has 30 completed tasks of 53.
@@ -390,10 +468,10 @@ The 47 task IDs below were checked against current code, tests, and evidence.
 | T030 | Blocked E7 | Both stores pass append-only replay tests. No retention or backfill policy is approved. |
 | T031 | Complete | The audience table maps executive, engineering, and SLE goals to selectors or explicit gaps. T049-T051 add independent SLE, cached-table, and export controls without claiming audience parity. |
 | T032 | Blocked E1/E3/E6 | Independent cached filters and CSV export now exist under T050-T051. Source-specific audience dimensions, controls, export formats, and SLE score mappings remain unverified. |
-| T033 | Complete | `design/research.md` records absent written rights and permits descriptive static comparison only. Runtime and visual parity remain blocked. |
-| T034 | Complete | The descriptive inventory covers hierarchy, type, colors, charts, tables, and responsive behavior. Source captures remain unopened and visual approval remains blocked by E2. |
+| T033 | Complete | `design/research.md` records the later execution/internal-capture authorization and its limits. Protected implementation and asset imports remain unauthorized. |
+| T034 | Complete | The inventory now includes authorized private runtime captures and interaction records. Complete source visual acceptance remains unreviewed. |
 | T035 | Complete | Offline browser tests check stable selectors at 1440x1100, 1280x800, and 390x844, plus horizontal overflow, sibling overlap, Tab focus, and Enter activation. |
-| T036 | Blocked E2 | No written rights or approved runtime capture method exists for protected visual comparison. |
+| T036 | Open acceptance | Authorized captures exist. Independent plot controls and reviewed visual adaptations remain buildable. Complete visual acceptance is not established. |
 | T037 | Complete | `design/contracts/parity.md` records worker and cache bounds, Redis ownership, retries, stale states, and matching local tests. |
 | T038 | Complete | `test_background_refresh.py`, `test_refresh_store.py`, and `test_request_admission.py` cover limits, expiry, repeated requests, and outages. |
 | T039 | Complete | Added concurrent-owner, retry, and lost-lease regressions. All pass. No refresh-policy defect was reproduced, so no production code change was justified. |
@@ -434,7 +512,7 @@ An explicit test gap means the behavior remains unaccepted.
 | P17 | T031-T032, T049-T051 | Audience goal matrix and independent SLE, cached-table, and CSV tests | Independent controls exist. Source-specific audience behavior remains unverified. |
 | P18 | T003, T031-T032, T051 | `wan-table-export` and scoped cached CSV tests | Full filtered cached export passes. Source export fields, format, and audience equivalence remain unverified. |
 | P19 | T007-T012, T052 | Core journeys, keyboard navigation, and cached-site browser tests | Organization/site/gateway/port/peer navigation passes independently. Source navigation equivalence and region routing remain unverified. |
-| P20 | T034-T036 | Responsive browser tests and rights record | Destination layout passes. Source visual approval remains blocked. |
+| P20 | T034-T036, T054 | Responsive destination assertions and private source captures | Destination layout passes. Source captures include narrow overflow. No pixel baseline or complete visual approval exists. |
 | P21 | T007, T011 | Offline overview status, KPI, and route tests | Synthetic population only. |
 | P22 | T007, T011 | Live snapshot route tests | Current states pass. Historical failover remains unverified. |
 | P23 | T007, T011, T049 | Offline alert selectors and independent SLE request/browser tests | Catalog and raw-impact handling pass with mocked data. Source alert rules and SLE score normalization remain unknown. |
@@ -453,18 +531,18 @@ An explicit test gap means the behavior remains unaccepted.
 | P36 | T008, T011 | Gateway live and offline route tests | Offline identity is synthetic. Live field units remain unverified. |
 | P37 | T008 | Gateway selector and explicit field-gap record | CPU, memory, and uptime have no destination assertion. |
 | P38 | T008, T011 | Gateway port/peer table and link tests | Synthetic navigation passes. Full identity parity remains open. |
-| P39 | T008, T011 | Gateway chart selectors in offline browser tests | Source axes, units, and coverage remain unknown. |
+| P39 | T008, T011, T054-T055 | Private source chart inventory and discrete retained-detail plot tests | Independent gateway projections are visible. Source metric equivalence and complete 24-hour coverage remain unverified. |
 | P40 | T009, T011 | Port KPI and gauge assertions | Synthetic status and utilization only. |
 | P41 | T009, T011 | Current-statistic and configuration selectors | Field mapping and units remain unverified. |
 | P42 | T009, T011 | Encoded-slash route test | Offline encoded route behavior passes. |
-| P43 | T009, T023 | Selected-port history and SDK compatibility tests | Source historical method is not portable to the installed SDK. |
+| P43 | T009, T023, T054-T055 | Selected-port history, discrete retained plots, private chart actions, and SDK tests | Verified retained values have independent plots. Source historical methods and complete rate history remain unsupported. |
 | P44 | T009 | Packet and error-counter selectors | Synthetic counters only. No source counter semantics are accepted. |
-| P45 | T010, T023-T024, T048 | Peer scalar tests plus retained-MOS SQLite, calendar, and route regressions | Scalar units, MOS bounds, and missing-unit compatibility pass. Source history and MOS quality categories remain unknown. |
+| P45 | T010, T023-T024, T048, T055 | Peer scalar, retained-MOS SQLite, calendar, route, and unit-separated plot regressions | Scalar units, MOS bounds, missing-unit compatibility, and independent projection plots pass. Source history and MOS quality categories remain unknown. |
 | P46 | T010 | Peer detail selector and explicit contract gap | Live field mapping remains unverified. |
 | P47 | T010 | Peer statistics selector and explicit contract gap | Live uptime and counter semantics remain unknown. |
 | P48 | T010, T040 | Scoped live peer route and path-key tests | MistHelper identity is tested. Source identity equivalence remains open. |
-| P49 | T003, T011 | Source test names and destination independent route tests | Source tests were inspected, not executed. No fixtures were copied. |
-| P50 | T003, T019-T022 | Source test names and destination live test module | Source tests were inspected, not executed. Ranking parity remains blocked. |
+| P49 | T003, T011, T054 | Complete isolated original suite and independent destination route tests | All 137 original tests pass. Original fixtures did not seed operator exploration or enter the product. |
+| P50 | T003, T019-T022, T054 | Complete isolated original suite and destination live tests | Original tests pass, but do not validate installed SDK portability, real source data, or ranking parity. |
 
 | Requirement | Task | Local test or evidence | Decision |
 | --- | --- | --- | --- |
@@ -482,7 +560,7 @@ An explicit test gap means the behavior remains unaccepted.
 | FR-012 | T042, T045 | Changed-file inventory and offline tests | No extra service, port, or credential store was added. |
 | FR-013 | T005-T006, T040-T042 | Synthetic isolation and provenance tests | Offline data remains separate from live collection. |
 | FR-014 | T005, T038-T042, T048-T049, T053 | Missing-unit, empty, stale, denied, store, session, SLE, and retained-window failure tests | Missing buckets and values remain explicit. Failed or unsupported history never appears as healthy empty data. |
-| FR-015 | T033-T036, T041, T043 | Descriptive comparison, browser evidence, and rights record | Runtime comparison remains blocked by missing rights. |
+| FR-015 | T033-T036, T041, T043, T054-T055 | Authorized private source captures, original test logs, mapped observations, and independent plot assertions | Runtime evidence now exists. Complete visual/interaction review remains open without a false rights blocker. |
 | FR-016 | T043-T047 | Exact local candidate and check records | Hosted and owner acceptance remain pending. |
 | SC-001 | T003, T007-T010, T043 | P01-P50 classifications | All inventory rows have a decision, including explicit unknowns. |
 | SC-002 | T011-T042, T043 | Focused tests and blocked-row decisions | Full source behavior is not complete. |

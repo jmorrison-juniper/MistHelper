@@ -3,6 +3,7 @@
 import re
 import threading
 from collections.abc import Iterator
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -238,6 +239,22 @@ def test_retained_window_does_not_change_cached_csv_scope(client, live_service):
     live_service.store.acquire.assert_not_called()
 
 
+def test_retained_plot_renders_present_values_without_missing_value_zeros(client, live_service, retained_history):
+    """Show an accessible discrete plot from the same exact scoped repository read."""
+    response = client.get("/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=6h")
+    text = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'aria-label="rx_bps: bit/s. Discrete retained hourly projections."' in text
+    assert text.count('data-testid="wan-retained-point"') == 1
+    assert 'data-value="40"' in text
+    assert "Points do not identify source metric sample times" in text
+    assert "No present metric values are available to plot" not in text
+    retained_history.read.assert_called_once()
+    retained_history.read_samples.assert_not_called()
+    retained_history.upsert.assert_not_called()
+    live_service.store.acquire.assert_not_called()
+
+
 def test_cached_site_csv_cannot_include_other_cached_sites(client, live_service):
     """Preserve selected-site scope across the separate cached export."""
     import csv
@@ -278,6 +295,13 @@ def test_browser_cached_site_and_retained_window_journey(page: Page, live_browse
         page.get_by_test_id("wan-retained-apply").click()
         expect(page.get_by_test_id("wan-retained-records")).to_contain_text("rx_bps: 40 bit/s")
         expect(page.get_by_test_id("wan-retained-coverage")).to_contain_text("Measurement completeness remains unknown")
+        expect(page.get_by_test_id("wan-retained-plot")).to_have_attribute(
+            "aria-label", "rx_bps: bit/s. Discrete retained hourly projections."
+        )
+        expect(page.get_by_test_id("wan-retained-plot")).to_be_visible()
+        expect(page.get_by_test_id("wan-retained-point")).to_have_count(1)
+        expect(page.get_by_test_id("wan-retained-point")).to_have_attribute("data-value", "40")
+        expect(page.get_by_test_id("wan-retained-plot").locator("polyline")).to_have_count(0)
     page.get_by_test_id("wan-live-port-link").first.click()
     expect(page.get_by_test_id("wan-live-port")).to_be_visible()
     expect(page.get_by_test_id("wan-retained-selection")).to_have_value("7d")
@@ -289,6 +313,9 @@ def test_browser_cached_site_and_retained_window_journey(page: Page, live_browse
         "Array.from(document.querySelectorAll('dd'))"
         ".filter(element => element.scrollWidth > element.clientWidth).map(element => element.textContent)"
     )
+    evidence_directory = Path(__file__).resolve().parents[3] / "test-artifacts" / "wan-performance"
+    evidence_directory.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(evidence_directory / f"retained-{viewport[0]}.png"), full_page=True)
     reads = retained_history.read.call_count
     page.get_by_test_id("wan-live-back-link").click()
     expect(page.get_by_test_id("wan-retained-unavailable")).to_contain_text(

@@ -3,6 +3,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from flask import abort, request
 
@@ -93,3 +94,52 @@ class RetainedWindow:
     def missing_hours(self) -> int | None:
         """Report absent retained hour keys, not unknown metric or elapsed duration."""
         return None if self.error else self.window.expected_hours - len(self.records)
+
+
+@dataclass(frozen=True)
+class RetainedPlot:
+    """Keep independently positioned points separate by retained metric and unit."""
+
+    name: str
+    unit: str
+    points: tuple[tuple[float, float, str, float | int, str], ...]
+
+    @classmethod
+    def build(cls, retained: RetainedWindow | None) -> tuple[RetainedPlot, ...]:
+        """Plot present projections without filling gaps or changing stored values."""
+        if retained is None or retained.error or not retained.records:
+            return ()
+        logger.info("Build discrete retained WAN observation plots.")
+        groups: dict[tuple[str, str], list[tuple[HourlyMeasurement, float | int]]] = {}
+        for record in retained.records:
+            for name, metric in record.metrics.items():
+                if metric.value is not None:
+                    groups.setdefault((name, metric.unit), []).append((record, metric.value))
+        plots = tuple(
+            cls(name, unit, cls._coordinates(records, retained.window))
+            for (name, unit), records in sorted(groups.items())
+        )
+        logger.debug(
+            "Built %s retained plots with %s present points.", len(plots), sum(len(plot.points) for plot in plots)
+        )
+        return plots
+
+    @staticmethod
+    def _coordinates(
+        records: list[tuple[HourlyMeasurement, float | int]], window: ObservationWindow
+    ) -> tuple[tuple[float, float, str, float | int, str], ...]:
+        """Use UTC bucket offsets and finite visual bounds, including extreme values."""
+        values = tuple(Decimal(str(value)) for _, value in records)
+        lower = min(values)
+        span = max(values) - lower
+        seconds = (window.end - window.start).total_seconds()
+        return tuple(
+            (
+                32 + (record.hour_start_utc - window.start).total_seconds() * 588 / seconds,
+                165 - 130 * float((Decimal(str(value)) - lower) / span) if span else 100,
+                record.hour_start_utc.isoformat(),
+                value,
+                record.collected_at_utc.isoformat(),
+            )
+            for record, value in records
+        )

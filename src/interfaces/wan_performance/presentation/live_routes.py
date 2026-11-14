@@ -27,7 +27,11 @@ from src.interfaces.wan_performance.integration.history_repository import Histor
 from src.interfaces.wan_performance.integration.refresh_store import RefreshStore
 from src.interfaces.wan_performance.presentation.inspection.sle_routes import SlePages
 from src.interfaces.wan_performance.presentation.inspection.table import RecordTable, TableOptions
-from src.interfaces.wan_performance.presentation.inspection.windows import ObservationWindow, RetainedWindow
+from src.interfaces.wan_performance.presentation.inspection.windows import (
+    ObservationWindow,
+    RetainedPlot,
+    RetainedWindow,
+)
 
 logger = logging.getLogger(__name__)
 live_bp = Blueprint("live", __name__, url_prefix="/live", template_folder="inspection/templates")
@@ -187,6 +191,7 @@ class LivePages:
             table=table,
             window=window,
             retained=retained,
+            plots=RetainedPlot.build(retained),
             summaries=summaries,
             states=states,
             gateways=gateways,

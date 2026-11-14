@@ -153,6 +153,10 @@ This specification authorizes no new transport or live request.
 - Cached-site navigation uses only site identifiers present in the selected organization's cached pages. It does not claim complete site inventory.
 - Independent 6-hour, 12-hour, 24-hour, and 7-day UTC views show retained hourly observations for one verified detail identity.
 - Retained windows end at the current UTC hour boundary and exclude the current hour. Missing buckets remain missing, not measured healthy time.
+- Independently designed retained plots show discrete hourly projection values for one identity, metric, and unit.
+  Keep missing hours as gaps and missing values absent. Preserve measured zero and separate incompatible units.
+  Label the UTC bucket axis, collection time, and unknown measurement completeness.
+  Do not imply source metric timestamps, continuous measurements, source-equivalent charts, or interpolated history.
 - Organization and site windows do not combine identity histories. They report unavailable history until the operator selects one gateway, port, or peer.
 - New per-poll sample storage is additive. Existing hourly records remain available, and hourly values derive from samples.
 - The existing hourly projection keeps its current calculations. A stored hour does not replace timestamped samples or prove complete coverage.

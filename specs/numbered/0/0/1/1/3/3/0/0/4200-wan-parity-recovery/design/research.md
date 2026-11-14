@@ -71,20 +71,36 @@ PR #4358 merged at `2a6a5844698aeb180fea353e0243034890774565`.
 PR #4208 remains the existing draft and is the only open PR for this feature.
 This assignment owns only the local candidate and does not change PR metadata, shared workflows, dependency pins, or host files.
 
-The source repository has no license field, and no written copying rights were supplied.
-Use pinned, read-only descriptions and independently authored tests as the evidence method.
-Do not run the source or copy its code, images, screenshots, or fixtures.
-This method does not prove runtime or visual parity.
+At this earlier checkpoint, no license grant or copying rights were supplied.
+The later authorization below permits isolated execution and internal captures, not protected implementation or asset imports.
+Neither method proves complete runtime or visual parity.
 
 ## Renewed original-application investigation
+
+### Execution authorization
+
+The user subsequently answered the pending execution request: "I gave you approval. Please continue autonomously".
+This authorizes original execution with synthetic data and screen capture for internal parity review.
+It does not authorize copying source code, fixtures, or assets into MistHelper, publication, hosted runs, or merging.
+The earlier rights holds below record the state before this response.
+The current examination must verify isolation before importing source code.
+Application exploration uses independently authored data. Original unit-test vectors stay inside the isolated original checkout.
+No production credential, Mist request, production store, or external service is permitted.
+
+The first strict macOS filesystem profile aborted native startup before any source import.
+A network-only profile started Python, but it did not provide the required filesystem boundary.
+The alternative uses an already cached test image with a read-only root and source mount, cleared process environment, and no network.
+Only the dedicated review directory and bounded temporary filesystems are writable.
+CPU, memory, process, and temporary-file limits bound the experiment.
+No original production launcher or source fixture launcher is used.
 
 On 2026-11-14, the user requested source execution, complete operator exploration, and further parity implementation.
 Read-only inspection again used source revision `2d1c2199fa1e31c129ef1e051c5389349a207785`.
 Its `pyproject.toml` explicitly declares `Proprietary` and `License :: Other/Proprietary License`.
 GitHub reports `license: null`. The recursive pinned tree contains no LICENSE, LICENCE, COPYING, or NOTICE file.
 Repository administrative access does not establish execution, copying, or visual reproduction rights.
-A verified grant and its permitted scope remain prerequisites for source execution and captures.
-This is a current evidence boundary, not a claim that the source cannot run.
+This earlier observation preceded the execution grant above.
+The proprietary declaration still prevents importing protected implementation or assets without separate rights.
 
 ### Dependency and startup observations
 
@@ -95,7 +111,7 @@ Do not use that launcher for an isolated comparison.
 
 The source Compose configuration publishes ports 8050 and 6379, uses named persistent volumes, and reads `.env`.
 Its build declares host networking. Those defaults do not meet this investigation's isolation requirements.
-No source container, process, volume, network, or dependency environment was created.
+No source container, process, volume, network, or dependency environment existed at that earlier checkpoint.
 
 The source screen guide describes a test-only launcher at `tests.fixtures.offline_dashboard`, using source-authored fixtures.
 It states that the launcher creates no API or database clients and starts no collection worker.
@@ -114,9 +130,51 @@ Inspect an available loopback port before starting the preview.
 Do not use the source Compose defaults or source persistent volumes.
 
 The exploration matrix is in [the comparison contract](contracts/parity.md#original-application-exploration-plan).
-Until execution is authorized, every runtime result in that matrix remains unexecuted.
+The later grant enabled the bounded execution record in the comparison contract.
 Independent destination tests and documented SDK contracts can support separate increments.
 They cannot replace the requested original-application test cycle.
+
+### Executed isolation and original test cycle
+
+The final experiment used an existing cached ARM64 image, Python 3.13.16, and the pinned original source.
+The Compose override added only `wan-original-review` under the project test profile.
+The exact temporary container was `misthelper-tmp-issue4200-original`.
+It had no network or published ports, a read-only root/source, and private empty read-only `/app` masks.
+The final harness and dependencies were read-only. Only the private output directory and temporary filesystems accepted application writes.
+The `/tmp` limit was 128 MiB.
+Limits were two CPUs, one GiB memory and swap, and 64 processes.
+Process checks verified zero effective, permitted, and bounding capabilities and `NoNewPrivs=1`.
+Before imports, probes found only loopback, zero credential variables, blocked IPv4/IPv6 egress, and a denied source write.
+CPU time, open files, and output-file size also had finite process limits.
+No production data or engine socket entered the container.
+
+The first original test attempt reported six missing-dependency collection errors.
+Only then were the original hashed runtime requirements restored into a private Linux ARM64 target.
+The separate original pytest-asyncio pin was 1.4.0.
+No repository dependency manifest changed.
+The complete original suite then passed 137 tests.
+A second complete run with the masks and capability checks passed 137 tests, with five warnings, in 15.35 seconds.
+The final read-only source/harness run passed the same 137 tests, with five warnings, in 8.51 seconds.
+Its pre-import probes also verified that the harness mount denied writes.
+The warnings concern an already imported plugin and deprecated Dash DataTable usage.
+No original test was skipped or removed.
+These results do not prove live service integration or source metric correctness.
+
+The browser used a host relay bound only to `127.0.0.1:9642`.
+The relay forwarded restricted HTTP-shaped input through the container's standard streams to its real Flask test client.
+No source TCP port, general proxy, or command endpoint was exposed.
+Every external browser request was blocked.
+The declared public Bootswatch stylesheet was served from a private file with its MIT notice and verified local checksum.
+Google Fonts remained blocked, so no exact font or pixel comparison is claimed.
+The independently seeded provider initialized no production launcher, API client, Redis service, or database.
+Original unit-test fixtures remained inside the original run and did not seed operator exploration.
+
+The first container inherited an image-declared anonymous volume, which disappeared after exact container removal.
+Tiny temporary `/app` masks then failed during Podman copy-up.
+Private empty read-only bind mounts resolved that setup failure.
+These failures do not establish original-application defects.
+The final container, relay, and named temporary volume/network searches were stopped or empty.
+The approved private logs, source archive, harness, screenshots, and downloads remain ignored review evidence.
 
 ## Current destination observations
 

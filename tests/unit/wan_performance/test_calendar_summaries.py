@@ -561,6 +561,95 @@ def test_unknown_threshold_observations_report_zero_valid_hours() -> None:
     assert (entry.valid_hours, entry.above_hours, entry.longest_run) == (0, 0, 0)
 
 
+def test_retained_plots_preserve_gaps_zero_missing_values_and_unit_boundaries() -> None:
+    """Plot exact bucket positions without replacing missing metrics or mixing units."""
+    from src.interfaces.wan_performance.presentation.inspection.windows import (
+        ObservationWindow,
+        RetainedPlot,
+        RetainedWindow,
+    )
+
+    original = OfflinePreviewFactory.build().measurements[0]
+    start = datetime(2024, 1, 1, 12, tzinfo=UTC)
+    window = ObservationWindow("6h", start, start + timedelta(hours=6))
+    records = tuple(
+        replace(
+            original,
+            hour_start_utc=start + timedelta(hours=offset),
+            collected_at_utc=start + timedelta(hours=offset, minutes=1),
+            metrics={
+                "rx_bps": MetricMeasurement(value, "bit/s"),
+                "latency": MetricMeasurement(offset + 2, unit),
+                "mos": MetricMeasurement(None, "unknown", missing_reason="No measurement."),
+            },
+            provenance="live",
+        )
+        for offset, value, unit in [(0, 0, "unknown"), (3, 30, "ms")]
+    )
+    plots = RetainedPlot.build(RetainedWindow(window, records))
+    assert [(plot.name, plot.unit) for plot in plots] == [
+        ("latency", "ms"),
+        ("latency", "unknown"),
+        ("rx_bps", "bit/s"),
+    ]
+    assert plots[2].points == (
+        (32, 165, "2024-01-01T12:00:00+00:00", 0, "2024-01-01T12:01:00+00:00"),
+        (326, 35, "2024-01-01T15:00:00+00:00", 30, "2024-01-01T15:01:00+00:00"),
+    )
+    assert records[0].metrics["mos"].value is None
+    assert records[0].metrics["latency"].unit == "unknown"
+
+
+@pytest.mark.parametrize(
+    ("values", "positions"), [((7, 7), (100, 100)), ((-1e308, 1e308), (165, 35)), ((1e-310, 2e-310), (165, 35))]
+)
+def test_retained_plot_coordinates_handle_constant_and_extreme_finite_values(
+    values: tuple[float | int, float | int], positions: tuple[int, int]
+) -> None:
+    """Keep legitimate finite values visible without overflow or a fabricated zero baseline."""
+    from src.interfaces.wan_performance.presentation.inspection.windows import (
+        ObservationWindow,
+        RetainedPlot,
+        RetainedWindow,
+    )
+
+    original = OfflinePreviewFactory.build().measurements[0]
+    window = ObservationWindow("6h", original.hour_start_utc, original.hour_start_utc + timedelta(hours=6))
+    records = tuple(
+        replace(
+            original,
+            hour_start_utc=window.start + timedelta(hours=index),
+            collected_at_utc=window.start + timedelta(hours=index, minutes=1),
+            metrics={"value": MetricMeasurement(value, "unknown")},
+            provenance="live",
+        )
+        for index, value in enumerate(values)
+    )
+    plot = RetainedPlot.build(RetainedWindow(window, records))[0]
+    assert tuple(point[1] for point in plot.points) == positions
+    assert tuple(point[3] for point in plot.points) == values
+    assert tuple(point[0] for point in plot.points) == (32, 130)
+
+
+def test_retained_plots_do_not_draw_missing_or_unavailable_values() -> None:
+    """Keep store failure and absent metrics distinct from measured zero."""
+    from src.interfaces.wan_performance.presentation.inspection.windows import (
+        ObservationWindow,
+        RetainedPlot,
+        RetainedWindow,
+    )
+
+    original = OfflinePreviewFactory.build().measurements[0]
+    window = ObservationWindow("6h", original.hour_start_utc, original.hour_start_utc + timedelta(hours=6))
+    missing = replace(
+        original, metrics={"loss": MetricMeasurement(None, "%", missing_reason="Absent")}, provenance="live"
+    )
+    assert RetainedPlot.build(None) == ()
+    assert RetainedPlot.build(RetainedWindow(window)) == ()
+    assert RetainedPlot.build(RetainedWindow(window, (missing,))) == ()
+    assert RetainedPlot.build(RetainedWindow(window, (missing,), error="Store unavailable")) == ()
+
+
 def test_monthly_thresholds_exclude_other_identity_and_prior_month() -> None:
     """Keep calendar boundaries and complete circuit identities separate."""
     dashboard = OfflinePreviewFactory.build()
