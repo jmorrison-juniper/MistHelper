@@ -49,6 +49,45 @@ Local plot zoom, visibility, and rectangle selection do not change this full-win
 
 ## Historical query eligibility
 
+### Version-one ranking
+
+Rank observations, not inferred device quality or complete organization inventory.
+The cached population is the full authorized route selection before lexical table filtering or display pagination.
+The retained population is the existing selected window for one full identity. Without that window, report unavailable.
+Select an exact metric name and unit together. Never convert units or substitute missing values.
+Order present values numerically, descending by default or explicitly ascending.
+Resolve equal-value ties by full natural identity, UTC observation hour, and collection time, always ascending.
+Show at most twenty ranked rows. Report population, eligible, displayed, missing, and incompatible-unit counts separately.
+Missing cache coverage and source completeness remain unknown. No ranking control starts an additional request or read.
+
+### Version-one declarations
+
+Accept a version-one object with full identity, UTC effective bounds, declared values, and `operator-declaration` provenance.
+Require capacity in bit/s to be finite and positive. Region and role remain bounded, printable operator text, not inferred taxonomies.
+Require at least one declared value and an increasing UTC effective interval.
+Require exact `DECLARE` before accepting metadata for an identity in the current cached tenant.
+Reject changed metadata at an existing identity/effective-interval key. Identical replay changes nothing.
+Keep at most one thousand declarations per selected organization in process-lifetime state.
+Provide JSON export and state clearly that a restart removes this state.
+This feature changes neither Mist configuration nor observed metric values.
+
+### Version-one archive import
+
+Accept at most eight MiB and 9528 unique projection records, spanning at most 397 days.
+Require version, provenance, full identity, half-open UTC bounds with `complete: false`, and records.
+Validate every record, exact identity, matching provenance, unique hour, finite values, units, and UTC timestamps before storage.
+Reject unknown envelope fields, incomplete identities, out-of-window rows, duplicate hours, and unsupported completeness claims.
+Synthetic import requires exact `IMPORT_SYNTHETIC` and uses only a separate process-lifetime synthetic store.
+Synthetic export preserves provenance and original bounds. It does not enable the live history codec.
+Live import requires exact `IMPORT` and an uploaded-byte SHA-256 digest present in a trusted server-side review map for the full identity.
+An archive cannot approve its own digest. No review map exists by default.
+This approval establishes reviewed input admission, not endpoint retention or source sampling completeness.
+Atomically append new live hour keys. Preserve identical replay and reject changed existing keys without replacing any record.
+SQLite executes this decision under one write transaction. Arango uses non-overwriting inserts in one streaming transaction.
+No raw-sample import, Mist write, historical synthesis, deletion, or schema migration occurs.
+Tests use temporary SQLite, isolated synthetic state, or mocked live-shaped inputs and Arango transactions.
+No invented fixture becomes real live history.
+
 Gateway insight start/end/interval/page controls establish query capability only.
 An interval applies an aggregation function. Do not label its returned aggregates as unaggregated samples.
 Require actual metric metadata before selecting supported intervals or retention windows.

@@ -51,6 +51,9 @@ class TableOptions:
             "download",
             "window",
             "observation_threshold",
+            "rank_source",
+            "rank_metric",
+            "rank_direction",
         }
         arguments = {name: value for name, value in request.args.items() if name in allowed}
         arguments.update(request.view_args or {})

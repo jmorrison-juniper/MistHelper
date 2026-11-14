@@ -1,17 +1,150 @@
-"""Inspect documented site SLE responses without inventing score or duration semantics."""
+"""Inspect supported SLE responses and rank scoped observations without inferred performance semantics."""
 
+import json
 import logging
 import math
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+from flask import abort, request
 from mistapi.api.v1.sites.sle import listSiteSleImpactedGateways, listSiteSlesMetrics
 
 from src.interfaces.wan_performance.collection.live_service import LiveService
 from src.interfaces.wan_performance.collection.snapshot_records import SnapshotRecords, SnapshotStates
 from src.interfaces.wan_performance.domain.identity import IdentityValidator
+from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement
+from src.interfaces.wan_performance.presentation.inspection.windows import RetainedWindow
 
 logger = logging.getLogger(__name__)
+
+
+class ObservationRanking:
+    """Order existing scoped values without additional acquisition or unit conversion."""
+
+    @staticmethod
+    def from_request() -> dict[str, str]:
+        """Validate bounded ranking controls before any cache or history access."""
+        source, direction = request.args.get("rank_source", "cached"), request.args.get("rank_direction", "desc")
+        token = request.args.get("rank_metric", "")
+        try:
+            if source not in {"cached", "retained"} or direction not in {"asc", "desc"} or len(token) > 2048:
+                raise ValueError("Select cached or retained ranking and ascending or descending order.")
+            if not token:
+                return {"source": source, "direction": direction, "metric": "", "unit": ""}
+            match json.loads(token):
+                case [str(metric), str(unit)] if max(len(metric), len(unit)) <= 128 and (metric + unit).isprintable():
+                    return {"source": source, "direction": direction, "metric": metric, "unit": unit}
+                case _:
+                    raise ValueError("Select one exact metric and unit pair.")
+        except (ValueError, TypeError):
+            logger.exception("Rejected WAN observation ranking controls.")
+            abort(400, description="Select valid bounded observation ranking controls.")
+
+    @classmethod
+    def build(
+        cls,
+        records: tuple[HourlyMeasurement, ...],
+        retained: RetainedWindow | None,
+        options: dict[str, str],
+        org_id: object,
+    ) -> dict[str, Any]:
+        """Keep full route population, missing counts, and twenty-row display bounds explicit."""
+        population, error = cls._scope(records, retained, options["source"], org_id)
+        choices = (
+            tuple(
+                (json.dumps([name, unit]), f"{name} [{unit}]")
+                for name, unit in sorted(
+                    {(name, metric.unit) for record in population for name, metric in record.metrics.items()}
+                )
+            )
+            if not error
+            else ()
+        )
+        logger.info("Rank %s scoped %s WAN observations.", len(population), options["source"])
+        allowed = bool(options["metric"]) and not error
+        rows = cls._rows(population, options) if allowed else ()
+        counts = cls._counts(population, options, len(rows)) if allowed else {}
+        logger.debug("Ranked %s eligible observations and displayed %s.", len(rows), min(20, len(rows)))
+        return {
+            "options": options,
+            "choices": choices,
+            "rows": rows[:20],
+            "counts": counts,
+            "error": error or (None if options["metric"] else "Select an exact metric and unit to rank observations."),
+        }
+
+    @staticmethod
+    def _scope(
+        records: tuple[HourlyMeasurement, ...], retained: RetainedWindow | None, source: str, org_id: object
+    ) -> tuple[tuple[HourlyMeasurement, ...], str | None]:
+        """Refuse foreign, duplicated, or oversized input rather than expose a partial ranking."""
+        if source == "retained":
+            if retained is None:
+                return (), "Ranking is unavailable without a selected retained window."
+            records = retained.records
+            if retained.error:
+                return (), retained.error
+        if any(
+            (
+                not isinstance(org_id, str),
+                len(records) > 10000,
+                len({row.natural_key for row in records}) != len(records),
+                any(row.provenance != "live" or row.identity.to_dict()["org_id"] != org_id for row in records),
+            )
+        ):
+            logger.error("WAN ranking has invalid organization context or population bounds.")
+            return (), "Ranking is unavailable because its organization context, identity, or population is invalid."
+        return records, None
+
+    @staticmethod
+    def _rows(records: tuple[HourlyMeasurement, ...], options: dict[str, str]) -> tuple[dict[str, Any], ...]:
+        """Order numeric values and retain ascending full-identity and time tie keys."""
+        entries = tuple(
+            (record, metric.value)
+            for record in records
+            if (metric := record.metrics.get(options["metric"])) is not None
+            and metric.unit == options["unit"]
+            and metric.value is not None
+        )
+        sign = -1 if options["direction"] == "desc" else 1
+        ordered = sorted(
+            entries,
+            key=lambda item: (
+                sign * item[1],
+                item[0].identity.natural_key,
+                item[0].hour_start_utc,
+                item[0].collected_at_utc,
+            ),
+        )
+        return tuple(
+            {
+                "identity": record.identity.to_dict(),
+                "hour": record.hour_start_utc.isoformat(),
+                "collected": record.collected_at_utc.isoformat(),
+                "value": value,
+            }
+            for record, value in ordered
+        )
+
+    @staticmethod
+    def _counts(records: tuple[HourlyMeasurement, ...], options: dict[str, str], eligible: int) -> dict[str, Any]:
+        """Keep absent metrics, missing values, and incompatible units separate."""
+        reasons = Counter(
+            (
+                "metric"
+                if (metric := record.metrics.get(options["metric"])) is None
+                else "unit" if metric.unit != options["unit"] else "value" if metric.value is None else "present"
+            )
+            for record in records
+        )
+        return {
+            "population": len(records),
+            "eligible": eligible,
+            "shown": min(20, eligible),
+            "missing": {"metric": reasons["metric"], "value": reasons["value"]},
+            "unit_mismatch": reasons["unit"],
+        }
 
 
 @dataclass(frozen=True)

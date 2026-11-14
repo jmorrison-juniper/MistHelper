@@ -90,6 +90,84 @@ def test_unknown_gateway_returns_not_found(client, live_service):
     assert response.status_code == 404
 
 
+@pytest.mark.parametrize(
+    "query",
+    [
+        {"rank_source": "foreign"},
+        {"rank_direction": "sideways"},
+        {"rank_metric": "not-json"},
+        {"rank_metric": '["rate"]'},
+        {"rank_metric": '["rate",null]'},
+        {"rank_metric": '["rate","\\u0000"]'},
+        {"rank_metric": '["' + "r" * 129 + '","bit/s"]'},
+        {"rank_metric": "x" * 2049},
+    ],
+)
+def test_invalid_ranking_controls_stop_before_storage(client, live_service, query):
+    """Fail bounded ranking admission before consulting cache, history, or a network session."""
+    response = client.get("/wan-performance/live/", query_string=query)
+    assert response.status_code == 400
+    live_service.store.cached.assert_not_called()
+    live_service.history.read.assert_not_called()
+    live_service.session.assert_not_called()
+
+
+def test_cached_ranking_precedes_lexical_filter_and_keeps_existing_reads(client, live_service):
+    """Rank the authorized cached population even when the lexical table has no matching rows."""
+    response = client.get(
+        "/wan-performance/live/", query_string={"rank_metric": '["rx_bps", "bit/s"]', "q": "absent-text"}
+    )
+    text = response.get_data(as_text=True)
+    assert response.status_code == 200 and "Population: 2. Eligible: 1." in text
+    assert 'data-testid="wan-ranking-rows"' in text and "<td>40</td>" in text
+    live_service.store.cached.assert_called_once_with("org-one")
+    live_service.history.read.assert_not_called()
+    live_service.store.acquire.assert_not_called()
+
+
+def test_retained_ranking_reuses_one_identity_window_read(client, live_service, retained_history):
+    """Rank one retained identity without consulting raw samples or acquiring another window."""
+    response = client.get(
+        "/wan-performance/live/port/site-one/ge-0/0/0",
+        query_string={
+            "gateway_id": "aabbccddeeff",
+            "window": "6h",
+            "rank_source": "retained",
+            "rank_metric": '["rx_bps", "bit/s"]',
+        },
+    )
+    text = response.get_data(as_text=True)
+    assert response.status_code == 200 and "Population: 1. Eligible: 1." in text
+    assert "port_name=ge-0/0/0" in text and "<td>40</td>" in text
+    retained_history.read.assert_called_once()
+    retained_history.read_samples.assert_not_called()
+    retained_history.upsert.assert_not_called()
+    live_service.store.cached.assert_called_once_with("org-one")
+    live_service.store.acquire.assert_not_called()
+
+
+@pytest.mark.parametrize("viewport", [(1440, 900), (1280, 800), (390, 844)])
+def test_browser_ranking_controls_change_numeric_order_without_acquisition(
+    page: Page,
+    live_browser_url: str,
+    live_service,
+    viewport,
+    wan_browser_artifacts: Path,
+):
+    """Exercise stable ranking controls and retain actual responsive screenshots."""
+    page.set_viewport_size({"width": viewport[0], "height": viewport[1]})
+    page.goto(live_browser_url + "/wan-performance/live/")
+    page.get_by_test_id("wan-ranking-metric").select_option(label="rx_bps [bit/s]")
+    page.get_by_test_id("wan-ranking-direction").select_option("asc")
+    page.get_by_test_id("wan-ranking-apply").click()
+    expect(page.get_by_test_id("wan-ranking-counts")).to_contain_text("Population: 2. Eligible: 1.")
+    expect(page.get_by_test_id("wan-ranking-rows")).to_contain_text("org_id=org-one")
+    expect(page.get_by_test_id("wan-ranking-rows")).to_contain_text("40")
+    page.screenshot(path=str(wan_browser_artifacts / f"replacement-ranking-{viewport[0]}.png"), full_page=True)
+    live_service.store.acquire.assert_not_called()
+    live_service.history.read.assert_not_called()
+
+
 @pytest.fixture
 def cached_gateway_statistics(live_service: LiveService) -> LiveService:
     """Add independently authored discovery fields without collecting or persisting them."""
@@ -958,7 +1036,7 @@ def test_browser_retained_png_failure_remains_explicit(page: Page, live_browser_
 @pytest.fixture
 def sle_api():
     """Return independent synthetic SDK results without opening any network connection."""
-    namespace = "src.interfaces.wan_performance.presentation.inspection.sle"
+    namespace = "src.interfaces.wan_performance.presentation.inspection.reports"
     with (
         patch(f"{namespace}.listSiteSlesMetrics") as catalog,
         patch(f"{namespace}.listSiteSleImpactedGateways") as impacted,
@@ -1076,7 +1154,7 @@ def test_sle_catalog_only_and_csrf_protection(client, live_service, sle_api):
 def test_sle_uses_actual_refresh_lease_without_releasing_cooldown(client, live_service, sle_api):
     """Exercise the actual lease protocol rather than inventing a mock context manager."""
     from src.interfaces.wan_performance.integration.refresh_store import RefreshLease
-    from src.interfaces.wan_performance.presentation.inspection.sle import SleReader
+    from src.interfaces.wan_performance.presentation.inspection.reports import SleReader
 
     redis_client = MagicMock()
     redis_client.get.return_value = "synthetic-owner"

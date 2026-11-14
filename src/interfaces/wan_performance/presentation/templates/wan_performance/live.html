@@ -32,7 +32,7 @@
             Site views do not combine persisted identity histories.</p>
     </nav>
     <form method="get" data-testid="wan-retained-controls">
-        {% for name, value in request.args.items() if name in ["gateway_id", "site_id", "path_key", "q", "sort", "direction"] %}
+        {% for name, value in request.args.items() if name in ["gateway_id", "site_id", "path_key", "q", "sort", "direction", "rank_metric", "rank_source", "rank_direction", "observation_threshold"] %}
         <input type="hidden" name="{{ name }}" value="{{ value }}">
         {% endfor %}
         <label for="wan-retained-selection">Retained UTC observation window</label>
@@ -46,6 +46,45 @@
         <p>A retained window requires one selected gateway, port, or peer.
             It shows stored hourly projections without interpolation, backfill, or new aggregation.</p>
     </form>
+    <section data-testid="wan-observation-ranking">
+        <h2>Designed replacement v1: observation ranking</h2>
+        <p>Rank existing values, not inferred device quality. The population follows this route, not complete organization inventory.
+            Cached ranking precedes lexical table filtering. Retained ranking uses one selected identity and window.
+            Missing values remain absent. Exact units never change. No additional acquisition or history query runs.</p>
+        <form method="get">
+            {% for name, value in request.args.items() if name not in ['rank_source', 'rank_metric', 'rank_direction', 'download', 'page'] %}
+            <input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+            <label for="wan-ranking-source">Observation population</label>
+            <select id="wan-ranking-source" name="rank_source" data-testid="wan-ranking-source">
+                {% for value in ['cached', 'retained'] %}<option value="{{ value }}"{% if ranking.options.source == value %} selected{% endif %}>{{ value }}</option>{% endfor %}
+            </select>
+            <label for="wan-ranking-metric">Exact metric and unit</label>
+            <select id="wan-ranking-metric" name="rank_metric" data-testid="wan-ranking-metric">
+                <option value="">Select a metric and unit</option>
+                {% for token, label in ranking.choices %}<option value="{{ token }}"{% if token == request.args.get('rank_metric') %} selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <label for="wan-ranking-direction">Numeric order</label>
+            <select id="wan-ranking-direction" name="rank_direction" data-testid="wan-ranking-direction">
+                <option value="desc"{% if ranking.options.direction == 'desc' %} selected{% endif %}>Descending</option>
+                <option value="asc"{% if ranking.options.direction == 'asc' %} selected{% endif %}>Ascending</option>
+            </select>
+            <button data-testid="wan-ranking-apply" type="submit">Rank existing observations</button>
+        </form>
+        {% if ranking.error %}<p role="status" data-testid="wan-ranking-state">{{ ranking.error }}</p>
+        {% else %}
+        <p data-testid="wan-ranking-counts">Population: {{ ranking.counts.population }}. Eligible: {{ ranking.counts.eligible }}.
+            Displayed: {{ ranking.counts.shown }} of at most 20. Missing metric: {{ ranking.counts.missing.metric }}.
+            Missing value: {{ ranking.counts.missing.value }}. Incompatible unit: {{ ranking.counts.unit_mismatch }}.
+            Source completeness remains unknown.</p>
+        <div class="table-responsive"><table class="table" data-testid="wan-ranking-rows">
+            <thead><tr><th>Full identity</th><th>UTC observation hour</th><th>Collection time</th>
+                <th>{{ ranking.options.metric }} [{{ ranking.options.unit }}]</th></tr></thead>
+            <tbody>{% for row in ranking.rows %}<tr><td>{% for name, value in row.identity.items() %}{{ name }}={{ value }} {% endfor %}</td>
+                <td>{{ row.hour }}</td><td>{{ row.collected }}</td><td>{{ row.value }}</td></tr>
+                {% else %}<tr><td colspan="4">No present observation has this exact metric and unit.</td></tr>{% endfor %}</tbody>
+        </table></div>
+        {% endif %}
+    </section>
     {% if kind != "site" %}
     <form method="post" action="{{ url_for('wan_performance.live.refresh') }}">
         {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}

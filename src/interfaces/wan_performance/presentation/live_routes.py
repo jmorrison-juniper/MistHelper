@@ -25,6 +25,7 @@ from src.interfaces.wan_performance.domain.measurement import HourlyMeasurement,
 from src.interfaces.wan_performance.domain.summary import CalendarSummaries, PeriodSummary
 from src.interfaces.wan_performance.integration.history_repository import HistoryRepository, HistorySelection
 from src.interfaces.wan_performance.integration.refresh_store import RefreshStore
+from src.interfaces.wan_performance.presentation.inspection.reports import ObservationRanking
 from src.interfaces.wan_performance.presentation.inspection.sle_routes import SlePages
 from src.interfaces.wan_performance.presentation.inspection.table import GatewayStatistics, RecordTable, TableOptions
 from src.interfaces.wan_performance.presentation.inspection.windows import (
@@ -162,6 +163,7 @@ class LivePages:
         options = TableOptions.from_request()
         window = ObservationWindow.from_request()
         threshold = ObservationStatistics.from_request()
+        ranking_options = ObservationRanking.from_request()
         try:
             service = cls.service()
             snapshot = service.store.cached(service.org_id)
@@ -201,6 +203,7 @@ class LivePages:
             plots=plots,
             observation_statistics=ObservationStatistics.build(plots, threshold),
             observation_threshold=threshold,
+            ranking=ObservationRanking.build(records, retained, ranking_options, current_app.config.get("ORG_ID")),
             summaries=summaries,
             states=states,
             gateways=gateways,

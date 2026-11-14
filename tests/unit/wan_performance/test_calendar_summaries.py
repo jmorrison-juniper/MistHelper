@@ -744,6 +744,87 @@ def test_replacement_statistics_preserve_unit_groups_and_empty_results() -> None
     assert ObservationStatistics.build((), 80) == ()
 
 
+@pytest.mark.parametrize(("direction", "expected"), [("desc", [100, 100, 9, 0]), ("asc", [0, 9, 100, 100])])
+def test_observation_ranking_preserves_numeric_order_identity_ties_and_missing(direction, expected):
+    """Rank exact units while retaining zero, missing evidence, and stable identity ties."""
+    from src.interfaces.wan_performance.presentation.inspection.reports import ObservationRanking
+
+    original = OfflinePreviewFactory.build().measurements[0]
+    records = tuple(
+        replace(
+            original,
+            identity=replace(original.identity, port_name=f"port-{index}"),
+            metrics={"rate": MetricMeasurement(value, unit, missing_reason="Absent" if value is None else None)},
+            provenance="live",
+        )
+        for index, value, unit in [
+            (2, 100, "bit/s"),
+            (1, 100, "bit/s"),
+            (3, 9, "bit/s"),
+            (4, 0, "bit/s"),
+            (5, None, "bit/s"),
+            (6, 80, "ms"),
+        ]
+    )
+    result = ObservationRanking.build(
+        records,
+        None,
+        {"source": "cached", "direction": direction, "metric": "rate", "unit": "bit/s"},
+        original.identity.gateway.site.org_id,
+    )
+    assert [row["value"] for row in result["rows"]] == expected
+    assert [row["identity"]["port_name"] for row in result["rows"] if row["value"] == 100] == ["port-1", "port-2"]
+    assert result["counts"] == {
+        "population": 6,
+        "eligible": 4,
+        "shown": 4,
+        "missing": {"metric": 0, "value": 1},
+        "unit_mismatch": 1,
+    }
+
+
+def test_observation_ranking_caps_display_and_reports_missing_metrics_and_retained_prerequisite() -> None:
+    """Keep the bounded population and exact missing reasons independent of display truncation."""
+    from src.interfaces.wan_performance.presentation.inspection.reports import ObservationRanking
+
+    original = replace(OfflinePreviewFactory.build().measurements[0], provenance="live")
+    records = tuple(
+        replace(
+            original,
+            identity=replace(original.identity, port_name=f"port-{index:02}"),
+            metrics=(
+                {"rate": MetricMeasurement(index, "bit/s")} if index < 25 else {"other": MetricMeasurement(1, "ms")}
+            ),
+        )
+        for index in range(26)
+    )
+    options = {"source": "cached", "direction": "desc", "metric": "rate", "unit": "bit/s"}
+    result = ObservationRanking.build(records, None, options, original.identity.gateway.site.org_id)
+    assert [row["value"] for row in result["rows"]] == list(range(24, 4, -1))
+    assert result["counts"]["missing"] == {"metric": 1, "value": 0}
+    assert result["counts"]["eligible"] == 25 and result["counts"]["population"] == 26
+    unavailable = ObservationRanking.build(
+        records, None, {**options, "source": "retained"}, original.identity.gateway.site.org_id
+    )
+    assert unavailable["rows"] == () and "retained window" in unavailable["error"]
+
+
+@pytest.mark.parametrize("state", ["foreign", "synthetic", "duplicate", "missing-org"])
+def test_observation_ranking_refuses_invalid_populations(state: str) -> None:
+    """Expose no choices or rows when identity, provenance, or context cannot be established."""
+    from src.interfaces.wan_performance.presentation.inspection.reports import ObservationRanking
+
+    original = replace(OfflinePreviewFactory.build().measurements[0], provenance="live")
+    records = (replace(original, provenance="synthetic"),) if state == "synthetic" else (original,)
+    records = records * 2 if state == "duplicate" else records
+    org = None if state == "missing-org" else "foreign" if state == "foreign" else original.identity.gateway.site.org_id
+    result = ObservationRanking.build(
+        records, None, {"source": "cached", "direction": "desc", "metric": "rate", "unit": "bit/s"}, org
+    )
+    assert result["rows"] == () and result["choices"] == ()
+    assert "invalid" in result["error"] and result["counts"] == {}
+
+
 def test_monthly_thresholds_exclude_other_identity_and_prior_month() -> None:
     """Keep calendar boundaries and complete circuit identities separate."""
     dashboard = OfflinePreviewFactory.build()

@@ -8,7 +8,7 @@ from redis.exceptions import RedisError
 from requests.exceptions import RequestException
 
 from src.interfaces.wan_performance.collection.live_service import LiveService
-from src.interfaces.wan_performance.presentation.inspection.sle import SleReader, SleResult
+from src.interfaces.wan_performance.presentation.inspection.reports import SleReader, SleResult
 
 logger = logging.getLogger(__name__)
 

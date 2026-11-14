@@ -124,6 +124,18 @@ This record does not claim that the complete Spec Kit command pipeline ran.
 
 ### Independently designed replacement sequence
 
+The continuation adds T064 ranking, T065 declarations, and T066 historical-import behavior.
+Ranking uses only existing cached or selected retained observations. It adds no source request or history query.
+Rename inspection/sle.py to inspection/reports.py before adding its fifth module-level name.
+Change every import and patch target. Keep no old-path alias.
+This changes the SLE logger name and SleResult/SleValidation/SleReader module names, not their behavior or serialized data.
+The inspection directory keeps five children. Existing SLE classes retain their tracked structural debt.
+Use existing integration/record_codec.py and integration/history_repository.py for archive and declaration classes.
+Do not add an integration-directory child. Preserve existing live codec and history behavior.
+Live archive writes use atomic non-replacing inserts, not a read-then-overwrite transaction.
+The declaration and synthetic archive stores remain isolated process-lifetime state with downloadable artifacts.
+No production operation, service, dependency, workflow, or publication change forms part of these increments.
+
 The later user direction permits defensible replacements instead of waiting for absent source evidence.
 Use [version-one contracts](design/contracts/replacements.md), and preserve original acceptance states.
 T061 records replacement requirements, evidence labels, and future ranking/declaration/backfill policies.

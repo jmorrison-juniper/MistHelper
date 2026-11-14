@@ -2,6 +2,23 @@
 
 ## User-directed replacement contracts
 
+### T064 observation ranking
+
+FR-022 and SC-012 now define independently designed ranking over existing cached or selected retained observations.
+Twenty new cases exercise numeric order, stable ties, missing values, exact units, admission, scope, truncation, and browser controls.
+The two initial ordering cases failed because the ranking module did not exist.
+Two later failures came from an invalid empty metric fixture and an omitted mock organization argument. Both test setups were repaired.
+The full WAN, browser, and SDK selection passed 552 cases with two existing warnings in 60.32 seconds.
+The later retained-ranking and structural selection passed 46 cases with two existing warnings in 3.62 seconds.
+Ruff, Black, mypy on 29 sources, presentation complexity, Bandit, STE, and thirteen tracked-file link checks passed.
+One attempted guard selector named a nonexistent file. No test ran in that command. The corrected structural selection passed.
+Browser controls passed at 1440, 1280, and 390 pixels. Captures remain in the ignored destination evidence directory.
+The SLE module moved to inspection/reports.py. Its logger and three existing class module names intentionally changed.
+No compatibility alias remains. Existing SLE behavior and tests remain intact.
+The ranking displays at most twenty observations and starts no additional acquisition or storage read.
+T065 declarations and T066 archive import remain the next implementation increments.
+The original acceptance and reviewer markers remain unchanged.
+
 The later user direction authorizes independently designed replacements and bounded synthetic validation.
 T061 defines [version-one contracts](design/contracts/replacements.md) without changing original acceptance states.
 T062 will implement observation statistics and configurable threshold counts over existing bounded retained projections.

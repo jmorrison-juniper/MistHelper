@@ -91,6 +91,9 @@ Operators need useful, defined behavior when original contracts or historical ev
 1. **Given** retained hourly projections, **When** users request observation statistics, **Then** values follow the named replacement policy without claiming source sampling semantics.
 2. **Given** missing measurements, **When** users inspect thresholds or percentiles, **Then** missing values remain absent and observation counts never become elapsed coverage.
 3. **Given** thirteen months of independent synthetic records, **When** validation exercises isolated storage, **Then** evidence identifies synthetic provenance and does not claim production retention.
+4. **Given** cached or retained observations, **When** users select an exact metric and unit, **Then** numeric ranking preserves full identities and stable ties.
+5. **Given** operator metadata, **When** users declare an effective interval, **Then** the interface labels declaration provenance without changing network configuration.
+6. **Given** an archive, **When** users request import, **Then** synthetic records remain isolated and live writes require trusted review and preserve existing observations.
 
 ### Edge Cases
 
@@ -125,6 +128,9 @@ Operators need useful, defined behavior when original contracts or historical ev
 - **FR-019**: Permit an integer observation threshold from zero through 100, defaulting to 80. Count strict exceedances and adjacent above-threshold hour keys without claiming duration.
 - **FR-020**: Validate thirteen calendar months with independently authored synthetic records, exact boundaries, identity isolation, missing periods, and preserved provenance.
 - **FR-021**: Define replacement ranking, declared metadata, backfill eligibility, and acceptance policies before their implementation. Missing network facts remain explicit input requirements.
+- **FR-022**: Rank existing scoped observations numerically by an exact metric/unit pair. Preserve stable identity/time ties, missing states, and a twenty-row display bound without new acquisition.
+- **FR-023**: Validate operator-declared capacity, region, and role with full identity and UTC effective intervals. Preserve declaration provenance and provide explicit process-lifetime and export states.
+- **FR-024**: Validate bounded version-one projection archives before import. Separate synthetic storage and require trusted digest review and typed confirmation for atomic, non-replacing live imports.
 
 ### Mist Cloud Transport Requirements
 
@@ -157,6 +163,9 @@ This specification authorizes no new transport or live request.
 - **SC-009**: Observation reports preserve zero, missing values, exact metric units, and full identity with no additional acquisition or history reads.
 - **SC-010**: Replacement threshold and percentile results match hand-calculated boundaries, sparse hours, ties, and extreme finite numbers.
 - **SC-011**: Synthetic historical validation reports actual record counts and scope results, distinguishing temporary SQLite execution from mocked Arango evidence.
+- **SC-012**: Ranking tests prove numeric order, stable ties, zero/missing/unit separation, route scope, and unchanged request/read counts.
+- **SC-013**: Declaration tests reject invalid capacity, timestamps, identities, and confirmation. Browser interactions preserve declared metadata without network operations.
+- **SC-014**: Archive tests prove bounded decoding, exact provenance and identity, namespace separation, trusted-review admission, atomic conflict rejection, and unchanged existing records.
 
 ## Assumptions
 

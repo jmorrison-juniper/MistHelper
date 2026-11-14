@@ -4,6 +4,11 @@
 
 Retained detail windows include version-one hourly-projection statistics and an adjustable percentage threshold.
 The report preserves missing values, exact units, full identity, and the existing bounded read.
+Live pages also rank existing cached or selected retained observations by one exact metric and unit.
+Cached ranking uses the route population before lexical filtering. Retained ranking requires one selected identity and window.
+Select ascending or descending numeric order. Equal values retain ascending full-identity, hour, and collection-time order.
+The report displays at most twenty rows and separates missing metrics, missing values, and incompatible units.
+Ranking starts no additional acquisition or storage read. It does not establish device quality or complete organization inventory.
 It does not claim raw-sample statistics, elapsed coverage, or source equivalence.
 The [replacement contract](../specs/numbered/0/0/1/1/3/3/0/0/4200-wan-parity-recovery/design/contracts/replacements.md) defines calculation rules and evidence limits.
 
