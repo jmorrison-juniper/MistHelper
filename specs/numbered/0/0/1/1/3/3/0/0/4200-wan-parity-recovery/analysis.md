@@ -47,12 +47,16 @@ All logs below use `test-artifacts/wan-performance/original-review/runtime/`.
 `t056-t057-complete.log` records eleven passing interaction/boundary/no-script cases.
 `destination-interactions-final.log` records the complete 464-test run.
 The final handoff reports exact commit and post-commit quality-ratchet results.
+The first committed ratchet reported four `weak_zero_assertions` findings in new browser cases.
+Its detector did not recognize their Playwright expectations and mock verification calls.
+The follow-up uses explicit Python checks for exact retained values, API call counts, and returned-row counts.
+All browser state/failure checks remain intact. No baseline, threshold, suppression, or test scope changed.
 
 ### Final local gates for T056-T057
 
 | Command or check | Actual result |
 | --- | --- |
-| `rtk .venv/bin/python -m pytest -q tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_offline.py tests/e2e/web_portal/test_wan_performance_live.py tests/integration/test_mistapi_sdk_compatibility.py --tb=short --show-capture=no --screenshot=only-on-failure --output=test-artifacts/wan-performance/destination-interaction-failures` | 464 passed, two existing warnings, 40.73 seconds. |
+| `rtk .venv/bin/python -m pytest -q tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_offline.py tests/e2e/web_portal/test_wan_performance_live.py tests/integration/test_mistapi_sdk_compatibility.py --tb=short --show-capture=no --screenshot=only-on-failure --output=test-artifacts/wan-performance/destination-interaction-failures` | 464 passed, two existing warnings. |
 | `rtk .venv/bin/python -m pytest -s -q tests/integration/test_mistapi_sdk_compatibility.py --tb=short` | Eight passed. Checked 587 signatures, with ten unresolved sites, 364 unverifiable signatures, and zero known failures. |
 | `rtk .venv/bin/python -m ruff check src/interfaces/wan_performance tests/unit/wan_performance tests/e2e/web_portal/test_wan_performance_live.py` | All checks passed. |
 | `rtk .venv/bin/python -m black --check src/interfaces/wan_performance tests/unit/wan_performance/test_calendar_summaries.py tests/e2e/web_portal/test_wan_performance_live.py` | 31 files unchanged. |

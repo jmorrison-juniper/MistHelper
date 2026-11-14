@@ -438,7 +438,7 @@ def wan_browser_artifacts() -> Path:
 def test_browser_retained_table_survives_without_javascript(page: Page, live_browser_url: str, retained_history):
     """Retain exact values and static points without browser interaction support."""
     page.goto(live_browser_url + "/wan-performance/live/port/site-one/ge-0/0/0?gateway_id=aabbccddeeff&window=6h")
-    expect(page.get_by_test_id("wan-retained-records")).to_contain_text("rx_bps: 40 bit/s")
+    assert "rx_bps: 40 bit/s" in page.get_by_test_id("wan-retained-records").inner_text()
     expect(page.get_by_test_id("wan-retained-point")).to_be_visible()
     expect(page.get_by_test_id("wan-retained-zoom-in")).to_be_disabled()
     expect(page.get_by_test_id("wan-retained-png")).to_be_disabled()
@@ -459,7 +459,7 @@ def test_browser_retained_png_failure_remains_explicit(page: Page, live_browser_
     page.wait_for_function("typeof window.wanEncodeComplete === 'function'")
     page.evaluate("() => window.wanEncodeComplete(null)")
     expect(page.get_by_test_id("wan-retained-chart-status")).to_contain_text("PNG could not be rendered")
-    expect(page.get_by_test_id("wan-retained-records")).to_contain_text("rx_bps: 40 bit/s")
+    assert "rx_bps: 40 bit/s" in page.get_by_test_id("wan-retained-records").inner_text()
     expect(page.get_by_test_id("wan-retained-png")).to_be_enabled()
     retained_history.read.assert_called_once()
 
@@ -829,8 +829,7 @@ def test_browser_sle_display_page_boundaries(page: Page, live_browser_url: str, 
         expect(page.get_by_test_id(f"wan-sle-{control}")).to_be_disabled()
     if count == 0:
         expect(page.get_by_test_id("wan-sle-results")).to_contain_text("This does not establish healthy service")
-    catalog.assert_called_once()
-    impacted.assert_called_once()
+    assert catalog.call_count == impacted.call_count == 1
 
 
 @pytest.mark.browser_context_args(java_script_enabled=False)
@@ -840,7 +839,7 @@ def test_browser_sle_all_rows_survive_without_javascript(page: Page, live_browse
     page.goto(live_browser_url + "/wan-performance/live/sle")
     page.get_by_test_id("wan-sle-metric").fill("application_health")
     page.get_by_test_id("wan-sle-submit").click()
-    expect(page.get_by_test_id("wan-sle-results").locator("tbody tr")).to_have_count(7)
+    assert page.get_by_test_id("wan-sle-results").locator("tbody tr").count() == 7
     expect(page.get_by_test_id("wan-sle-next")).to_be_disabled()
     expect(page.get_by_test_id("wan-sle-sort")).to_be_disabled()
     expect(page.get_by_test_id("wan-sle-page")).to_contain_text("All returned rows remain in the table")
