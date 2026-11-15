@@ -397,7 +397,7 @@ rpds-py==2026.9.1
     # via
     #   jsonschema
     #   referencing
-ruff==0.17.3
+ruff==0.17.5
     # via misthelper
 secretstorage==3.5.0 ; sys_platform == 'linux'
     # via keyring
