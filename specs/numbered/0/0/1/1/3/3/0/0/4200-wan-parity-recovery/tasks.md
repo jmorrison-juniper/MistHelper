@@ -101,9 +101,9 @@ Independent test: negative cases stop safely and unrelated portal journeys still
 
 - [X] T043 Verify every FR/SC and every source inventory row has task, test, evidence, and decision coverage in analysis.md.
 - [X] T044 Run Spec Kit consistency, task format, link, structure, and STE checks and record exact results in analysis.md.
-- [ ] T045 Run applicable local gates and exact-head CI after ownership reconciliation using design/quickstart.md.
+- [X] T045 Run applicable local gates and exact-head CI after ownership reconciliation using design/quickstart.md. Evidence names implementation head `843be63bc837513b4442dae69da9f0db922e0ed1`.
 - [X] T046 Update documentation/wan-performance.md and changelog.d/pr-4208.md with verified behavior and unresolved blockers.
-- [ ] T047 Prepare owner acceptance evidence in analysis.md and the existing PR template without enabling auto-merge or closing issue #4200.
+- [ ] T047 Prepare owner acceptance evidence in analysis.md and the existing PR template without enabling auto-merge or closing issue #4200. Source acceptance remains blocked by unverified comparison rows, not publication scope.
 
 ## Independent destination increments
 

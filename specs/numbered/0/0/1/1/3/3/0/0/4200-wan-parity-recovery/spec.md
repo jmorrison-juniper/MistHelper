@@ -122,7 +122,7 @@ Operators need useful, defined behavior when original contracts or historical ev
 - **FR-013**: Keep synthetic records isolated from live storage, collection, and status labels.
 - **FR-014**: Test authorization, validation, missing data, stale data, API failures, throttling, storage failures, and refresh bounds.
 - **FR-015**: Retain approved browser evidence and map every accepted comparison row to a test and reviewer decision.
-- **FR-016**: Keep unsupported contracts blocked and preserve draft status until every required acceptance row has evidence.
+- **FR-016**: Keep unsupported contracts blocked until required acceptance rows have evidence or an approved deviation. Review readiness does not establish source acceptance.
 - **FR-017**: Version replacement behavior separately from source behavior. Distinguish observed source facts, independently designed rules, operator declarations, and synthetic evidence.
 - **FR-018**: Summarize one full identity, metric, and unit from present hourly projections with equal observation weights and a nearest-rank p95.
 - **FR-019**: Permit an integer observation threshold from zero through 100, defaulting to 80. Count strict exceedances and adjacent above-threshold hour keys without claiming duration.

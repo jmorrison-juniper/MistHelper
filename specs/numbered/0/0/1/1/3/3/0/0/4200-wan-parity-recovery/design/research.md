@@ -19,7 +19,7 @@ The source license field is absent. That is not permission to copy.
 | Preserve the existing portal and storage | Issue #4200 prohibits another application stack | Deploy source services |
 | Require independent metric contracts | Source endpoint lists do not establish SDK or calculation behavior | Infer methods and samples |
 | Compare descriptions before protected captures | Written reproduction rights are absent | Copy source screenshots |
-| Keep draft acceptance blocked | Known parity and history gaps remain | Merge because CI is green |
+| Keep source acceptance blocked | Known parity and history gaps remain | Infer acceptance because CI is green |
 
 ## Open evidence ledger
 
@@ -68,8 +68,9 @@ That branch has 13 merge conflicts, including 11 add/add conflicts.
 This reconstruction does not edit the original branch or worktree.
 
 PR #4358 merged at `2a6a5844698aeb180fea353e0243034890774565`.
-PR #4208 remains the existing draft and is the only open PR for this feature.
-This assignment owns only the local candidate and does not change PR metadata, shared workflows, dependency pins, or host files.
+At this reconstruction checkpoint, PR #4208 was the existing draft and the only open PR for this feature.
+The checkpoint assignment owned only the local candidate and did not change PR metadata, shared workflows, dependency pins, or host files.
+The later authorized review publication is recorded in [analysis.md](../analysis.md#acceptance-continuation-on-2026-11-15).
 
 At this earlier checkpoint, no license grant or copying rights were supplied.
 The later authorization below permits isolated execution and internal captures, not protected implementation or asset imports.

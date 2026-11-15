@@ -45,7 +45,7 @@ Historical completeness, backfill, and 13-month retention remain unverified.
 - No sample expiry, historical backfill, or 13-month guarantee is added without evidence.
 - Implementation must obey structural limits and record touched existing violations with separate remediation actions.
 - Each increment starts with failing tests and preserves existing portal behavior.
-- Publication and deployment require explicit acceptance. The original draft and no-merge holds remain controlling.
+- Review publication requires explicit authorization. Source acceptance and deployment require complete evidence or approved deviations.
 
 ## Phase 0 - Evidence and baseline
 
@@ -94,8 +94,10 @@ Run [quickstart validation](design/quickstart.md), source-to-test coverage, and 
 Reconcile shared workflow and portal ownership before any publication.
 Preserve other migrations and both rename endpoints.
 Use the existing PR template for any authorized update.
-Keep PR #4208 draft and auto-merge disabled until acceptance evidence and owner approval exist.
-Merge and deployment are separate owner decisions, not automatic results of this workflow.
+Review readiness and source acceptance are separate decisions.
+Keep unsupported acceptance rows open. Required checks do not establish source equivalence.
+The coordinator owns PR state and merge decisions in this continuation. Do not enable auto-merge.
+Deployment remains a separate owner decision, not an automatic result of this workflow.
 
 ## Project Structure
 

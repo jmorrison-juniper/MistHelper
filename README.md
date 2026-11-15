@@ -21,6 +21,11 @@ It also serves a web portal, an upgrade capture portal, and a metrics gateway.
 The web portal includes a read-only WAN Dashboard for gateway status, port
 details, traffic, WAN Insights, and CSV exports. See the
 [Web Portal guide](documentation/wiki/Web-Portal.md) for its workflows.
+WAN Performance adds separate gateway, WAN-port, and VPN-peer views from
+cached observations or labeled synthetic previews. Source equivalence and
+complete historical coverage remain unverified.
+Read [the WAN Performance guide](documentation/wan-performance.md) for supported
+behavior and limits.
 Read [the operator guide](documentation/operator-guide.md) for what each part
 does.
 

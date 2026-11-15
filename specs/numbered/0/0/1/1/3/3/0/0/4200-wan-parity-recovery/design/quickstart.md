@@ -55,7 +55,8 @@ Compare every inventoried control and layout region, not only the five navigatio
 Record exact commands, exit codes, examined counts, source revision, destination revision, and retained artifacts.
 Run source-to-task and source-to-test coverage checks.
 A missing source contract, rights decision, or accepted deviation remains a blocker.
-Keep PR #4208 draft until the owner accepts the complete evidence.
+Review readiness does not close unsupported acceptance rows.
+The coordinator owns PR state and merge decisions. Do not enable auto-merge.
 Record recovery progress on issue #4200. Do not create another issue for the same subject.
 
 ## Original-application cycle prerequisites

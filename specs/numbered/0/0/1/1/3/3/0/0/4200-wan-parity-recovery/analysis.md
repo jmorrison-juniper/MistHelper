@@ -952,9 +952,9 @@ The 47 task IDs below were checked against current code, tests, and evidence.
 | T042 | Complete | The same 408-test run covered portal smoke, converter routes, websocket routes, and synthetic isolation. No service or port changed. |
 | T043 | Complete | The coverage matrices below map all 50 inventory rows and 24 FR/SC entries to tasks, tests or explicit test gaps, evidence, and decisions. |
 | T044 | Complete | The feature-specific prerequisite, consistency review, task format audit, link scan, structure tests, and STE checks passed. The broader route contract has one unrelated failure, recorded below. |
-| T045 | Blocked by assignment scope | Local gates can run. Hosted exact-head CI is not authorized before parent review. |
+| T045 | Complete at pinned implementation head | Applicable local gates and hosted CI passed on `843be63bc837513b4442dae69da9f0db922e0ed1`. The continuation below records exact evidence. |
 | T046 | Complete | `documentation/wan-performance.md` and `changelog.d/pr-4208.md` describe replay, unknown event coverage, gateway scope, issues #4793-#4795, retained MOS compatibility, and independent SLE, table, cached-site, and retained-window controls. |
-| T047 | Blocked by assignment scope | Parent review must precede PR metadata or acceptance changes. No PR template or hosted state was changed. |
+| T047 | Source acceptance remains blocked | Review publication was authorized. The PR template preserves unsupported source criteria, missing comparison evidence, and unverified operational prerequisites. |
 
 ### Source inventory and requirement coverage for T043
 
@@ -969,7 +969,7 @@ An explicit test gap means the behavior remains unaccepted.
 | P02 | T008, T011 | Gateway route and gateway-to-detail browser links | Identity and history parity remain open. |
 | P03 | T009, T011 | Encoded-port and calendar-summary tests | Synthetic values only. |
 | P04 | T010, T011 | Peer route and peer-quality tests | Synthetic fields only. |
-| P05 | T019-T022 | `wan-top-congested-circuits` preview selector | Top-N ranking test is absent. |
+| P05 | T019-T022, T064 | `wan-top-congested-circuits` preview selector and independent observation-ranking tests | Source-equivalent top-N ranking remains untested. |
 | P06 | T013-T016, T062 | Threshold observation tests and version-one adjustable percentage controls | Source threshold and override semantics remain unknown. Independent counts do not establish elapsed duration. |
 | P07 | T015-T016 | `test_wan_performance_live.py` duration assertions | Current sample intervals do not prove source duration parity. |
 | P08 | T017-T018 | `test_calendar_summaries.py` event and unknown-coverage cases | Historical flap and availability parity remains open. |
@@ -1033,7 +1033,7 @@ An explicit test gap means the behavior remains unaccepted.
 | FR-013 | T005-T006, T040-T042 | Synthetic isolation and provenance tests | Offline data remains separate from live collection. |
 | FR-014 | T005, T038-T042, T048-T049, T053, T060 | Missing-unit, empty, stale, denied, store, session, SLE, retained-window, and cached gateway field/scope failure tests | Missing buckets and values remain explicit. Failed or unsupported history never appears as healthy empty data. |
 | FR-015 | T033-T036, T041, T043, T054-T059 | Authorized source captures, original tests, site-input errors, mapped observations, and independent plot assertions | Runtime evidence now exists. Complete visual/interaction review remains open without a false rights blocker. |
-| FR-016 | T043-T047 | Exact local candidate and check records | Hosted and owner acceptance remain pending. |
+| FR-016 | T043-T047 | Exact local candidate and check records | Hosted validation passed at the pinned implementation head. Owner source acceptance remains pending. |
 | SC-001 | T003, T007-T010, T043 | P01-P50 classifications | All inventory rows have a decision, including explicit unknowns. |
 | SC-002 | T011-T042, T043 | Focused tests and blocked-row decisions | Full source behavior is not complete. |
 | SC-003 | T014-T030, T040, T048-T049, T053, T060 | Unknown-value, missing-unit, raw SLE, retained-window, and cached gateway field assertions | Unavailable values remain explicit. Missing buckets remain absent, and bucket presence does not establish measurement completeness. |
@@ -1041,7 +1041,7 @@ An explicit test gap means the behavior remains unaccepted.
 | SC-005 | T011, T021, T026, T032, T035, T040-T042, T049-T060 | Core, SLE, cached-control, site, retained-window, rectangle, and gateway statistics browser tests at three viewports | Tested independent destination journeys pass. Source interaction equivalence remains unverified. |
 | SC-006 | T033-T036, T043, T054-T057 | Authorized private captures, descriptive inventory, and independent responsive chart/table controls | Complete source visual acceptance remains unreviewed, not blocked by absent execution rights. |
 | SC-007 | T005-T006, T037-T042, T049-T060 | Offline, scoped-store, admission, SLE, CSV, site, retained-window, rectangle, and no-query gateway statistics tests | No live Mist call or production store was used. |
-| SC-008 | T043-T047 | Local validation record and parent review hold | Parent review is pending. |
+| SC-008 | T043-T047 | Local validation record and authorized review publication | Owner source acceptance remains pending. |
 
 ### Frozen-head defect regressions
 
@@ -1102,3 +1102,88 @@ The quickstart command passed 408 tests with two existing pytest deprecation war
 The earlier focused run passed 159 tests before the ambiguity regression was added.
 Re-run focused tests and all applicable style, type, link, STE, and test-quality gates after the final edits.
 Do not treat these local results as hosted CI or source acceptance.
+
+## Acceptance continuation on 2026-11-15
+
+The coordinator assigned remaining acceptance work for the only open PR, #4208.
+The coordinator retains PR state and merge ownership. This continuation changes documentation only.
+The README entry links the existing WAN Performance guide and identifies synthetic previews and unverified source equivalence.
+The earlier README hold applied to review preparation. The coordinator released that hold for this narrow acceptance work.
+
+### Verified implementation and review evidence
+
+Implementation head `843be63bc837513b4442dae69da9f0db922e0ed1` descends from main `2a6a5844698aeb180fea353e0243034890774565`.
+The original published head remains preserved at `recovery/4208-original-before-review-fbb23f8`.
+The verified implementation remains preserved at `recovery/4208-fixture-isolation-843be63`.
+The published PR was open and ready for review, with all 15 required checks passing.
+These results apply to the named implementation head, not an untested documentation commit.
+
+| Evidence | Result |
+| --- | --- |
+| [Quality Gates run 43676623926](https://github.com/jmorrison-juniper/MistHelper/actions/runs/43676623926) | Completed successfully on the implementation head. Combined root coverage reports 93%. All coverage and service-backed browser shards passed. |
+| [CodeQL run 43676623883](https://github.com/jmorrison-juniper/MistHelper/actions/runs/43676623883) | Completed successfully on the same head. The required CodeQL status passed. |
+| Complete WAN, RADIUS fixture, browser, and SDK selector | 812 passed, 15 warnings, and 93.70% feature coverage. |
+| Complete local unit selection | All 24 chunks passed in 493.7 seconds. The principal chunk had 26,143 passes and 24 skips. |
+| Complete contract, guardrail, and integration selection | All 15 chunks passed in 347.7 seconds. |
+| Isolated ops-platform tests | 614 passed, 32 skipped, and 63.23% coverage. |
+| Committed and full test-quality checks | 17 and 1,260 files examined. Both reported zero new findings and zero parse errors. |
+
+The PR body retains exact local commands, results, warnings, skips, and preserved references.
+The current test inventory removes eight old WAN test paths containing 39 definitions. This is not a content-identical move.
+The fixture repair for #4797 restores the resolver host. The assertion repair for #4798 checks the contained API failure.
+Neither repair weakens production behavior or source acceptance.
+
+### Linked issue criteria and remaining prerequisites
+
+The issue contains seven product criteria and one planning-stage criterion.
+No criterion is checked merely because an independent replacement passes.
+
+| Issue criterion | Verified destination evidence | Remaining prerequisite |
+| --- | --- | --- |
+| Four portal journeys | Offline and mocked live browser journeys cover overview, gateway, encoded port, peer, return navigation, and scope. | Original full route and query equivalence still requires accepted comparison rows. |
+| Source metrics, identifiers, time semantics, and visual hierarchy | The pinned source inventory distinguishes observed behavior, source failures, and independently designed replacements. | Approved metric, sampling, weighting, identifier, and visual comparison contracts or explicit accepted deviations are absent. |
+| Synthetic previews remain separate | Origin, denied-access, wrong-organization, archive, cache, and browser cases preserve synthetic isolation. | No live-data or production-history claim follows from these tests. |
+| Existing storage without another database | Native temporary SQLite and mocked Arango tests preserve configured storage and existing records. No service or database was added. | Real feature Arango execution, capacity, retention, and deployment evidence remain unavailable. |
+| Isolated Redis keys, expiry, and failure | Cache provenance, lease replacement, expiry, outage, and worker ownership tests pass. | Real Redis and multi-process operational acceptance remain unverified. |
+| Bounded API and background refresh | Admission, scoped leases, supported pagination, shutdown, retries, and denied-access tests pass. | Source equivalence cannot be inferred from destination bounds. |
+| Success, missing data, errors, and navigation tests | Complete local selections and hosted browser shards pass on the named head. | Source-specific metric and visual acceptance remains separate from destination test coverage. |
+| Planning before implementation | The preserved original branch contains this 47-task recovery record. | The owner-provided historical T001-T087 mapping and its approval history remain absent. T002 stays open. |
+
+The source runtime inventory records provider signature mismatches for overview gateway-port and peer charts.
+The supported SDK does not establish the assumed peer history or complete gateway historical coverage.
+Query parameters and product retention descriptions do not prove endpoint completeness or thirteen-month availability.
+Do not synthesize those missing records, units, timestamps, or source formulas.
+
+The pinned OpenAPI inspection examined four named operations.
+`getSiteGatewayMetrics` maps to `GET /api/v1/sites/{site_id}/stats/gateways/metrics`.
+`getSiteInsightMetricsForGateway` maps to `GET /api/v1/sites/{site_id}/insights/gateway/{device_id}/stats`.
+The coordinator's source review identifies the former name in the source timeseries wrapper.
+The documented insight endpoint provides query capability, not proof that the source wrapper is equivalent.
+
+`getSiteInsightMetricsForDevice` maps to `GET /api/v1/sites/{site_id}/insights/device/{device_mac}/{metric}`.
+The source peer wrapper supplies `vpn_peer-metrics`. The parsed pinned document contains zero occurrences of that literal.
+The source peer history and its loss/jitter series therefore remain unsupported by the pinned contract.
+This finding does not prove which undocumented behaviors a production service might accept.
+Documented scalar peer searches remain distinct from a verified historical series.
+Their `search_after` cursor comes from Mist's prior `next` URL. Never construct it.
+
+T045 is complete for the pinned implementation. T047 remains open because source acceptance evidence is incomplete.
+FR-016 and the publication instructions now distinguish authorized review readiness from source acceptance.
+Original source-acceptance tasks remain open. No issue checkbox, PR state, workflow, dependency pin, or production store changed.
+
+The named VS Code Browser Agent is not available in this tool catalog.
+The earlier Chrome DevTools failure is not that verification. Keep its PR checkbox open.
+No affected menu or production deployment ran. Those operational claims remain unverified.
+Further source-equivalent implementation requires the missing contracts or an explicit accepted deviation, not another passing replacement test.
+
+### Documentation validation
+
+The Markdown link check examined all seven changed documents and found zero broken links.
+STE read seven documents and skipped none. Every score met the unchanged 80-point threshold.
+The isolated task audit examined one feature, one task file, and 66 markers.
+It found 44 checked markers, 22 open markers, and zero malformed markers.
+The source-acceptance tasks remain open. Only the independently verified T045 gate task changed its state.
+
+`python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/test_process_folder_structure.py tests/guardrails/test_changelog_fragment_policy.py tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides`
+completed with 29 passes, one skip, and one existing warning.
+These documentation checks do not replace the pinned implementation's full-suite or hosted evidence.
