@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.foundation.models.data.data_processing_utils import DataProcessingUtils
 from src.foundation.persistence.db.database_schema_utils import DatabaseSchemaUtils
 from src.foundation.support.refactors import sqlite_database_writer as sqlite_module
 from src.foundation.support.refactors.endpoint_primary_key_strategies import (
@@ -118,6 +119,17 @@ def test_sqlite_distinct_window_adds_a_separate_keyed_row(sqlite_path: Path, ope
             "SELECT COUNT(*) FROM sle_window WHERE misthelper_sle_window_key IS NOT NULL"
         ).fetchone()
     assert count == (2,)
+
+
+def test_sqlite_preserves_carriage_returns(sqlite_path: Path) -> None:
+    """Keep raw carriage returns through the real SQLite processing path."""
+    processing = sqlite_module._resolve_runtime_dependencies().DataProcessingUtils
+    processing.escape_multiline.side_effect = DataProcessingUtils.escape_multiline
+    row = {**_window(HISTOGRAM_OPERATION), "value": "a\r\nb"}
+    assert SQLiteDatabaseWriter([row], "sle_window", HISTOGRAM_OPERATION).write() is True
+    with closing(sqlite3.connect(sqlite_path)) as connection:
+        stored = connection.execute("SELECT value FROM sle_window").fetchall()
+    assert stored == [("a\r\\nb",)]
 
 
 @pytest.mark.parametrize("operation", OPERATIONS)

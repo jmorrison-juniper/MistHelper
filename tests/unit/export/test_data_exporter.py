@@ -13,14 +13,17 @@ Why:
 
 from __future__ import annotations
 
+import csv
 import importlib
 import logging
 import sys
 import types
+from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
+from src.foundation.models.data.data_processing_utils import DataProcessingUtils
 from src.foundation.models.dataclasses.export_backend_options import ExportBackendOptions
 from src.operations.exporting.export import data_exporter as de_module
 from src.operations.exporting.export.data_exporter import DataExporter
@@ -510,6 +513,56 @@ class TestWriteToCsv:
         ):
             DataExporter.write_to_csv([{"a": 1, "b": 2}], "target.csv")
         handler.assert_called_once_with("data/target.csv", escaped, ["a", "b"])
+
+    def test_preserves_input_and_escapes_carriage_returns(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Preserve source values while presenting line breaks in CSV cells."""
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / "output.csv"
+        rows = [
+            {"value": "'\rplain", "other": "a\r\nb", "items": ["x\ry", "z\nw"]},
+            {"value": "\\r", "other": "\r\r\n", "items": 42},
+        ]
+        original = [
+            {"value": "'\rplain", "other": "a\r\nb", "items": ["x\ry", "z\nw"]},
+            {"value": "\\r", "other": "\r\r\n", "items": 42},
+        ]
+        DataExporter.write_to_csv(rows, str(path))
+        with path.open(newline="", encoding="utf-8") as handle:
+            written = list(csv.DictReader(handle))
+        assert written == [
+            {"value": "'\\rplain", "other": "a\\r\\nb", "items": "x\\ry,z\nw"},
+            {"value": "\\r", "other": "\\r\\r\\n", "items": "42"},
+        ]
+        assert rows == original
+
+    def test_csv_dispatch_keeps_raw_rows_for_database(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Send raw carriage returns to the database after CSV output."""
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / "output.csv"
+        rows = [{"value": "a\rb"}]
+        with patch.object(DataExporter, "_route_to_polyglot", return_value=MagicMock(written=True)) as router:
+            result = DataExporter.write_with_format_selection(
+                rows, str(path), "listStuff", backend_options=ExportBackendOptions(format_override="csv")
+            )
+        with path.open(newline="", encoding="utf-8") as handle:
+            written = list(csv.DictReader(handle))
+        assert result is True
+        assert written == [{"value": "a\\rb"}]
+        assert router.call_args.args[0] == [{"value": "a\rb"}]
+        assert rows == [{"value": "a\rb"}]
+
+    def test_preprocessed_text_is_not_escaped_twice(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Keep the original sequence when shared processing precedes CSV output."""
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / "output.csv"
+        rows = DataProcessingUtils.escape_multiline([{"value": "a\r\nb"}])
+        DataExporter.write_to_csv(rows, str(path))
+        with path.open(newline="", encoding="utf-8") as handle:
+            written = list(csv.DictReader(handle))
+        assert written == [{"value": "a\\r\\nb"}]
+        assert rows == [{"value": "a\r\\nb"}]
 
 
 class TestResolveCsvPath:

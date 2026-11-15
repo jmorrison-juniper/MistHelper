@@ -157,12 +157,13 @@ class DataProcessingUtils:
         """Escape multiline strings for CSV compatibility.
 
         Joins list values as CSV-separated strings. Replaces newline
-        characters with escaped versions on string fields.
+        characters with escaped versions on string fields. Carriage returns
+        remain available for output-specific processing.
         """
         for entry in data:  # Process each record.
             for key, value in entry.items():  # Walk each field.
                 if isinstance(value, list):  # Join lists to a CSV string.
                     entry[key] = ",".join(map(str, value))  # CSV-join the list.
                 elif isinstance(value, str):  # Escape string newlines for CSV safety.
-                    entry[key] = value.replace("\n", "\\n").replace("\r", "")  # Escape CR/LF for CSV.
+                    entry[key] = value.replace("\n", "\\n")  # Keep carriage returns for the output writer.
         return data  # Return escaped records.
