@@ -704,11 +704,12 @@ class TestApplyChangesDispatch:
             manager._apply_changes()  # WHY: run the dispatch.
         assert not (site_spy.called or template_spy.called or org_spy.called)
 
-    def test_an_api_failure_is_contained(self, manager: WLANRadiusTimerManager) -> None:
+    def test_an_api_failure_is_contained(self, manager: WLANRadiusTimerManager, capsys: Any) -> None:
         """A raised error must not crash the menu after the confirmation."""
         manager.selected_wlan = {"id": "w1", "_inheritance_level": "site"}  # WHY: set the scope.
         with patch.object(manager, "_update_site_wlan", side_effect=OSError("no route")):
             manager._apply_changes()  # WHY: the call must swallow the error.
+        assert "Error applying changes: no route" in capsys.readouterr().out
 
 
 class TestSiteWlanUpdate:
