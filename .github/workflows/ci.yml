@@ -651,7 +651,7 @@ jobs:
         with:
           submodules: false
       # Issue #3515: the parser is the mermaid-lint action of misthelper-devtools.
-      - uses: jmorrison-juniper/misthelper-devtools/.github/actions/mermaid-lint@e8e093d205428b5503887267b6a9751fa7354be7 # v0.6.3
+      - uses: jmorrison-juniper/misthelper-devtools/.github/actions/mermaid-lint@79a5e45970e876f1656d69520d9635cea1aa25ef # v0.6.4
         with:
           docs-dir: documentation
           extra-files: README.md
