@@ -23,7 +23,6 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from src.foundation.models.data.data_processing_utils import DataProcessingUtils
 from src.foundation.models.dataclasses.export_backend_options import ExportBackendOptions
 from src.operations.exporting.export import data_exporter as de_module
 from src.operations.exporting.export.data_exporter import DataExporter
@@ -557,7 +556,7 @@ class TestWriteToCsv:
         """Keep the original sequence when shared processing precedes CSV output."""
         monkeypatch.chdir(tmp_path)
         path = tmp_path / "output.csv"
-        rows = DataProcessingUtils.escape_multiline([{"value": "a\r\nb"}])
+        rows = de_module.DataProcessingUtils.escape_multiline([{"value": "a\r\nb"}])
         DataExporter.write_to_csv(rows, str(path))
         with path.open(newline="", encoding="utf-8") as handle:
             written = list(csv.DictReader(handle))
