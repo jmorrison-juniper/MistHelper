@@ -1159,6 +1159,10 @@ The pinned OpenAPI inspection examined four named operations.
 `getSiteInsightMetricsForGateway` maps to `GET /api/v1/sites/{site_id}/insights/gateway/{device_id}/stats`.
 The coordinator's source review identifies the former name in the source timeseries wrapper.
 The documented insight endpoint provides query capability, not proof that the source wrapper is equivalent.
+The coordinator also verified that the installed SDK has no `mistapi.api.v1.sites.insights.getSiteGatewayMetrics`.
+`mistapi.api.v1.sites.stats.getSiteGatewayMetrics` accepts only `mist_session` and `site_id`, not historical query arguments.
+`getSiteInsightMetricsForGateway` accepts explicit gateway scope, metrics, and optional time and pagination arguments.
+The source wrapper therefore has an installed-SDK incompatibility, not only a naming difference.
 
 `getSiteInsightMetricsForDevice` maps to `GET /api/v1/sites/{site_id}/insights/device/{device_mac}/{metric}`.
 The source peer wrapper supplies `vpn_peer-metrics`. The parsed pinned document contains zero occurrences of that literal.
