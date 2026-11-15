@@ -4,6 +4,20 @@
 
 ### T066 projection archives and strict input boundaries
 
+Review preparation compared the reconstructed candidate with verified main and the conflicting original PR head.
+Main remains `2a6a5844698aeb180fea353e0243034890774565`. The candidate already descends from that commit.
+The original PR head produces thirteen conflicts, including eleven add/add conflicts.
+The candidate preserves current workflows, dependency pins, menu references, and the shared entry point.
+The full public-symbol guard initially reported intentional WAN removals in nine modules.
+After coordinator ownership approval, its exact removal map records only obsolete exports, collectors, helpers, and imports.
+Tracked Python callers use current concrete modules and supported scalar collectors. No compatibility alias or general exclusion was added.
+Twenty symbol-guard cases pass, including existing rejection cases.
+Eight baseline test paths contain 39 definitions. The replacement inventory is not a content-identical test move.
+Supported-contract regressions remain tested in the expanded WAN suite. Unsupported source assumptions do not become accepted contracts.
+The full routing guard required a local PowerShell installation. Version 7.7 accepted an invalid midnight name.
+Version 7.6 passes all forty routing cases. No routing source or test changed.
+Source acceptance and named VS Code Browser Agent verification remain incomplete.
+
 The follow-up admission correction bounds replacement POST requests before application CSRF hooks.
 The live blueprint URL preprocessor rejects unknown lengths with 411 and excessive declared lengths with 413 without form or stream reads.
 Per-request body, field-memory, and multipart-part limits preserve stricter application settings and unrelated uploads.

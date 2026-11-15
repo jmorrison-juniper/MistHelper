@@ -241,6 +241,12 @@ Subsequent increments require verified inputs and expected results for each exis
 
 ## Independent destination increments
 
+Review preparation records exact intentional WAN symbol removals in the existing public-symbol guard after ownership approval.
+Package re-exports are removed rather than retained as aliases. Callers use the concrete canonical modules.
+Supported scalar collectors replace undocumented peer-array collectors and obsolete helpers.
+`SnapshotRates` now belongs to the record builder module. Explicit domain validators replace the previous validator class.
+Preserve every other module comparison and report each exact allowed name. Do not add a package-wide exclusion.
+
 These increments do not claim source parity and do not close the existing acceptance tasks.
 New presentation code enters a compliant `presentation/inspection/` package.
 The existing presentation directory has four counted children. This package is its fifth child.
