@@ -83,7 +83,7 @@ No project setup is needed. The feature uses the existing Python environment and
 - [X] T007 Add the issue release fragment in `changelog.d/issue-4771-windows-audit-report-portability.md`.
 - [X] T008 Run the focused regression, applicable lint and format checks, and offline synthetic smoke. Record exact outcomes in the handoff.
 - [X] T009 Restore the prior `.specify/feature.json` content, verify the routed record, and commit the completed local change.
-- [ ] T010 Run both native regressions through the branch-push workflow. Leave this task open until the Windows job reports two passed tests and zero skips.
+- [X] T010 Run both native regressions through the branch-push workflow. Native run 43797470577 at commit `d51c2790269cdc66c74dcce12b9f5565570f9c5a` passed on win32 Python 3.15.2 with 2 passed, 2 collected, 0 skipped, and 0 failures.
 - [X] T015 Update the native Windows workflow path in the #4771 records and release fragment.
 - [X] T016 Run the focused regression, workflow contract, applicable quality gates, and offline synthetic smoke. Record exact outcomes in the handoff.
 - [X] T017 Commit the reviewed local changes with a Conventional Commit subject and the required co-author trailer.
@@ -105,7 +105,7 @@ No project setup is needed. The feature uses the existing Python environment and
 - **US1 (P1)**: T001 and T002 deliver Windows report output. T011 follows T002 because it corrects the file handle used for DACL changes.
 - **US2 (P1)**: T003 and T004 verify fail-closed path safety.
 - **US3 (P2)**: T005 and T006 verify rollback and cleanup after report failures.
-- **US4 (P1)**: T012 and T013 add native writer and workflow contract tests. T014 adds the separate workflow after those tests exist. T010 remains open until the branch-push run passes.
+- **US4 (P1)**: T012 and T013 add native writer and workflow contract tests. T014 adds the separate workflow after those tests exist. T010 closed after branch-push run 43797470577 passed.
 
 ### Parallel Opportunities
 
@@ -128,4 +128,4 @@ Then add T011 native handle coverage in tests/e2e/websockets_tab/dialog_audit/te
 2. Deliver US1 and verify the synthetic Windows path.
 3. Deliver US2 and verify fail-closed path checks.
 4. Deliver US3 and verify rollback and cleanup.
-5. Run local validation and commit. Keep T010 open until the native workflow reports success.
+5. Run local validation and commit. Close T010 only after the native workflow reports success.

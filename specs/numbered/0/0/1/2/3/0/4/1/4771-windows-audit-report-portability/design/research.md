@@ -44,8 +44,8 @@
 
 **Decision**: Keep `SetSecurityInfo` with `PROTECTED_DACL_SECURITY_INFORMATION` and `DACL_SECURITY_INFORMATION` on the verified handle. Request `READ_CONTROL`, `WRITE_DAC`, and `FILE_READ_ATTRIBUTES` on the directory and staged-file handles. Read the DACL back with `GetSecurityInfo` through the same handle, and fail when `SE_DACL_PROTECTED` or `SE_DACL_PRESENT` is absent.
 
-**Rationale**: Native run 43795918169 failed with Win32 status 5 at `SetSecurityInfo` on a directory handle that had `WRITE_DAC` and `FILE_READ_ATTRIBUTES` only. The hypothesis is that the call also needs `READ_CONTROL` on the handle. Native evidence has not proven this hypothesis yet. The readback makes a silent change fail closed. The extra right is on the writer handle only, and it gives no access to other accounts.
+**Rationale**: Native run 43795918169 failed with Win32 status 5 at `SetSecurityInfo` on a directory handle that had `WRITE_DAC` and `FILE_READ_ATTRIBUTES` only. The hypothesis was that the call also needs `READ_CONTROL` on the handle. Native run 43797470577 passed after the handle added `READ_CONTROL`, so the native evidence supports this hypothesis. The readback makes a silent change fail closed. The extra right is on the writer handle only, and it gives no access to other accounts.
 
 **Alternatives considered**: `SetKernelObjectSecurity` writes a descriptor directly to a handle. Microsoft documentation tells callers to use `SetSecurityInfo` for file-system objects, so this design does not use it.
 
-**Evidence**: The failed log shows the error at `_set_owner_dacl` after `SetSecurityInfo`. The boundary tests model the handle rights and fail against the previous writer. Native success is not proven until the Windows job passes.
+**Evidence**: The failed log shows the error at `_set_owner_dacl` after `SetSecurityInfo`. The boundary tests model the handle rights and fail against the previous writer. Native run 43797470577 at commit `d51c2790269cdc66c74dcce12b9f5565570f9c5a` reported 2 passed, 0 skipped, and 0 failures on win32 Python 3.15.2.
