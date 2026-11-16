@@ -63,16 +63,16 @@ No project setup is needed. The feature uses the existing Python environment and
 
 **Goal**: Run the real Windows helper and writer tests before merge without changing required CI.
 
-**Independent Test**: Push a feature branch commit and confirm that two native tests pass with zero skips.
+**Independent Test**: Push a feature branch commit that changes a listed test input and confirm that two native tests pass with zero skips.
 
 ### Tests for User Story 4
 
 - [X] T012 [US1] Add a native full-writer regression with synthetic evidence in `tests/e2e/websockets_tab/dialog_audit/test_inventory.py`.
-- [X] T013 [US4] Add a workflow guard for runner, permissions, timeout, and zero-skip behavior in `tests/guardrails/test_ci_gate_triggers.py`.
+- [X] T013 [US4] Add a workflow guard for the path filter, runner, permissions, timeout, and zero-skip behavior in `tests/guardrails/test_ci_gate_triggers.py`.
 
 ### Implementation for User Story 4
 
-- [X] T014 [US4] Add a separate optional Windows workflow in `.github/workflows/windows-audit-report.yml`.
+- [X] T014 [US4] Add a separate optional Windows workflow with a narrow path filter in `.github/workflows/windows-audit-report.yml`.
 
 **Checkpoint**: The workflow must run both real Windows regressions and fail if either test skips.
 
@@ -85,8 +85,8 @@ No project setup is needed. The feature uses the existing Python environment and
 - [X] T009 Restore the prior `.specify/feature.json` content, verify the routed record, and commit the completed local change.
 - [ ] T010 Run both native regressions through the branch-push workflow. Leave this task open until the Windows job reports two passed tests and zero skips.
 - [X] T015 Update the native Windows workflow path in the #4771 records and release fragment.
-- [X] T016 Run the focused regression, workflow contract, applicable quality gates, and offline synthetic smoke. Record exact outcomes in the handoff.
-- [X] T017 Commit the reviewed local changes with a Conventional Commit subject and the required co-author trailer.
+- [ ] T016 Run the focused regression, workflow contract, applicable quality gates, and offline synthetic smoke. Record exact outcomes in the handoff.
+- [ ] T017 Commit the reviewed local changes with a Conventional Commit subject and the required co-author trailer.
 
 ## Dependencies and Execution Order
 

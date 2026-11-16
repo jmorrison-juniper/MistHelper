@@ -4,6 +4,14 @@ on:
   push:
     branches-ignore:
       - main
+    paths:
+      - .github/workflows/windows-audit-report.yml
+      - tests/e2e/websockets_tab/dialog_audit/support/reporting.py
+      - tests/e2e/websockets_tab/dialog_audit/test_inventory.py
+      - tests/guardrails/test_ci_gate_triggers.py
+      - pyproject.toml
+      - requirements.txt
+      - requirements-dev.txt
 
 concurrency:
   group: windows-audit-report-${{ github.ref }}

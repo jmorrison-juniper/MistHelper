@@ -32,9 +32,9 @@
 
 ## Decision 4: Run native Windows checks from a feature-branch push
 
-**Decision**: Add a separate optional workflow that runs the real helper and writer tests on `windows-latest` after a non-main branch push. Require two collected tests, zero skips, and zero failures.
+**Decision**: Add a separate optional workflow that runs the real helper and writer tests on `windows-latest` after a non-main branch push that changes a listed test input. Require two collected tests, zero skips, and zero failures.
 
-**Rationale**: This workflow file can run from the pushed branch before it exists on the default branch. The separate job can test native APIs without changing the required CI workflow or status names.
+**Rationale**: This workflow file can run from the pushed branch before it exists on the default branch. A narrow path filter avoids runs for unrelated changes. The separate job can test native APIs without changing the required CI workflow or status names.
 
 **Alternatives considered**: A manual dispatch requires the workflow file on the default branch. A simulated Windows test cannot prove that `CreateFileW` grants the rights needed by the real ACL update.
 

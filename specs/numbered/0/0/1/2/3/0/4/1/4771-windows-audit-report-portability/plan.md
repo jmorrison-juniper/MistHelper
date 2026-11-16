@@ -6,7 +6,7 @@
 
 ## Summary
 
-Make the restricted audit writer work on Windows without weakening owner-only permissions or link rejection. Stage both reports in private, exclusive files, then replace the report pair only after both writes succeed. Open each staged file with `WRITE_DAC` and `FILE_READ_ATTRIBUTES` through `FILE_FLAG_OPEN_REPARSE_POINT` before applying its protected owner-only access control list. Add a separate optional Windows workflow that runs the real helper and writer regressions on a feature-branch push.
+Make the restricted audit writer work on Windows without weakening owner-only permissions or link rejection. Stage both reports in private, exclusive files, then replace the report pair only after both writes succeed. Open each staged file with `WRITE_DAC` and `FILE_READ_ATTRIBUTES` through `FILE_FLAG_OPEN_REPARSE_POINT` before applying its protected owner-only access control list. Add a separate optional Windows workflow that runs the real helper and writer regressions only when a feature-branch push changes a listed test input.
 
 ## Technical Context
 
@@ -24,7 +24,7 @@ Make the restricted audit writer work on Windows without weakening owner-only pe
 
 **Performance Goals**: Write two small local reports without network access.
 
-**Constraints**: Keep the exact approved directory, owner-only access, symlink and reparse-point rejection, safe handling of existing reports, and cleanup after failure. Add no dependency. Keep the new workflow read-only and optional. Do not edit `ci.yml`, branch protection, required status names, or other product source. Do not call Mist endpoints or use credentials, production data, or services.
+**Constraints**: Keep the exact approved directory, owner-only access, symlink and reparse-point rejection, safe handling of existing reports, and cleanup after failure. Add no dependency. Keep the new workflow read-only, optional, and limited to relevant test inputs. Do not edit `ci.yml`, branch protection, required status names, or other product source. Do not call Mist endpoints or use credentials, production data, or services.
 
 **Scale/Scope**: One writer regression, one workflow contract, one optional workflow, one release fragment, and the routed Spec Kit record.
 
@@ -36,7 +36,7 @@ Make the restricted audit writer work on Windows without weakening owner-only pe
 - The change adds one uniquely named issue release fragment. This is a required record under the established `changelog.d/` process folder.
 - Existing process-folder debt remains governed by `tests/guardrails/process_folder_baseline.json`. This change does not alter the baseline. A separate future task can reduce any recorded debt.
 - Generated test reports remain in the ignored `test-artifacts/` directory. This change creates no product data.
-- The new optional workflow runs only on feature-branch pushes, has read-only repository access, and does not change required status names.
+- The new optional workflow runs only on relevant feature-branch pushes, has read-only repository access, and does not change required status names.
 - No Mist Cloud API, menu operation, production source package, dependency, `ci.yml`, branch protection, or public symbol changes.
 - Keep each new class and method within the repository limits. Refactor the existing long `AuditReportWriter.write` method into bounded methods. This plan records that existing method-length violation as a directly touched issue.
 - Use a Conventional Commit subject and include the required Copilot co-author trailer.

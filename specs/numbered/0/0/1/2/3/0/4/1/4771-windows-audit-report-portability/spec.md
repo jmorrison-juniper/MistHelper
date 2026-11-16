@@ -59,7 +59,7 @@ A maintainer checks the report helper and writer on a native Windows runner befo
 
 **Acceptance Scenarios**:
 
-1. **Given** a feature branch commit, **When** it is pushed, **Then** a separate bounded Windows workflow runs the native helper and writer tests.
+1. **Given** a feature branch commit that changes a listed test input, **When** it is pushed, **Then** a separate bounded Windows workflow runs the native helper and writer tests.
 2. **Given** a native test is missing or skipped, **When** the workflow checks its results, **Then** the job fails.
 3. **Given** the workflow runs, **Then** it uses synthetic data, read-only repository access, and no Mist service or credential.
 
@@ -81,7 +81,7 @@ A maintainer checks the report helper and writer on a native Windows runner befo
 - **FR-005**: The writer MUST preserve earlier reports when a write fails.
 - **FR-006**: The writer MUST remove temporary files after a failed write.
 - **FR-007**: The writer MUST keep existing non-Windows report behavior and path restrictions.
-- **FR-008**: A separate optional workflow MUST run the native Windows helper and writer regressions after a non-main branch push.
+- **FR-008**: A separate optional workflow MUST run the native Windows helper and writer regressions after a non-main branch push that changes a listed test input.
 - **FR-009**: The workflow MUST fail unless both native tests run and pass without a skip.
 - **FR-010**: The workflow MUST use no credentials, Mist endpoints, production data, or services and MUST NOT change required checks.
 
@@ -101,7 +101,7 @@ A maintainer checks the report helper and writer on a native Windows runner befo
 - **SC-004**: Every injected write failure preserves prior report contents and leaves no temporary files.
 - **SC-005**: The existing non-Windows writer tests continue to pass.
 - **SC-006**: The Windows workflow reports exactly two passed native regressions and zero skips.
-- **SC-007**: The workflow has a read-only token permission and a finite job timeout.
+- **SC-007**: The workflow has a narrow path filter, a read-only token permission, and a finite job timeout.
 
 ## Assumptions
 

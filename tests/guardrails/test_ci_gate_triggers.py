@@ -40,6 +40,17 @@ CODEQL_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "codeql.yml"
 # Name the optional native writer workflow, because it is not a required check.
 WINDOWS_AUDIT_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "windows-audit-report.yml"
 
+# List only the files that can change the native report test result.
+WINDOWS_AUDIT_TRIGGER_PATHS = (
+    ".github/workflows/windows-audit-report.yml",
+    "tests/e2e/websockets_tab/dialog_audit/support/reporting.py",
+    "tests/e2e/websockets_tab/dialog_audit/test_inventory.py",
+    "tests/guardrails/test_ci_gate_triggers.py",
+    "pyproject.toml",
+    "requirements.txt",
+    "requirements-dev.txt",
+)
+
 # PyYAML turns the bare `on` key into the boolean True, so name that key once.
 TRIGGER_KEY = True
 
@@ -436,7 +447,11 @@ class TestWindowsAuditReportWorkflow:
         """Check the trigger, permissions, and concurrency boundary."""
         concurrency = workflow.get("concurrency", {})  # Read the cancellation policy before accepting the job.
         contracts = {
-            "feature-push-trigger": workflow.get("on", {}).get("push") == {"branches-ignore": ["main"]},
+            "feature-push-trigger": workflow.get("on", {}).get("push")
+            == {
+                "branches-ignore": ["main"],
+                "paths": list(WINDOWS_AUDIT_TRIGGER_PATHS),
+            },
             "read-only-permission": workflow.get("permissions") == {"contents": "read"},
             "cancel-aware-concurrency": (
                 "github.ref" in concurrency.get("group", "") and concurrency.get("cancel-in-progress") is True
@@ -481,12 +496,14 @@ class TestWindowsAuditReportWorkflow:
         }  # Fail when a native regression is absent, skipped, or allowed to fail.
         return [name for name, valid in contracts.items() if not valid]  # Name each failed contract.
 
-    @pytest.mark.parametrize("mutation", [None, "runner", "skip-check", "secret"])
+    @pytest.mark.parametrize("mutation", [None, "path-filter", "runner", "skip-check", "secret"])
     def test_workflow_contract_rejects_unsafe_changes(self, mutation: str | None) -> None:
         """Check the live workflow and prove that unsafe changes fail."""
         workflow = self.read_workflow()  # Use a fresh mapping for each test case.
         job = workflow["jobs"]["native_windows_audit_report"]  # Read the sole optional native job.
-        if mutation == "runner":
+        if mutation == "path-filter":
+            workflow["on"]["push"].pop("paths")
+        elif mutation == "runner":
             job["runs-on"] = "ubuntu-latest"
         elif mutation == "skip-check":
             job["steps"][-1]["run"] = job["steps"][-1]["run"].replace("skipped == 0", "skipped >= 0")
