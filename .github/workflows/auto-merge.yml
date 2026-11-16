@@ -58,11 +58,11 @@ jobs:
       contents: write
       # The job sets the auto-merge state and writes the notice comments.
       pull-requests: write
-    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-auto-merge.yml@0fdcf610c87a281bd4e952486d6154b2bf45fec4 # Verified merge recovery
+    uses: jmorrison-juniper/misthelper-devtools/.github/workflows/reusable-auto-merge.yml@d63a120487cecf750184cb178387cdc25c0a7635 # Verified post-merge dispatch
     with:
       # The workflows that a push to main starts. The dispatch job reads this
       # one list, so a new main workflow needs one edit only.
-      main-workflows: 'ci.yml codeql.yml container-build.yml'
+      main-workflows: 'ci.yml codeql.yml container-build.yml ste-lint.yml'
       # The orphan job reads the push trigger above (issue #1960).
       report-orphaned-push: true
 
