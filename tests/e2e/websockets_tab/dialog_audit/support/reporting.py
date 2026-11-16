@@ -113,20 +113,27 @@ class WindowsAuditReportApis:
             ctypes.POINTER(wintypes.BOOL),
         ]
         advapi32.GetSecurityDescriptorDacl.restype = wintypes.BOOL
-        advapi32.SetKernelObjectSecurity.argtypes = [  # Write the DACL directly to the opened handle.
+        advapi32.SetSecurityInfo.argtypes = [  # Apply the DACL to the opened handle, not a path.
             wintypes.HANDLE,
             wintypes.DWORD,
+            wintypes.DWORD,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
             ctypes.c_void_p,
         ]
-        advapi32.SetKernelObjectSecurity.restype = wintypes.BOOL  # Report native write failure.
-        advapi32.GetKernelObjectSecurity.argtypes = [  # Read the applied DACL back from the same handle.
+        advapi32.SetSecurityInfo.restype = wintypes.DWORD  # Return a Win32 status code.
+        advapi32.GetSecurityInfo.argtypes = [  # Read the applied DACL back from the same handle.
             wintypes.HANDLE,
             wintypes.DWORD,
-            ctypes.c_void_p,
             wintypes.DWORD,
-            ctypes.POINTER(wintypes.DWORD),
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_void_p),
         ]
-        advapi32.GetKernelObjectSecurity.restype = wintypes.BOOL  # Report native read failure.
+        advapi32.GetSecurityInfo.restype = wintypes.DWORD  # Return a Win32 status code.
         advapi32.GetSecurityDescriptorControl.argtypes = [  # Read the protected and present control bits.
             ctypes.c_void_p,
             ctypes.POINTER(wintypes.WORD),
@@ -185,9 +192,10 @@ class WindowsAuditReportSecurity:
             )
             if not has_dacl or not present.value or not dacl.value:
                 raise OSError("Windows did not provide the required owner-only DACL.")
-            # SetSecurityInfo reads the old descriptor through MARTA, so a WRITE_DAC handle failed with status 5.
-            if not advapi32.SetKernelObjectSecurity(handle, 0x00000004, descriptor):  # Write DACL information only.
-                raise WindowsAuditReportSecurity._windows_error()  # Fail closed with the native error.
+            # Native run 43795918169 returned status 5 with WRITE_DAC alone. The handle now adds READ_CONTROL.
+            status = advapi32.SetSecurityInfo(handle, 1, 0x80000004, None, None, dacl, None)  # Protected DACL.
+            if status:  # A nonzero Win32 status means the DACL was not applied.
+                raise WindowsAuditReportSecurity._windows_error(status)  # Fail closed with the native status.
         finally:
             kernel32.LocalFree(descriptor)  # Release the descriptor after success or failure.
 
@@ -205,32 +213,32 @@ class WindowsAuditReportDaclVerifier:
     """Read the applied DACL back so a silent inheritance change fails closed."""
 
     @staticmethod
-    def _read_descriptor(apis: tuple[Any, Any, Any], handle: int) -> Any:
-        import ctypes  # Allocate the native descriptor buffer.
-        from ctypes import wintypes  # Receive the required buffer length.
-
-        advapi32 = apis[1]  # Use the configured security API table.
-        needed = wintypes.DWORD()  # Receive the descriptor length from the sizing call.
-        advapi32.GetKernelObjectSecurity(handle, 0x00000004, None, 0, ctypes.byref(needed))  # Size only.
-        if not needed.value:  # Fail closed when Windows cannot report a descriptor length.
-            raise WindowsAuditReportSecurity._windows_error()  # Preserve the native sizing error.
-        buffer = ctypes.create_string_buffer(needed.value)  # Hold the self-relative descriptor.
-        if not advapi32.GetKernelObjectSecurity(handle, 0x00000004, buffer, needed.value, ctypes.byref(needed)):
-            raise WindowsAuditReportSecurity._windows_error()  # Fail closed when the DACL cannot be read.
-        return buffer  # Return the descriptor for control-bit inspection.
-
-    @classmethod
-    def verify(cls, apis: tuple[Any, Any, Any], handle: int, path: Path) -> None:
+    def _control_bits(apis: tuple[Any, Any, Any], descriptor: Any) -> int:
         import ctypes  # Pass output pointers to the native control query.
         from ctypes import wintypes  # Match the control and revision widths.
 
-        logger.info("Verifying protected owner-only DACL on %s", path.name)  # Trace the native readback.
-        descriptor = cls._read_descriptor(apis, handle)  # Read the DACL through the same verified handle.
         control, revision = wintypes.WORD(), wintypes.DWORD()  # Receive the descriptor control bits.
         if not apis[1].GetSecurityDescriptorControl(descriptor, ctypes.byref(control), ctypes.byref(revision)):
             raise WindowsAuditReportSecurity._windows_error()  # Fail closed when the control bits are unknown.
-        if control.value & 0x1004 != 0x1004:  # Require SE_DACL_PROTECTED and SE_DACL_PRESENT.
-            raise OSError(f"Windows did not keep the protected owner-only DACL: {path}")
+        return int(control.value)  # Return the bits for the protected and present check.
+
+    @classmethod
+    def verify(cls, apis: tuple[Any, Any, Any], handle: int, path: Path) -> None:
+        import ctypes  # Receive the descriptor and DACL pointers from the native read.
+
+        logger.info("Verifying protected owner-only DACL on %s", path.name)  # Trace the native readback.
+        dacl, descriptor = ctypes.c_void_p(), ctypes.c_void_p()  # Receive pointers that Windows allocates.
+        status = apis[1].GetSecurityInfo(  # Read DACL information through the same verified handle.
+            handle, 1, 0x00000004, None, None, ctypes.byref(dacl), None, ctypes.byref(descriptor)
+        )
+        if status:  # A nonzero Win32 status means the DACL could not be read.
+            raise WindowsAuditReportSecurity._windows_error(status)  # Fail closed with the native status.
+        try:
+            control = cls._control_bits(apis, descriptor)  # Read the protected and present bits.
+            if not dacl.value or control & 0x1004 != 0x1004:  # Require a DACL with both control bits set.
+                raise OSError(f"Windows did not keep the protected owner-only DACL: {path}")
+        finally:
+            apis[0].LocalFree(descriptor)  # Release the descriptor that GetSecurityInfo allocated.
         logger.debug("Verified protected owner-only DACL on %s", path.name)  # Confirm the readback result.
 
 

@@ -40,12 +40,12 @@
 
 **Evidence**: GitHub documents that a push event can run an unmerged workflow file in the pushed commit. See [Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows).
 
-## Decision 5: Write the DACL directly to the verified handle
+## Decision 5: Request READ_CONTROL and verify the DACL through the same handle
 
-**Decision**: Apply the owner-only DACL with `SetKernelObjectSecurity` and `DACL_SECURITY_INFORMATION`. Request `READ_CONTROL`, `WRITE_DAC`, and `FILE_READ_ATTRIBUTES` on the directory and staged-file handles. Read the descriptor back through the same handle, and fail when `SE_DACL_PROTECTED` or `SE_DACL_PRESENT` is absent.
+**Decision**: Keep `SetSecurityInfo` with `PROTECTED_DACL_SECURITY_INFORMATION` and `DACL_SECURITY_INFORMATION` on the verified handle. Request `READ_CONTROL`, `WRITE_DAC`, and `FILE_READ_ATTRIBUTES` on the directory and staged-file handles. Read the DACL back with `GetSecurityInfo` through the same handle, and fail when `SE_DACL_PROTECTED` or `SE_DACL_PRESENT` is absent.
 
-**Rationale**: Native run 43795918169 failed with Win32 status 5 at `SetSecurityInfo` on a directory handle that had `WRITE_DAC` only. `SetSecurityInfo` uses the access-control layer, which reads the current descriptor before it writes. The direct call needs `WRITE_DAC` only, and the `D:P` descriptor sets the protected bit. The readback proves the result, so a silent change fails closed.
+**Rationale**: Native run 43795918169 failed with Win32 status 5 at `SetSecurityInfo` on a directory handle that had `WRITE_DAC` and `FILE_READ_ATTRIBUTES` only. The hypothesis is that the call also needs `READ_CONTROL` on the handle. Native evidence has not proven this hypothesis yet. The readback makes a silent change fail closed. The extra right is on the writer handle only, and it gives no access to other accounts.
 
-**Alternatives considered**: Add only `READ_CONTROL` and keep `SetSecurityInfo`. That call also propagates inherited entries to existing children through path opens, which this writer does not need.
+**Alternatives considered**: `SetKernelObjectSecurity` writes a descriptor directly to a handle. Microsoft documentation tells callers to use `SetSecurityInfo` for file-system objects, so this design does not use it.
 
-**Evidence**: The failed log shows the error at `_set_owner_dacl` after `SetSecurityInfo`. The new boundary tests fail against the previous writer. Native success is not proven until the Windows job passes.
+**Evidence**: The failed log shows the error at `_set_owner_dacl` after `SetSecurityInfo`. The boundary tests model the handle rights and fail against the previous writer. Native success is not proven until the Windows job passes.

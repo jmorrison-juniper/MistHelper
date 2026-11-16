@@ -893,11 +893,11 @@ class TestWindowsAuditReportWriter:
 
 
 class TestWindowsAuditReportDaclBoundary:
-    """Prove the real DACL helpers use handle rights that the native API needs."""
+    """Prove the real DACL helpers use the documented file-security APIs on verified handles."""
 
     @staticmethod
-    def fake_advapi32(control: int = 0x1004, descriptor_size: int = 64) -> SimpleNamespace:
-        """Return security functions that fill ctypes outputs like the native API."""
+    def fake_advapi32(control: int = 0x1004, dacl_pointer: int = 888, granted: int = 0x00060080) -> SimpleNamespace:
+        """Return security functions that fill ctypes outputs and model handle-right checks."""
 
         def convert(_sddl, _revision, descriptor, _size):
             descriptor._obj.value = 777  # Simulate the descriptor that Windows allocates.
@@ -907,9 +907,14 @@ class TestWindowsAuditReportDaclBoundary:
             present._obj.value, dacl._obj.value = True, 888  # Report a present owner-only DACL.
             return True
 
-        def read_descriptor(_handle, _information, buffer, _length, needed):
-            needed._obj.value = descriptor_size  # Report the self-relative descriptor size.
-            return buffer is not None and descriptor_size > 0
+        def write_info(_handle, _object_type, _information, _owner, _group, _dacl, _sacl):
+            return 0 if granted & 0x00060000 == 0x00060000 else 5  # Model a denied write without both rights.
+
+        def read_info(_handle, _object_type, _information, _owner, _group, dacl, _sacl, descriptor):
+            if granted & 0x00020000 == 0:  # Model the read that needs READ_CONTROL.
+                return 5
+            dacl._obj.value, descriptor._obj.value = dacl_pointer, 999  # Return the applied descriptor.
+            return 0
 
         def read_control(_descriptor, control_bits, _revision):
             control_bits._obj.value = control  # Report the applied descriptor control bits.
@@ -918,82 +923,102 @@ class TestWindowsAuditReportDaclBoundary:
         return SimpleNamespace(
             ConvertStringSecurityDescriptorToSecurityDescriptorW=Mock(side_effect=convert),
             GetSecurityDescriptorDacl=Mock(side_effect=get_dacl),
-            SetKernelObjectSecurity=Mock(return_value=True),
-            GetKernelObjectSecurity=Mock(side_effect=read_descriptor),
+            SetSecurityInfo=Mock(side_effect=write_info),
+            GetSecurityInfo=Mock(side_effect=read_info),
             GetSecurityDescriptorControl=Mock(side_effect=read_control),
         )
 
-    def test_owner_dacl_writes_directly_to_handle(self) -> None:
-        """Avoid the MARTA read that failed with status 5 on a WRITE_DAC handle."""
+    def test_owner_dacl_uses_protected_set_security_info_on_handle(self) -> None:
+        """Apply the protected owner-only DACL through SetSecurityInfo on the opened handle."""
         from tests.e2e.websockets_tab.dialog_audit.support import reporting
 
         kernel32 = SimpleNamespace(LocalFree=Mock())  # Record descriptor release.
-        advapi32 = self.fake_advapi32()  # Omit SetSecurityInfo so a regression raises AttributeError.
+        advapi32 = self.fake_advapi32()  # Model a handle with READ_CONTROL and WRITE_DAC.
         reporting.WindowsAuditReportSecurity._set_owner_dacl((kernel32, advapi32, None), 321, True)
-        handle, information, _descriptor = advapi32.SetKernelObjectSecurity.call_args.args
-        assert (handle, information) == (321, 0x00000004)  # Write DACL information only to this handle.
+        handle, object_type, information, owner, group, dacl, sacl = advapi32.SetSecurityInfo.call_args.args
+        assert (handle, object_type, information) == (321, 1, 0x80000004)  # Protected DACL on a file handle.
+        assert (owner, group, sacl, dacl.value) == (None, None, None, 888)  # Change only the owner-only DACL.
         sddl = advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.call_args.args[0]
         assert sddl == "D:P(A;OICI;FA;;;OW)"  # Keep the protected owner-only directory policy.
         assert kernel32.LocalFree.call_count == 1  # Release the converted descriptor.
 
     def test_owner_dacl_write_failure_fails_closed(self) -> None:
-        """Raise when Windows rejects the direct DACL write."""
+        """Raise when Windows rejects the DACL write on a handle without READ_CONTROL."""
         from tests.e2e.websockets_tab.dialog_audit.support import reporting
 
         kernel32 = SimpleNamespace(LocalFree=Mock())  # Record descriptor release.
-        advapi32 = self.fake_advapi32()  # Supply the native security functions.
-        advapi32.SetKernelObjectSecurity.return_value = False  # Simulate an access-denied write.
+        advapi32 = self.fake_advapi32(granted=0x00040080)  # Model the rights of native run 43795918169.
         with pytest.raises(OSError, match="Windows API call failed"):
             reporting.WindowsAuditReportSecurity._set_owner_dacl((kernel32, advapi32, None), 321, False)
         assert kernel32.LocalFree.call_count == 1  # Release the descriptor after the failure.
 
     @pytest.mark.parametrize(
-        ("control", "descriptor_size", "message"),
+        ("control", "dacl_pointer", "granted", "message", "released"),
         [
-            (0x0004, 64, "did not keep the protected"),
-            (0x1000, 64, "did not keep the protected"),
-            (0x1004, 0, "Windows API call failed"),
+            (0x0004, 888, 0x00060080, "did not keep the protected", 1),
+            (0x1000, 888, 0x00060080, "did not keep the protected", 1),
+            (0x1004, 0, 0x00060080, "did not keep the protected", 1),
+            (0x1004, 888, 0x00040080, "Windows API call failed", 0),
         ],
     )
     def test_dacl_readback_rejects_unprotected_or_unreadable_descriptor(
-        self, control: int, descriptor_size: int, message: str
+        self, control: int, dacl_pointer: int, granted: int, message: str, released: int
     ) -> None:
-        """Fail closed when the readback lacks protection, a DACL, or a descriptor."""
+        """Fail closed when the readback lacks protection, a DACL, or READ_CONTROL."""
         from tests.e2e.websockets_tab.dialog_audit.support import reporting
 
-        advapi32 = self.fake_advapi32(control, descriptor_size)  # Simulate the applied descriptor state.
+        kernel32 = SimpleNamespace(LocalFree=Mock())  # Record release of the returned descriptor.
+        advapi32 = self.fake_advapi32(control, dacl_pointer, granted)  # Simulate the applied descriptor state.
         with pytest.raises(OSError, match=message):
-            reporting.WindowsAuditReportDaclVerifier.verify((None, advapi32, None), 321, Path("report.json"))
+            reporting.WindowsAuditReportDaclVerifier.verify((kernel32, advapi32, None), 321, Path("report.json"))
+        assert kernel32.LocalFree.call_count == released  # Free only a descriptor that Windows returned.
 
     def test_dacl_readback_accepts_protected_descriptor(self) -> None:
-        """Read the descriptor through the same handle and accept protected DACL bits."""
+        """Read the DACL through GetSecurityInfo on the same handle and accept protected bits."""
         from tests.e2e.websockets_tab.dialog_audit.support import reporting
 
+        kernel32 = SimpleNamespace(LocalFree=Mock())  # Record release of the returned descriptor.
         advapi32 = self.fake_advapi32()  # Report SE_DACL_PROTECTED and SE_DACL_PRESENT.
-        reporting.WindowsAuditReportDaclVerifier.verify((None, advapi32, None), 321, Path("report.json"))
-        read_calls = advapi32.GetKernelObjectSecurity.call_args_list  # Read the sizing and data calls.
-        assert [call.args[:2] for call in read_calls] == [(321, 4), (321, 4)]  # Read the DACL from this handle.
-        assert read_calls[1].args[3] == 64  # Pass the reported buffer length to the data call.
+        reporting.WindowsAuditReportDaclVerifier.verify((kernel32, advapi32, None), 321, Path("report.json"))
+        assert advapi32.GetSecurityInfo.call_args.args[:3] == (321, 1, 0x00000004)  # Read DACL from this handle.
+        assert kernel32.LocalFree.call_args.args[0].value == 999  # Free the descriptor that Windows allocated.
 
-    def test_directory_handle_requests_read_control_and_write_dac(
+    def test_directory_restrict_succeeds_only_with_read_control(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """Open the existing directory with only the rights that the DACL work needs."""
+        """Run the real directory open, restrict, write, and readback against modeled handle rights."""
         from tests.e2e.websockets_tab.dialog_audit.support import reporting
 
-        access = reporting.WindowsAuditReportAccess  # Exercise the real directory helper.
-        kernel32 = SimpleNamespace(CreateFileW=Mock(return_value=654), CloseHandle=Mock(return_value=True))
-        security = reporting.WindowsAuditReportSecurity  # Replace only the native boundary and DACL write.
-        monkeypatch.setattr(security, "_windows_apis", Mock(return_value=(kernel32, None, None)))
-        monkeypatch.setattr(security, "restrict", Mock())
+        def query_attributes(_handle, _information_class, attributes, _size):
+            attributes[0] = 0x10  # Report a plain directory without a reparse point.
+            return True
+
+        granted = {}  # Record the rights that the real helper requests.
+
+        def open_handle(_path, desired_access, *_arguments):
+            granted["mask"] = desired_access  # Grant exactly the requested rights.
+            return 654
+
+        kernel32 = SimpleNamespace(
+            CreateFileW=Mock(side_effect=open_handle),
+            CloseHandle=Mock(return_value=True),
+            GetFileInformationByHandleEx=Mock(side_effect=query_attributes),
+            LocalFree=Mock(),
+        )
+        advapi32 = self.fake_advapi32()  # Model the API checks before the requested mask is known.
+        advapi32.SetSecurityInfo.side_effect = lambda *args: 0 if granted["mask"] & 0x00060000 == 0x00060000 else 5
+        access, security = reporting.WindowsAuditReportAccess, reporting.WindowsAuditReportSecurity
+        monkeypatch.setattr(security, "_windows_apis", Mock(return_value=(kernel32, advapi32, None)))
         monkeypatch.setattr(access, "reject_reparse_points", Mock())  # POSIX lstat has no Windows attributes.
-        monkeypatch.setattr(access, "verify_attributes", Mock())  # POSIX lstat has no Windows attributes.
+        verify_handle_attributes = access.verify_attributes  # Keep the real check for handle attributes.
+        handle_only = Mock(side_effect=lambda bits, path: bits and verify_handle_attributes(bits, path))  # Skip lstat.
+        monkeypatch.setattr(access, "verify_attributes", handle_only)  # Check only the handle attribute query.
         access.ensure_private_directory(tmp_path)  # Reopen the existing pytest directory.
         arguments = kernel32.CreateFileW.call_args.args  # Read the native open request.
         assert arguments[1] == 0x00060080  # Require READ_CONTROL, WRITE_DAC, and FILE_READ_ATTRIBUTES only.
-        assert arguments[4] == 3  # Open only the existing directory.
-        assert arguments[5] == 0x02200000  # Use backup semantics without following a reparse point.
-        assert security.restrict.call_args.args == (654, tmp_path, True)  # Restrict the opened directory handle.
+        assert access.verify_attributes.call_args.args[0] == 0x10  # Check the attributes of the opened handle.
+        assert (arguments[4], arguments[5]) == (3, 0x02200000)  # Open the existing directory without following.
+        assert advapi32.GetSecurityInfo.call_args.args[0] == 654  # Read back through the restricted handle.
         assert kernel32.CloseHandle.call_args.args == (654,)  # Close the directory handle.
 
 

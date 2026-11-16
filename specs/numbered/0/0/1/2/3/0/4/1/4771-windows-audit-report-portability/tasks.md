@@ -87,7 +87,7 @@ No project setup is needed. The feature uses the existing Python environment and
 - [X] T015 Update the native Windows workflow path in the #4771 records and release fragment.
 - [X] T016 Run the focused regression, workflow contract, applicable quality gates, and offline synthetic smoke. Record exact outcomes in the handoff.
 - [X] T017 Commit the reviewed local changes with a Conventional Commit subject and the required co-author trailer.
-- [X] T018 Repair the directory DACL failure from native run 43795918169. Write the DACL with `SetKernelObjectSecurity`, request `READ_CONTROL` on both handles, and read back the protected DACL bits. Add boundary tests that fail against the previous writer.
+- [X] T018 Repair the directory DACL failure from native run 43795918169. Keep `SetSecurityInfo` with the protected DACL flag, request `READ_CONTROL` on both handles, and read back the protected DACL bits through `GetSecurityInfo`. Add boundary tests that fail against the previous writer.
 
 ## Dependencies and Execution Order
 
