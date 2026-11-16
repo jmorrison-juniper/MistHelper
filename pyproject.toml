@@ -85,7 +85,7 @@ dependencies = [
     # Upgrade capture portal (web application, request forgery guard, server)
     "Flask>=3.1.3,<4",
     "flask-wtf>=1.3.0,<2",
-    "gunicorn>=26.2.0,<27",
+    "gunicorn>=26.2.0,<28",
     # Windows cannot run Gunicorn, because `gunicorn.util` imports `fcntl` and
     # Windows ships no `fcntl`. `select_server_name()` therefore returns Waitress
     # on Windows, so a Windows install needs Waitress as a core dependency. A
@@ -98,9 +98,9 @@ dependencies = [
 dev = [
     # Each pin equals the pin in requirements-dev.txt (issue #3400). The guard
     # tests/guardrails/test_dependency_declaration_parity.py compares the two.
-    "uv==0.13.7",  # Provide the export command to CI jobs that install with pip.
+    "uv==0.13.8",  # Provide the export command to CI jobs that install with pip.
     "podman-compose==1.6.0",
-    "ruff==0.17.3",
+    "ruff==0.17.5",
     "black==26.10.1",
     "mypy==2.4.1",
     "types-requests==2.33.0.20261030",
