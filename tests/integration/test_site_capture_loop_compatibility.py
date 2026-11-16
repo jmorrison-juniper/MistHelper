@@ -11,4 +11,4 @@ def test_site_capture_loop_runner_stops_on_keyboard_interrupt() -> None:
     manager._fetch_completed_pcaps.side_effect = KeyboardInterrupt
     runner = SiteCaptureLoopRunner(manager=manager)
     runner.run("site-1", {"duration": 60})
-    manager._log_loop_stop.assert_called_once()
+    manager._log_loop_stop.assert_called_once_with(1)  # first fetch interrupted after the counter started iteration 1
