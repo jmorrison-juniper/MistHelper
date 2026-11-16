@@ -78,7 +78,10 @@ It also serves a network operations center that runs the same report on a
 schedule, and a managed service provider that works across more than one
 organization.
 
-You need a Mist API token. You do not need to write Python.
+You can use a Mist API token or sign in with `--login` and your Mist email and
+password. If your account requires two-factor authentication, MistHelper prompts
+for a verification code. You do not need to write Python. See the [command line
+reference](documentation/cli-reference.md#flags) for more about `--login`.
 
 ## Where
 
@@ -87,8 +90,11 @@ container carries Python, every dependency, the two data stores, and both
 portals.
 
 It reaches the Mist Cloud API over HTTPS. It writes every output file to
-`data/`, which the container shares with your machine. Your API token stays in
-your local `.env` file and never leaves your host.
+`data/`, which the container shares with your machine. When you use an API
+token, MistHelper sends it to Mist in an HTTPS `Authorization` header. Keep the
+token in your local `.env` file. Git ignores that file. With `--login`,
+MistHelper uses your email and password and prompts for a verification code
+when Mist requires two-factor authentication.
 
 ## When
 
@@ -141,16 +147,16 @@ cd MistHelper
 cp documentation\sample.env .env
 ```
 
-Open `.env` and set two values:
+Open `.env` and set `MIST_HOST` to name your Mist cloud, such as
+`api.mist.com`. For API-token authentication, also set `MIST_APITOKEN` to your
+Mist API token. Interactive `--login` does not need an API token.
 
-- `MIST_APITOKEN` holds your Mist API token.
-- `MIST_HOST` names your Mist cloud, such as `api.mist.com`.
+To create a token for API-token authentication, sign in to
+<https://manage.mist.com>, open Organization, then API Tokens, then create a
+token.
 
-To create the token, sign in to <https://manage.mist.com>, open Organization,
-then API Tokens, then create a token.
-
-Warning: `.env` holds a live credential. The repository ignores that file. Never
-commit it, and never paste its contents into an issue.
+Warning: `.env` may hold a live API token. The repository ignores that file.
+Never commit it, and never paste its contents into an issue.
 
 ### Step 3: Let the data folder accept a write
 
