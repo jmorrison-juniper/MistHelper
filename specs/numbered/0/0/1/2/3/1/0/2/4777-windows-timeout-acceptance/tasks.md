@@ -40,7 +40,19 @@ No shared infrastructure changes are required.
 
 ### Native Acceptance
 
-- [ ] T008 [US1] After coordinator approval, run the workflow on a relevant non-main push. Verify seven tests pass with zero skips, errors, or failures. Keep this task unchecked until a real native Windows run succeeds.
+- [X] T008 [US1] Run the workflow on an approved non-main push. Verify seven tests pass with zero skips, errors, or failures.
+
+**Verified run**:
+
+- URL: https://github.com/jmorrison-juniper/MistHelper/actions/runs/43806539826
+- Tested commit: `2fbfe2e9a9392f168d20726ccfd3fc965ad1ac00`.
+- Environment: Windows Server 2025 and CPython 3.15.2.
+- Pytest result: `7 passed, 1 warning`.
+- Validator result: `Native Windows tests: 7 collected, 0 skipped, 0 failures, 0 errors`.
+
+**Pending**: Quality Gates, CodeQL, STE compliance, and Conventional Commits PR title checks await the pull request.
+
+**Not applicable**: UI, container, and menu checks. This change alters none of them.
 
 ## Dependencies & Execution Order
 
