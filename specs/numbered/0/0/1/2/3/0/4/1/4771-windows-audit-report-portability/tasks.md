@@ -85,8 +85,8 @@ No project setup is needed. The feature uses the existing Python environment and
 - [X] T009 Restore the prior `.specify/feature.json` content, verify the routed record, and commit the completed local change.
 - [ ] T010 Run both native regressions through the branch-push workflow. Leave this task open until the Windows job reports two passed tests and zero skips.
 - [X] T015 Update the native Windows workflow path in the #4771 records and release fragment.
-- [ ] T016 Run the focused regression, workflow contract, applicable quality gates, and offline synthetic smoke. Record exact outcomes in the handoff.
-- [ ] T017 Commit the reviewed local changes with a Conventional Commit subject and the required co-author trailer.
+- [X] T016 Run the focused regression, workflow contract, applicable quality gates, and offline synthetic smoke. Record exact outcomes in the handoff.
+- [X] T017 Commit the reviewed local changes with a Conventional Commit subject and the required co-author trailer.
 
 ## Dependencies and Execution Order
 
