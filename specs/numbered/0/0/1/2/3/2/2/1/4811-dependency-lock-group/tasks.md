@@ -42,7 +42,7 @@
 
 - [x] T010 Add the grouped release note in changelog.d/pr-4806.md. (delivered: changelog.d/pr-4806.md)
 - [x] T011 Complete Spec Kit consistency analysis and record findings, exact commands, and unresolved blockers in analysis.md. (delivered: analysis.md)
-- [ ] T012 Commit only the explicit feature files and report the exact local head to the coordinator. Keep the validation record in analysis.md.
+- [x] T012 Commit only the explicit feature files and retain the unpublished validation record in analysis.md. (delivered: analysis.md, implementation commit `58c83eb4b04868dac58990c271e93c79f38f5156`)
 
 ## Dependencies & Execution Order
 

@@ -12,6 +12,8 @@ The original merge base is `2a6a5844698aeb180fea353e0243034890774565`.
 The inspected local `origin/main` is `decd7f8b7f754289eccc27214f6d5c772c1d9698`.
 The coordinator retains the publication slot until the preceding serial merges finish.
 The final local commit is recorded in Git and reported separately to avoid a self-referencing commit record.
+The implementation commit is `58c83eb4b04868dac58990c271e93c79f38f5156`.
+The following documentation commit records task completion without changing the validated dependency set.
 
 ## Spec Kit analysis
 
@@ -89,6 +91,7 @@ The full test-quality analyzer reports 52 configured skips and zero parse errors
 The STE check passed every initial feature document and the release fragment.
 Scores ranged from 94 through 97 against the required minimum of 80.
 The final bookkeeping documents receive a separate check before the local commit.
+Their separate check passed with a score of 96 for each document.
 
 ### Environment corrections and unrelated failure
 
