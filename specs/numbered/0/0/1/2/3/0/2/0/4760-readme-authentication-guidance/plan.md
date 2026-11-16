@@ -50,13 +50,14 @@ specs/numbered/0/0/1/2/3/0/2/0/4760-readme-authentication-guidance/
   spec.md
   plan.md
   tasks.md
-  analysis.md
   design/
     checklists/requirements.md
     data-model.md
     quickstart.md
     research.md
 ```
+
+The Spec Kit analysis reports findings without writing an `analysis.md` file.
 
 ### Source Code
 
