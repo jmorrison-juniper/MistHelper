@@ -236,7 +236,7 @@ class TestWindowsTimeoutBudgetWorkflow:
     ) -> None:
         """Run the workflow's actual inline validator against synthetic JUnit reports."""
         validator = TimeoutBudgetWorkflowPolicy.junit_validator(workflow)  # Extract the workflow's real script.
-        assert validator, "The workflow must include its inline JUnit validator."  # Reject a missing validator.
+        assert validator != "", "The workflow must include its inline JUnit validator."  # Reject a missing validator.
         report_path = tmp_path / "timeout-budget.xml"  # Isolate each synthetic report.
         if xml_content is not None:  # Keep the unreadable case without a file.
             logging.info("action=%s phase=%s", "write_junit_fixture", "before")  # Mark the temporary report write.
