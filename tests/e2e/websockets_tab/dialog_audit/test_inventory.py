@@ -927,6 +927,7 @@ class TestWindowsAuditReportFailures:
         staged_path = Path(staged_name)  # Convert the reserved name for the real helper.
         try:
             reporting.WindowsAuditReportAccess.secure_staged_file(staged_path)  # Apply the real Windows file DACL.
+            assert staged_path.is_file()  # Confirm ACL enforcement preserves the staged report as a file.
         finally:
             os.close(descriptor)  # Close the exclusive creator descriptor.
             staged_path.unlink(missing_ok=True)  # Remove only this test's staged report.
