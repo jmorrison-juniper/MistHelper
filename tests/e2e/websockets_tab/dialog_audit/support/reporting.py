@@ -5,11 +5,245 @@ import logging  # Log output actions without report bodies.
 import os  # Enforce owner-only artifact permissions.
 import re  # Redact identifiers even when a future observation accidentally includes one.
 import shlex  # Record the actual process command without unsafe shell interpretation.
+import stat  # Reject links and non-file report destinations.
 import subprocess  # Record the selected source revision without network access.
 import sys  # Obtain the exact interpreter invocation, not a fabricated validation command.
+import tempfile  # Stage complete reports before replacing earlier evidence.
 from pathlib import Path  # Restrict report destinations to the ignored audit directory.
+from typing import Any  # Type the Windows system library handles.
 
 logger = logging.getLogger(__name__)  # Keep artifacts out of log output.
+
+
+class WindowsAuditReportApis:
+    """Configure the Windows APIs that inspect and protect report handles."""
+
+    @staticmethod
+    def load() -> tuple[Any, Any, Any]:
+        import ctypes  # Load native security APIs only on Windows.
+        from ctypes import wintypes  # Match Windows API argument widths.
+
+        library_loader = getattr(ctypes, "WinDLL", None)
+        if library_loader is None:
+            raise OSError("Windows security APIs are unavailable on this platform.")
+        kernel32 = library_loader("kernel32", use_last_error=True)  # Open and inspect native handles.
+        advapi32 = library_loader("advapi32", use_last_error=True)  # Build and apply a protected DACL.
+        WindowsAuditReportApis._configure_kernel32(kernel32, ctypes, wintypes)
+        WindowsAuditReportApis._configure_advapi32(advapi32, ctypes, wintypes)
+        return kernel32, advapi32, wintypes
+
+    @staticmethod
+    def create_private_directory(path: Path) -> None:
+        import ctypes  # Keep the new directory protected from its first instant.
+
+        kernel32, descriptor, attributes = WindowsAuditReportApis._directory_security_attributes()
+        try:
+            if kernel32.CreateDirectoryW(str(path), ctypes.byref(attributes)):
+                return
+            get_last_error = getattr(ctypes, "get_last_error", None)
+            if get_last_error is None:
+                raise OSError("Windows did not provide the native error code.")
+            error_code = get_last_error()
+            if error_code != 183:
+                raise WindowsAuditReportSecurity._windows_error(error_code)
+        finally:
+            kernel32.LocalFree(descriptor)
+
+    @staticmethod
+    def _directory_security_attributes() -> tuple[Any, Any, Any]:
+        import ctypes  # Keep the new directory protected from its first instant.
+        from ctypes import wintypes  # Match Windows security attribute fields.
+
+        kernel32, advapi32, _ = WindowsAuditReportApis.load()
+        descriptor = ctypes.c_void_p()
+        sddl = "D:P(A;OICI;FA;;;OW)"
+        if not advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, ctypes.byref(descriptor), None):
+            raise WindowsAuditReportSecurity._windows_error()
+
+        class SecurityAttributes(ctypes.Structure):
+            """Pass the protected DACL to CreateDirectoryW."""
+
+            _fields_ = [
+                ("length", wintypes.DWORD),
+                ("descriptor", ctypes.c_void_p),
+                ("inherit", wintypes.BOOL),
+            ]
+
+        attributes = SecurityAttributes(ctypes.sizeof(SecurityAttributes), descriptor, False)
+        return kernel32, descriptor, attributes
+
+    @staticmethod
+    def _configure_kernel32(kernel32: Any, ctypes: Any, wintypes: Any) -> None:
+        kernel32.CreateFileW.argtypes = [  # Keep path access on the wide-character API.
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.HANDLE,
+        ]
+        kernel32.CreateFileW.restype = wintypes.HANDLE  # Preserve the native handle width.
+        kernel32.CreateDirectoryW.argtypes = [wintypes.LPCWSTR, ctypes.c_void_p]
+        kernel32.CreateDirectoryW.restype = wintypes.BOOL
+        kernel32.GetFileInformationByHandleEx.argtypes = [  # Read reparse attributes from the opened object.
+            wintypes.HANDLE,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+        ]
+        kernel32.GetFileInformationByHandleEx.restype = wintypes.BOOL  # Report native query failure.
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]  # Close directory handles.
+        kernel32.CloseHandle.restype = wintypes.BOOL  # Report close failure.
+        kernel32.LocalFree.argtypes = [ctypes.c_void_p]  # Release the converted security descriptor.
+
+    @staticmethod
+    def _configure_advapi32(advapi32: Any, ctypes: Any, wintypes: Any) -> None:
+        advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [  # Convert a fixed SDDL policy.
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.restype = wintypes.BOOL
+        advapi32.GetSecurityDescriptorDacl.argtypes = [  # Extract only the explicit protected DACL.
+            ctypes.c_void_p,
+            ctypes.POINTER(wintypes.BOOL),
+            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.POINTER(wintypes.BOOL),
+        ]
+        advapi32.GetSecurityDescriptorDacl.restype = wintypes.BOOL
+        advapi32.SetSecurityInfo.argtypes = [  # Apply the DACL to the opened handle, not a path.
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+        ]
+        advapi32.SetSecurityInfo.restype = wintypes.DWORD  # Return a Win32 status code.
+
+
+class WindowsAuditReportSecurity:
+    """Apply owner-only access to Windows handles without following reparse points."""
+
+    @staticmethod
+    def _windows_apis() -> tuple[Any, Any, Any]:
+        return WindowsAuditReportApis.load()
+
+    @staticmethod
+    def _windows_error(code: int | None = None) -> OSError:
+        import ctypes  # Resolve Windows-only error helpers at runtime.
+
+        get_last_error = getattr(ctypes, "get_last_error", None)
+        if get_last_error is None:
+            return OSError("A Windows API call failed on a non-Windows platform.")
+        error_code = code if code is not None else get_last_error()
+        return OSError(int(error_code), "Windows API call failed.")
+
+    @staticmethod
+    def _verify_handle(apis: tuple[Any, Any, Any], handle: int, path: Path, directory: bool) -> None:
+        import ctypes  # Allocate the fixed file-attribute query buffer.
+        from ctypes import wintypes  # Match the Windows attribute fields.
+
+        attributes = (wintypes.DWORD * 2)()  # FileAttributeTagInfo contains two DWORD values.
+        kernel32 = apis[0]  # Use the configured native API table.
+        if not kernel32.GetFileInformationByHandleEx(handle, 9, attributes, ctypes.sizeof(attributes)):
+            raise WindowsAuditReportSecurity._windows_error()
+        WindowsAuditReportAccess.verify_attributes(attributes[0], path)
+        if bool(attributes[0] & stat.FILE_ATTRIBUTE_DIRECTORY) != directory:
+            raise ValueError(f"The report path has an invalid file type: {path}")
+
+    @staticmethod
+    def _set_owner_dacl(apis: tuple[Any, Any, Any], handle: int, directory: bool) -> None:
+        import ctypes  # Own the converted security descriptor until the native call completes.
+        from ctypes import wintypes  # Allocate Windows Boolean values for ACL inspection.
+
+        kernel32, advapi32, _ = apis  # Keep native functions grouped by DLL.
+        descriptor = ctypes.c_void_p()  # Receive the descriptor created from fixed SDDL.
+        inheritance = "OICI" if directory else ""  # Pass directory access only to its children.
+        sddl = f"D:P(A;{inheritance};FA;;;OW)"  # Protect the DACL and grant full access to the owner only.
+        convert_descriptor = advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW
+        if not convert_descriptor(sddl, 1, ctypes.byref(descriptor), None):
+            raise WindowsAuditReportSecurity._windows_error()
+        try:
+            present, defaulted = wintypes.BOOL(), wintypes.BOOL()  # Inspect the explicit DACL.
+            dacl = ctypes.c_void_p()  # Receive the owner-only ACL.
+            has_dacl = advapi32.GetSecurityDescriptorDacl(
+                descriptor, ctypes.byref(present), ctypes.byref(dacl), ctypes.byref(defaulted)
+            )
+            if not has_dacl or not present.value or not dacl.value:
+                raise OSError("Windows did not provide the required owner-only DACL.")
+            status = advapi32.SetSecurityInfo(handle, 1, 0x80000004, None, None, dacl, None)
+            if status:
+                raise WindowsAuditReportSecurity._windows_error(status)
+        finally:
+            kernel32.LocalFree(descriptor)  # Release the descriptor after success or failure.
+
+    @classmethod
+    def restrict(cls, handle: int, path: Path, directory: bool) -> None:
+        apis = cls._windows_apis()  # Load only the native functions needed for this handle.
+        cls._verify_handle(apis, handle, path, directory)  # Refuse reparse points and wrong object types.
+        cls._set_owner_dacl(apis, handle, directory)  # Apply the protected owner-only access rule.
+
+
+class WindowsAuditReportAccess:
+    """Create the approved report directory and validate Windows file attributes."""
+
+    @staticmethod
+    def verify_attributes(attributes: int | None, path: Path) -> None:
+        if attributes is None:
+            raise ValueError(f"Windows file attributes cannot be verified: {path}")
+        if attributes & 0x400:  # Windows FILE_ATTRIBUTE_REPARSE_POINT is not defined on other systems.
+            raise ValueError(f"Windows report paths cannot use a reparse point: {path}")
+
+    @classmethod
+    def reject_reparse_points(cls, path: Path) -> None:
+        for candidate in reversed((path, *path.parents)):
+            try:
+                status = candidate.lstat()
+            except FileNotFoundError:
+                continue
+            cls.verify_attributes(getattr(status, "st_file_attributes", None), candidate)
+            if stat.S_ISLNK(status.st_mode):
+                raise ValueError(f"Windows report paths cannot use a symbolic link: {candidate}")
+            if candidate != path and not stat.S_ISDIR(status.st_mode):
+                raise ValueError(f"Windows report path components must be directories: {candidate}")
+
+    @classmethod
+    def ensure_private_directory(cls, path: Path) -> None:
+        import ctypes  # Raise the native error when Windows cannot open the directory.
+
+        cls.reject_reparse_points(path)
+        for candidate in reversed((path, *path.parents)):
+            try:
+                status = candidate.lstat()
+            except FileNotFoundError:
+                WindowsAuditReportApis.create_private_directory(candidate)
+                continue
+            cls.verify_attributes(getattr(status, "st_file_attributes", None), candidate)
+            if candidate != path and not stat.S_ISDIR(status.st_mode):
+                raise ValueError(f"Windows report path components must be directories: {candidate}")
+        kernel32, _, _ = WindowsAuditReportSecurity._windows_apis()
+        handle = kernel32.CreateFileW(str(path), 0x00040080, 0x00000007, None, 3, 0x02200000, None)
+        if handle == ctypes.c_void_p(-1).value:
+            raise WindowsAuditReportSecurity._windows_error()
+        try:
+            WindowsAuditReportSecurity.restrict(handle, path, True)
+        finally:
+            if not kernel32.CloseHandle(handle):
+                raise WindowsAuditReportSecurity._windows_error()
+        cls.reject_reparse_points(path)
+
+    @staticmethod
+    def secure_file_descriptor(descriptor: int, path: Path) -> None:
+        import msvcrt  # Convert the exclusive temporary file descriptor to a Windows handle.
+
+        windows_api_name = "get_osfhandle"
+        get_osfhandle = getattr(msvcrt, windows_api_name)
+        handle = get_osfhandle(descriptor)
+        WindowsAuditReportSecurity.restrict(handle, path, False)
 
 
 class AuditReportWriter:
@@ -28,7 +262,13 @@ class AuditReportWriter:
     }  # No arbitrary raw evidence.
 
     @classmethod
-    def build(cls, inventory, records, duration_seconds=0, sdk_version=None):
+    def build(
+        cls,
+        inventory: list[str],
+        records: list[dict[str, Any]],
+        duration_seconds: float = 0,
+        sdk_version: str | None = None,
+    ) -> dict[str, Any]:
         keys = [record.get("key") for record in records]  # Preserve the complete denominator.
         if not inventory or len(keys) != len(set(keys)) or set(keys) != set(inventory):
             raise ValueError("The report does not cover the complete nonempty inventory.")  # Never hide missing forms.
@@ -67,7 +307,7 @@ class AuditReportWriter:
         }  # Historical blocker, not a new probe.
 
     @classmethod
-    def redact(cls, value):
+    def redact(cls, value: Any) -> Any:
         if isinstance(value, dict):
             return {key: cls.redact(item) for key, item in value.items()}  # Redact all nested observations.
         if isinstance(value, list):
@@ -83,10 +323,57 @@ class AuditReportWriter:
         )  # Secret-like assignments.
 
     @staticmethod
-    def write(report, destination):
+    def _prepare_report(report: dict[str, Any], root: Path) -> dict[str, Any]:
+        logger.info("Reading the local source revision")  # Log before the local Git query.
+        try:
+            revision = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
+            ).stdout.strip()  # Record only local source state.
+        except (OSError, subprocess.CalledProcessError):
+            logger.exception("Could not read the local source revision")
+            raise
+        logger.debug("Read the local source revision")  # Confirm the local query result.
+        command = shlex.join(sys.orig_argv)  # Record the actual Python invocation.
+        command = re.sub(
+            r"--ws-audit-base-url(?:=|\s+)\S+", "--ws-audit-base-url=<authorized-origin>", command
+        )  # Never save a real origin.
+        return {
+            **report,
+            "source_revision": revision,
+            "command": AuditReportWriter.redact(command),
+        }  # Add sanitized execution evidence.
+
+    @staticmethod
+    def _documents(report: dict[str, Any]) -> list[tuple[str, str]]:
+        summary_lines = [
+            "# WebSocket dialog audit",
+            "",
+            f"Isolated measured dialogs: {report['isolated_inspection']['measured_dialogs']}",
+            f"Live measured dialogs: {report['live_inspection'].get('measured_dialogs', 0)}",
+            f"Live inspection status: {report['live_inspection']['status']}",
+            f"Live subscription: {report['live_subscription']['status']}",
+            (
+                "Only the reviewed site.stats.devices observation lifecycle was selected."
+                if report["live_subscription"].get("key")
+                else "No operation was started."
+            ),
+        ]  # Keep isolated and live evidence separate.
+        summary = "\n".join(summary_lines) + "\n"
+        prefix = (
+            "subscription-report"
+            if report["live_subscription"].get("key")
+            else "live-report" if "measured_dialogs" in report["live_inspection"] else "report"
+        )  # Preserve the report name for each supported run type.
+        return [
+            (prefix + ".json", json.dumps(report, indent=2)),
+            (prefix + ".md", summary),
+        ]  # Stage both report formats as one transaction.
+
+    @staticmethod
+    def write(report: dict[str, Any], destination: str | Path) -> None:
         root = Path(__file__).resolve().parents[5]  # Bind artifacts to this checkout only.
-        expected = root / "test-artifacts" / "websocket-dialog-audit"  # Existing ignore policy covers this directory.
-        path = Path(destination).absolute()  # Do not accept arbitrary public or external paths.
+        expected = root / "test-artifacts" / "websocket-dialog-audit"  # Use the ignored owner-only location.
+        path = Path(destination).absolute()  # Reject arbitrary public or external paths.
         if (
             path != expected
             or path.resolve() != expected
@@ -95,47 +382,123 @@ class AuditReportWriter:
             raise ValueError(
                 "Use the restricted worktree test-artifacts/websocket-dialog-audit directory."
             )  # Reject traversal and symlinks.
-        logger.info("Writing restricted audit reports")  # Log before filesystem actions.
-        path.mkdir(parents=True, exist_ok=True, mode=0o700)  # Artifacts are owner-only.
-        path.chmod(0o700)  # Tighten an existing directory before creating files.
-        revision = subprocess.run(
-            ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
-        ).stdout.strip()  # Local revision.
-        command = shlex.join(sys.orig_argv)  # Record the actual Python invocation and selected tests.
-        command = re.sub(
-            r"--ws-audit-base-url(?:=|\s+)\S+", "--ws-audit-base-url=<authorized-origin>", command
-        )  # Never save a real origin.
-        report = {
-            **report,
-            "source_revision": revision,
-            "command": AuditReportWriter.redact(command),
-        }  # Sanitized execution evidence.
-        summary = (
-            "# WebSocket dialog audit\n\nIsolated measured dialogs: "
-            + str(report["isolated_inspection"]["measured_dialogs"])
-            + "\nLive measured dialogs: "
-            + str(report["live_inspection"].get("measured_dialogs", 0))
-            + "\nLive inspection status: "
-            + report["live_inspection"]["status"]
-            + "\nLive subscription: "
-            + report["live_subscription"]["status"]
-            + "\n"
-            + (
-                "Only the reviewed site.stats.devices observation lifecycle was selected.\n"
-                if report["live_subscription"].get("key")
-                else "No operation was started.\n"
-            )
-        )  # Never mix isolated and live evidence.
-        prefix = (
-            "subscription-report"
-            if report["live_subscription"].get("key")
-            else "live-report" if "measured_dialogs" in report["live_inspection"] else "report"
-        )  # Preserve isolated and all-form live evidence.
-        for name, text in ((prefix + ".json", json.dumps(report, indent=2)), (prefix + ".md", summary)):
-            descriptor = os.open(
-                path / name, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600
-            )  # Refuse final symlink.
-            with os.fdopen(descriptor, "w") as output:
-                os.fchmod(output.fileno(), 0o600)  # Tighten an existing report before writing.
-                output.write(text)  # Save only bounded audit fields.
-        logger.debug("Wrote restricted JSON and Markdown reports")  # Do not publish artifacts.
+        logger.info("Preparing the restricted audit report directory")  # Log before filesystem actions.
+        if sys.platform == "win32":
+            WindowsAuditReportAccess.ensure_private_directory(path)
+        else:
+            path.mkdir(parents=True, exist_ok=True, mode=0o700)  # Create only the approved owner-only directory.
+            path.chmod(0o700)  # Tighten an existing directory before staging files.
+        logger.debug("Prepared the restricted audit report directory")  # Confirm the directory action.
+        AuditReportFileTransaction.write(report, path, root)
+
+
+class AuditReportFileTransaction:
+    """Stage both report formats and restore earlier files if replacement fails."""
+
+    @classmethod
+    def write(cls, report: dict[str, Any], directory: Path, root: Path) -> None:
+        safe_report = AuditReportWriter._prepare_report(report, root)
+        documents = AuditReportWriter._documents(safe_report)
+        staged: list[tuple[Path, Path]] = []
+        backups: dict[Path, Path] = {}
+        installed: list[Path] = []
+        succeeded = False
+        try:
+            cls._stage_reports(directory, documents, staged)
+            cls._backup_destinations(staged, backups)
+            for temporary_path, destination in staged:
+                logger.info("Installing audit report %s", destination.name)  # Log before atomic replacement.
+                os.replace(temporary_path, destination)
+                installed.append(destination)
+                logger.debug("Installed audit report %s", destination.name)  # Confirm the replacement.
+            succeeded = True
+        except (OSError, ValueError):
+            logger.exception("Could not replace the restricted audit report pair")
+            raise
+        finally:
+            cls._finish(staged, backups, installed, succeeded)
+
+    @staticmethod
+    def _stage_reports(
+        directory: Path,
+        documents: list[tuple[str, str]],
+        staged: list[tuple[Path, Path]],
+    ) -> None:
+        for name, text in documents:
+            logger.info("Staging audit report %s", name)  # Log before writing each private temporary file.
+            descriptor, temporary_name = tempfile.mkstemp(
+                prefix=".audit-report-stage-", suffix=".tmp", dir=directory
+            )  # Create an exclusive file beside the final report.
+            staged.append((Path(temporary_name), directory / name))
+            try:
+                if sys.platform == "win32":
+                    WindowsAuditReportAccess.secure_file_descriptor(descriptor, staged[-1][0])
+                else:
+                    os.fchmod(descriptor, 0o600)  # Preserve POSIX owner-only file access.
+                descriptor, output = -1, os.fdopen(descriptor, "w", encoding="utf-8")
+                with output:
+                    output.write(text)  # Write the complete report before replacement.
+                    output.flush()  # Flush Python buffers before the durability request.
+                    os.fsync(output.fileno())  # Persist staged contents before installation.
+            finally:
+                if descriptor >= 0:
+                    os.close(descriptor)  # Close a descriptor when setup fails before fdopen.
+            logger.debug("Staged audit report %s", name)  # Confirm the complete staged file.
+
+    @staticmethod
+    def _backup_destinations(staged: list[tuple[Path, Path]], backups: dict[Path, Path]) -> None:
+        for _, destination in staged:
+            logger.info("Checking audit report destination %s", destination.name)
+            if sys.platform == "win32":
+                WindowsAuditReportAccess.reject_reparse_points(destination)
+            AuditReportFileTransaction._backup_one(destination, backups)
+            logger.debug("Checked audit report destination %s", destination.name)
+
+    @staticmethod
+    def _backup_one(destination: Path, backups: dict[Path, Path]) -> None:
+        try:
+            status = destination.lstat()
+        except FileNotFoundError:
+            return
+        if stat.S_ISLNK(status.st_mode) or not stat.S_ISREG(status.st_mode):
+            raise ValueError(f"An existing audit report is not a regular file: {destination}")
+        logger.info("Backing up existing audit report %s", destination.name)
+        descriptor, backup_name = tempfile.mkstemp(
+            prefix=".audit-report-backup-", suffix=".tmp", dir=destination.parent
+        )  # Reserve a private same-directory rollback name.
+        backup = Path(backup_name)
+        try:
+            os.close(descriptor)
+            os.replace(destination, backup)
+        except OSError:
+            if backup.exists() and not destination.exists():
+                os.replace(backup, destination)
+            else:
+                backup.unlink(missing_ok=True)
+            raise
+        backups[destination] = backup
+        logger.debug("Backed up existing audit report %s", destination.name)
+
+    @staticmethod
+    def _finish(
+        staged: list[tuple[Path, Path]],
+        backups: dict[Path, Path],
+        installed: list[Path],
+        succeeded: bool,
+    ) -> None:
+        if succeeded:
+            for backup in backups.values():
+                logger.info("Removing an obsolete audit report backup")
+                backup.unlink(missing_ok=True)
+        else:
+            for destination, backup in backups.items():
+                if backup.exists():
+                    logger.info("Restoring audit report %s", destination.name)
+                    os.replace(backup, destination)
+            for destination in installed:
+                if destination not in backups:
+                    logger.info("Removing incomplete audit report %s", destination.name)
+                    destination.unlink(missing_ok=True)
+        for temporary_path, _ in staged:
+            temporary_path.unlink(missing_ok=True)
+        logger.debug("Finished audit report transaction cleanup")

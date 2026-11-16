@@ -2,6 +2,7 @@
 
 import json  # Raise the real parser exception for malformed response tests.
 from copy import deepcopy  # Exercise changed inventory without changing the source catalog.
+from pathlib import Path  # Build test-owned report and symlink paths.
 from types import SimpleNamespace  # Trap actual route decisions without a remote endpoint.
 
 import pytest  # Parameterize negative policy cases with explicit expected outcomes.
@@ -744,3 +745,161 @@ class TestMeasuredCoverage:
             summary["measured_dialogs"] == 1 and summary["totals"]["passed"] == 0
         )  # Never convert a blocker to a pass.
         assert summary["totals"]["blocked"] == 1  # Preserve target availability as an explicit blocker.
+
+
+class TestWindowsAuditReportWriter:
+    """Keep Windows report writes independent from POSIX-only file flags."""
+
+    @staticmethod
+    def destination():
+        return Path(__file__).resolve().parents[4] / "test-artifacts" / "websocket-dialog-audit"
+
+    @staticmethod
+    def snapshot(destination):
+        return {
+            name: (destination / name).read_bytes() if (destination / name).exists() else None
+            for name in ("report.json", "report.md")
+        }
+
+    @staticmethod
+    def restore(destination, previous):
+        for name, content in previous.items():
+            path = destination / name
+            if content is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(content)
+
+    @staticmethod
+    def windows_access_stub(calls, fail_on_file=None):
+        """Record Windows access checks without requiring native Windows APIs."""
+
+        class FakeWindowsAuditReportAccess:
+            @staticmethod
+            def reject_reparse_points(path: Path) -> None:
+                calls.append(("checked", path))
+
+            @staticmethod
+            def verify_attributes(attributes: int | None, path: Path) -> None:
+                calls.append(("attributes", path))
+
+            @staticmethod
+            def ensure_private_directory(path: Path) -> None:
+                path.mkdir(parents=True, exist_ok=True, mode=0o700)
+                path.chmod(0o700)
+                calls.append(("directory", path))
+
+            @staticmethod
+            def secure_file_descriptor(descriptor: int, path: Path) -> None:
+                calls.append(("file", path.name))
+                if sum(kind == "file" for kind, _ in calls) == fail_on_file:
+                    raise OSError("synthetic ACL failure")
+
+        return FakeWindowsAuditReportAccess
+
+    @staticmethod
+    def run_windows_write(monkeypatch, access_stub, report, destination, replace=None):
+        """Run one report write with synthetic Windows APIs and local Git evidence."""
+        from types import SimpleNamespace
+
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        monkeypatch.setattr(
+            reporting.subprocess,
+            "run",
+            lambda *_args, **_kwargs: SimpleNamespace(stdout="synthetic-revision\n"),
+        )  # Keep the test independent from a mounted Git checkout.
+        with monkeypatch.context() as patch:
+            patch.setattr(reporting.sys, "platform", "win32")
+            patch.delattr(reporting.os, "O_NOFOLLOW", raising=False)
+            patch.delattr(reporting.os, "fchmod", raising=False)
+            patch.setattr(reporting, "WindowsAuditReportAccess", access_stub, raising=False)
+            if replace is not None:
+                patch.setattr(reporting.os, "replace", replace)
+            AuditReportWriter.write(report, destination)
+
+    @staticmethod
+    def markdown_replace_failure():
+        """Reject the Markdown install while retaining the real replace function."""
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        original_replace = reporting.os.replace
+
+        def fail_markdown_replace(source, target):
+            if Path(target).name == "report.md" and Path(source).name.startswith(".audit-report-stage-"):
+                raise OSError("synthetic replace failure")
+            original_replace(source, target)
+
+        return fail_markdown_replace
+
+    def test_writer_creates_reports_without_posix_only_flags(self, monkeypatch):
+        """Write both reports when the simulated Windows runtime lacks POSIX flags."""
+        destination = self.destination()
+        destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+        previous = self.snapshot(destination)
+        calls = []
+        access_stub = self.windows_access_stub(calls)
+        report = AuditReportWriter.build(["synthetic"], [{"key": "synthetic", "status": "passed"}])
+        try:
+            self.run_windows_write(monkeypatch, access_stub, report, destination)
+            saved = json.loads((destination / "report.json").read_text())
+            assert saved["inventory"] == ["synthetic"]
+            assert saved["source_revision"] == "synthetic-revision"
+            assert (destination / "report.md").is_file()
+            assert [kind for kind, _ in calls].count("file") == 2
+        finally:
+            self.restore(destination, previous)
+
+
+class TestWindowsAuditReportFailures:
+    """Keep earlier reports intact when a Windows report update fails."""
+
+    def test_windows_attributes_fail_closed(self):
+        """Reject missing evidence and reparse attributes without using Windows APIs."""
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        access = getattr(reporting, "WindowsAuditReportAccess", None)
+        if access is None:
+            pytest.fail("Windows report access checks are not implemented.")
+        with pytest.raises(ValueError, match="cannot be verified"):
+            access.verify_attributes(None, Path("report.json"))
+        with pytest.raises(ValueError, match="reparse point"):
+            access.verify_attributes(0x400, Path("report.json"))
+        access.verify_attributes(0, Path("report.json"))
+
+    def test_acl_failure_preserves_reports_and_cleans_staging(self, monkeypatch):
+        """Preserve prior reports and staging names after an ACL error."""
+        destination = TestWindowsAuditReportWriter.destination()
+        destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+        previous = TestWindowsAuditReportWriter.snapshot(destination)
+        temporary_before = {path.name for path in destination.iterdir() if path.name.startswith(".audit-report-")}
+        calls = []
+        access_stub = TestWindowsAuditReportWriter.windows_access_stub(calls, fail_on_file=2)
+        report = AuditReportWriter.build(["synthetic"], [{"key": "synthetic", "status": "passed"}])
+        try:
+            with pytest.raises(OSError, match="synthetic ACL failure"):
+                TestWindowsAuditReportWriter.run_windows_write(monkeypatch, access_stub, report, destination)
+            assert TestWindowsAuditReportWriter.snapshot(destination) == previous
+            temporary_after = {path.name for path in destination.iterdir() if path.name.startswith(".audit-report-")}
+            assert temporary_after == temporary_before
+        finally:
+            TestWindowsAuditReportWriter.restore(destination, previous)
+
+    def test_replace_failure_restores_previous_reports(self, monkeypatch):
+        """Restore prior reports and staging names after a replacement error."""
+        destination = TestWindowsAuditReportWriter.destination()
+        destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+        previous = TestWindowsAuditReportWriter.snapshot(destination)
+        temporary_before = {path.name for path in destination.iterdir() if path.name.startswith(".audit-report-")}
+        calls = []
+        access_stub = TestWindowsAuditReportWriter.windows_access_stub(calls)
+        report = AuditReportWriter.build(["synthetic"], [{"key": "synthetic", "status": "passed"}])
+        replace = TestWindowsAuditReportWriter.markdown_replace_failure()
+        try:
+            with pytest.raises(OSError, match="synthetic replace failure"):
+                TestWindowsAuditReportWriter.run_windows_write(monkeypatch, access_stub, report, destination, replace)
+            assert TestWindowsAuditReportWriter.snapshot(destination) == previous
+            temporary_after = {path.name for path in destination.iterdir() if path.name.startswith(".audit-report-")}
+            assert temporary_after == temporary_before
+        finally:
+            TestWindowsAuditReportWriter.restore(destination, previous)
