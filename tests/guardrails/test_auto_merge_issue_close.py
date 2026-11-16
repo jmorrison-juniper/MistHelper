@@ -43,7 +43,7 @@ SHARED_PREFIX = "jmorrison-juniper/misthelper-devtools/.github/workflows/"
 
 # A full commit cannot move. A branch or a tag can move without a change here.
 FULL_COMMIT = re.compile(r"@[0-9a-f]{40}$")
-VERIFIED_MERGE_RECOVERY_COMMIT = "0fdcf610c87a281bd4e952486d6154b2bf45fec4"
+VERIFIED_MERGE_RECOVERY_COMMIT = "d63a120487cecf750184cb178387cdc25c0a7635"
 
 
 def load_workflow(path: Path) -> dict[Any, Any]:
@@ -155,13 +155,15 @@ class TestAutoMergeJob:
         # Read the list that the shared dispatch job starts after a merge (issue #1851).
         names = str(auto_merge["jobs"][MERGE_JOB_NAME]["with"]["main-workflows"]).split()
 
-        # These three workflows report the state of main, so each must run after a merge.
-        assert {"ci.yml", "codeql.yml", "container-build.yml"} <= set(names), f"A main workflow is missing: {names}"
+        # These four workflows report the state of main, and each name must appear once.
+        expected = {"ci.yml", "codeql.yml", "container-build.yml", "ste-lint.yml"}
+        assert len(names) == len(expected) and set(names) == expected, f"The main workflow list changed: {names}"
 
-        # A workflow without the trigger rejects the dispatch call, and main stays stale.
+        # Each workflow must accept a manual start and a push to main.
         for name in names:
             triggers = load_workflow(WORKFLOWS / name)[TRIGGER_KEY]
             assert "workflow_dispatch" in triggers, f"{name} must accept workflow_dispatch."
+            assert "main" in triggers["push"]["branches"], f"{name} must accept pushes to main."
 
 
 class TestCloseLinkedIssuesJob:
