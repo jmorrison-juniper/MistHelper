@@ -411,7 +411,7 @@ class DataExporter:  # Multi-backend export facade.
             for row in escaped_data
         ]  # Keep carriage returns visible without changing source records.
         fields = DataExporter._resolve_csv_fields(escaped_data, fieldnames)  # Final column order for the CSV
-        logger.debug("CSV fields determined: %s", fields)  # Trace fields
+        logger.debug("CSV fields determined: %s fields", len(fields))  # Keep field names out of diagnostics.
         DataExporter._write_csv_with_exception_handling(csv_file_path, escaped_data, fields)  # Open + write rows
         logger.info("File I/O: Successfully wrote %s rows to %s", len(escaped_data), csv_file_path)  # Log success
         logger.debug("EXIT: DataExporter.write_to_csv - success")  # Trace exit
@@ -440,11 +440,10 @@ class DataExporter:  # Multi-backend export facade.
 
     @staticmethod
     def _emit_rows(writer: csv.DictWriter, escaped_data: list[dict[str, Any]], fields: list[str]) -> None:
-        """Write every row in escaped_data through writer. Debug-log the first three for diagnostics."""
-        for idx, row in enumerate(escaped_data):  # Walk each row in input order
+        """Write rows in order and report aggregate counts without cell values."""
+        for row in escaped_data:  # Walk each row in input order.
             writer.writerow({field_name: row.get(field_name, "") for field_name in fields})  # Emit in col order
-            if idx < 3:  # Trace the first three rows to aid post-mortem debugging
-                logger.debug("Row %s written: %s", idx, row)  # Per-row trace
+        logger.debug("Wrote %s rows with %s fields", len(escaped_data), len(fields))  # Report counts only.
 
     @staticmethod
     def _write_csv_open_and_emit(

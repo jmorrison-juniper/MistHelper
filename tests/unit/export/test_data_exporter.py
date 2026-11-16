@@ -490,6 +490,32 @@ class TestWriteSqliteFormat:
 
 
 class TestWriteToCsv:
+    def test_csv_values_are_not_logged_at_debug(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Keep synthetic values in the CSV without copying them to logs."""
+        monkeypatch.chdir(tmp_path)
+        path = tmp_path / "output.csv"
+        rows = [
+            {"SYNTHETIC_FIELD": "SYNTHETIC_CELL_ONE\r\nnext", "other": "SYNTHETIC_CELL_TWO"},
+            {"SYNTHETIC_FIELD": 'SYNTHETIC_CELL_THREE,"quoted"'},
+            {"SYNTHETIC_FIELD": "SYNTHETIC_CELL_FOUR"},
+            {"SYNTHETIC_FIELD": "SYNTHETIC_CELL_FIVE"},
+        ]
+        with caplog.at_level(logging.DEBUG):
+            DataExporter.write_to_csv(rows, str(path), fieldnames=["other", "SYNTHETIC_FIELD"])
+        with path.open(newline="", encoding="utf-8") as handle:
+            written = list(csv.DictReader(handle))
+        assert written == [
+            {"other": "SYNTHETIC_CELL_TWO", "SYNTHETIC_FIELD": "SYNTHETIC_CELL_ONE\\r\\nnext"},
+            {"other": "", "SYNTHETIC_FIELD": 'SYNTHETIC_CELL_THREE,"quoted"'},
+            {"other": "", "SYNTHETIC_FIELD": "SYNTHETIC_CELL_FOUR"},
+            {"other": "", "SYNTHETIC_FIELD": "SYNTHETIC_CELL_FIVE"},
+        ]
+        assert "SYNTHETIC_" not in caplog.text
+        assert "4 rows" in caplog.text
+        assert "2 fields" in caplog.text
+
     def test_empty_data_short_circuits(self):
         with patch.object(DataExporter, "_resolve_csv_path") as resolver:
             result = DataExporter.write_to_csv([], "target.csv")
@@ -632,6 +658,18 @@ class TestWriteCsvWithExceptionHandling:
         with patch.object(DataExporter, "_write_csv_open_and_emit", side_effect=OSError("disk full")):
             with pytest.raises(OSError):
                 DataExporter._write_csv_with_exception_handling("p", [{"a": 1}], ["a"])
+
+    def test_write_failure_reports_context_without_success(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Report a write failure without logging the synthetic row."""
+        monkeypatch.chdir(tmp_path)
+        with caplog.at_level(logging.DEBUG), patch("csv.DictWriter.writerow", side_effect=OSError("disk full")):
+            with pytest.raises(OSError, match="disk full"):
+                DataExporter.write_to_csv([{"value": "SYNTHETIC_FAILURE"}], str(tmp_path / "output.csv"))
+        assert "disk full" in caplog.text
+        assert "SYNTHETIC_FAILURE" not in caplog.text
+        assert "Successfully wrote 1 rows" not in caplog.text
 
     def test_unexpected_error_reraises(self):
         with patch.object(DataExporter, "_write_csv_open_and_emit", side_effect=RuntimeError("weird")):
