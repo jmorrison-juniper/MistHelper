@@ -38,8 +38,8 @@ A maintainer needs evidence that the existing timeout-budget guard passes on nat
 - **FR-001**: The project MUST provide an optional acceptance run for the existing timeout-budget guard.
 - **FR-002**: The acceptance run MUST execute the full existing guard module on native Windows.
 - **FR-003**: The acceptance run MUST confirm the native operating system and a supported Python version.
-- **FR-004**: The acceptance run MUST require exactly seven collected tests and zero skips, errors, and failures.
-- **FR-005**: The acceptance run MUST fail when no tests run, the count differs, or any test skips, errors, or fails.
+- **FR-004**: The acceptance run MUST require recorded test, skip, error, and failure counts, exactly seven tests, and zero skips, errors, and failures.
+- **FR-005**: The acceptance run MUST fail when a count is absent, no tests run, the count differs, or any test skips, errors, or fails.
 - **FR-006**: The acceptance run MUST start only for a non-main push that changes a relevant path.
 - **FR-007**: The acceptance run MUST be bounded and safely cancel older runs for the same branch.
 - **FR-008**: The acceptance run MUST use read-only repository access and MUST NOT persist checkout credentials.

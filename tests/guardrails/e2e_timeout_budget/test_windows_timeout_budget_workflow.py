@@ -217,6 +217,10 @@ class TestWindowsTimeoutBudgetWorkflow:
         ("xml_content", "expected_return_code"),
         [
             ('<testsuites><testsuite tests="7" skipped="0" failures="0" errors="0"/></testsuites>', 0),
+            ('<testsuites><testsuite skipped="0" failures="0" errors="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="7" failures="0" errors="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="7" skipped="0" errors="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="7" skipped="0" failures="0"/></testsuites>', 1),
             ('<testsuites><testsuite tests="0" skipped="0" failures="0" errors="0"/></testsuites>', 1),
             ('<testsuites><testsuite tests="6" skipped="0" failures="0" errors="0"/></testsuites>', 1),
             ('<testsuites><testsuite tests="7" skipped="1" failures="0" errors="0"/></testsuites>', 1),
@@ -225,7 +229,20 @@ class TestWindowsTimeoutBudgetWorkflow:
             (None, 1),
             ("<testsuites>", 1),
         ],
-        ids=("valid", "zero-tests", "wrong-count", "skipped", "failed", "errored", "unreadable", "malformed"),
+        ids=(
+            "valid",
+            "missing-tests",
+            "missing-skipped",
+            "missing-failures",
+            "missing-errors",
+            "zero-tests",
+            "wrong-count",
+            "skipped",
+            "failed",
+            "errored",
+            "unreadable",
+            "malformed",
+        ),
     )
     def test_junit_validator_checks_real_result_counts(
         self,

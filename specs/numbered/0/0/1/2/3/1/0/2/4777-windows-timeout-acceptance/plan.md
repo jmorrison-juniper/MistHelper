@@ -32,7 +32,7 @@ Add a bounded, optional Windows acceptance run that executes the existing seven-
 
 - **Safety**: Pass. The run uses no Mist credentials, production data, live operations, services, or browser.
 - **Permissions**: Pass. The workflow needs only `contents: read`, and checkout does not persist credentials.
-- **Test integrity**: Pass. The workflow runs the existing full module with real subprocess behavior. It fails for zero tests, an unexpected count, skips, errors, or failures.
+- **Test integrity**: Pass. The workflow runs the existing full module with real subprocess behavior. It fails for missing count fields, zero tests, an unexpected count, skips, errors, or failures.
 - **Change boundary**: Pass. The existing timeout test and its thresholds remain unchanged. No required check or repository setting changes.
 - **Structure**: Pass. The feature uses the required eight-segment route for issue 4777. Each route parent has fewer than five children after allocation.
 - **Existing folder debt**: `specs/` has 795 direct children. This record uses the required managed route and adds no direct child. Track any migration of existing direct records as separate work.
@@ -42,7 +42,7 @@ Add a bounded, optional Windows acceptance run that executes the existing seven-
 
 - Use the action versions already used by `.github/workflows/windows-audit-report.yml`.
 - Trigger only on non-main pushes that change the workflow, its contract test, the timeout-budget module, its shared E2E configuration, or dependency manifests.
-- Store the test result as JUnit XML and check the recorded total, skipped, failed, and errored counts.
+- Store the test result as JUnit XML. Require recorded total, skipped, failed, and errored counts.
 - Keep the acceptance run optional. A successful native push run, not a local test, is the acceptance evidence.
 - Do not add a separate contract directory because this workflow has no public interface.
 

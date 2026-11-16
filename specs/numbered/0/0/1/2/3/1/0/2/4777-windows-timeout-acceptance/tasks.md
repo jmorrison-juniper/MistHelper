@@ -24,7 +24,7 @@ No shared infrastructure changes are required.
 
 ### Tests
 
-- [X] T001 [US1] Add contract tests in `tests/guardrails/e2e_timeout_budget/test_windows_timeout_budget_workflow.py`. Check non-main push filters, read-only permissions, credential-free checkout, native Windows, Python, seven tests, and zero skips, errors, or failures. Run the extracted JUnit validator against valid and invalid reports, including unreadable and malformed files. Add a mutation case that rejects an unapproved trigger.
+- [X] T001 [US1] Add contract tests in `tests/guardrails/e2e_timeout_budget/test_windows_timeout_budget_workflow.py`. Check non-main push filters, read-only permissions, credential-free checkout, native Windows, Python, seven tests, and zero skips, errors, or failures. Run the extracted JUnit validator against valid and invalid reports, including each missing count field, unreadable files, and malformed files. Add a mutation case that rejects an unapproved trigger.
 
 ### Implementation
 
@@ -33,7 +33,7 @@ No shared infrastructure changes are required.
 
 ### Local Validation
 
-- [X] T004 [US1] Run the workflow contract tests. Verify trigger rejection and require the extracted JUnit validator to accept only seven clean results.
+- [X] T004 [US1] Run the workflow contract tests. Verify trigger rejection and require the extracted JUnit validator to accept only seven clean results with every count field present.
 - [X] T005 [US1] Run the full timeout-budget test module and verify all seven tests pass.
 - [X] T006 [US1] Run the applicable Ruff, Black, compile, and STE checks for the new test and documentation.
 - [X] T007 [US1] Confirm the existing timeout test, protected CI files, dependency files, settings, and `.specify/feature.json` remain unchanged.
