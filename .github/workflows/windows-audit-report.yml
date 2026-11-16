@@ -1,0 +1,58 @@
+name: Windows audit report
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+concurrency:
+  group: windows-audit-report-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  native_windows_audit_report:
+    name: Native Windows audit report
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.15'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Confirm native Windows Python
+        shell: pwsh
+        run: |
+          if ($env:OS -ne 'Windows_NT') {
+            throw 'The report regression requires a native Windows runner.'
+          }
+          python -c 'import os, sys; sys.exit(0 if os.name == "nt" else "Python is not running on native Windows.")'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run native report safety regressions
+        shell: pwsh
+        run: |
+          $junitPath = Join-Path $env:RUNNER_TEMP 'native-audit-report.xml'
+          python -m pytest -q "--junitxml=$junitPath" `
+            tests/e2e/websockets_tab/dialog_audit/test_inventory.py::TestWindowsAuditReportFailures::test_native_windows_staged_file_sets_owner_only_acl `
+            tests/e2e/websockets_tab/dialog_audit/test_inventory.py::TestWindowsAuditReportWriter::test_native_windows_writer_writes_private_report_pair
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c 'import sys; from xml.etree import ElementTree as ET; root=ET.parse(sys.argv[1]).getroot(); suites=[root] if root.tag=="testsuite" else root.findall("testsuite"); total=sum(int(suite.get("tests","0")) for suite in suites); skipped=sum(int(suite.get("skipped","0")) for suite in suites); failures=sum(int(suite.get("failures","0"))+int(suite.get("errors","0")) for suite in suites); print(f"Native Windows tests: {total} collected, {skipped} skipped, {failures} failures"); sys.exit(0 if total == 2 and skipped == 0 and failures == 0 else 1)' $junitPath
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

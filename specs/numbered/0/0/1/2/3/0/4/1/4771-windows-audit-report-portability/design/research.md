@@ -29,3 +29,13 @@
 **Alternatives considered**: Truncate each existing file before writing. A failure during the second write can then leave a mixed or incomplete report pair.
 
 **Evidence**: `AuditReportWriter.write` currently truncates each destination in sequence.
+
+## Decision 4: Run native Windows checks from a feature-branch push
+
+**Decision**: Add a separate optional workflow that runs the real helper and writer tests on `windows-latest` after a non-main branch push. Require two collected tests, zero skips, and zero failures.
+
+**Rationale**: This workflow file can run from the pushed branch before it exists on the default branch. The separate job can test native APIs without changing the required CI workflow or status names.
+
+**Alternatives considered**: A manual dispatch requires the workflow file on the default branch. A simulated Windows test cannot prove that `CreateFileW` grants the rights needed by the real ACL update.
+
+**Evidence**: GitHub documents that a push event can run an unmerged workflow file in the pushed commit. See [Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows).

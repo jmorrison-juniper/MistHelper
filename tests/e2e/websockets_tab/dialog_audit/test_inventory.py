@@ -852,6 +852,45 @@ class TestWindowsAuditReportWriter:
         finally:
             self.restore(destination, previous)
 
+    @staticmethod
+    def native_destination_state() -> tuple[Path, Path, bool, bool, dict[str, bytes | None]]:
+        """Validate the report target before snapshotting existing test evidence."""
+        destination = TestWindowsAuditReportWriter.destination()
+        artifact_root = destination.parent
+        report_paths = [destination / name for name in ("report.json", "report.md")]
+        protected_paths = (destination, *destination.parents, *report_paths)
+        if any(path.is_symlink() for path in protected_paths):
+            pytest.fail("The native report test path contains a symbolic link.")
+        if destination.exists() and not destination.is_dir():
+            pytest.fail("The native report test path is not a directory.")
+        if any(path.exists() and not path.is_file() for path in report_paths):
+            pytest.fail("A native report destination is not a file.")
+        directory_existed = destination.exists()
+        artifact_root_existed = artifact_root.exists()
+        previous = TestWindowsAuditReportWriter.snapshot(destination)
+        return destination, artifact_root, directory_existed, artifact_root_existed, previous
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="This test needs native Windows security APIs.")
+    def test_native_windows_writer_writes_private_report_pair(
+        self: TestWindowsAuditReportWriter,
+    ) -> None:
+        """Write both reports through the real Windows helper with synthetic evidence."""
+        destination, artifact_root, directory_existed, artifact_root_existed, previous = self.native_destination_state()
+        report_paths = {name: destination / name for name in ("report.json", "report.md")}
+        report = AuditReportWriter.build(["synthetic"], [{"key": "synthetic", "status": "passed"}])
+        try:
+            AuditReportWriter.write(report, destination)
+            saved = json.loads(report_paths["report.json"].read_text(encoding="utf-8"))
+            assert saved["inventory"] == ["synthetic"]
+            assert saved["isolated_inspection"]["totals"]["passed"] == 1
+            assert "Isolated measured dialogs: 1" in report_paths["report.md"].read_text(encoding="utf-8")
+        finally:
+            self.restore(destination, previous)
+            if not directory_existed and destination.exists():
+                destination.rmdir()
+            if not artifact_root_existed and artifact_root.exists():
+                artifact_root.rmdir()
+
 
 class TestWindowsAuditReportFailures:
     """Keep earlier reports intact when a Windows report update fails."""

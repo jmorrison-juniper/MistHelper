@@ -49,6 +49,20 @@ An operator can rely on existing report files when a new report write fails.
 1. **Given** existing report files, **When** a new write fails, **Then** the earlier files remain unchanged.
 2. **Given** a failed write, **When** cleanup completes, **Then** no temporary report files remain.
 
+### User Story 4 - Validate report safety on native Windows (Priority: P1)
+
+A maintainer checks the report helper and writer on a native Windows runner before the feature merges.
+
+**Why this priority**: Simulated Windows calls cannot prove that the real Windows security APIs accept the requested handles.
+
+**Independent Test**: Push a feature branch commit and verify that both native regressions pass with zero skips.
+
+**Acceptance Scenarios**:
+
+1. **Given** a feature branch commit, **When** it is pushed, **Then** a separate bounded Windows workflow runs the native helper and writer tests.
+2. **Given** a native test is missing or skipped, **When** the workflow checks its results, **Then** the job fails.
+3. **Given** the workflow runs, **Then** it uses synthetic data, read-only repository access, and no Mist service or credential.
+
 ### Edge Cases
 
 - Reject a missing or invalid file-safety capability instead of treating it as disabled.
@@ -67,6 +81,9 @@ An operator can rely on existing report files when a new report write fails.
 - **FR-005**: The writer MUST preserve earlier reports when a write fails.
 - **FR-006**: The writer MUST remove temporary files after a failed write.
 - **FR-007**: The writer MUST keep existing non-Windows report behavior and path restrictions.
+- **FR-008**: A separate optional workflow MUST run the native Windows helper and writer regressions after a non-main branch push.
+- **FR-009**: The workflow MUST fail unless both native tests run and pass without a skip.
+- **FR-010**: The workflow MUST use no credentials, Mist endpoints, production data, or services and MUST NOT change required checks.
 
 ### Key Entities
 
@@ -83,9 +100,12 @@ An operator can rely on existing report files when a new report write fails.
 - **SC-003**: The approved directory and reports deny access to accounts other than the current owner.
 - **SC-004**: Every injected write failure preserves prior report contents and leaves no temporary files.
 - **SC-005**: The existing non-Windows writer tests continue to pass.
+- **SC-006**: The Windows workflow reports exactly two passed native regressions and zero skips.
+- **SC-007**: The workflow has a read-only token permission and a finite job timeout.
 
 ## Assumptions
 
 - The writer continues to accept only `test-artifacts/websocket-dialog-audit` in the current worktree.
 - Audit reports contain the existing restricted, redacted fields and do not contain screenshots or private values.
-- This change does not run Mist Cloud operations or change audit evidence rules.
+- The native workflow runs on a feature-branch push so it can validate the commit before merge.
+- The workflow does not run Mist Cloud operations or change audit evidence rules.

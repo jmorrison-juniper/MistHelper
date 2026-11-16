@@ -37,6 +37,9 @@ CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 # Name the CodeQL workflow once, because it reports a required check too.
 CODEQL_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "codeql.yml"
 
+# Name the optional native writer workflow, because it is not a required check.
+WINDOWS_AUDIT_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "windows-audit-report.yml"
+
 # PyYAML turns the bare `on` key into the boolean True, so name that key once.
 TRIGGER_KEY = True
 
@@ -414,3 +417,81 @@ class TestCodeqlTrigger:
 
         # A scan on every push repeats the pull request scan and adds cost.
         assert push["branches"] == ["main"], "The push trigger must stay on main."
+
+
+class TestWindowsAuditReportWorkflow:
+    """Keep the native report check separate, bounded, and fail-closed."""
+
+    @staticmethod
+    def read_workflow() -> dict[str, Any]:
+        """Read the optional workflow and normalize its trigger key."""
+        workflow = _parse(WINDOWS_AUDIT_WORKFLOW)  # Parse the actual checked-in workflow.
+        if TRIGGER_KEY in workflow:
+            assert "on" not in workflow, "The workflow must declare its trigger once."
+            workflow["on"] = workflow.pop(TRIGGER_KEY)  # PyYAML parses an unquoted on key as Boolean.
+        return workflow
+
+    @staticmethod
+    def root_blockers(workflow: dict[str, Any]) -> list[str]:
+        """Check the trigger, permissions, and concurrency boundary."""
+        concurrency = workflow.get("concurrency", {})  # Read the cancellation policy before accepting the job.
+        contracts = {
+            "feature-push-trigger": workflow.get("on", {}).get("push") == {"branches-ignore": ["main"]},
+            "read-only-permission": workflow.get("permissions") == {"contents": "read"},
+            "cancel-aware-concurrency": (
+                "github.ref" in concurrency.get("group", "") and concurrency.get("cancel-in-progress") is True
+            ),
+            "no-secrets": "secrets." not in str(workflow),
+            "one-job": list(workflow.get("jobs", {})) == ["native_windows_audit_report"],
+        }  # Keep the validation optional and limited to the feature branch.
+        return [name for name, valid in contracts.items() if not valid]  # Name each failed contract.
+
+    @staticmethod
+    def job_blockers(workflow: dict[str, Any]) -> list[str]:
+        """Check the runner, setup, and exact native regression commands."""
+        job = workflow.get("jobs", {}).get("native_windows_audit_report", {})  # Read the one optional job.
+        steps = job.get("steps", [])  # Read each setup and test action in order.
+        checkout = next((step for step in steps if step.get("uses", "").startswith("actions/checkout@")), {})
+        python = next((step for step in steps if step.get("uses", "").startswith("actions/setup-python@")), {})
+        windows = next((step for step in steps if step.get("name") == "Confirm native Windows Python"), {})
+        tests = next((step for step in steps if step.get("name") == "Run native report safety regressions"), {})
+        command = tests.get("run", "")  # Inspect the exact native test selection and skip check.
+        contracts = {
+            "windows-runner": job.get("runs-on") == "windows-latest",
+            "bounded-timeout": isinstance(job.get("timeout-minutes"), int) and 1 <= job["timeout-minutes"] <= 20,
+            "no-services": not job.get("services"),
+            "checkout-credentials": checkout.get("with", {}).get("persist-credentials") is False,
+            "checkout-action": checkout.get("uses", "").startswith("actions/checkout@v"),
+            "python-action": python.get("uses", "").startswith("actions/setup-python@v"),
+            "supported-python": python.get("with", {}).get("python-version") == "3.15",
+            "runtime-dependencies": any(
+                step.get("run") == "python -m pip install -r requirements.txt" for step in steps
+            ),
+            "test-dependencies": any(
+                step.get("run") == "python -m pip install -r requirements-dev.txt" for step in steps
+            ),
+            "native-python-check": windows.get("shell") == "pwsh" and 'os.name == "nt"' in windows.get("run", ""),
+            "native-test-selection": (
+                tests.get("shell") == "pwsh"
+                and "test_native_windows_staged_file_sets_owner_only_acl" in command
+                and "test_native_windows_writer_writes_private_report_pair" in command
+            ),
+            "skip-detection": "total == 2" in command and "skipped == 0" in command,
+            "failure-propagation": "continue-on-error" not in str(job),
+        }  # Fail when a native regression is absent, skipped, or allowed to fail.
+        return [name for name, valid in contracts.items() if not valid]  # Name each failed contract.
+
+    @pytest.mark.parametrize("mutation", [None, "runner", "skip-check", "secret"])
+    def test_workflow_contract_rejects_unsafe_changes(self, mutation: str | None) -> None:
+        """Check the live workflow and prove that unsafe changes fail."""
+        workflow = self.read_workflow()  # Use a fresh mapping for each test case.
+        job = workflow["jobs"]["native_windows_audit_report"]  # Read the sole optional native job.
+        if mutation == "runner":
+            job["runs-on"] = "ubuntu-latest"
+        elif mutation == "skip-check":
+            job["steps"][-1]["run"] = job["steps"][-1]["run"].replace("skipped == 0", "skipped >= 0")
+        elif mutation == "secret":
+            workflow["env"] = {"MIST_API_TOKEN": "${{ secrets.MIST_API_TOKEN }}"}
+        blockers = self.root_blockers(workflow) + self.job_blockers(workflow)  # Audit the complete contract.
+        print(f"Checked 1 optional workflow and 2 native tests, mutation={mutation}, blockers={blockers}.")
+        assert (blockers == []) is (mutation is None), f"Invalid native Windows workflow contract: {blockers}"
