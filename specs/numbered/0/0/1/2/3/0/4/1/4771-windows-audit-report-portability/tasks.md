@@ -23,6 +23,7 @@ No project setup is needed. The feature uses the existing Python environment and
 ### Implementation for User Story 1
 
 - [X] T002 [US1] Add Windows-safe directory and report file access in `tests/e2e/websockets_tab/dialog_audit/support/reporting.py`.
+- [X] T011 [US1] Open staged files with ACL and attribute access through a no-follow Windows handle, and add API-boundary and native-Windows tests in `tests/e2e/websockets_tab/dialog_audit/test_inventory.py`.
 
 **Checkpoint**: Both report files can be created on the Windows path without POSIX-only flags.
 
@@ -78,7 +79,7 @@ No project setup is needed. The feature uses the existing Python environment and
 
 ### User Story Dependencies
 
-- **US1 (P1)**: T001 and T002 deliver successful Windows report output.
+- **US1 (P1)**: T001 and T002 deliver Windows report output. T011 follows T002 because it corrects the file handle used for DACL changes.
 - **US2 (P1)**: T003 and T004 verify fail-closed path safety.
 - **US3 (P2)**: T005 and T006 verify rollback and cleanup after report failures.
 

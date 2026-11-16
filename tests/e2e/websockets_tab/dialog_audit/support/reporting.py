@@ -237,13 +237,45 @@ class WindowsAuditReportAccess:
         cls.reject_reparse_points(path)
 
     @staticmethod
-    def secure_file_descriptor(descriptor: int, path: Path) -> None:
-        import msvcrt  # Convert the exclusive temporary file descriptor to a Windows handle.
+    def _open_staged_file_handle(path: Path) -> tuple[Any, int]:
+        import ctypes  # Compare the native invalid-handle value without platform assumptions.
 
-        windows_api_name = "get_osfhandle"
-        get_osfhandle = getattr(msvcrt, windows_api_name)
-        handle = get_osfhandle(descriptor)
-        WindowsAuditReportSecurity.restrict(handle, path, False)
+        logger.info("Opening staged audit report for owner-only access %s", path.name)  # Trace the ACL setup.
+        desired_access = 0x00040080  # Request WRITE_DAC and FILE_READ_ATTRIBUTES for ACL updates and checks.
+        share_mode = 0x00000007  # Allow the exclusive creator handle to remain open while permissions change.
+        open_existing = 3  # Reopen only the file already created by tempfile.mkstemp.
+        open_reparse_point = 0x00200000  # Inspect the file object itself rather than following a reparse point.
+        kernel32, _, _ = WindowsAuditReportSecurity._windows_apis()  # Load the native handle functions.
+        handle = kernel32.CreateFileW(
+            str(path),  # Reopen only the file that the exclusive creator made.
+            desired_access,  # Include WRITE_DAC for the following protected DACL update.
+            share_mode,  # Keep the original staging descriptor open during the ACL update.
+            None,  # Use the inherited private security descriptor.
+            open_existing,  # Refuse to create or truncate a different file.
+            open_reparse_point,  # Verify the named object without following a reparse point.
+            None,  # Do not inherit this security handle.
+        )  # Request a handle that can read attributes and update the DACL.
+        if handle == ctypes.c_void_p(-1).value:  # Fail closed when Windows cannot open the staged object.
+            raise WindowsAuditReportSecurity._windows_error()  # Preserve the native open error.
+        logger.debug("Opened staged audit report for owner-only access %s", path.name)  # Confirm the handle request.
+        return kernel32, handle  # Keep the API owner for deterministic handle cleanup.
+
+    @staticmethod
+    def secure_staged_file(path: Path) -> None:
+        logger.info("Applying owner-only access to staged audit report %s", path.name)  # Trace the DACL update.
+        try:  # Log native failures while preserving their original type.
+            kernel32, handle = WindowsAuditReportAccess._open_staged_file_handle(path)  # Open with ACL rights.
+            try:
+                WindowsAuditReportSecurity.restrict(handle, path, False)  # Verify and apply the owner-only DACL.
+                logger.debug("Applied owner-only access to staged audit report %s", path.name)  # Confirm the update.
+            finally:  # Close the native handle even when verification or ACL setup fails.
+                logger.info("Closing staged audit report security handle %s", path.name)  # Trace handle cleanup.
+                if not kernel32.CloseHandle(handle):  # Report a failed native handle close.
+                    raise WindowsAuditReportSecurity._windows_error()  # Preserve the native close error.
+                logger.debug("Closed staged audit report security handle %s", path.name)  # Confirm handle cleanup.
+        except (OSError, ValueError):
+            logger.exception("Could not set owner-only access on staged audit report %s", path.name)  # Record context.
+            raise  # Keep the writer fail-closed when Windows cannot protect the staged file.
 
 
 class AuditReportWriter:
@@ -432,7 +464,7 @@ class AuditReportFileTransaction:
             staged.append((Path(temporary_name), directory / name))
             try:
                 if sys.platform == "win32":
-                    WindowsAuditReportAccess.secure_file_descriptor(descriptor, staged[-1][0])
+                    WindowsAuditReportAccess.secure_staged_file(staged[-1][0])  # Require ACL rights first.
                 else:
                     os.fchmod(descriptor, 0o600)  # Preserve POSIX owner-only file access.
                 descriptor, output = -1, os.fdopen(descriptor, "w", encoding="utf-8")

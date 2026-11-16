@@ -6,7 +6,7 @@
 
 ## Summary
 
-Make the restricted audit writer work on Windows without weakening owner-only permissions or link rejection. Stage both reports in private, exclusive files, then replace the report pair only after both writes succeed. Use Windows file attributes and native handles for reparse-point checks and a protected owner-only access control list. Keep POSIX mode checks, reject links before replacement, and use atomic replacement instead of opening existing report files.
+Make the restricted audit writer work on Windows without weakening owner-only permissions or link rejection. Stage both reports in private, exclusive files, then replace the report pair only after both writes succeed. Open each staged file with `WRITE_DAC` and `FILE_READ_ATTRIBUTES` through `FILE_FLAG_OPEN_REPARSE_POINT` before applying its protected owner-only access control list. Keep POSIX mode checks, reject links before replacement, and use atomic replacement instead of opening existing report files.
 
 ## Technical Context
 
