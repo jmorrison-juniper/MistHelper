@@ -39,3 +39,13 @@
 **Alternatives considered**: A manual dispatch requires the workflow file on the default branch. A simulated Windows test cannot prove that `CreateFileW` grants the rights needed by the real ACL update.
 
 **Evidence**: GitHub documents that a push event can run an unmerged workflow file in the pushed commit. See [Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows).
+
+## Decision 5: Write the DACL directly to the verified handle
+
+**Decision**: Apply the owner-only DACL with `SetKernelObjectSecurity` and `DACL_SECURITY_INFORMATION`. Request `READ_CONTROL`, `WRITE_DAC`, and `FILE_READ_ATTRIBUTES` on the directory and staged-file handles. Read the descriptor back through the same handle, and fail when `SE_DACL_PROTECTED` or `SE_DACL_PRESENT` is absent.
+
+**Rationale**: Native run 43795918169 failed with Win32 status 5 at `SetSecurityInfo` on a directory handle that had `WRITE_DAC` only. `SetSecurityInfo` uses the access-control layer, which reads the current descriptor before it writes. The direct call needs `WRITE_DAC` only, and the `D:P` descriptor sets the protected bit. The readback proves the result, so a silent change fails closed.
+
+**Alternatives considered**: Add only `READ_CONTROL` and keep `SetSecurityInfo`. That call also propagates inherited entries to existing children through path opens, which this writer does not need.
+
+**Evidence**: The failed log shows the error at `_set_owner_dacl` after `SetSecurityInfo`. The new boundary tests fail against the previous writer. Native success is not proven until the Windows job passes.
