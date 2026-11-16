@@ -57,13 +57,12 @@ specs/numbered/0/0/1/2/3/1/0/2/4777-windows-timeout-acceptance/
 ├── spec.md
 ├── plan.md
 ├── tasks.md
-├── analysis.md
 └── design/
     ├── checklists/requirements.md
     ├── data-model.md
     ├── quickstart.md
     └── research.md
-changelog.d/2026-11-15-windows-timeout-acceptance.md
+changelog.d/issue-4777-windows-timeout-acceptance.md
 ```
 
 **Structure Decision**: Reuse the existing guardrail test package and add one workflow. Keep supporting records under `design/`. The feature root has five children or fewer.

@@ -2,6 +2,8 @@
 
 import logging  # Keep the contract decision visible in pytest diagnostics.
 import re  # Validate action references without blocking future major versions.
+import subprocess  # Execute the workflow validator against synthetic reports.
+import sys  # Reuse the active Python interpreter for validator behavior.
 from copy import deepcopy  # Keep mutation checks away from the loaded workflow.
 from pathlib import Path  # Resolve the workflow from this repository.
 from typing import Any  # Describe the parsed YAML mapping.
@@ -96,6 +98,24 @@ class TimeoutBudgetWorkflowPolicy:
         if not all(token in test_run for token in required):  # Check the result policy.
             findings.append("Seven tests must pass without skips, failures, or errors.")  # Name result failure.
         return findings  # Return every acceptance execution error.
+
+    @staticmethod
+    def junit_validator(workflow: dict[str, Any]) -> str:
+        """Return the exact inline result validator from the workflow."""
+        steps = workflow["jobs"]["windows_timeout_budget"]["steps"]  # Read the validated job steps.
+        test_step = next(
+            step  # Keep the selected workflow step.
+            for step in steps  # Inspect each workflow step.
+            if step.get("name") == "Run native timeout budget guard"  # Select the guard command.
+        )  # Fail when the guard step is absent.
+        command = next(
+            line.strip()  # Remove indentation from the shell command.
+            for line in test_step["run"].splitlines()  # Inspect each command in the step.
+            if line.strip().startswith("python -c '")  # Select the inline Python validator.
+        )  # Fail when the validator command is absent.
+        prefix = "python -c '"  # Identify the shell command prefix.
+        suffix = "' $junitPath"  # Identify the JUnit argument suffix.
+        return command[len(prefix) : -len(suffix)] if command.endswith(suffix) else ""  # Extract only the real script.
 
 
 class TimeoutBudgetJobPolicy:
@@ -192,3 +212,42 @@ class TestWindowsTimeoutBudgetWorkflow:
         assert (
             "The workflow must use only the push event." in findings
         ), "The contract accepted a pull request trigger."  # Prove rejection.
+
+    @pytest.mark.parametrize(
+        ("xml_content", "expected_return_code"),
+        [
+            ('<testsuites><testsuite tests="7" skipped="0" failures="0" errors="0"/></testsuites>', 0),
+            ('<testsuites><testsuite tests="0" skipped="0" failures="0" errors="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="6" skipped="0" failures="0" errors="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="7" skipped="1" failures="0" errors="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="7" skipped="0" failures="1" errors="0"/></testsuites>', 1),
+            ('<testsuites><testsuite tests="7" skipped="0" failures="0" errors="1"/></testsuites>', 1),
+            (None, 1),
+            ("<testsuites>", 1),
+        ],
+        ids=("valid", "zero-tests", "wrong-count", "skipped", "failed", "errored", "unreadable", "malformed"),
+    )
+    def test_junit_validator_checks_real_result_counts(
+        self,
+        workflow: dict[str, Any],
+        tmp_path: Path,
+        xml_content: str | None,
+        expected_return_code: int,
+    ) -> None:
+        """Run the workflow's actual inline validator against synthetic JUnit reports."""
+        validator = TimeoutBudgetWorkflowPolicy.junit_validator(workflow)  # Extract the workflow's real script.
+        assert validator, "The workflow must include its inline JUnit validator."  # Reject a missing validator.
+        report_path = tmp_path / "timeout-budget.xml"  # Isolate each synthetic report.
+        if xml_content is not None:  # Keep the unreadable case without a file.
+            logging.info("action=%s phase=%s", "write_junit_fixture", "before")  # Mark the temporary report write.
+            report_path.write_text(xml_content, encoding="utf-8")  # Supply exact synthetic result counts.
+            logging.debug("action=%s size=%s", "write_junit_fixture", len(xml_content))  # Report fixture size.
+        logging.info("action=%s phase=%s", "run_junit_validator", "before")  # Mark actual validator execution.
+        result = subprocess.run(
+            [sys.executable, "-c", validator, str(report_path)],  # Execute the extracted Python command.
+            capture_output=True,  # Retain validator errors for the assertion.
+            text=True,  # Compare the process result without byte conversion.
+            check=False,  # Assert the expected pass or fail result below.
+        )
+        logging.debug("action=%s code=%s", "run_junit_validator", result.returncode)  # Report validator status.
+        assert result.returncode == expected_return_code, result.stderr  # Verify the required result policy.

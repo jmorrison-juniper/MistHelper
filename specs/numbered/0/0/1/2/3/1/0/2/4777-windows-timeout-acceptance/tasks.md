@@ -24,16 +24,16 @@ No shared infrastructure changes are required.
 
 ### Tests
 
-- [X] T001 [US1] Add contract tests in `tests/guardrails/e2e_timeout_budget/test_windows_timeout_budget_workflow.py`. Check non-main push filters, read-only permissions, credential-free checkout, and native Windows and Python. Check full-module execution, seven tests, and zero skips, errors, or failures. Add a mutation case that rejects an invalid trigger.
+- [X] T001 [US1] Add contract tests in `tests/guardrails/e2e_timeout_budget/test_windows_timeout_budget_workflow.py`. Check non-main push filters, read-only permissions, credential-free checkout, native Windows, Python, seven tests, and zero skips, errors, or failures. Run the extracted JUnit validator against valid and invalid reports, including unreadable and malformed files. Add a mutation case that rejects an unapproved trigger.
 
 ### Implementation
 
 - [X] T002 [US1] Add `.github/workflows/windows-timeout-budget.yml`. Trigger it only on filtered non-main pushes. Use bounded Windows execution, existing action versions, read-only permissions, credential-free checkout, runtime confirmation, and JUnit validation. Keep `tests/guardrails/e2e_timeout_budget/test_timeout_budget.py` unchanged.
-- [X] T003 [P] [US1] Add `changelog.d/2026-11-15-windows-timeout-acceptance.md` with one `###` heading and one issue #4777 bullet.
+- [X] T003 [P] [US1] Add `changelog.d/issue-4777-windows-timeout-acceptance.md` with one `###` heading and one issue #4777 bullet.
 
 ### Local Validation
 
-- [X] T004 [US1] Run the workflow contract test and verify that it rejects an invalid trigger.
+- [X] T004 [US1] Run the workflow contract tests. Verify trigger rejection and require the extracted JUnit validator to accept only seven clean results.
 - [X] T005 [US1] Run the full timeout-budget test module and verify all seven tests pass.
 - [X] T006 [US1] Run the applicable Ruff, Black, compile, and STE checks for the new test and documentation.
 - [X] T007 [US1] Confirm the existing timeout test, protected CI files, dependency files, settings, and `.specify/feature.json` remain unchanged.
