@@ -1,8 +1,11 @@
 """Independent catalog, policy, and sanitized report contract tests."""
 
 import json  # Raise the real parser exception for malformed response tests.
+import sys  # Select the native Windows regression only on Windows.
 from copy import deepcopy  # Exercise changed inventory without changing the source catalog.
+from pathlib import Path  # Build test-owned report and symlink paths.
 from types import SimpleNamespace  # Trap actual route decisions without a remote endpoint.
+from unittest.mock import Mock  # Record native API arguments without Windows.
 
 import pytest  # Parameterize negative policy cases with explicit expected outcomes.
 
@@ -744,3 +747,407 @@ class TestMeasuredCoverage:
             summary["measured_dialogs"] == 1 and summary["totals"]["passed"] == 0
         )  # Never convert a blocker to a pass.
         assert summary["totals"]["blocked"] == 1  # Preserve target availability as an explicit blocker.
+
+
+class TestWindowsAuditReportWriter:
+    """Keep Windows report writes independent from POSIX-only file flags."""
+
+    @staticmethod
+    def destination():
+        return Path(__file__).resolve().parents[4] / "test-artifacts" / "websocket-dialog-audit"
+
+    @staticmethod
+    def snapshot(destination):
+        return {
+            name: (destination / name).read_bytes() if (destination / name).exists() else None
+            for name in ("report.json", "report.md")
+        }
+
+    @staticmethod
+    def restore(destination, previous):
+        for name, content in previous.items():
+            path = destination / name
+            if content is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(content)
+
+    @staticmethod
+    def windows_access_stub(calls, fail_on_file=None):
+        """Record Windows access checks without requiring native Windows APIs."""
+
+        class FakeWindowsAuditReportAccess:
+            @staticmethod
+            def reject_reparse_points(path: Path) -> None:
+                calls.append(("checked", path))
+
+            @staticmethod
+            def verify_attributes(attributes: int | None, path: Path) -> None:
+                calls.append(("attributes", path))
+
+            @staticmethod
+            def ensure_private_directory(path: Path) -> None:
+                path.mkdir(parents=True, exist_ok=True, mode=0o700)
+                path.chmod(0o700)
+                calls.append(("directory", path))
+
+            @staticmethod
+            def secure_staged_file(path: Path) -> None:
+                calls.append(("file", path.name))
+                if sum(kind == "file" for kind, _ in calls) == fail_on_file:
+                    raise OSError("synthetic ACL failure")
+
+        return FakeWindowsAuditReportAccess
+
+    @staticmethod
+    def run_windows_write(monkeypatch, access_stub, report, destination, replace=None):
+        """Run one report write with synthetic Windows APIs and local Git evidence."""
+        from types import SimpleNamespace
+
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        monkeypatch.setattr(
+            reporting.subprocess,
+            "run",
+            lambda *_args, **_kwargs: SimpleNamespace(stdout="synthetic-revision\n"),
+        )  # Keep the test independent from a mounted Git checkout.
+        with monkeypatch.context() as patch:
+            patch.setattr(reporting.sys, "platform", "win32")
+            patch.delattr(reporting.os, "O_NOFOLLOW", raising=False)
+            patch.delattr(reporting.os, "fchmod", raising=False)
+            patch.setattr(reporting, "WindowsAuditReportAccess", access_stub, raising=False)
+            if replace is not None:
+                patch.setattr(reporting.os, "replace", replace)
+            AuditReportWriter.write(report, destination)
+
+    @staticmethod
+    def markdown_replace_failure():
+        """Reject the Markdown install while retaining the real replace function."""
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        original_replace = reporting.os.replace
+
+        def fail_markdown_replace(source, target):
+            if Path(target).name == "report.md" and Path(source).name.startswith(".audit-report-stage-"):
+                raise OSError("synthetic replace failure")
+            original_replace(source, target)
+
+        return fail_markdown_replace
+
+    def test_writer_creates_reports_without_posix_only_flags(self, monkeypatch):
+        """Write both reports when the simulated Windows runtime lacks POSIX flags."""
+        destination = self.destination()
+        destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+        previous = self.snapshot(destination)
+        calls = []
+        access_stub = self.windows_access_stub(calls)
+        report = AuditReportWriter.build(["synthetic"], [{"key": "synthetic", "status": "passed"}])
+        try:
+            self.run_windows_write(monkeypatch, access_stub, report, destination)
+            saved = json.loads((destination / "report.json").read_text())
+            assert saved["inventory"] == ["synthetic"]
+            assert saved["source_revision"] == "synthetic-revision"
+            assert (destination / "report.md").is_file()
+            assert [kind for kind, _ in calls].count("file") == 2
+        finally:
+            self.restore(destination, previous)
+
+    @staticmethod
+    def native_destination_state() -> tuple[Path, Path, bool, bool, dict[str, bytes | None]]:
+        """Validate the report target before snapshotting existing test evidence."""
+        destination = TestWindowsAuditReportWriter.destination()
+        artifact_root = destination.parent
+        report_paths = [destination / name for name in ("report.json", "report.md")]
+        protected_paths = (destination, *destination.parents, *report_paths)
+        if any(path.is_symlink() for path in protected_paths):
+            pytest.fail("The native report test path contains a symbolic link.")
+        if destination.exists() and not destination.is_dir():
+            pytest.fail("The native report test path is not a directory.")
+        if any(path.exists() and not path.is_file() for path in report_paths):
+            pytest.fail("A native report destination is not a file.")
+        directory_existed = destination.exists()
+        artifact_root_existed = artifact_root.exists()
+        previous = TestWindowsAuditReportWriter.snapshot(destination)
+        return destination, artifact_root, directory_existed, artifact_root_existed, previous
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="This test needs native Windows security APIs.")
+    def test_native_windows_writer_writes_private_report_pair(
+        self: TestWindowsAuditReportWriter,
+    ) -> None:
+        """Write both reports through the real Windows helper with synthetic evidence."""
+        destination, artifact_root, directory_existed, artifact_root_existed, previous = self.native_destination_state()
+        report_paths = {name: destination / name for name in ("report.json", "report.md")}
+        report = AuditReportWriter.build(["synthetic"], [{"key": "synthetic", "status": "passed"}])
+        try:
+            AuditReportWriter.write(report, destination)
+            saved = json.loads(report_paths["report.json"].read_text(encoding="utf-8"))
+            assert saved["inventory"] == ["synthetic"]
+            assert saved["isolated_inspection"]["totals"]["passed"] == 1
+            assert "Isolated measured dialogs: 1" in report_paths["report.md"].read_text(encoding="utf-8")
+        finally:
+            self.restore(destination, previous)
+            if not directory_existed and destination.exists():
+                destination.rmdir()
+            if not artifact_root_existed and artifact_root.exists():
+                artifact_root.rmdir()
+
+
+class TestWindowsAuditReportDaclBoundary:
+    """Prove the real DACL helpers use the documented file-security APIs on verified handles."""
+
+    @staticmethod
+    def fake_advapi32(control: int = 0x1004, dacl_pointer: int = 888, granted: int = 0x00060080) -> SimpleNamespace:
+        """Return security functions that fill ctypes outputs and model handle-right checks."""
+
+        def convert(_sddl, _revision, descriptor, _size):
+            descriptor._obj.value = 777  # Simulate the descriptor that Windows allocates.
+            return True
+
+        def get_dacl(_descriptor, present, dacl, _defaulted):
+            present._obj.value, dacl._obj.value = True, 888  # Report a present owner-only DACL.
+            return True
+
+        def write_info(_handle, _object_type, _information, _owner, _group, _dacl, _sacl):
+            return 0 if granted & 0x00060000 == 0x00060000 else 5  # Model a denied write without both rights.
+
+        def read_info(_handle, _object_type, _information, _owner, _group, dacl, _sacl, descriptor):
+            if granted & 0x00020000 == 0:  # Model the read that needs READ_CONTROL.
+                return 5
+            dacl._obj.value, descriptor._obj.value = dacl_pointer, 999  # Return the applied descriptor.
+            return 0
+
+        def read_control(_descriptor, control_bits, _revision):
+            control_bits._obj.value = control  # Report the applied descriptor control bits.
+            return True
+
+        return SimpleNamespace(
+            ConvertStringSecurityDescriptorToSecurityDescriptorW=Mock(side_effect=convert),
+            GetSecurityDescriptorDacl=Mock(side_effect=get_dacl),
+            SetSecurityInfo=Mock(side_effect=write_info),
+            GetSecurityInfo=Mock(side_effect=read_info),
+            GetSecurityDescriptorControl=Mock(side_effect=read_control),
+        )
+
+    def test_owner_dacl_uses_protected_set_security_info_on_handle(self) -> None:
+        """Apply the protected owner-only DACL through SetSecurityInfo on the opened handle."""
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        kernel32 = SimpleNamespace(LocalFree=Mock())  # Record descriptor release.
+        advapi32 = self.fake_advapi32()  # Model a handle with READ_CONTROL and WRITE_DAC.
+        reporting.WindowsAuditReportSecurity._set_owner_dacl((kernel32, advapi32, None), 321, True)
+        handle, object_type, information, owner, group, dacl, sacl = advapi32.SetSecurityInfo.call_args.args
+        assert (handle, object_type, information) == (321, 1, 0x80000004)  # Protected DACL on a file handle.
+        assert (owner, group, sacl, dacl.value) == (None, None, None, 888)  # Change only the owner-only DACL.
+        sddl = advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.call_args.args[0]
+        assert sddl == "D:P(A;OICI;FA;;;OW)"  # Keep the protected owner-only directory policy.
+        assert kernel32.LocalFree.call_count == 1  # Release the converted descriptor.
+
+    def test_owner_dacl_write_failure_fails_closed(self) -> None:
+        """Raise when Windows rejects the DACL write on a handle without READ_CONTROL."""
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        kernel32 = SimpleNamespace(LocalFree=Mock())  # Record descriptor release.
+        advapi32 = self.fake_advapi32(granted=0x00040080)  # Model the rights of native run 43795918169.
+        with pytest.raises(OSError, match="Windows API call failed"):
+            reporting.WindowsAuditReportSecurity._set_owner_dacl((kernel32, advapi32, None), 321, False)
+        assert kernel32.LocalFree.call_count == 1  # Release the descriptor after the failure.
+
+    @pytest.mark.parametrize(
+        ("control", "dacl_pointer", "granted", "message", "released"),
+        [
+            (0x0004, 888, 0x00060080, "did not keep the protected", 1),
+            (0x1000, 888, 0x00060080, "did not keep the protected", 1),
+            (0x1004, 0, 0x00060080, "did not keep the protected", 1),
+            (0x1004, 888, 0x00040080, "Windows API call failed", 0),
+        ],
+    )
+    def test_dacl_readback_rejects_unprotected_or_unreadable_descriptor(
+        self, control: int, dacl_pointer: int, granted: int, message: str, released: int
+    ) -> None:
+        """Fail closed when the readback lacks protection, a DACL, or READ_CONTROL."""
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        kernel32 = SimpleNamespace(LocalFree=Mock())  # Record release of the returned descriptor.
+        advapi32 = self.fake_advapi32(control, dacl_pointer, granted)  # Simulate the applied descriptor state.
+        with pytest.raises(OSError, match=message):
+            reporting.WindowsAuditReportDaclVerifier.verify((kernel32, advapi32, None), 321, Path("report.json"))
+        assert kernel32.LocalFree.call_count == released  # Free only a descriptor that Windows returned.
+
+    def test_dacl_readback_accepts_protected_descriptor(self) -> None:
+        """Read the DACL through GetSecurityInfo on the same handle and accept protected bits."""
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        kernel32 = SimpleNamespace(LocalFree=Mock())  # Record release of the returned descriptor.
+        advapi32 = self.fake_advapi32()  # Report SE_DACL_PROTECTED and SE_DACL_PRESENT.
+        reporting.WindowsAuditReportDaclVerifier.verify((kernel32, advapi32, None), 321, Path("report.json"))
+        assert advapi32.GetSecurityInfo.call_args.args[:3] == (321, 1, 0x00000004)  # Read DACL from this handle.
+        assert kernel32.LocalFree.call_args.args[0].value == 999  # Free the descriptor that Windows allocated.
+
+    def test_directory_restrict_succeeds_only_with_read_control(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Run the real directory open, restrict, write, and readback against modeled handle rights."""
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        def query_attributes(_handle, _information_class, attributes, _size):
+            attributes[0] = 0x10  # Report a plain directory without a reparse point.
+            return True
+
+        granted = {}  # Record the rights that the real helper requests.
+
+        def open_handle(_path, desired_access, *_arguments):
+            granted["mask"] = desired_access  # Grant exactly the requested rights.
+            return 654
+
+        kernel32 = SimpleNamespace(
+            CreateFileW=Mock(side_effect=open_handle),
+            CloseHandle=Mock(return_value=True),
+            GetFileInformationByHandleEx=Mock(side_effect=query_attributes),
+            LocalFree=Mock(),
+        )
+        advapi32 = self.fake_advapi32()  # Model the API checks before the requested mask is known.
+        advapi32.SetSecurityInfo.side_effect = lambda *args: 0 if granted["mask"] & 0x00060000 == 0x00060000 else 5
+        access, security = reporting.WindowsAuditReportAccess, reporting.WindowsAuditReportSecurity
+        monkeypatch.setattr(security, "_windows_apis", Mock(return_value=(kernel32, advapi32, None)))
+        monkeypatch.setattr(access, "reject_reparse_points", Mock())  # POSIX lstat has no Windows attributes.
+        verify_handle_attributes = access.verify_attributes  # Keep the real check for handle attributes.
+        handle_only = Mock(side_effect=lambda bits, path: bits and verify_handle_attributes(bits, path))  # Skip lstat.
+        monkeypatch.setattr(access, "verify_attributes", handle_only)  # Check only the handle attribute query.
+        access.ensure_private_directory(tmp_path)  # Reopen the existing pytest directory.
+        arguments = kernel32.CreateFileW.call_args.args  # Read the native open request.
+        assert arguments[1] == 0x00060080  # Require READ_CONTROL, WRITE_DAC, and FILE_READ_ATTRIBUTES only.
+        assert access.verify_attributes.call_args.args[0] == 0x10  # Check the attributes of the opened handle.
+        assert (arguments[4], arguments[5]) == (3, 0x02200000)  # Open the existing directory without following.
+        assert advapi32.GetSecurityInfo.call_args.args[0] == 654  # Read back through the restricted handle.
+        assert kernel32.CloseHandle.call_args.args == (654,)  # Close the directory handle.
+
+
+class TestWindowsAuditReportFailures:
+    """Keep earlier reports intact when a Windows report update fails."""
+
+    def test_staged_file_opens_acl_capable_non_reparse_handle(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Request WRITE_DAC and OPEN_REPARSE_POINT before applying the file DACL."""
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        kernel32 = SimpleNamespace(  # Supply only the native functions used by the real access helper.
+            CreateFileW=Mock(return_value=123),
+            CloseHandle=Mock(return_value=True),
+        )
+        monkeypatch.setattr(
+            reporting.WindowsAuditReportSecurity,
+            "_windows_apis",
+            Mock(return_value=(kernel32, None, None)),
+        )  # Replace only the OS boundary.
+        monkeypatch.setattr(
+            reporting.WindowsAuditReportSecurity,
+            "restrict",
+            Mock(),
+        )  # Keep the access helper and its open flags real.
+        staged_path = tmp_path / ".audit-report-stage-test.tmp"  # Use a harmless test-owned path.
+        reporting.WindowsAuditReportAccess.secure_staged_file(staged_path)  # Exercise the real access helper.
+        arguments = kernel32.CreateFileW.call_args.args  # Read the native open request.
+        assert arguments[1] == 0x00060080  # Require READ_CONTROL, WRITE_DAC, and FILE_READ_ATTRIBUTES only.
+        assert arguments[1] & 0x00000080  # Require FILE_READ_ATTRIBUTES for handle validation.
+        assert arguments[2] == 0x00000007  # Preserve access for the exclusive creator handle.
+        assert arguments[4] == 3  # Reopen the existing staged file without truncation.
+        assert arguments[5] & 0x00200000  # Inspect the object without following reparse points.
+        assert kernel32.CloseHandle.call_args.args == (123,)  # Close the native handle after ACL enforcement.
+        restriction_call = reporting.WindowsAuditReportSecurity.restrict.call_args.args
+        assert restriction_call == (123, staged_path, False)  # Apply the DACL to the opened file handle.
+
+    def test_staged_file_closes_native_handle_after_acl_failure(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Close the ACL-capable handle when applying the file DACL fails."""
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        kernel32 = SimpleNamespace(  # Keep native resource handling in the real access helper.
+            CreateFileW=Mock(return_value=456),
+            CloseHandle=Mock(return_value=True),
+        )
+        monkeypatch.setattr(
+            reporting.WindowsAuditReportSecurity,
+            "_windows_apis",
+            Mock(return_value=(kernel32, None, None)),
+        )  # Replace only the native API boundary.
+        monkeypatch.setattr(
+            reporting.WindowsAuditReportSecurity,
+            "restrict",
+            Mock(side_effect=OSError("synthetic ACL failure")),
+        )  # Inject the DACL failure after the handle opens.
+        staged_path = tmp_path / "report.tmp"  # Use a harmless test-owned path.
+        with pytest.raises(OSError, match="synthetic ACL failure"):  # Require the ACL failure to propagate.
+            reporting.WindowsAuditReportAccess.secure_staged_file(staged_path)  # Exercise real handle cleanup.
+        assert kernel32.CloseHandle.call_args.args == (456,)  # Prove the helper closes the handle after failure.
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="This test needs native Windows security APIs.")
+    def test_native_windows_staged_file_sets_owner_only_acl(self, tmp_path: Path) -> None:
+        """Exercise the real report helper and native ACL APIs on Windows."""
+        import os
+        import tempfile
+
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        directory = tmp_path / "private-audit-reports"  # Keep the native ACL test inside pytest's private tree.
+        reporting.WindowsAuditReportAccess.ensure_private_directory(directory)  # Apply a protected parent DACL.
+        descriptor, staged_name = tempfile.mkstemp(prefix=".audit-report-stage-", dir=directory)  # Create exclusively.
+        staged_path = Path(staged_name)  # Convert the reserved name for the real helper.
+        try:
+            reporting.WindowsAuditReportAccess.secure_staged_file(staged_path)  # Apply the real Windows file DACL.
+            assert staged_path.is_file()  # Confirm ACL enforcement preserves the staged report as a file.
+        finally:
+            os.close(descriptor)  # Close the exclusive creator descriptor.
+            staged_path.unlink(missing_ok=True)  # Remove only this test's staged report.
+            directory.rmdir()  # Remove the now-empty test directory.
+
+    def test_windows_attributes_fail_closed(self):
+        """Reject missing evidence and reparse attributes without using Windows APIs."""
+        from tests.e2e.websockets_tab.dialog_audit.support import reporting
+
+        access = getattr(reporting, "WindowsAuditReportAccess", None)
+        if access is None:
+            pytest.fail("Windows report access checks are not implemented.")
+        with pytest.raises(ValueError, match="cannot be verified"):
+            access.verify_attributes(None, Path("report.json"))
+        with pytest.raises(ValueError, match="reparse point"):
+            access.verify_attributes(0x400, Path("report.json"))
+        access.verify_attributes(0, Path("report.json"))
+
+    def test_acl_failure_preserves_reports_and_cleans_staging(self, monkeypatch):
+        """Preserve prior reports and staging names after an ACL error."""
+        destination = TestWindowsAuditReportWriter.destination()
+        destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+        previous = TestWindowsAuditReportWriter.snapshot(destination)
+        temporary_before = {path.name for path in destination.iterdir() if path.name.startswith(".audit-report-")}
+        calls = []
+        access_stub = TestWindowsAuditReportWriter.windows_access_stub(calls, fail_on_file=2)
+        report = AuditReportWriter.build(["synthetic"], [{"key": "synthetic", "status": "passed"}])
+        try:
+            with pytest.raises(OSError, match="synthetic ACL failure"):
+                TestWindowsAuditReportWriter.run_windows_write(monkeypatch, access_stub, report, destination)
+            assert TestWindowsAuditReportWriter.snapshot(destination) == previous
+            temporary_after = {path.name for path in destination.iterdir() if path.name.startswith(".audit-report-")}
+            assert temporary_after == temporary_before
+        finally:
+            TestWindowsAuditReportWriter.restore(destination, previous)
+
+    def test_replace_failure_restores_previous_reports(self, monkeypatch):
+        """Restore prior reports and staging names after a replacement error."""
+        destination = TestWindowsAuditReportWriter.destination()
+        destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+        previous = TestWindowsAuditReportWriter.snapshot(destination)
+        temporary_before = {path.name for path in destination.iterdir() if path.name.startswith(".audit-report-")}
+        calls = []
+        access_stub = TestWindowsAuditReportWriter.windows_access_stub(calls)
+        report = AuditReportWriter.build(["synthetic"], [{"key": "synthetic", "status": "passed"}])
+        replace = TestWindowsAuditReportWriter.markdown_replace_failure()
+        try:
+            with pytest.raises(OSError, match="synthetic replace failure"):
+                TestWindowsAuditReportWriter.run_windows_write(monkeypatch, access_stub, report, destination, replace)
+            assert TestWindowsAuditReportWriter.snapshot(destination) == previous
+            temporary_after = {path.name for path in destination.iterdir() if path.name.startswith(".audit-report-")}
+            assert temporary_after == temporary_before
+        finally:
+            TestWindowsAuditReportWriter.restore(destination, previous)
