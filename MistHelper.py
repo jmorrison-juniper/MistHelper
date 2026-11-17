@@ -44,7 +44,6 @@ warnings.filterwarnings(
 
 import argparse  # Import argparse for command-line argument parsing (--menu, --test, --fast flags)
 import concurrent.futures  # High-level parallelism primitives for batched API calls
-import importlib  # Load optional packages without requiring third-party stub distributions.
 import inspect  # Introspect functions/classes at runtime (signatures, source lookup)
 import logging  # Import logging for structured logging to script.log and console
 import os  # Import os for file path operations, environment variables, and data/ directory setup
@@ -352,50 +351,6 @@ __all__ = [  # Preserve the existing behavior during the compliance refactor.
     "WebSocketManager",
     "WebSocketStreamTarget",
     "WiredClientManufacturerReportGenerator",
-    "_attempt_all_session_strategies",
-    "_attempt_interactive_login_with_rollback",
-    "_build_argument_parser",
-    "_build_interactive_test_runner",
-    "_build_systematic_test_options",
-    "_configure_runtime_options",
-    "_configure_session_timeout",
-    "_dispatch_main_mode",
-    "_early_dependency_check",
-    "_establish_mist_session",
-    "_execute_systematic_test_loop",
-    "_exit_on_unsupported_flag",
-    "_finalize_systematic_telemetry",
-    "_get_tuning_data_file_path",
-    "_handle_interactive_login_success",
-    "_initialize_deferred_imports",
-    "_initialize_dependencies",
-    "_initialize_systematic_telemetry",
-    "_install_default_request_timeout",
-    "_introspect_apisession_class",
-    "_is_help_invocation",
-    "_load_mistapi_module",
-    "_log_failed_session_variants",
-    "_print_switch_login_header",
-    "_print_systematic_banner",
-    "_print_systematic_pre_run_counts",
-    "_print_systematic_summary",
-    "_prompt_switch_login_confirmation",
-    "_reject_unsupported_flag_variants",
-    "_report_systematic_outcome",
-    "_resolve_systematic_test_context",
-    "_restore_session_globals_from_state",
-    "_run_capture_portal_mode",
-    "_run_cli_mode",
-    "_run_interactive_test_mode",
-    "_run_metrics_gateway_mode",
-    "_run_metrics_snmp",
-    "_run_mib_generator_mode",
-    "_run_systematic_test_mode",
-    "_run_tui_mode_and_exit",
-    "_run_web_portal_mode",
-    "_setup_runtime_flags",
-    "_snapshot_session_globals_to_state",
-    "_validate_initialized_session",
     "apisession",
     "argparse",
     "concurrent",
@@ -1082,11 +1037,11 @@ def _parse_requirements_file(
         # _early_dependency_check_legacy_impl removed per issue #431 (ARCH-NAMING +
         # dead-code). The function (~430 lines, cyclomatic 64) was a leftover legacy
         # implementation never called from anywhere -- production startup uses the
-        # canonical _early_dependency_check() defined below which delegates to the
+        # canonical early_dependency_check() defined below which delegates to the
         # extracted src/foundation/runtime/bootstrap/* orchestrator.
 
 
-def _early_dependency_check() -> None:  # Public entry point. Delegates to the extracted bootstrap modules
+def early_dependency_check() -> None:  # Public entry point. Delegates to the extracted bootstrap modules
     """Run early dependency checks through the extracted bootstrap orchestrator."""
     installer = PackageInstaller(  # Build the installer with stdlib modules injected (enables testing/mocking)
         os_module=os,  # Inject os for path/env operations
@@ -1143,7 +1098,7 @@ except ImportError:  # Extremely unlikely for a stdlib module, but guard anyway
 
 mistapi: Any = None  # Preserve the historical module global for tests and menu factories.
 try:  # Import the SDK without starting a session or touching the network.
-    _mistapi_impl = importlib.import_module("mistapi")  # Keep optional SDK loading consistent with deferred imports.
+    import mistapi as _mistapi_impl  # Bind the SDK for import-time menu factories and tests.
 
     mistapi = _mistapi_impl  # Preserve the historical module global without a bootstrap session.
 except ImportError:  # The bootstrap dependency check reports the missing SDK before runtime modes start.
@@ -1184,9 +1139,7 @@ except ImportError:  # paramiko not installed
 
     # Optional imports with fallbacks
 try:  # scourgify is optional (US street-address normalization)
-    normalize_address_record: Callable[..., dict[str, str | None]] | None = importlib.import_module(
-        "scourgify"
-    ).normalize_address_record  # Preserve the optional normalizer's structured address result.
+    from scourgify import normalize_address_record  # Normalize messy US addresses into structured fields
 except ImportError:  # scourgify not installed
     normalize_address_record = None  # None lets callers fall back to raw address strings
 
@@ -1966,6 +1919,8 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
         self, module_name: str
     ) -> None:  # Preserve the existing behavior during the compliance refactor.
         """Invalidate import caches and purge stale failed entries so a post-install retry imports cleanly."""
+        import importlib  # Imported locally to invalidate caches only when needed.
+
         importlib.invalidate_caches()  # Force Python to notice the newly installed files.
         actual_import_name = self.import_name_mappings.get(module_name, module_name)  # Resolve package -> import name.
         for mod_name in (actual_import_name, module_name):  # Both names may be cached as failed.
@@ -2297,9 +2252,9 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
         try:  # The function may be an attribute or require a direct import
             normalize_func = getattr(module_obj, "normalize_address_record", None)  # Look for the normalize function
             if not normalize_func:  # Attribute missing -- import directly from scourgify
-                normalize_func = importlib.import_module(
-                    "scourgify"
-                ).normalize_address_record  # Resolve the same package attribute after a missing hoist.
+                from scourgify import normalize_address_record  # Direct import fallback
+
+                normalize_func = normalize_address_record  # Rebind the direct-import result
             globals()["normalize_address_record"] = normalize_func  # Bind the resolved function globally
         except (ImportError, AttributeError):  # Package present but function unavailable
             logging.debug("Could not import normalize_address_record from scourgify, using fallback")  # Note fallback
@@ -2552,9 +2507,7 @@ def _exit_on_unsupported_flag(
 
 
 try:  # Import the sanitizer class without configuring logging during module import.
-    LogSanitizer: Callable[[], logging.Filter] | None = importlib.import_module(
-        "mistapi.__logger"
-    ).LogSanitizer  # Preserve the SDK logging filter factory when the optional module exists.
+    from mistapi.__logger import LogSanitizer  # Keep the old exported name available for callers.
 except ImportError:  # Older mistapi versions may not publish the sanitizer.
     LogSanitizer = None  # Keep the exported name stable when mistapi lacks the class.
 
@@ -2712,9 +2665,9 @@ def _restore_session_globals_from_state(
     MainEntrypoint.context.org_id = state.get("org_id", MainEntrypoint.context.org_id)  # Copy the selected org ID back
 
 
-def _print_switch_login_header() -> None:  # Preserve the existing behavior during the compliance refactor.
+def print_switch_login_header() -> None:  # Preserve the existing behavior during the compliance refactor.
     """Display switch to interactive login header and benefits."""
-    logger.debug("Entering _print_switch_login_header()")  # Trace entry for debugging
+    logger.debug("Entering print_switch_login_header()")  # Trace entry for debugging
     echo("")  # Preserve the existing behavior during the compliance refactor.
     echo("=" * 60)  # Preserve the existing behavior during the compliance refactor.
     echo("  SWITCH TO INTERACTIVE LOGIN")  # Preserve the existing behavior during the compliance refactor.
@@ -2748,7 +2701,7 @@ def _print_switch_login_header() -> None:  # Preserve the existing behavior duri
         echo("")  # Preserve the existing behavior during the compliance refactor.
 
 
-def _attempt_interactive_login_with_rollback(
+def attempt_interactive_login_with_rollback(
     old_session: Any, old_org_id: str | None
 ) -> bool:  # Preserve the existing behavior during the compliance refactor.
     """Clear session and attempt interactive login with rollback on failure.
@@ -2758,7 +2711,7 @@ def _attempt_interactive_login_with_rollback(
     """
     # The application context owns this state, so no global declaration is needed.
 
-    logger.debug("Entering _attempt_interactive_login_with_rollback()")  # Trace entry for debugging
+    logger.debug("Entering attempt_interactive_login_with_rollback()")  # Trace entry for debugging
     logger.debug("Clearing existing session state for re-authentication")  # Note we reset before re-login
 
     MainEntrypoint.context.clear_session()  # Drop old session state through the context owner.
@@ -2776,9 +2729,9 @@ def _attempt_interactive_login_with_rollback(
     return True  # Signal success to the caller
 
 
-def _handle_interactive_login_success() -> None:  # Preserve the existing behavior during the compliance refactor.
+def handle_interactive_login_success() -> None:  # Preserve the existing behavior during the compliance refactor.
     """Handle successful interactive login - display status and select MSP/org."""
-    logger.debug("Entering _handle_interactive_login_success()")  # Trace entry for debugging
+    logger.debug("Entering handle_interactive_login_success()")  # Trace entry for debugging
     echo("")  # Preserve the existing behavior during the compliance refactor.
     echo(
         "  + Successfully switched to interactive login"
@@ -2802,12 +2755,12 @@ def _handle_interactive_login_success() -> None:  # Preserve the existing behavi
         _select_org_from_session()  # Non-MSP users pick an org directly
 
 
-def _prompt_switch_login_confirmation() -> bool:  # Preserve the existing behavior during the compliance refactor.
+def prompt_switch_login_confirmation() -> bool:  # Preserve the existing behavior during the compliance refactor.
     """Prompt the user to confirm switching to interactive login.
 
     Returns True if the user typed 'y', False on cancel/EOF/SystemExit.
     """
-    logger.debug("_prompt_switch_login_confirmation: prompting user for y/N")  # Log before prompt
+    logger.debug("prompt_switch_login_confirmation: prompting user for y/N")  # Log before prompt
     try:  # safe_input may raise SystemExit on EOF in some contexts
         confirm = (  # Preserve the existing behavior during the compliance refactor.
             InputUtils.safe_input("  Proceed with re-authentication? (y/N): ", context="switch_login").strip().lower()
@@ -2881,7 +2834,7 @@ def _select_org_from_session() -> None:  # Preserve the existing behavior during
     _invoke_mistapi_org_picker_and_apply()  # Run picker. Updates the org_id global
 
 
-def _load_mistapi_module(current_mistapi: Any) -> Any:  # Preserve the existing behavior during the compliance refactor.
+def load_mistapi_module(current_mistapi: Any) -> Any:  # Preserve the existing behavior during the compliance refactor.
     """Ensure mistapi is imported, falling back to direct import if the global is not yet set.
 
     Args:
@@ -2893,7 +2846,7 @@ def _load_mistapi_module(current_mistapi: Any) -> Any:  # Preserve the existing 
     if current_mistapi is not None:  # Already loaded -- return immediately without re-importing
         return current_mistapi  # Pass through existing module reference
     try:
-        mistapi_fallback = importlib.import_module("mistapi")  # Load the same SDK package only when absent.
+        import mistapi as mistapi_fallback  # Attempt direct import as fallback when global not yet set
 
         logger.debug("Loaded mistapi via fallback import in initialize_mist_session")  # Confirm load path
         return mistapi_fallback  # Return newly imported module
@@ -2968,7 +2921,7 @@ def _preflight_verify_credentials(
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Fail closed before any mistapi/requests call when host/token config is absent or a placeholder.
 
-    Feature 1020 (US3): invoked at the top of ``_establish_mist_session()`` for every dispatch mode. It
+    Feature 1020 (US3): invoked at the top of ``establish_mist_session()`` for every dispatch mode. It
     performs only local string validation. It never imports ``requests`` or ``mistapi`` and never issues
     an HTTP request. So a misconfigured run exits with a redacted, actionable message instead of a
     malformed URL from mistapi. Token-based modes need a token
@@ -3084,7 +3037,7 @@ def _check_token_rate_limit(
         return True  # Treat connection exception as unavailable to avoid broken tokens
 
 
-def _introspect_apisession_class(
+def introspect_apisession_class(
     mistapi_module: Any,
 ) -> tuple[Any, list[str]]:  # Preserve the existing behavior during the compliance refactor.
     """Retrieve the APISession class and its constructor parameter names from mistapi.
@@ -3487,7 +3440,7 @@ def _validate_initialized_session(
     return True  # Session passed all checks -- ready for API calls
 
 
-def _attempt_all_session_strategies(  # Preserve the existing behavior during the compliance refactor.
+def attempt_all_session_strategies(  # Preserve the existing behavior during the compliance refactor.
     apisession_cls: type[Any],
     sig_params: list[str],
     tokens: list[str],
@@ -3508,7 +3461,7 @@ def _attempt_all_session_strategies(  # Preserve the existing behavior during th
     return session_obj, method, tried  # Caller validates / logs / patches
 
 
-def _log_failed_session_variants(
+def log_failed_session_variants(
     tried_variants: list[str],
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Log every kwargs variant that failed (operator debugging on total init failure)."""
@@ -3553,7 +3506,7 @@ def _install_default_request_timeout(
     inner_session.mount("http://", adapter)  # Apply to plain HTTP too for completeness
 
 
-def _configure_session_timeout(
+def configure_session_timeout(
     session_obj: Any,
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Report that the explicit session configurator owns timeout setup."""
@@ -3829,7 +3782,7 @@ def _build_org_ap_upgrader(
 
 def _ws_cmd_deps() -> WebSocketCmdDeps:  # Preserve the existing behavior during the compliance refactor.
     """Create WebSocket command dependency context for the dispatch table."""
-    _site_devices = importlib.import_module("mistapi.api.v1.sites.devices")  # Resolve the deferred SDK endpoint module.
+    import mistapi.api.v1.sites.devices as _site_devices
 
     return WebSocketCmdDeps(  # Preserve the existing behavior during the compliance refactor.
         apisession=MainEntrypoint.context.apisession,
@@ -6860,7 +6813,7 @@ def _systematic_test_resolve_fast_mode() -> bool:  # Preserve the existing behav
     return _fast_mode_from_cli_args()  # Fallback: parsed --fast on CLI args namespace.
 
 
-def _print_systematic_banner() -> None:  # Preserve the existing behavior during the compliance refactor.
+def print_systematic_banner() -> None:  # Preserve the existing behavior during the compliance refactor.
     """Print the test-start banner + timestamp + separator to the operator console."""
     echo(
         " Starting systematic test of MistHelper menu options..."
@@ -6890,7 +6843,7 @@ _SYSTEMATIC_TEST_OPTIMIZED_ORDER = [  # Shortest-running operations first to sur
 ]
 
 
-def _build_systematic_test_options() -> (
+def build_systematic_test_options() -> (
     tuple[list[str], list[str], list[str]]
 ):  # Preserve the existing behavior during the compliance refactor.
     """Compute the safe/unsafe option lists in optimized execution order.
@@ -6907,7 +6860,7 @@ def _build_systematic_test_options() -> (
     return safe_options, unsafe_list, all_options  # Preserve the existing behavior during the compliance refactor.
 
 
-def _print_systematic_pre_run_counts(
+def print_systematic_pre_run_counts(
     all_options: list[str], safe_options: list[str], unsafe_list: list[str]
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Print the total / safe / unsafe option counts before the test loop runs."""
@@ -6923,7 +6876,7 @@ def _print_systematic_pre_run_counts(
     echo("")  # Preserve the existing behavior during the compliance refactor.
 
 
-def _initialize_systematic_telemetry(
+def initialize_systematic_telemetry(
     unsafe_list: list[str],
 ) -> tuple[TelemetryEmitter, str, int]:  # Preserve the existing behavior during the compliance refactor.
     """Open the timestamped telemetry emitter and emit skip events. Return (emitter, path, skip_count)."""
@@ -6937,7 +6890,7 @@ def _initialize_systematic_telemetry(
     return emitter, telemetry_path, skip_count  # Preserve the existing behavior during the compliance refactor.
 
 
-def _resolve_systematic_test_context() -> bool:  # Preserve the existing behavior during the compliance refactor.
+def resolve_systematic_test_context() -> bool:  # Preserve the existing behavior during the compliance refactor.
     """Resolve module-level org_id and the fast-mode flag once before the test loop."""
     # The application context owns this state, so no global declaration is needed.
     if not _systematic_test_has_api_token():  # Offline test mode cannot resolve a live organization.
@@ -6954,7 +6907,7 @@ def _resolve_systematic_test_context() -> bool:  # Preserve the existing behavio
     return _systematic_test_resolve_fast_mode()  # Resolve fast-mode flag once for the loop.
 
 
-def _execute_systematic_test_loop(  # Preserve the existing behavior during the compliance refactor.
+def execute_systematic_test_loop(  # Preserve the existing behavior during the compliance refactor.
     emitter: TelemetryEmitter, safe_options: list[str], fast_enabled: bool
 ) -> tuple[int, int]:
     """Iterate safe options through the runner, counting successes/failures."""
@@ -6979,7 +6932,7 @@ def _execute_systematic_test_loop(  # Preserve the existing behavior during the 
     return success_count, error_count  # Preserve the existing behavior during the compliance refactor.
 
 
-def _finalize_systematic_telemetry(
+def finalize_systematic_telemetry(
     emitter: TelemetryEmitter, summary: TestSummary
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Emit the final summary event, close the telemetry file, and enforce retention."""
@@ -6988,7 +6941,7 @@ def _finalize_systematic_telemetry(
     emitter.enforce_retention()  # Clean up old telemetry files per configured retention policy.
 
 
-def _print_systematic_summary(
+def print_systematic_summary(
     summary: TestSummary, telemetry_path: str
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Print the human-readable summary block (totals, coverage %, paths)."""
@@ -7013,7 +6966,7 @@ def _print_systematic_summary(
     echo("   Detailed logs in: script.log")  # Preserve the existing behavior during the compliance refactor.
 
 
-def _report_systematic_outcome(
+def report_systematic_outcome(
     success_count: int, error_count: int, safe_count: int, total_time: float
 ) -> bool:  # Preserve the existing behavior during the compliance refactor.
     """Emit the final all-pass / partial-failure message and return the boolean result."""
@@ -7036,7 +6989,7 @@ def _report_systematic_outcome(
     return False  # Signal partial failure to callers.
 
 
-def _build_interactive_test_runner(
+def build_interactive_test_runner(
     get_org_id: Any, set_org_id: Any
 ) -> Any:  # Preserve the existing behavior during the compliance refactor.
     """Construct InteractiveTestRunner with the current runtime context and return it."""
@@ -7704,18 +7657,18 @@ def _add_auth_and_backend_flags(
     )
 
 
-def _build_argument_parser() -> (
+def build_argument_parser() -> (
     argparse.ArgumentParser
 ):  # Preserve the existing behavior during the compliance refactor.
     """Build and return the CLI argument parser for MistHelper with all supported flags."""
-    logger.debug("_build_argument_parser: building argument parser")  # Log before parser creation
+    logger.debug("build_argument_parser: building argument parser")  # Log before parser creation
     parser = argparse.ArgumentParser(description="MistHelper CLI Interface")  # Create base parser with description
     _add_target_selection_arguments(parser)  # Register org/menu/site/device/port selection flags
     _add_execution_mode_arguments(parser)  # Register debug/delay/fast/skip-deps execution-mode flags
     _add_output_format_arguments(parser)  # Register output-format and systematic-test flags
     _add_safety_arguments(parser)  # Register dry-run/address-check/SSL/no-env safety flags
     _add_interface_arguments(parser)  # Register TUI/login/web-portal/standalone interface flags
-    logger.debug("_build_argument_parser: parser ready with all arguments configured")  # Log completion
+    logger.debug("build_argument_parser: parser ready with all arguments configured")  # Log completion
     return parser  # Return parser for caller to call parse_args() on
 
 
@@ -7750,12 +7703,12 @@ def _announce_fast_mode_scope() -> None:  # Preserve the existing behavior durin
         echo("  - %s", name)  # Preserve the existing behavior during the compliance refactor.
 
 
-def _setup_runtime_flags(
+def setup_runtime_flags(
     args: argparse.Namespace,
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Apply standalone env flag, register args globally, and configure FAST_MODE_ENABLED."""
     # The application context owns this state, so no global declaration is needed.
-    logger.debug("_setup_runtime_flags: applying standalone and fast mode flags")  # Log entry
+    logger.debug("setup_runtime_flags: applying standalone and fast mode flags")  # Log entry
     if args.standalone:  # --standalone flag disables ArangoDB/Redis connections org-wide
         os.environ["MISTHELPER_STANDALONE"] = "true"  # Write env var so all components detect standalone mode
         logger.info("Standalone mode enabled via --standalone flag: ArangoDB/Redis disabled")  # Log env write
@@ -7775,7 +7728,7 @@ def _setup_runtime_flags(
     logger.debug("FAST_MODE_ENABLED set to %s", MainEntrypoint.context.fast_mode_enabled)  # Log fast mode state
     if MainEntrypoint.context.fast_mode_enabled:  # Announce only after the guarded flag write succeeds
         _announce_fast_mode_scope()  # Log + print fast-capable function list
-    logger.debug("_setup_runtime_flags: complete")  # Log exit
+    logger.debug("setup_runtime_flags: complete")  # Log exit
 
 
 def _apply_dependency_assignments(
@@ -7823,11 +7776,11 @@ def _run_skip_dependency_init() -> None:  # Preserve the existing behavior durin
     _apply_dependency_assignments(skip_mode=True)  # Publish whatever symbols resolved even in skip mode
 
 
-def _initialize_dependencies(
+def initialize_dependencies(
     args: argparse.Namespace,
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Initialize deferred module imports based on --skip-deps flag, aborting on critical failure."""
-    logger.debug("_initialize_dependencies: checking if dependency initialization is needed")  # Log entry
+    logger.debug("initialize_dependencies: checking if dependency initialization is needed")  # Log entry
     already_done = hasattr(import_manager, "deferred_init_done")  # Preserve the existing attribute-presence check.
     if not _initialize_imports_now and not already_done:  # First-time deferred init required
         if args.skip_deps:  # Minimal path when the caller passed --skip-deps
@@ -7836,14 +7789,14 @@ def _initialize_dependencies(
             _run_full_dependency_init(args)  # Run the full import cycle (may sys.exit on critical failure)
     elif already_done:  # Already initialized -- skip to avoid duplicate work
         logger.debug("Dependencies already initialized, skipping duplicate initialization")  # Note the skip
-    logger.debug("_initialize_dependencies: complete")  # Log exit
+    logger.debug("initialize_dependencies: complete")  # Log exit
 
 
-def _establish_mist_session(
+def establish_mist_session(
     args: argparse.Namespace,
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Initialize Mist API session using interactive login or API token, then detect MSP privileges."""
-    logger.debug("_establish_mist_session: starting session initialization")  # Log entry
+    logger.debug("establish_mist_session: starting session initialization")  # Log entry
     is_capture_portal = bool(
         getattr(args, "capture_portal", False)
     )  # The portal creates its own environment or browser credential session.
@@ -7866,7 +7819,7 @@ def _establish_mist_session(
         _init_interactive_session()  # Email/password path. Exits non-zero on failure.
     else:  # Default path: use API token from .env or environment variables
         _init_token_session()  # Token path. Exits non-zero on failure, then publishes MSP grants.
-    logger.debug("_establish_mist_session: session established successfully")  # Log successful auth
+    logger.debug("establish_mist_session: session established successfully")  # Log successful auth
 
 
 def _preflight_systematic_test_org(
@@ -7910,7 +7863,7 @@ def _init_token_session() -> None:  # Preserve the existing behavior during the 
     MainEntrypoint.context.msp_privileges = detect_msp_privileges(
         MainEntrypoint.context.apisession
     )  # Detect MSP grants for token session and publish to global
-    logger.debug("_establish_mist_session: session established successfully")  # Log successful auth
+    logger.debug("establish_mist_session: session established successfully")  # Log successful auth
 
 
 def _apply_debug_log_level() -> None:  # Preserve the existing behavior during the compliance refactor.
@@ -7925,12 +7878,12 @@ def _apply_debug_log_level() -> None:  # Preserve the existing behavior during t
     logger.debug("Performance monitoring will trigger circuit breakers for infinite loops")  # Remind about CBs
 
 
-def _configure_runtime_options(
+def configure_runtime_options(
     args: argparse.Namespace,
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Set OUTPUT_FORMAT, initialize PROGRESS_EMITTER, and configure debug log level."""
     # The application context owns this state, so no global declaration is needed.
-    logger.debug("_configure_runtime_options: applying runtime configuration")  # Log entry
+    logger.debug("configure_runtime_options: applying runtime configuration")  # Log entry
     MainEntrypoint.context.output_format = (
         args.output_format
     )  # Apply --output-format (csv or sqlite) to global used by all exporters
@@ -7949,7 +7902,7 @@ def _configure_runtime_options(
         MainEntrypoint.context.progress_emitter = None  # Set to None so callers skip telemetry gracefully
     if args.debug:  # Apply debug logging level to file handlers. Keep console at INFO to avoid noise
         _apply_debug_log_level()  # Promote root + file handlers to DEBUG
-    logger.debug("_configure_runtime_options: complete")  # Log exit
+    logger.debug("configure_runtime_options: complete")  # Log exit
 
 
 def _run_tui_mode(args: argparse.Namespace) -> None:  # Preserve the existing behavior during the compliance refactor.
@@ -8424,7 +8377,7 @@ def _run_capture_portal_mode(
     """Launch the upgrade capture portal on port 8056 and exit cleanly on shutdown.
 
     Why:
-        _dispatch_main_mode needs one handler for each front end. This handler keeps the
+        dispatch_main_mode needs one handler for each front end. This handler keeps the
         --capture-portal flag beside the --web-portal flag in the same dispatch table.
 
     Args:
@@ -8441,7 +8394,7 @@ def _run_metrics_gateway_mode(
     """Serve the Prometheus endpoint and exit cleanly on shutdown.
 
     Why:
-        _dispatch_main_mode needs one handler for each front end. This handler keeps the
+        dispatch_main_mode needs one handler for each front end. This handler keeps the
         --metrics-gateway flag beside the --capture-portal flag in the same table.
 
     Args:
@@ -8454,31 +8407,29 @@ def _run_metrics_gateway_mode(
 
 _SORTED_MENU_KEYS_CACHE: tuple[tuple[str, ...], tuple[str, ...]] | None = None  # Cache the sorted menu key order.
 
-_MAIN_MODE_TABLE: tuple[tuple[Callable[[argparse.Namespace], bool], str], ...] = (
-    (lambda a: bool(a.test), "_run_systematic_test_mode"),
-    (lambda a: bool(a.testinteractive), "_run_interactive_test_mode"),
-    (lambda a: bool(a.tui), "_run_tui_mode_and_exit"),
-    (lambda a: bool(getattr(a, "web_portal", False)), "_run_web_portal_mode"),
-    (lambda a: bool(getattr(a, "capture_portal", False)), "_run_capture_portal_mode"),
-    (lambda a: bool(getattr(a, "metrics_snmp", False)), "_run_metrics_snmp"),
-    (
-        lambda a: any(
-            bool(getattr(a, name, False)) for name in ("mib_generate", "mib_dry_run", "mib_report", "mib_check")
-        ),
-        "_run_mib_generator_mode",
-    ),
-    (lambda a: bool(getattr(a, "metrics_gateway", False)), "_run_metrics_gateway_mode"),
-    (lambda a: _has_meaningful_cli_args(a), "_run_cli_mode"),
-)  # Cache predicate definitions while handler names keep monkeypatch and late binding behavior.
 
-
-def _dispatch_main_mode(
+def dispatch_main_mode(
     args: argparse.Namespace,
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Dispatch to the appropriate mode entry point based on parsed CLI flags."""
-    for predicate, handler_name in _MAIN_MODE_TABLE:  # Stop on the first cached predicate that matches.
+    modes: tuple[tuple[Callable[[argparse.Namespace], bool], Callable[[argparse.Namespace], None]], ...] = (
+        (lambda a: bool(a.test), _run_systematic_test_mode),
+        (lambda a: bool(a.testinteractive), _run_interactive_test_mode),
+        (lambda a: bool(a.tui), _run_tui_mode_and_exit),
+        (lambda a: bool(getattr(a, "web_portal", False)), _run_web_portal_mode),
+        (lambda a: bool(getattr(a, "capture_portal", False)), _run_capture_portal_mode),
+        (lambda a: bool(getattr(a, "metrics_snmp", False)), _run_metrics_snmp),
+        (
+            lambda a: any(
+                bool(getattr(a, name, False)) for name in ("mib_generate", "mib_dry_run", "mib_report", "mib_check")
+            ),
+            _run_mib_generator_mode,
+        ),
+        (lambda a: bool(getattr(a, "metrics_gateway", False)), _run_metrics_gateway_mode),
+        (lambda a: _has_meaningful_cli_args(a), _run_cli_mode),
+    )  # Resolve real handlers per dispatch so rebinding remains visible without a string or getter registry.
+    for predicate, handler in modes:  # Stop on the first predicate that matches.
         if predicate(args):  # Preserve the existing behavior during the compliance refactor.
-            handler = globals()[handler_name]  # Resolve at dispatch time so tests and late binding still work.
             handler(args)  # Preserve the existing behavior during the compliance refactor.
             return  # Most handlers call sys.exit. The return is defensive for _run_cli_mode
     _run_interactive_mode(args)  # Fallback: interactive menu loop

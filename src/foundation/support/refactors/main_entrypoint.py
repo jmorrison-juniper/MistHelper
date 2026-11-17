@@ -8,9 +8,9 @@ class method. No wrapper shim remains in MistHelper.py after this
 extraction.
 
 All six pipeline dependencies (`_initialize_deferred_imports`,
-`InputUtils`, `_build_argument_parser`, `_setup_runtime_flags`,
-`_initialize_dependencies`, `_establish_mist_session`,
-`_configure_runtime_options`, `_dispatch_main_mode`) are resolved
+`InputUtils`, `build_argument_parser`, `setup_runtime_flags`,
+`initialize_dependencies`, `establish_mist_session`,
+`configure_runtime_options`, `dispatch_main_mode`) are resolved
 lazily through the source dependency resolver. The host module binds
 itself during startup, so the source package does not import the root
 module.
@@ -125,7 +125,7 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
 
     def _parse_arguments(self) -> argparse.Namespace:
         """Parse the command line exactly one time."""
-        parser = cast(argparse.ArgumentParser, _MH._build_argument_parser())  # Build the real parser for errors.
+        parser = cast(argparse.ArgumentParser, _MH.build_argument_parser())  # Build the real parser for errors.
         return parser.parse_args(list(self.argv))  # Let --help exit before side effects.
 
     def _build_web_args(self) -> argparse.Namespace:
@@ -147,18 +147,18 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         self._activate_context()  # Publish this invocation state before legacy startup helpers write to it.
         self._run_common_startup()  # Move import-time work behind the explicit bootstrap boundary.
         _MH.InputUtils.ensure_tqdm_available()  # Keep the progress wrapper available before dispatch.
-        _MH._setup_runtime_flags(self.parsed_args)  # Publish the stored parse result to legacy call sites.
-        _MH._initialize_dependencies(self.parsed_args)  # Initialize imports using the stored parse result.
+        _MH.setup_runtime_flags(self.parsed_args)  # Publish the stored parse result to legacy call sites.
+        _MH.initialize_dependencies(self.parsed_args)  # Initialize imports using the stored parse result.
         self._establish_cli_session()  # Authenticate only for modes that need a startup session.
-        _MH._configure_runtime_options(self.parsed_args)  # Apply output and telemetry settings after dependencies.
+        _MH.configure_runtime_options(self.parsed_args)  # Apply output and telemetry settings after dependencies.
         return self.parsed_args  # Give MainEntrypoint the same Namespace object for dispatch.
 
     def bootstrap_for_web(self) -> argparse.Namespace:
         """Run the side-effect startup path for the WSGI host."""
         self._activate_context()  # Publish this web invocation state before legacy startup helpers write to it.
         self._run_common_startup()  # Move import-time work behind the explicit web bootstrap boundary.
-        _MH._setup_runtime_flags(self.parsed_args)  # Publish default web args for helpers that read globals()["args"].
-        _MH._initialize_dependencies(self.parsed_args)  # Initialize imports without a command-line parse.
+        _MH.setup_runtime_flags(self.parsed_args)  # Publish default web args for helpers that read globals()["args"].
+        _MH.initialize_dependencies(self.parsed_args)  # Initialize imports without a command-line parse.
         return self.parsed_args  # Let the caller inspect the startup mode if needed.
 
     def _activate_context(self) -> None:
@@ -246,7 +246,7 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
             logger.debug("The early dependency check did not run")  # Confirm no dependency action ran.
             return  # Stop before any file, network, or subprocess dependency work.
         logger.info("Running the early dependency check")  # Log before package validation.
-        _MH._early_dependency_check()  # Preserve the existing dependency orchestrator behavior.
+        _MH.early_dependency_check()  # Preserve the existing dependency orchestrator behavior.
         logger.debug("The early dependency check finished")  # Log after package validation.
 
     def _build_import_manager(self) -> None:
@@ -349,7 +349,7 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
     def _establish_cli_session(self) -> None:
         """Create the Mist session only when the parsed mode needs one."""
         if MainEntrypoint._needs_startup_session(self.parsed_args):  # Use the stored args for the session decision.
-            _MH._establish_mist_session(self.parsed_args)  # Authenticate before live API modes use Mist Cloud.
+            _MH.establish_mist_session(self.parsed_args)  # Authenticate before live API modes use Mist Cloud.
             return  # Avoid the offline-test log when a session was created.
         logger.info("SYSTEMATIC_TEST: No API token found; deferring Mist session for offline safe tests")  # Explain.
         logger.debug("SYSTEMATIC_TEST: Mist session was not built for offline --test")  # Confirm no session work.
@@ -398,4 +398,4 @@ class MainEntrypoint:  # CLI main entry-point seam
         bootstrap = ApplicationBootstrap(context=context)  # Parse the command line once with invocation state.
         logger.debug("The CLI application bootstrap is ready")  # Log after startup preparation is ready.
         args = bootstrap.bootstrap_for_cli()  # Run explicit startup and keep the stored Namespace for dispatch.
-        _MH._dispatch_main_mode(args)  # Choose and run the right mode (test, TUI, web portal, CLI, interactive).
+        _MH.dispatch_main_mode(args)  # Choose and run the right mode (test, TUI, web portal, CLI, interactive).

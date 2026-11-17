@@ -25,13 +25,13 @@ import MistHelper as MAIN  # WHY: the root script holds CLI flags and menus.
 )
 def test_each_switch_parses_and_sets_its_own_attribute(flag: str, attribute: str) -> None:
     """A person must be able to name any one of the four actions."""
-    args = MAIN._build_argument_parser().parse_args([flag])  # Parse the single flag on its own.
+    args = MAIN.build_argument_parser().parse_args([flag])  # Parse the single flag on its own.
     assert getattr(args, attribute) is True  # The named action must switch on.
 
 
 def test_the_output_flag_carries_a_path() -> None:
     """A person must be able to send the file somewhere else for a review."""
-    args = MAIN._build_argument_parser().parse_args(["--mib-generate", "--mib-output", "out.mib"])
+    args = MAIN.build_argument_parser().parse_args(["--mib-generate", "--mib-output", "out.mib"])
     assert args.mib_output == "out.mib"  # The path must reach the handler unchanged.
 
 

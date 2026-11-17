@@ -62,16 +62,14 @@ def _publish_helpers(monkeypatch: pytest.MonkeyPatch, **overrides: Any) -> dict[
     or side_effect via the returned dict.
     """
     helpers = {  # WHY: build the default mock set once, then let tests customize per-need.
-        "_load_mistapi_module": MagicMock(name="_load_mistapi_module"),  # WHY: returns loaded mistapi module.
+        "load_mistapi_module": MagicMock(name="load_mistapi_module"),  # WHY: returns loaded mistapi module.
         "_parse_api_tokens": MagicMock(name="_parse_api_tokens"),  # WHY: returns (host, tokens).
-        "_introspect_apisession_class": MagicMock(
-            name="_introspect_apisession_class"
-        ),  # WHY: returns (cls, sig_params).
-        "_attempt_all_session_strategies": MagicMock(
-            name="_attempt_all_session_strategies"
+        "introspect_apisession_class": MagicMock(name="introspect_apisession_class"),  # WHY: returns (cls, sig_params).
+        "attempt_all_session_strategies": MagicMock(
+            name="attempt_all_session_strategies"
         ),  # WHY: returns (session, method, tried).
-        "_log_failed_session_variants": MagicMock(name="_log_failed_session_variants"),  # WHY: called only on failure.
-        "_configure_session_timeout": MagicMock(name="_configure_session_timeout"),  # WHY: called only on success.
+        "log_failed_session_variants": MagicMock(name="log_failed_session_variants"),  # WHY: called only on failure.
+        "configure_session_timeout": MagicMock(name="configure_session_timeout"),  # WHY: called only on success.
         "_validate_initialized_session": MagicMock(name="_validate_initialized_session"),  # WHY: returns truthy/falsy.
     }
 
@@ -91,18 +89,18 @@ class TestInitializeShortCircuit:
         helpers = _publish_helpers(monkeypatch)  # WHY: publish helpers so short-circuit assertion is provable.
 
         assert MistSessionInitializer.initialize() is True  # WHY: short-circuit returns True.
-        assert helpers["_load_mistapi_module"].call_count == 0  # WHY: setup skipped entirely.
+        assert helpers["load_mistapi_module"].call_count == 0  # WHY: setup skipped entirely.
 
 
 class TestInitializeMistapiLoadFailure:
     """`initialize()` returns False when mistapi cannot be loaded."""
 
     def test_load_mistapi_returns_none_bails(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When _load_mistapi_module returns None/falsy, initialize() returns False."""
+        """When load_mistapi_module returns None/falsy, initialize() returns False."""
         monkeypatch.setattr("MistHelper.apisession", None, raising=False)  # WHY: not-initialized.
         monkeypatch.setattr("MistHelper.mistapi", None, raising=False)  # WHY: starting state - no mistapi.
         helpers = _publish_helpers(monkeypatch)  # WHY: publish helpers so load returns None.
-        helpers["_load_mistapi_module"].return_value = None  # WHY: force loader failure branch.
+        helpers["load_mistapi_module"].return_value = None  # WHY: force loader failure branch.
 
         assert MistSessionInitializer.initialize() is False  # WHY: mistapi unavailable → False.
         assert helpers["_parse_api_tokens"].call_count == 0  # WHY: never reached parse step.
@@ -112,35 +110,35 @@ class TestInitializeStrategiesFail:
     """`initialize()` returns False when no session strategy succeeds."""
 
     def test_all_strategies_fail_logs_and_returns_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When _attempt_all_session_strategies returns falsy session, log variants + False."""
+        """When attempt_all_session_strategies returns falsy session, log variants + False."""
         monkeypatch.setattr("MistHelper.apisession", None, raising=False)  # WHY: not-initialized.
         monkeypatch.setattr("MistHelper.mistapi", None, raising=False)  # WHY: mistapi placeholder.
         helpers = _publish_helpers(monkeypatch)  # WHY: publish helpers with sensible defaults.
 
         loaded_mistapi = MagicMock(name="loaded_mistapi")  # WHY: successful loader result.
-        helpers["_load_mistapi_module"].return_value = loaded_mistapi  # WHY: loader step succeeds.
+        helpers["load_mistapi_module"].return_value = loaded_mistapi  # WHY: loader step succeeds.
         helpers["_parse_api_tokens"].return_value = (
             "https://api.mist.com",
             ["tok1", "tok2"],
         )  # WHY: (host, tokens) tuple.
         apisession_cls = MagicMock(name="APISession_cls")  # WHY: class handle discovered by introspect.
-        helpers["_introspect_apisession_class"].return_value = (
+        helpers["introspect_apisession_class"].return_value = (
             apisession_cls,
             ["host", "token"],
         )  # WHY: (cls, sig_params) tuple.
         tried_variants = ["variant_a", "variant_b"]  # WHY: sentinel list for post-assert.
-        helpers["_attempt_all_session_strategies"].return_value = (
+        helpers["attempt_all_session_strategies"].return_value = (
             None,
             None,
             tried_variants,
         )  # WHY: all strategies fail → falsy session.
 
         assert MistSessionInitializer.initialize() is False  # WHY: strategies failed → False.
-        assert helpers["_log_failed_session_variants"].call_count == 1  # WHY: failure logged.
-        assert helpers["_log_failed_session_variants"].call_args.args == (
+        assert helpers["log_failed_session_variants"].call_count == 1  # WHY: failure logged.
+        assert helpers["log_failed_session_variants"].call_args.args == (
             tried_variants,
         )  # WHY: tried variants surfaced.
-        assert helpers["_configure_session_timeout"].call_count == 0  # WHY: timeout config skipped.
+        assert helpers["configure_session_timeout"].call_count == 0  # WHY: timeout config skipped.
         assert helpers["_validate_initialized_session"].call_count == 0  # WHY: validation skipped.
 
 
@@ -154,18 +152,18 @@ class TestInitializeHappyPath:
         helpers = _publish_helpers(monkeypatch)  # WHY: publish helpers.
 
         loaded_mistapi = MagicMock(name="loaded_mistapi")  # WHY: successful loader result.
-        helpers["_load_mistapi_module"].return_value = loaded_mistapi  # WHY: loader succeeds.
+        helpers["load_mistapi_module"].return_value = loaded_mistapi  # WHY: loader succeeds.
         helpers["_parse_api_tokens"].return_value = (
             "https://api.mist.com",
             ["tok1"],
         )  # WHY: (host, tokens).
         apisession_cls = MagicMock(name="APISession_cls")  # WHY: class handle from introspect.
-        helpers["_introspect_apisession_class"].return_value = (
+        helpers["introspect_apisession_class"].return_value = (
             apisession_cls,
             ["host", "apitoken"],
         )  # WHY: (cls, params).
         new_session = MagicMock(name="new_apisession")  # WHY: truthy session sentinel.
-        helpers["_attempt_all_session_strategies"].return_value = (
+        helpers["attempt_all_session_strategies"].return_value = (
             new_session,
             "positional_all_args",
             ["variant_ok"],
@@ -192,16 +190,16 @@ class TestInitializeHappyPath:
         monkeypatch.setattr("MistHelper.mistapi", None, raising=False)  # WHY: mistapi placeholder.
         helpers = _publish_helpers(monkeypatch)  # WHY: publish helpers.
 
-        helpers["_load_mistapi_module"].return_value = MagicMock(name="loaded_mistapi")  # WHY: loader succeeds.
+        helpers["load_mistapi_module"].return_value = MagicMock(name="loaded_mistapi")  # WHY: loader succeeds.
         helpers["_parse_api_tokens"].return_value = (
             "https://api.mist.com",
             ["tok1"],
         )  # WHY: (host, tokens).
-        helpers["_introspect_apisession_class"].return_value = (
+        helpers["introspect_apisession_class"].return_value = (
             MagicMock(name="APISession_cls"),
             ["host", "apitoken"],
         )  # WHY: (cls, params).
-        helpers["_attempt_all_session_strategies"].return_value = (
+        helpers["attempt_all_session_strategies"].return_value = (
             MagicMock(name="new_apisession"),
             "positional_all_args",
             ["variant_ok"],

@@ -18,7 +18,7 @@
 
 - [x] T005 [US1] Correct local inferred collections and exception scope in `MistHelper.py`. (delivered: MistHelper.py)
 - [x] T006 [US1] Correct optional import contracts and typed dynamic module methods in `MistHelper.py`. (delivered: MistHelper.py)
-- [x] T007 [US1] Express actual dynamic dispatch contracts without dummy references in `MistHelper.py`. (delivered: MistHelper.py)
+- [ ] T007 [US1] Express actual dynamic dispatch contracts without dummy references in `MistHelper.py`.
 - [ ] T008 [US1] Correct required shared callback and record contracts under `src/`.
 - [x] T009 [US1] Resolve the reserved portal signature contract in `web_portal/app.py` after handoff. (delivered: web_portal/app.py)
 - [ ] T010 [US1] Record a verified zero-error strict report in `analysis.md`.
@@ -66,5 +66,8 @@ Optional commit hooks remain deferred to the verified local commit.
 
 T003 remains incomplete for the archived API and cache owners.
 T008 retains their two unchanged source contracts.
-T010 cannot pass while their ten strict diagnostics remain.
+T007 retains nine preserved declarations without verified production callers.
+These nine diagnostics are not ownership blockers.
+The corrected host interfaces and actual mode dispatcher resolve the other unused-function diagnostics.
+T010 cannot pass while the ten held-contract errors and nine preserved-declaration errors remain.
 The portal and ARP handoffs do not release either source hold.
