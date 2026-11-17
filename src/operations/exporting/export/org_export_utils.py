@@ -11,6 +11,7 @@ from __future__ import annotations  # WHY: enable PEP 604 unions on Python 3.9+.
 
 import logging  # WHY: structured trace for export lifecycle events.
 import time  # WHY: sites_sle_summary progress timer.
+from collections.abc import Callable  # Type the injected API endpoint without changing its keyword arguments.
 from typing import Any  # WHY: raw insight rows are duck-typed dicts from mistapi.
 
 import mistapi  # WHY: direct SDK access for org export endpoints.
@@ -48,7 +49,13 @@ class OrgExportUtils:
     _ORG_VALID_METRIC_CHOICES = ("bytes", "rx_bytes", "tx_bytes")  # Org-scope-valid parameterized metric choices
 
     @staticmethod
-    def export_data(api_call, data_type, sort_key="name", limit=1000, **api_kwargs):  # Export an org endpoint.
+    def export_data(
+        api_call: Callable[..., object],
+        data_type: str,
+        sort_key: str = "name",
+        limit: int | None = 1000,
+        **api_kwargs: object,
+    ) -> None:  # Keep endpoint arguments intact for the existing APIDataFetcher.
         """Generic org-data export: build Org<DataType>.csv from `api_call`, pass `limit`/extras as API kwargs."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Starting export of organization %s...", data_type)  # Log start.

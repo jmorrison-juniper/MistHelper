@@ -903,11 +903,11 @@ class TestMSPMode:
 
 
 class TestMSPSelection:
-    """Tests for _select_msps."""
+    """Tests for the public MSP selector."""
 
     def test_single_msp_auto(self):
         u = _make_upgrader(msp_privileges=[SAMPLE_MSP])
-        result = u._select_msps()
+        result = u.select_msps()
         assert len(result) == 1
 
     def test_multi_msp_select_all(self):
@@ -915,7 +915,7 @@ class TestMSPSelection:
             msp_privileges=[SAMPLE_MSP, SAMPLE_MSP_2],
             safe_input_fn=MagicMock(return_value="all"),
         )
-        result = u._select_msps()
+        result = u.select_msps()
         assert len(result) == 2
 
     def test_multi_msp_cancel(self):
@@ -923,7 +923,7 @@ class TestMSPSelection:
             msp_privileges=[SAMPLE_MSP, SAMPLE_MSP_2],
             safe_input_fn=MagicMock(return_value="q"),
         )
-        result = u._select_msps()
+        result = u.select_msps()
         assert result == []
 
     def test_multi_msp_select_one(self):
@@ -931,7 +931,7 @@ class TestMSPSelection:
             msp_privileges=[SAMPLE_MSP, SAMPLE_MSP_2],
             safe_input_fn=MagicMock(return_value="1"),
         )
-        result = u._select_msps()
+        result = u.select_msps()
         assert len(result) == 1
 
     def test_default_msp(self):
@@ -940,13 +940,13 @@ class TestMSPSelection:
             selected_msp=SAMPLE_MSP,
             safe_input_fn=MagicMock(return_value=""),
         )
-        result = u._select_msps()
+        result = u.select_msps()
         assert len(result) == 1
         assert result[0]["msp_id"] == "msp-001"
 
 
 class TestOrgSelection:
-    """Tests for _select_orgs_from_msp."""
+    """Tests for the public organization selector."""
 
     def test_selects_orgs(self):
         u = _make_upgrader(safe_input_fn=MagicMock(return_value="1"))
@@ -955,7 +955,7 @@ class TestOrgSelection:
             mock_msp_api = MagicMock()
             mock_msp_api.listMspOrgs.return_value = _make_api_response([SAMPLE_ORG, SAMPLE_ORG_2])
             mock_import.return_value = mock_msp_api
-            result = u._select_orgs_from_msp(SAMPLE_MSP)
+            result = u.select_orgs_from_msp(SAMPLE_MSP)
 
         assert len(result) == 1
 
@@ -966,7 +966,7 @@ class TestOrgSelection:
             mock_msp_api = MagicMock()
             mock_msp_api.listMspOrgs.return_value = _make_api_response([SAMPLE_ORG, SAMPLE_ORG_2])
             mock_import.return_value = mock_msp_api
-            result = u._select_orgs_from_msp(SAMPLE_MSP)
+            result = u.select_orgs_from_msp(SAMPLE_MSP)
 
         assert len(result) == 2
 
@@ -977,7 +977,7 @@ class TestOrgSelection:
             mock_msp_api = MagicMock()
             mock_msp_api.listMspOrgs.return_value = _make_api_response([SAMPLE_ORG])
             mock_import.return_value = mock_msp_api
-            result = u._select_orgs_from_msp(SAMPLE_MSP)
+            result = u.select_orgs_from_msp(SAMPLE_MSP)
 
         assert result == []
 
@@ -988,7 +988,7 @@ class TestOrgSelection:
             mock_msp_api = MagicMock()
             mock_msp_api.listMspOrgs.return_value = _make_api_response([])
             mock_import.return_value = mock_msp_api
-            result = u._select_orgs_from_msp(SAMPLE_MSP)
+            result = u.select_orgs_from_msp(SAMPLE_MSP)
 
         assert result == []
 
@@ -999,13 +999,13 @@ class TestOrgSelection:
             mock_msp_api = MagicMock()
             mock_msp_api.listMspOrgs.side_effect = Exception("API error")
             mock_import.return_value = mock_msp_api
-            result = u._select_orgs_from_msp(SAMPLE_MSP)
+            result = u.select_orgs_from_msp(SAMPLE_MSP)
 
         assert result == []
 
     def test_api_session_none(self):
         u = _make_upgrader(apisession=None)
-        result = u._select_orgs_from_msp(SAMPLE_MSP)
+        result = u.select_orgs_from_msp(SAMPLE_MSP)
         assert result == []
 
 
