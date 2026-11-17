@@ -24,11 +24,11 @@
 
 ### Tests for User Story 1
 
-- [x] T003 [US1] Cover FR-001, FR-003, FR-005, and FR-006 with mocked tests for empty success, invalid records, unusable names, repeated links, `run()` pagination failure, and a later-page duplicate in `tests/unit/prod_readiness/standalone/operations/wan/test_wan_vpn_builder.py` (delivered: `tests/unit/prod_readiness/standalone/operations/wan/test_wan_vpn_builder.py`).
+- [x] T003 [US1] Cover FR-001, FR-003, FR-005 through FR-008 with native `requests.Response` tests for single-page success, invalid headers, error payloads, repeated links, `run()` stopping before name input after transport or header failure, and a multi-page duplicate in `tests/unit/prod_readiness/standalone/operations/wan/test_wan_vpn_builder.py` (delivered: `tests/unit/prod_readiness/standalone/operations/wan/test_wan_vpn_builder.py`).
 
 ### Implementation for User Story 1
 
-- [x] T004 [US1] Implement FR-001 and FR-006 by validating VPN records and names, rejecting repeated page links, and distinguishing complete empty inventory from unavailable inventory in `src/operations/wan/wan_vpn_builder.py` (delivered: `src/operations/wan/wan_vpn_builder.py`).
+- [x] T004 [US1] Implement FR-001 and FR-006 through FR-008 by validating records, names, error payloads, and native pagination metadata in `src/operations/wan/wan_vpn_builder.py` (delivered: `src/operations/wan/wan_vpn_builder.py`).
 - [x] T005 [US1] Implement FR-002 and preserve FR-004 by stopping before the name prompt and typed confirmation when VPN inventory is unavailable in `src/operations/wan/wan_vpn_builder.py` (delivered: `src/operations/wan/wan_vpn_builder.py`).
 - [x] T006 [P] [US1] Add the issue-specific release note in `changelog.d/issue-4792-wan-vpn-list-failure.md` (delivered: `changelog.d/issue-4792-wan-vpn-list-failure.md`).
 

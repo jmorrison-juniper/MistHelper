@@ -14,7 +14,7 @@ Run the focused mocked test module:
 python -m pytest tests/unit/prod_readiness/standalone/operations/wan/test_wan_vpn_builder.py
 ```
 
-The tests must prove that a complete empty inventory remains valid, invalid records and repeated links stop the workflow, later-page failures stop `run()`, and names on later pages block duplicates.
+The tests must prove that native single-page responses remain valid, invalid SDK headers and error payloads stop the workflow, and later-page failures stop `run()`.
 
 Run static checks for the modified Python module and test module:
 

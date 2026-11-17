@@ -13,8 +13,8 @@ The VPN inventory contains all VPN definitions returned for one organization.
 
 | State | Meaning | Builder behavior |
 | - | - | - |
-| Complete and non-empty | Every page succeeded and contains object records with nonblank string names. Pagination links do not repeat. | Display the inventory and reject duplicate names. |
-| Complete and empty | Every page succeeded and contains a valid empty result list. | Continue the normal name flow. |
-| Unavailable | A request failed, a page or record had an invalid shape, a name was unusable, a link repeated, or a declared page did not arrive. | Stop before the name prompt and VPN creation. |
+| Complete and non-empty | Every page succeeded, records have nonblank string names, and pagination metadata is valid and stable. | Display the inventory and reject duplicate names. |
+| Complete and empty | A successful single-page response has no page headers, or every declared page succeeds with stable metadata and no VPN records. | Continue the normal name flow. |
+| Unavailable | A request failed, an error payload appeared, a page or record had an invalid shape, a name was unusable, headers were invalid, a link repeated, or a declared page did not arrive. | Stop before the name prompt and VPN creation. |
 
 The builder must not convert an unavailable inventory into a complete empty inventory.

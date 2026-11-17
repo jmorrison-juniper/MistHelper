@@ -29,6 +29,8 @@ An operator uses the WAN VPN builder to create an organization VPN. The builder 
 
 - A successful response contains an empty list.
 - A response has no successful status or has an invalid results shape.
+- Pagination headers are incomplete, malformed, or inconsistent between pages.
+- A 2xx response body contains a truthy `error` field with a results list.
 - A later page fails, cannot be fetched, or is missing.
 - The list request raises an exception before it returns a response.
 
@@ -42,11 +44,13 @@ An operator uses the WAN VPN builder to create an organization VPN. The builder 
 - **FR-004**: The builder MUST keep the existing typed confirmation before it creates an organization VPN.
 - **FR-005**: Verification MUST use synthetic responses and MUST NOT call a live Mist organization.
 - **FR-006**: Each VPN record MUST be an object with a nonblank string name. A repeated pagination link MUST make the inventory unavailable.
+- **FR-007**: When any page header is present, all three Mist pagination headers MUST be valid and consistent across pages. No page headers MUST remain valid for a single-page response.
+- **FR-008**: The builder MUST reject a 2xx response body with a truthy `error` field, even when it also contains `results`.
 
 ### Mist Cloud Transport Requirements
 
 - The existing `mistapi.api.v1.orgs.vpns.listOrgVpns` method remains the VPN inventory path. The existing `createOrgVpn` method remains behind the typed confirmation. No direct HTTP transport is added.
-- Mocked contract tests must prove that failed status, malformed records, unusable names, pagination failure, repeated links, and missing pages cannot reach VPN creation. Tests must not use a production credential or expose a secret.
+- Mocked contract tests must prove that failed status, malformed records, unusable names, invalid pagination headers, pagination failure, repeated links, and missing pages cannot reach VPN creation. Native `requests.Response` objects must verify the installed SDK behavior. Tests must not use a production credential or expose a secret.
 - SDK insufficiency is not in scope because the existing SDK methods remain in use. Authentication and endpoint parity remain unchanged because this fix does not alter the SDK session or endpoint.
 
 ### Key Entities
@@ -62,6 +66,8 @@ An operator uses the WAN VPN builder to create an organization VPN. The builder 
 - **SC-002**: Every tested failed or incomplete inventory case makes zero VPN creation calls.
 - **SC-003**: A complete successful empty inventory remains distinct from an unavailable inventory.
 - **SC-004**: A complete multi-page inventory rejects a duplicate name found on a later page before creation.
+- **SC-005**: A native 2xx single-page response without pagination headers remains valid.
+- **SC-006**: A native 2xx response with a truthy `error` field and `results` is unavailable.
 
 ## Assumptions
 

@@ -6,7 +6,7 @@
 
 ## Summary
 
-Keep VPN creation unavailable unless every page and VPN name is valid. Reuse the existing Mist SDK, stop on repeated pagination links, and preserve a successful empty inventory as valid.
+Keep VPN creation unavailable unless every page and VPN name is valid. Validate native SDK pagination headers, stop on repeated links, and preserve valid single-page and empty inventories.
 
 ## Technical Context
 
@@ -34,8 +34,10 @@ Keep VPN creation unavailable unless every page and VPN name is valid. Reuse the
 - The existing `specs/` root has 795 children. This change uses the managed `numbered/` route and adds no direct child to that root.
 - The changelog change is one issue-specific release fragment. It does not edit `CHANGELOG.md`.
 - The implementation keeps the existing Mist SDK list and create methods. It adds no direct HTTP transport.
-- Synthetic tests cover complete empty inventory, invalid records, repeated links, later-page failures, and the stop-before-create behavior.
+- Synthetic tests cover native SDK headers, error payloads, complete empty inventory, invalid records, repeated links, later-page failures, and the stop-before-create behavior.
 - The existing typed confirmation remains unchanged. No live organization call or mutation is part of implementation or validation.
+- `specs/` has 795 direct children, and `WanVpnBuilder` already exceeds the five-member limit. This change uses the managed numbered route and adds only focused inventory validation methods.
+- Separate incremental remediation action: track a later refactor that moves WAN VPN inventory handling into a compliant module and reduces the existing builder class size. This action is outside issue #4792.
 - The commit subject will use a Conventional Commit form accepted by the title guard.
 
 **Gate result**: Pass. The change preserves the current transport and confirmation boundary and adds no new product output.
@@ -74,7 +76,8 @@ The relevant behavior is fully specified. The repository already has a validated
 
 - Stage VPN definitions until every response page has a successful status, valid result list, and usable name for each record.
 - Treat a successful empty list as complete inventory.
-- Treat an exception, failed status, malformed record, unusable name, repeated link, or missing next page as unavailable inventory.
+- Treat an exception, failed status, malformed record, unusable name, invalid or inconsistent pagination headers, repeated link, or missing next page as unavailable inventory.
+- Treat a truthy `error` field as a failure even when a 2xx body also contains `results`.
 - Stop the workflow before the name prompt when inventory is unavailable.
 - Include every page in duplicate-name validation and keep the typed confirmation.
 - Add mocked tests only. Do not run live VPN integration tests.

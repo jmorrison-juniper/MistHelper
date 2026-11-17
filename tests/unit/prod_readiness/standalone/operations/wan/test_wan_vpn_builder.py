@@ -80,6 +80,31 @@ def sample_vpns():
     ]
 
 
+def _native_sdk_response(
+    status_code: int,
+    reason: str,
+    response_body: bytes,
+    url: str,
+    headers: dict[str, str] | None = None,
+) -> object:
+    """Build a real requests response and parse it with the installed Mist SDK."""
+    import sys  # WHY: locate the SDK module imported by the builder under test.
+
+    import requests  # WHY: use the transport type that mistapi 0.64 parses.
+
+    response = requests.Response()  # WHY: construct a response without sending a network request.
+    response.status_code = status_code  # WHY: preserve the HTTP result for SDK parsing.
+    response.url = url  # WHY: let the SDK build its native pagination URL.
+    response.reason = reason  # WHY: retain response status context for SDK logs.
+    response.headers["Content-Type"] = "application/json"  # WHY: model Mist JSON responses.
+    for header_name, header_value in (headers or {}).items():  # WHY: apply only synthetic headers from each test.
+        response.headers[header_name] = header_value  # WHY: feed actual header parsing to the SDK.
+    response._content = response_body  # WHY: supply the native response body without network access.
+    source_module = sys.modules[WanVpnBuilder.__module__]  # WHY: reuse the SDK import used by production code.
+    response_module = getattr(source_module.mistapi, "__api_response")  # WHY: construct mistapi's real wrapper.
+    return response_module.APIResponse(response=response, url=url)  # WHY: verify the installed SDK behavior.
+
+
 @pytest.fixture
 def hub_spoke_assignments(sample_profiles):
     """Assignments: first profile=hub, second=spoke, third=skip."""
@@ -320,6 +345,114 @@ class TestFetchExistingVpns:
     """Test _fetch_existing_vpns API call."""
 
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_native_single_page_without_page_headers_is_complete(self, mock_list, builder):
+        response = _native_sdk_response(  # WHY: parse a real HTTP response without pagination headers.
+            200,
+            "OK",
+            b'[{"id":"vpn-1","name":"Existing"}]',
+            "https://api.mist.com/api/v1/orgs/org-1/vpns",
+        )
+        assert response.next is None  # WHY: the installed SDK marks this valid single page as final.
+        mock_list.return_value = response  # WHY: route the builder through the native SDK response.
+        result = builder._fetch_existing_vpns()  # WHY: preserve legitimate single-page inventory.
+        assert result == [{"id": "vpn-1", "name": "Existing"}]  # WHY: accept valid unpaginated endpoint data.
+
+    @pytest.mark.parametrize(
+        ("headers", "sdk_next"),
+        [
+            ({"X-Page-Total": "2", "X-Page-Limit": "1"}, None),
+            (
+                {"X-Page-Total": "invalid", "X-Page-Limit": "1", "X-Page-Page": "1"},
+                None,
+            ),
+            (
+                {"X-Page-Total": "2", "X-Page-Limit": "0", "X-Page-Page": "1"},
+                "/api/v1/orgs/org-1/vpns?page=2",
+            ),
+            (
+                {"X-Page-Total": "1", "X-Page-Limit": "1", "X-Page-Page": "2"},
+                None,
+            ),
+        ],
+    )
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_native_sdk_incomplete_or_invalid_headers_are_unavailable(self, mock_list, builder, headers, sdk_next):
+        response = _native_sdk_response(  # WHY: exercise mistapi's real header parser with mocked transport data.
+            200,
+            "OK",
+            b'[{"id":"vpn-1","name":"Existing"}]',
+            "https://api.mist.com/api/v1/orgs/org-1/vpns",
+            headers,
+        )
+        assert response.next == sdk_next  # WHY: verify the SDK's default-none and next-link behavior.
+        mock_list.return_value = response  # WHY: exercise the builder with the parsed SDK response.
+        result = builder._fetch_existing_vpns()  # WHY: reject any malformed or inconsistent header state.
+        assert result is None  # WHY: SDK next=None cannot hide incomplete pagination metadata.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_next")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_native_sdk_accepts_consistent_header_pages(self, mock_list, mock_get_next, builder):
+        first_page = _native_sdk_response(  # WHY: have the real SDK calculate a valid page-two link.
+            200,
+            "OK",
+            b'[{"id":"vpn-1","name":"First"}]',
+            "https://api.mist.com/api/v1/orgs/org-1/vpns",
+            {"X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "1"},
+        )
+        second_page = _native_sdk_response(  # WHY: model the final response with stable header counts.
+            200,
+            "OK",
+            b'[{"id":"vpn-2","name":"Second"}]',
+            "https://api.mist.com/api/v1/orgs/org-1/vpns?page=2",
+            {"X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "2"},
+        )
+        assert first_page.next == "/api/v1/orgs/org-1/vpns?page=2"  # WHY: verify the SDK's next link.
+        assert second_page.next is None  # WHY: the declared final page has no next link.
+        mock_list.return_value = first_page  # WHY: return the native first page from the SDK endpoint.
+        mock_get_next.return_value = second_page  # WHY: keep pagination offline with native response objects.
+        result = builder._fetch_existing_vpns()  # WHY: accept one coherent, complete header-paginated inventory.
+        assert result == [  # WHY: preserve records from every validated page.
+            {"id": "vpn-1", "name": "First"},
+            {"id": "vpn-2", "name": "Second"},
+        ]
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_next")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_native_sdk_rejects_changed_total_across_pages(self, mock_list, mock_get_next, builder):
+        first_page = _native_sdk_response(  # WHY: declare two records in the first page.
+            200,
+            "OK",
+            b'[{"id":"vpn-1","name":"First"}]',
+            "https://api.mist.com/api/v1/orgs/org-1/vpns",
+            {"X-Page-Total": "2", "X-Page-Limit": "1", "X-Page-Page": "1"},
+        )
+        changed_page = _native_sdk_response(  # WHY: model a later page with a conflicting declared total.
+            200,
+            "OK",
+            b'[{"id":"vpn-2","name":"Second"}]',
+            "https://api.mist.com/api/v1/orgs/org-1/vpns?page=2",
+            {"X-Page-Total": "3", "X-Page-Limit": "1", "X-Page-Page": "2"},
+        )
+        mock_list.return_value = first_page  # WHY: begin the synthetic native SDK sequence.
+        mock_get_next.return_value = changed_page  # WHY: return the inconsistent later page without HTTP.
+        result = builder._fetch_existing_vpns()  # WHY: require stable totals across all pages.
+        assert result is None  # WHY: conflicting totals cannot establish complete duplicate-name coverage.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_native_sdk_error_payload_with_results_is_unavailable(self, mock_list, builder):
+        response = _native_sdk_response(  # WHY: model the error shape that the SDK logs on a 2xx response.
+            200,
+            "OK",
+            b'{"error":"failed","results":[{"id":"vpn-1","name":"Hidden"}]}',
+            "https://api.mist.com/api/v1/orgs/org-1/vpns",
+        )
+        assert response.status_code == 200  # WHY: prove the refusal comes from payload shape.
+        assert response.data["error"] == "failed"  # WHY: verify the SDK preserved its error-marked body.
+        mock_list.return_value = response  # WHY: route the real SDK wrapper through the builder.
+        result = builder._fetch_existing_vpns()  # WHY: reject results that accompany an SDK error.
+        assert result is None  # WHY: the endpoint's array response contract excludes this error object.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
     def test_returns_all_vpns(self, mock_list, builder, sample_vpns):
         mock_list.return_value = SimpleNamespace(  # WHY: model one complete successful VPN page.
             status_code=200, data=list(sample_vpns), next=None
@@ -540,6 +673,26 @@ class TestRunWorkflow:
         mock_create.assert_not_called()  # WHY: the failed page must never reach VPN creation.
 
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_incomplete_native_headers_stop_run_before_name_or_creation(
+        self, mock_list, mock_create, builder, sample_profiles
+    ):
+        first_page = _native_sdk_response(  # WHY: reproduce the SDK's default next=None for partial headers.
+            200,
+            "OK",
+            b'[{"id":"vpn-1","name":"Existing"}]',
+            "https://api.mist.com/api/v1/orgs/org-1/vpns",
+            {"X-Page-Total": "2", "X-Page-Limit": "1"},
+        )
+        assert first_page.next is None  # WHY: confirm the installed SDK leaves the link unset.
+        mock_list.return_value = first_page  # WHY: exercise the native response through run() without HTTP.
+        builder._fetch_profiles = MagicMock(return_value=sample_profiles)  # WHY: keep every API read synthetic.
+        builder._safe_input = MagicMock(return_value="q")  # WHY: detect whether invalid headers reach name input.
+        builder.run()  # WHY: verify the native SDK pagination gap stops the full workflow.
+        builder._safe_input.assert_not_called()  # WHY: incomplete headers cannot prove duplicate-name coverage.
+        mock_create.assert_not_called()  # WHY: incomplete inventory cannot reach organization VPN creation.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
     @patch("src.operations.wan.wan_vpn_builder.mistapi.get_next")
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
     def test_second_page_duplicate_name_is_rejected(
@@ -736,19 +889,12 @@ class TestFetchProfilesHttpRefusal:
     @staticmethod
     def _native_response(status_code: int, reason: str, response_body: bytes) -> object:
         """Create an SDK response with the requested HTTP result."""
-        import sys  # WHY: access the SDK module imported by the system under test.
-
-        import requests  # WHY: construct the native HTTP response consumed by the Mist SDK.
-
-        response = requests.Response()  # WHY: the Mist SDK reads its status and body.
-        response.status_code = status_code  # WHY: model the failed Mist API request.
-        response.url = "https://api.mist.com/api/v1/orgs/org-1/deviceprofiles"  # WHY: identify the mocked endpoint.
-        response.reason = reason  # WHY: preserve the native HTTP failure detail.
-        response.headers["Content-Type"] = "application/json"  # WHY: use the Mist error response format.
-        response._content = response_body  # WHY: include the response data under test.
-        source_module = sys.modules[WanVpnBuilder.__module__]  # WHY: reuse the SDK import already under test.
-        response_module = getattr(source_module.mistapi, "__api_response")  # WHY: access the SDK response type.
-        return response_module.APIResponse(response=response, url=response.url)  # WHY: retain native status semantics.
+        return _native_sdk_response(  # WHY: share native SDK response construction with VPN header tests.
+            status_code,
+            reason,
+            response_body,
+            "https://api.mist.com/api/v1/orgs/org-1/deviceprofiles",
+        )
 
     @staticmethod
     def _profile_response(status_code: int, body: bytes) -> object:

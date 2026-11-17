@@ -417,11 +417,23 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             return None  # WHY: keep missing data distinct from a successful empty page.
         vpns: list[Any] = []  # WHY: stage records until every page passes validation.
         seen_next_links: set[str] = set()  # WHY: stop pagination when the SDK repeats a page link.
+        prior_header_state: tuple[int, int, int] | None = None  # WHY: detect metadata changes across pages.
+        page_count = 0  # WHY: distinguish first-page metadata from later-page metadata.
         current_response = response  # WHY: validate each page before accepting its data.
         while current_response is not None:  # WHY: consume every page declared by the SDK.
             page_vpns = self._validated_vpn_page(current_response)  # WHY: check status and result shape together.
             if page_vpns is None:  # WHY: any invalid page makes earlier staged rows incomplete.
                 return None  # WHY: discard partial inventory before duplicate checks.
+            headers_ok, header_state = self._validated_pagination_headers(current_response)  # WHY: check SDK metadata.
+            if not headers_ok:  # WHY: malformed header pagination can hide additional VPN records.
+                return None  # WHY: do not treat the SDK's default next=None as proof of completion.
+            if not self._pagination_headers_are_consistent(
+                prior_header_state, header_state, page_count
+            ):  # WHY: page totals, limits, and indexes must describe one stable inventory.
+                logger.error("Organization VPN pagination headers are inconsistent")  # WHY: report the invalid state.
+                return None  # WHY: inconsistent pages cannot prove complete duplicate-name coverage.
+            prior_header_state = header_state  # WHY: compare the next page with this validated page.
+            page_count += 1  # WHY: identify the next response as a later page.
             vpns.extend(page_vpns)  # WHY: stage only data from a validated page.
             page_ok, next_response = self._fetch_next_vpn_page(  # WHY: validate links before requesting another page.
                 current_response, seen_next_links
@@ -432,6 +444,116 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
                 return vpns  # WHY: expose all staged records only after the final page.
             current_response = next_response  # WHY: validate the next response before accepting its records.
         return None  # WHY: an unexpected missing response cannot prove inventory completeness.
+
+    @staticmethod
+    def _validated_pagination_headers(
+        response: Any,
+    ) -> tuple[bool, tuple[int, int, int] | None]:
+        """Validate Mist pagination headers and their next-link decision."""
+        headers = getattr(response, "headers", None)  # WHY: native SDK responses retain transport headers.
+        if headers is None:  # WHY: simple SDK wrappers can represent non-header pagination.
+            return True, None  # WHY: let the next link determine whether another page exists.
+        raw_values = WanVpnBuilder._read_pagination_header_values(headers)  # WHY: preserve missing values explicitly.
+        if raw_values is None:  # WHY: an invalid header container cannot establish pagination state.
+            return False, None  # WHY: stop before duplicate-name checks.
+        values_ok, header_state = WanVpnBuilder._parse_pagination_header_values(raw_values)  # WHY: validate counters.
+        if not values_ok or header_state is None:  # WHY: headerless pages need no SDK link comparison.
+            return values_ok, header_state  # WHY: preserve valid no-header responses and reject invalid values.
+        if not WanVpnBuilder._sdk_next_link_matches_headers(response, header_state):  # WHY: detect SDK parse gaps.
+            return False, None  # WHY: header and SDK state must agree before the inventory is accepted.
+        return True, header_state  # WHY: caller verifies stable counters across the page sequence.
+
+    @staticmethod
+    def _read_pagination_header_values(headers: Any) -> tuple[Any, Any, Any] | None:
+        """Read the three Mist page headers without hiding malformed containers."""
+        header_names = ("X-Page-Total", "X-Page-Limit", "X-Page-Page")  # WHY: SDK pagination uses all three values.
+        try:  # WHY: reject malformed header containers rather than assuming a final page.
+            raw_values = tuple(headers.get(name) for name in header_names)  # WHY: preserve missing values explicitly.
+        except AttributeError:  # WHY: an invalid header object cannot establish pagination state.
+            logger.error("Organization VPN page has invalid pagination headers")  # WHY: report malformed SDK metadata.
+            return None  # WHY: stop before duplicate-name checks.
+        return raw_values  # WHY: let the parser distinguish absent and incomplete headers.
+
+    @staticmethod
+    def _parse_pagination_header_values(
+        raw_values: tuple[Any, Any, Any],
+    ) -> tuple[bool, tuple[int, int, int] | None]:
+        """Parse complete, in-range page counters."""
+        if all(value is None for value in raw_values):  # WHY: no page headers means a legitimate single-page response.
+            return True, None  # WHY: preserve unpaginated endpoint responses.
+        if not WanVpnBuilder._pagination_headers_are_complete(raw_values):  # WHY: require all three values.
+            logger.error("Organization VPN pagination headers are incomplete")  # WHY: report missing header values.
+            return False, None  # WHY: missing metadata cannot prove inventory completeness.
+        header_state = WanVpnBuilder._pagination_header_integers(raw_values)  # WHY: parse all SDK page counters.
+        if header_state is None:  # WHY: malformed counters must not look like a final page.
+            return False, None  # WHY: reject unparseable pagination state.
+        if not WanVpnBuilder._pagination_header_state_is_valid(header_state):  # WHY: reject invalid counter ranges.
+            logger.error("Organization VPN pagination headers contain invalid ranges")  # WHY: report bad counters.
+            return False, None  # WHY: invalid ranges cannot describe a complete list.
+        return True, header_state  # WHY: caller verifies stable counters across the page sequence.
+
+    @staticmethod
+    def _pagination_headers_are_complete(raw_values: tuple[Any, Any, Any]) -> bool:
+        """Return whether every pagination header is a nonblank string."""
+        return all(  # WHY: reject empty and non-text counters before integer parsing.
+            isinstance(value, str) and bool(value.strip())  # WHY: require nonblank strings.
+            for value in raw_values  # WHY: validate each of the three page counters.
+        )
+
+    @staticmethod
+    def _pagination_header_integers(raw_values: tuple[Any, Any, Any]) -> tuple[int, int, int] | None:
+        """Convert complete header values to integer counters."""
+        try:  # WHY: SDK int conversion failures otherwise leave next=None.
+            return (  # WHY: keep the exact SDK counter order in a fixed-size tuple.
+                int(raw_values[0]),  # WHY: convert the declared VPN count.
+                int(raw_values[1]),  # WHY: convert the page size.
+                int(raw_values[2]),  # WHY: convert the current page number.
+            )
+        except ValueError:  # WHY: malformed counters must not look like a final page.
+            logger.error("Organization VPN pagination headers contain invalid integers")  # WHY: report parse failure.
+            return None  # WHY: reject unparseable pagination state.
+
+    @staticmethod
+    def _pagination_header_state_is_valid(header_state: tuple[int, int, int]) -> bool:
+        """Check that the page counters describe a valid page in the declared inventory."""
+        total, limit, page = header_state  # WHY: name the counters for range checks.
+        if total < 0 or limit <= 0 or page <= 0:  # WHY: valid totals are nonnegative and page values are positive.
+            return False  # WHY: invalid ranges cannot describe a complete list.
+        last_page = max(1, (total + limit - 1) // limit)  # WHY: include one page for an empty inventory.
+        if page > last_page:  # WHY: an out-of-range page cannot belong to this inventory.
+            logger.error("Organization VPN page number exceeds the declared total")  # WHY: report inconsistent counts.
+            return False  # WHY: stop when header counts disagree.
+        return True  # WHY: counters describe an in-range page.
+
+    @staticmethod
+    def _sdk_next_link_matches_headers(
+        response: Any,
+        header_state: tuple[int, int, int],
+    ) -> bool:
+        """Require the SDK next link to match the validated page counters."""
+        total, limit, page = header_state  # WHY: name the counters for the SDK pagination comparison.
+        has_next = limit * page < total  # WHY: match the SDK pagination rule for a remaining page.
+        next_link = getattr(response, "next", None)  # WHY: compare the SDK's computed link with the headers.
+        if has_next != bool(next_link):  # WHY: the SDK can leave next unset after invalid header parsing.
+            logger.error("Organization VPN pagination headers disagree with the SDK next link")  # WHY: report mismatch.
+            return False  # WHY: header and SDK state must agree before the inventory is accepted.
+        return True  # WHY: SDK link behavior matches the parsed header counters.
+
+    @staticmethod
+    def _pagination_headers_are_consistent(
+        prior_state: tuple[int, int, int] | None,
+        current_state: tuple[int, int, int] | None,
+        page_count: int,
+    ) -> bool:
+        """Require header pagination to start at page one and remain stable across pages."""
+        if current_state is None:  # WHY: headerless pagination must remain headerless on each page.
+            return prior_state is None  # WHY: mixed metadata cannot prove complete pagination.
+        if prior_state is None:  # WHY: the first response establishes the pagination mode.
+            return page_count == 0 and current_state[2] == 1  # WHY: initial header pages must start at page one.
+        same_total = current_state[0] == prior_state[0]  # WHY: each page must declare the same inventory size.
+        same_limit = current_state[1] == prior_state[1]  # WHY: each page must use the same page size.
+        next_page = current_state[2] == prior_state[2] + 1  # WHY: page indexes must advance by one.
+        return same_total and same_limit and next_page  # WHY: require one coherent header sequence.
 
     def _fetch_next_vpn_page(self, response: Any, seen_next_links: set[str]) -> tuple[bool, Any | None]:
         """Fetch the next page or report whether the current page completes inventory."""
@@ -465,6 +587,10 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             logger.error("Organization VPN page failed with HTTP status %s", status_code)  # WHY: report the failure.
             return None  # WHY: prevent failed-page data from reaching the builder.
         response_data = getattr(response, "data", None)  # WHY: read page data only after status validation.
+        has_sdk_error = isinstance(response_data, dict) and bool(response_data.get("error"))  # WHY: reject SDK errors.
+        if has_sdk_error:  # WHY: the SDK logs truthy errors as failures.
+            logger.error("Organization VPN page contains an error payload")  # WHY: report the SDK error shape.
+            return None  # WHY: do not accept results from a response the SDK marks as an error.
         page_vpns = (
             response_data
             if isinstance(response_data, list)
