@@ -132,6 +132,9 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
     def _prompt_name_after_display(self, profiles: list[Any]) -> str | None:  # WHY: keeps run() body flat.
         """Fetch existing VPNs, display them, then prompt for a unique VPN name."""
         existing_vpns = self._fetch_existing_vpns()  # WHY: needed both for display and uniqueness check.
+        if existing_vpns is None:  # WHY: an unavailable inventory cannot prove that a new name is unique.
+            logger.warning("! VPN inventory is unavailable. The builder will stop.")  # WHY: explain the safe abort.
+            return None  # WHY: stop before prompts or organization changes.
         self._display_existing_vpns(existing_vpns)  # WHY: operator sees current overlays before naming a new one.
         existing_names = [vpn.get("name", "") for vpn in existing_vpns]  # WHY: build name list once for validator.
         vpn_name = self._prompt_vpn_name(existing_names)  # WHY: enforce uniqueness before profile selection.
@@ -387,23 +390,68 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             return None  # WHY: prevent malformed later pages from allowing partial configuration.
         return page_profiles  # WHY: pass only a validated page to the staged inventory.
 
-    def _fetch_existing_vpns(self) -> list[Any]:  # WHY: separate fetch keeps API responsibilities clear.
-        """Fetch all org VPN definitions."""
-        try:  # WHY: mirror _fetch_profiles' graceful degradation.
-            response = mistapi.api.v1.orgs.vpns.listOrgVpns(self.apisession, self.org_id)  # WHY: list org VPNs.
-            vpns: list[Any] = mistapi.get_all(response=response, mist_session=self.apisession)  # WHY: paginate.
-            logger.debug("Fetched %d org VPNs", len(vpns))  # WHY: %s style logging per project rule.
-            return vpns  # WHY: caller uses for display + uniqueness check.
-        except Exception as error:  # WHY: keep broad so the menu can display with incomplete VPN data.
+    def _fetch_existing_vpns(self) -> list[Any] | None:  # WHY: distinguish valid emptiness from unavailable data.
+        """Fetch complete org VPN definitions or return None when any page fails."""
+        try:  # WHY: keep transport errors inside this read-only boundary.
+            logger.info("Fetching organization VPNs for %s", self.org_id)  # WHY: record the inventory read.
+            response = mistapi.api.v1.orgs.vpns.listOrgVpns(self.apisession, self.org_id)  # WHY: use the Mist SDK.
+            vpns = self._collect_vpns_from_pages(response)  # WHY: validate all pages before names reach the workflow.
+            if vpns is None:  # WHY: a failed page invalidates the complete inventory.
+                logger.error("Organization VPN inventory is incomplete")  # WHY: record why creation must stop.
+                return None  # WHY: do not convert an incomplete list into an empty one.
+            logger.debug("Fetched %d organization VPNs", len(vpns))  # WHY: summarize the validated inventory.
+            return vpns  # WHY: preserve complete data for display and duplicate checks.
+        except Exception as error:  # WHY: a raised SDK error also means inventory is unavailable.
             logging.exception(
-                "Failed to fetch org VPNs after %s: %s",
+                "Failed to fetch organization VPNs after %s: %s",
                 type(error).__name__,
                 error,
-            )  # WHY: preserve the VPN list read fault for operator log review.
-            logging.error(
-                "! Error retrieving VPN definitions. Check API connectivity."
-            )  # WHY: operator-visible warning.
-            return []  # WHY: empty list keeps display/name-uniqueness code paths well-defined.
+            )  # WHY: retain exception context for operator review.
+            logging.error("! Error retrieving VPN definitions. Check API connectivity.")  # WHY: show the read failure.
+            return None  # WHY: prevent a failed read from allowing VPN creation.
+
+    def _collect_vpns_from_pages(self, response: Any) -> list[Any] | None:
+        """Return VPN definitions only when every declared page succeeds."""
+        if response is None:  # WHY: no first response cannot prove that the inventory is empty.
+            logger.error("Organization VPN list returned no response")  # WHY: report the missing SDK result.
+            return None  # WHY: keep missing data distinct from a successful empty page.
+        vpns: list[Any] = []  # WHY: stage records until every page passes validation.
+        current_response = response  # WHY: validate each page before accepting its data.
+        while current_response is not None:  # WHY: consume every page declared by the SDK.
+            page_vpns = self._validated_vpn_page(current_response)  # WHY: check status and result shape together.
+            if page_vpns is None:  # WHY: any invalid page makes earlier staged rows incomplete.
+                return None  # WHY: discard partial inventory before duplicate checks.
+            vpns.extend(page_vpns)  # WHY: stage only data from a validated page.
+            if not getattr(current_response, "next", None):  # WHY: no next link marks a complete inventory.
+                break  # WHY: the current page is the last declared page.
+            logger.info("Fetching the next organization VPN page")  # WHY: record each additional SDK request.
+            current_response = mistapi.get_next(self.apisession, current_response)  # WHY: keep pagination on the SDK.
+            logger.debug("Received the next organization VPN page")  # WHY: record completion before validation.
+            if current_response is None:  # WHY: a missing declared page means the inventory is truncated.
+                logger.error(
+                    "Organization VPN pagination ended before a declared page arrived"
+                )  # WHY: report truncation.
+                return None  # WHY: do not expose earlier pages as a complete list.
+        return vpns  # WHY: expose data only after every declared page succeeds.
+
+    @staticmethod
+    def _validated_vpn_page(response: Any) -> list[Any] | None:
+        """Return VPN definitions only when one response page has valid status and data."""
+        status_code = getattr(response, "status_code", None)  # WHY: require status evidence before reading the body.
+        status_is_successful = isinstance(status_code, int) and 200 <= status_code < 300  # WHY: accept only 2xx.
+        if not status_is_successful:  # WHY: an error body may contain data that is not a full inventory.
+            logger.error("Organization VPN page failed with HTTP status %s", status_code)  # WHY: report the failure.
+            return None  # WHY: prevent failed-page data from reaching the builder.
+        response_data = getattr(response, "data", None)  # WHY: read page data only after status validation.
+        page_vpns = (
+            response_data
+            if isinstance(response_data, list)
+            else (response_data.get("results") if isinstance(response_data, dict) else None)
+        )  # WHY: accept SDK lists and Mist result dictionaries.
+        if not isinstance(page_vpns, list):  # WHY: a missing results list cannot prove inventory completeness.
+            logger.error("Organization VPN page has no valid results list")  # WHY: report the malformed page.
+            return None  # WHY: malformed responses must not act like empty inventories.
+        return page_vpns  # WHY: pass only validated VPN definitions to pagination.
 
     def _create_vpn(self, vpn_body: dict[str, Any]) -> dict[str, Any] | None:  # WHY: isolated for tests.
         """Create VPN via API. Returns created VPN dict or None on failure."""

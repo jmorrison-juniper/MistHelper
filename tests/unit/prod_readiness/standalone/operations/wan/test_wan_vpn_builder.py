@@ -319,18 +319,67 @@ class TestFetchProfiles:
 class TestFetchExistingVpns:
     """Test _fetch_existing_vpns API call."""
 
-    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_all")
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
-    def test_returns_all_vpns(self, mock_list, mock_get_all, builder, sample_vpns):
-        mock_get_all.return_value = list(sample_vpns)
-        result = builder._fetch_existing_vpns()
-        assert len(result) == 2
+    def test_returns_all_vpns(self, mock_list, builder, sample_vpns):
+        mock_list.return_value = SimpleNamespace(  # WHY: model one complete successful VPN page.
+            status_code=200, data=list(sample_vpns), next=None
+        )
+        result = builder._fetch_existing_vpns()  # WHY: exercise the complete-inventory boundary.
+        assert result == sample_vpns  # WHY: preserve every VPN definition for duplicate-name checks.
 
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
-    def test_api_error_returns_empty(self, mock_list, builder):
-        mock_list.side_effect = Exception("API error")
-        result = builder._fetch_existing_vpns()
-        assert result == []
+    def test_empty_success_returns_empty_inventory(self, mock_list, builder):
+        mock_list.return_value = SimpleNamespace(  # WHY: an empty 2xx page is complete inventory.
+            status_code=200, data=[], next=None
+        )
+        result = builder._fetch_existing_vpns()  # WHY: distinguish valid emptiness from a read failure.
+        assert result == []  # WHY: preserve the valid empty organization state.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_failed_status_returns_unavailable_inventory(self, mock_list, builder):
+        mock_list.return_value = SimpleNamespace(  # WHY: include data in a failed response to catch unsafe use.
+            status_code=503, data=[{"id": "vpn-injected", "name": "Hidden"}], next=None
+        )
+        result = builder._fetch_existing_vpns()  # WHY: reject body data without a successful response status.
+        assert result is None  # WHY: failed inventory must not appear complete and empty.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_malformed_success_returns_unavailable_inventory(self, mock_list, builder):
+        mock_list.return_value = SimpleNamespace(  # WHY: model a successful status with no results list.
+            status_code=200, data={"unexpected": []}, next=None
+        )
+        result = builder._fetch_existing_vpns()  # WHY: reject a page that cannot prove inventory completeness.
+        assert result is None  # WHY: malformed success must not act like an empty inventory.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_next")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_failed_later_page_returns_unavailable_inventory(self, mock_list, mock_get_next, builder, sample_vpns):
+        first_page = SimpleNamespace(  # WHY: model an accepted page before the inventory becomes incomplete.
+            status_code=200, data=list(sample_vpns), next="next-page"
+        )
+        failed_page = SimpleNamespace(  # WHY: include hidden response data to ensure failed pages invalidate all data.
+            status_code=503, data=[{"id": "vpn-injected", "name": "Hidden"}], next=None
+        )
+        mock_list.return_value = first_page  # WHY: start pagination with a successful page.
+        mock_get_next.return_value = failed_page  # WHY: fail the next page after staged VPN data.
+        result = builder._fetch_existing_vpns()  # WHY: require the complete multi-page inventory.
+        assert result is None  # WHY: discard earlier data when any later page fails.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_next")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_missing_later_page_returns_unavailable_inventory(self, mock_list, mock_get_next, builder, sample_vpns):
+        mock_list.return_value = SimpleNamespace(  # WHY: model a first page that declares more data.
+            status_code=200, data=list(sample_vpns), next="next-page"
+        )
+        mock_get_next.return_value = None  # WHY: model pagination ending before the declared page arrives.
+        result = builder._fetch_existing_vpns()  # WHY: require every declared page before using names.
+        assert result is None  # WHY: missing pagination data must not appear as a complete inventory.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_api_error_returns_unavailable_inventory(self, mock_list, builder):
+        mock_list.side_effect = Exception("API error")  # WHY: model a failed request without live Mist access.
+        result = builder._fetch_existing_vpns()  # WHY: preserve the read failure as an unavailable state.
+        assert result is None  # WHY: a failed list must not be interpreted as a complete empty list.
 
 
 class TestCreateVpn:
@@ -427,6 +476,16 @@ class TestDisplayPreview:
 
 class TestRunWorkflow:
     """Test run() main workflow orchestration."""
+
+    def test_unavailable_vpn_inventory_stops_before_prompt_and_creation(self, builder, sample_profiles):
+        safe_input = MagicMock()  # WHY: detect whether an incomplete inventory reaches operator input.
+        builder._safe_input = safe_input  # WHY: inject synthetic input without reading from a terminal.
+        builder._fetch_profiles = MagicMock(return_value=sample_profiles)  # WHY: satisfy the profile prerequisite.
+        builder._fetch_existing_vpns = MagicMock(return_value=None)  # WHY: model an unavailable VPN inventory.
+        builder._create_vpn = MagicMock()  # WHY: detect any attempted organization change.
+        builder.run()  # WHY: verify the fail-closed workflow with synthetic dependencies only.
+        safe_input.assert_not_called()  # WHY: do not ask for a name when the current inventory is unknown.
+        builder._create_vpn.assert_not_called()  # WHY: do not create a VPN after an incomplete read.
 
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
