@@ -37,16 +37,66 @@ def _pinned_uv_version() -> str:
     return requirement.removeprefix("uv==")  # Compare the workflow with the project pin.
 
 
+def _named_step_position(steps: list[dict[str, Any]], name: str) -> tuple[int, dict[str, Any]]:
+    """Return one uniquely named workflow step and its position."""
+    matches = [(index, step) for index, step in enumerate(steps) if step.get("name") == name]  # Match one step.
+    assert len(matches) == 1, f"Expected one workflow step named {name!r}, found {len(matches)}"  # Reject ambiguity.
+    return matches[0]  # Preserve the order for the installation contract.
+
+
+def _run_commands(steps: list[dict[str, Any]]) -> list[tuple[str, list[str]]]:
+    """Return shell commands without commented text."""
+    commands: list[tuple[str, list[str]]] = []  # Keep executable tokens with their workflow step.
+    for step in steps:  # Inspect every step so extra test commands cannot hide.
+        run = step.get("run")  # Read only executable workflow content.
+        if not isinstance(run, str):  # Ignore steps that use an action instead of a shell.
+            continue
+        for line in run.splitlines():  # Check each shell line separately.
+            tokens = shlex.split(line, comments=True)  # Exclude shell comments from executable commands.
+            if tokens:  # Keep commands that contain executable tokens.
+                commands.append((step.get("name", ""), tokens))  # Keep the source step for order checks.
+    return commands  # Return parsed commands for the workflow contract.
+
+
+def _contains_tokens(tokens: list[str], expected: list[str]) -> bool:
+    """Return whether a command contains one exact token sequence."""
+    return any(  # Check each possible command position.
+        tokens[index : index + len(expected)] == expected  # Match complete shell tokens, not text fragments.
+        for index in range(len(tokens) - len(expected) + 1)  # Stop before an incomplete match.
+    )
+
+
+def _pytest_invocations(commands: list[tuple[str, list[str]]]) -> list[tuple[str, list[str]]]:
+    """Return each executable Python pytest command."""
+    invocation = ["python", "-m", "pytest"]  # Identify pytest calls that could bypass the UV environment.
+    return [  # Keep every matching command for the single-invocation contract.
+        (name, tokens)  # Preserve step and command for exact validation.
+        for name, tokens in commands  # Inspect executable shell commands.
+        if _contains_tokens(tokens, invocation)  # Exclude comments and unrelated text.
+    ]
+
+
 def _check_locked_test_install(workflow: dict[str, Any]) -> int:
     """Require the pinned UV installer and the synchronized test interpreter."""
     steps = workflow["jobs"]["test"]["steps"]  # Read the unit-test job steps.
-    commands = "\n".join(step["run"] for step in steps if "run" in step)  # Collect executable commands.
-    assert f"python -m pip install uv=={_pinned_uv_version()}" in commands  # Require the declared UV version.
-    assert "uv sync --locked --extra dev --no-install-project" in commands  # Require the locked dev environment.
-    assert "uv run --locked --no-sync python -m pytest tests/unit/ -v" in commands  # Use the synced interpreter.
-    assert "pip install -r requirements.txt" not in commands  # Reject the unlocked runtime install.
-    assert "pip install -r requirements-dev.txt" not in commands  # Reject the unlocked development install.
-    return 5  # Count each required installation rule.
+    uv_index, uv_step = _named_step_position(steps, "Install pinned UV")  # Locate the pinned installer.
+    sync_index, sync_step = _named_step_position(steps, "Sync locked test dependencies")  # Locate the sync.
+    test_index, test_step = _named_step_position(steps, "Run unit tests")  # Locate the unit-test command.
+    assert uv_step.get("run") == f"python -m pip install uv=={_pinned_uv_version()}"  # Require the declared pin.
+    assert sync_step.get("run") == "uv sync --locked --extra dev --no-install-project"  # Require locked setup.
+    assert test_step.get("run") == "uv run --locked --no-sync python -m pytest tests/unit/ -v"  # Use synced Python.
+    assert uv_index < sync_index < test_index  # Install and sync before running tests.
+    commands = _run_commands(steps)  # Parse all executable lines, including steps after the unit tests.
+    expected_test = shlex.split(test_step["run"])  # Compare the complete command as shell tokens.
+    assert _pytest_invocations(commands) == [("Run unit tests", expected_test)]  # Reject extra global pytest calls.
+    unlocked = (
+        ["pip", "install", "-r", "requirements.txt"],  # Reject the unlocked runtime dependency export.
+        ["pip", "install", "-r", "requirements-dev.txt"],  # Reject the unlocked development dependency export.
+    )
+    assert not any(  # Require both dependency groups to use the lock.
+        _contains_tokens(tokens, old_install) for _, tokens in commands for old_install in unlocked
+    ), "Container tests must not install from requirements files"
+    return 10  # Count step identity, exact commands, order, pytest isolation, and old-install rules.
 
 
 def _check_lock_trigger(workflow: dict[str, Any]) -> int:
@@ -105,13 +155,11 @@ def test_container_build_uses_the_locked_test_environment() -> None:
     workflow = _workflow()  # Read the live workflow before checking its contract.
     checked = _check_locked_test_install(workflow) + _check_lock_trigger(workflow)  # Count each required rule.
     print(f"container_build_trigger: checked {checked} workflow rules")  # Report the measured contract size.
-    assert checked == 6  # Fail if the guard stops checking one of its declared rules.
+    assert checked == 11  # Fail if the guard stops checking one of its declared rules.
 
 
-@pytest.mark.parametrize("mutation", ["locked-install", "interpreter", "lock-trigger"])
-def test_contract_rejects_an_unlocked_build_path(mutation: str) -> None:
-    """Prove that each missing lock requirement causes a contract failure."""
-    workflow = deepcopy(_workflow())  # Preserve the live workflow for each failure proof.
+def _apply_workflow_mutation(workflow: dict[str, Any], mutation: str) -> None:
+    """Apply one invalid workflow change for a contract failure proof."""
     steps = workflow["jobs"]["test"]["steps"]  # Select the copied unit-test steps.
     if mutation == "locked-install":  # Remove locked resolution from dependency setup.
         install = next(step for step in steps if step.get("run", "").startswith("uv sync "))  # Find sync.
@@ -121,7 +169,27 @@ def test_contract_rejects_an_unlocked_build_path(mutation: str) -> None:
         test["run"] = "python -m pytest tests/unit/ -v"  # Bypass the synchronized environment.
     elif mutation == "lock-trigger":  # Stop image builds after lock changes.
         workflow[TRIGGER_KEY]["push"]["paths"].remove("uv.lock")  # Remove the required file filter.
+    elif mutation == "commented-command":  # Replace the locked sync with a shell comment.
+        install = next(step for step in steps if step.get("name") == "Sync locked test dependencies")  # Find sync.
+        install["run"] = "# uv sync --locked --extra dev --no-install-project"  # Disable the sync command.
+    elif mutation == "sync-after-test":  # Place dependency setup after the test command.
+        install = next(step for step in steps if step.get("name") == "Sync locked test dependencies")  # Find sync.
+        steps.remove(install)  # Remove sync before placing it after tests.
+        test = next(step for step in steps if step.get("name") == "Run unit tests")  # Find the test step.
+        steps.insert(steps.index(test) + 1, install)  # Move dependency setup after the tests.
+    elif mutation == "global-pytest":  # Add a second test call outside the UV interpreter.
+        steps.append({"name": "Run tests globally", "run": "python -m pytest tests/unit/ -v"})  # Add global pytest.
     else:
         pytest.fail(f"Unknown mutation: {mutation}")  # Reject an untested failure proof.
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["locked-install", "interpreter", "lock-trigger", "commented-command", "sync-after-test", "global-pytest"],
+)
+def test_contract_rejects_an_unlocked_build_path(mutation: str) -> None:
+    """Prove that each missing lock requirement causes a contract failure."""
+    workflow = deepcopy(_workflow())  # Preserve the live workflow for each failure proof.
+    _apply_workflow_mutation(workflow, mutation)  # Weaken one requirement at a time.
     with pytest.raises(AssertionError):  # Require the weakened workflow to fail its contract.
         _check_lock_trigger(workflow) if mutation == "lock-trigger" else _check_locked_test_install(workflow)
