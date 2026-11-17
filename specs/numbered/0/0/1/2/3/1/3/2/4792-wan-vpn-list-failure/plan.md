@@ -6,7 +6,7 @@
 
 ## Summary
 
-Keep VPN creation unavailable unless the builder has a complete VPN inventory. Reuse the existing Mist SDK, validate each page, and preserve a successful empty inventory as valid.
+Keep VPN creation unavailable unless every page and VPN name is valid. Reuse the existing Mist SDK, stop on repeated pagination links, and preserve a successful empty inventory as valid.
 
 ## Technical Context
 
@@ -34,7 +34,7 @@ Keep VPN creation unavailable unless the builder has a complete VPN inventory. R
 - The existing `specs/` root has 795 children. This change uses the managed `numbered/` route and adds no direct child to that root.
 - The changelog change is one issue-specific release fragment. It does not edit `CHANGELOG.md`.
 - The implementation keeps the existing Mist SDK list and create methods. It adds no direct HTTP transport.
-- Synthetic tests cover complete empty inventory, failed responses, later-page failures, and the stop-before-create behavior.
+- Synthetic tests cover complete empty inventory, invalid records, repeated links, later-page failures, and the stop-before-create behavior.
 - The existing typed confirmation remains unchanged. No live organization call or mutation is part of implementation or validation.
 - The commit subject will use a Conventional Commit form accepted by the title guard.
 
@@ -72,11 +72,11 @@ The relevant behavior is fully specified. The repository already has a validated
 
 ## Phase 1: Design
 
-- Stage VPN definitions until every response page has a successful status and valid result list.
+- Stage VPN definitions until every response page has a successful status, valid result list, and usable name for each record.
 - Treat a successful empty list as complete inventory.
-- Treat an exception, failed status, malformed data, or missing next page as unavailable inventory.
+- Treat an exception, failed status, malformed record, unusable name, repeated link, or missing next page as unavailable inventory.
 - Stop the workflow before the name prompt when inventory is unavailable.
-- Keep duplicate-name validation and typed confirmation for complete inventories.
+- Include every page in duplicate-name validation and keep the typed confirmation.
 - Add mocked tests only. Do not run live VPN integration tests.
 
 **Post-design gate result**: Pass. The design adds no external interface, database, product output, or alternate transport.

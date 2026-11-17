@@ -136,7 +136,7 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             logger.warning("! VPN inventory is unavailable. The builder will stop.")  # WHY: explain the safe abort.
             return None  # WHY: stop before prompts or organization changes.
         self._display_existing_vpns(existing_vpns)  # WHY: operator sees current overlays before naming a new one.
-        existing_names = [vpn.get("name", "") for vpn in existing_vpns]  # WHY: build name list once for validator.
+        existing_names = [vpn["name"].strip() for vpn in existing_vpns]  # WHY: normalize names for duplicate checks.
         vpn_name = self._prompt_vpn_name(existing_names)  # WHY: enforce uniqueness before profile selection.
         if vpn_name is not None:  # WHY: only render the profile table if the user is proceeding.
             self._display_profile_list(profiles)  # WHY: show profile inventory once a valid name is chosen.
@@ -416,23 +416,45 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
             logger.error("Organization VPN list returned no response")  # WHY: report the missing SDK result.
             return None  # WHY: keep missing data distinct from a successful empty page.
         vpns: list[Any] = []  # WHY: stage records until every page passes validation.
+        seen_next_links: set[str] = set()  # WHY: stop pagination when the SDK repeats a page link.
         current_response = response  # WHY: validate each page before accepting its data.
         while current_response is not None:  # WHY: consume every page declared by the SDK.
             page_vpns = self._validated_vpn_page(current_response)  # WHY: check status and result shape together.
             if page_vpns is None:  # WHY: any invalid page makes earlier staged rows incomplete.
                 return None  # WHY: discard partial inventory before duplicate checks.
             vpns.extend(page_vpns)  # WHY: stage only data from a validated page.
-            if not getattr(current_response, "next", None):  # WHY: no next link marks a complete inventory.
-                break  # WHY: the current page is the last declared page.
-            logger.info("Fetching the next organization VPN page")  # WHY: record each additional SDK request.
-            current_response = mistapi.get_next(self.apisession, current_response)  # WHY: keep pagination on the SDK.
-            logger.debug("Received the next organization VPN page")  # WHY: record completion before validation.
-            if current_response is None:  # WHY: a missing declared page means the inventory is truncated.
-                logger.error(
-                    "Organization VPN pagination ended before a declared page arrived"
-                )  # WHY: report truncation.
-                return None  # WHY: do not expose earlier pages as a complete list.
-        return vpns  # WHY: expose data only after every declared page succeeds.
+            page_ok, next_response = self._fetch_next_vpn_page(  # WHY: validate links before requesting another page.
+                current_response, seen_next_links
+            )
+            if not page_ok:  # WHY: invalid or repeated links cannot prove a complete inventory.
+                return None  # WHY: prevent unsafe duplicate-name checks.
+            if next_response is None:  # WHY: no next link means the validated inventory is complete.
+                return vpns  # WHY: expose all staged records only after the final page.
+            current_response = next_response  # WHY: validate the next response before accepting its records.
+        return None  # WHY: an unexpected missing response cannot prove inventory completeness.
+
+    def _fetch_next_vpn_page(self, response: Any, seen_next_links: set[str]) -> tuple[bool, Any | None]:
+        """Fetch the next page or report whether the current page completes inventory."""
+        if not hasattr(response, "next"):  # WHY: missing pagination metadata cannot prove that no page remains.
+            logger.error("Organization VPN page has no pagination metadata")  # WHY: report incomplete response shape.
+            return False, None  # WHY: stop rather than accept a possibly partial inventory.
+        next_link = response.next  # WHY: read the SDK page link after validating its presence.
+        if next_link is None:  # WHY: the SDK marks the final page with no next link.
+            return True, None  # WHY: signal complete pagination without another request.
+        if not isinstance(next_link, str) or not next_link.strip():  # WHY: only a usable URL can fetch a page.
+            logger.error("Organization VPN page has an invalid next link")  # WHY: report malformed pagination data.
+            return False, None  # WHY: stop when the next page cannot be identified.
+        if next_link in seen_next_links:  # WHY: a repeated URL can otherwise loop without end.
+            logger.error("Organization VPN pagination repeated a next link")  # WHY: report the bounded stop.
+            return False, None  # WHY: repeated links cannot prove a complete inventory.
+        seen_next_links.add(next_link)  # WHY: remember each requested page URL for cycle detection.
+        logger.info("Fetching the next organization VPN page")  # WHY: record each additional SDK request.
+        next_response = mistapi.get_next(self.apisession, response)  # WHY: keep pagination on the SDK.
+        logger.debug("Received the next organization VPN page")  # WHY: record completion before page validation.
+        if next_response is None:  # WHY: a missing declared page means the inventory is truncated.
+            logger.error("Organization VPN pagination ended before a declared page arrived")  # WHY: report truncation.
+            return False, None  # WHY: do not expose earlier pages as a complete list.
+        return True, next_response  # WHY: the caller validates this page before accepting its records.
 
     @staticmethod
     def _validated_vpn_page(response: Any) -> list[Any] | None:
@@ -451,7 +473,22 @@ class WanVpnBuilder:  # WHY: class encapsulates all per-run state (session, org,
         if not isinstance(page_vpns, list):  # WHY: a missing results list cannot prove inventory completeness.
             logger.error("Organization VPN page has no valid results list")  # WHY: report the malformed page.
             return None  # WHY: malformed responses must not act like empty inventories.
+        if not WanVpnBuilder._vpn_records_have_usable_names(page_vpns):  # WHY: every VPN needs a checkable name.
+            return None  # WHY: an unnamed record can hide a duplicate.
         return page_vpns  # WHY: pass only validated VPN definitions to pagination.
+
+    @staticmethod
+    def _vpn_records_have_usable_names(vpn_records: list[Any]) -> bool:
+        """Require every inventory record to provide a nonblank string name."""
+        for vpn_record in vpn_records:  # WHY: one uncheckable VPN invalidates duplicate-name coverage.
+            if not isinstance(vpn_record, dict):  # WHY: a non-object record cannot provide a reliable name.
+                logger.error("Organization VPN page contains a non-object record")  # WHY: report malformed data.
+                return False  # WHY: do not treat an unknown record as safe inventory.
+            vpn_name = vpn_record.get("name")  # WHY: read the field used to reject duplicate names.
+            if not isinstance(vpn_name, str) or not vpn_name.strip():  # WHY: missing or blank names are uncheckable.
+                logger.error("Organization VPN record has no usable name")  # WHY: report incomplete duplicate data.
+                return False  # WHY: stop before a new VPN can hide a collision.
+        return True  # WHY: every record can participate in duplicate-name validation.
 
     def _create_vpn(self, vpn_body: dict[str, Any]) -> dict[str, Any] | None:  # WHY: isolated for tests.
         """Create VPN via API. Returns created VPN dict or None on failure."""

@@ -351,6 +351,26 @@ class TestFetchExistingVpns:
         result = builder._fetch_existing_vpns()  # WHY: reject a page that cannot prove inventory completeness.
         assert result is None  # WHY: malformed success must not act like an empty inventory.
 
+    @pytest.mark.parametrize(
+        "invalid_vpn",
+        [
+            None,
+            "not-a-vpn",
+            {},
+            {"name": None},
+            {"name": 1},
+            {"name": ""},
+            {"name": "   "},
+        ],
+    )
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_invalid_vpn_record_or_name_returns_unavailable_inventory(self, mock_list, builder, invalid_vpn):
+        mock_list.return_value = SimpleNamespace(  # WHY: model a successful page with one uncheckable VPN.
+            status_code=200, data=[{"name": "Existing"}, invalid_vpn], next=None
+        )
+        result = builder._fetch_existing_vpns()  # WHY: reject records that cannot support duplicate checks.
+        assert result is None  # WHY: one uncheckable record makes the whole inventory incomplete.
+
     @patch("src.operations.wan.wan_vpn_builder.mistapi.get_next")
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
     def test_failed_later_page_returns_unavailable_inventory(self, mock_list, mock_get_next, builder, sample_vpns):
@@ -374,6 +394,21 @@ class TestFetchExistingVpns:
         mock_get_next.return_value = None  # WHY: model pagination ending before the declared page arrives.
         result = builder._fetch_existing_vpns()  # WHY: require every declared page before using names.
         assert result is None  # WHY: missing pagination data must not appear as a complete inventory.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_next")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_repeated_next_link_stops_pagination(self, mock_list, mock_get_next, builder, sample_vpns):
+        first_page = SimpleNamespace(  # WHY: model a page that declares the next URL once.
+            status_code=200, data=[sample_vpns[0]], next="next-page"
+        )
+        repeated_page = SimpleNamespace(  # WHY: model an SDK response that repeats the same URL.
+            status_code=200, data=[sample_vpns[1]], next="next-page"
+        )
+        mock_list.return_value = first_page  # WHY: start the synthetic page sequence.
+        mock_get_next.return_value = repeated_page  # WHY: return a page with a repeated pagination link.
+        result = builder._fetch_existing_vpns()  # WHY: require bounded pagination for complete inventory.
+        assert result is None  # WHY: repeated links cannot prove that all VPNs were read.
+        mock_get_next.assert_called_once_with(builder.apisession, first_page)  # WHY: do not follow the repeated link.
 
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
     def test_api_error_returns_unavailable_inventory(self, mock_list, builder):
@@ -486,6 +521,45 @@ class TestRunWorkflow:
         builder.run()  # WHY: verify the fail-closed workflow with synthetic dependencies only.
         safe_input.assert_not_called()  # WHY: do not ask for a name when the current inventory is unknown.
         builder._create_vpn.assert_not_called()  # WHY: do not create a VPN after an incomplete read.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_next")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_pagination_failure_stops_run_before_name_or_creation(
+        self, mock_list, mock_get_next, mock_create, builder, sample_profiles, sample_vpns
+    ):
+        first_page = SimpleNamespace(  # WHY: model a valid first page that declares more inventory.
+            status_code=200, data=list(sample_vpns), next="next-page"
+        )
+        mock_list.return_value = first_page  # WHY: route run() through the actual VPN inventory reader.
+        mock_get_next.side_effect = Exception("API error")  # WHY: fail pagination without a live Mist request.
+        builder._fetch_profiles = MagicMock(return_value=sample_profiles)  # WHY: keep profile setup synthetic.
+        builder._safe_input = MagicMock()  # WHY: detect any prompt after the failed inventory read.
+        builder.run()  # WHY: exercise the full workflow through the real list and pagination helpers.
+        builder._safe_input.assert_not_called()  # WHY: an unavailable inventory must stop before name input.
+        mock_create.assert_not_called()  # WHY: the failed page must never reach VPN creation.
+
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.get_next")
+    @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")
+    def test_second_page_duplicate_name_is_rejected(
+        self, mock_list, mock_get_next, mock_create, builder, sample_profiles, sample_vpns
+    ):
+        first_page = SimpleNamespace(  # WHY: put one existing VPN on the first successful page.
+            status_code=200, data=[sample_vpns[0]], next="next-page"
+        )
+        second_page = SimpleNamespace(  # WHY: put the duplicate target on the final successful page.
+            status_code=200, data=[sample_vpns[1]], next=None
+        )
+        mock_list.return_value = first_page  # WHY: route run() through the actual VPN inventory reader.
+        mock_get_next.return_value = second_page  # WHY: complete synthetic pagination successfully.
+        builder._fetch_profiles = MagicMock(return_value=sample_profiles)  # WHY: keep profile setup synthetic.
+        builder._safe_input = MagicMock(side_effect=["backupvpn", "q"])  # WHY: try a later-page duplicate then cancel.
+        builder.run()  # WHY: verify every successful page contributes to duplicate-name checks.
+        name_calls = builder._safe_input.call_args_list  # WHY: inspect the operator inputs without terminal access.
+        assert len(name_calls) == 2  # WHY: a rejected duplicate must cause another name prompt.
+        assert all(call.kwargs["context"] == "wan_vpn_name_input" for call in name_calls)  # WHY: both inputs are names.
+        mock_create.assert_not_called()  # WHY: the duplicate attempt and cancellation must not create a VPN.
 
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.createOrgVpn")
     @patch("src.operations.wan.wan_vpn_builder.mistapi.api.v1.orgs.vpns.listOrgVpns")

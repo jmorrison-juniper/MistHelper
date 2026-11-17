@@ -38,14 +38,15 @@ An operator uses the WAN VPN builder to create an organization VPN. The builder 
 
 - **FR-001**: The builder MUST distinguish a complete empty VPN inventory from a failed or incomplete inventory.
 - **FR-002**: The builder MUST stop before the name prompt when it cannot verify the complete VPN inventory.
-- **FR-003**: The builder MUST use all VPN names from a complete inventory to reject duplicate names.
+- **FR-003**: The builder MUST use every nonblank VPN name from a complete inventory to reject duplicate names.
 - **FR-004**: The builder MUST keep the existing typed confirmation before it creates an organization VPN.
 - **FR-005**: Verification MUST use synthetic responses and MUST NOT call a live Mist organization.
+- **FR-006**: Each VPN record MUST be an object with a nonblank string name. A repeated pagination link MUST make the inventory unavailable.
 
 ### Mist Cloud Transport Requirements
 
 - The existing `mistapi.api.v1.orgs.vpns.listOrgVpns` method remains the VPN inventory path. The existing `createOrgVpn` method remains behind the typed confirmation. No direct HTTP transport is added.
-- Mocked contract tests must prove that failed status, malformed data, pagination failure, and missing pages cannot reach VPN creation. Tests must not use a production credential or expose a secret.
+- Mocked contract tests must prove that failed status, malformed records, unusable names, pagination failure, repeated links, and missing pages cannot reach VPN creation. Tests must not use a production credential or expose a secret.
 - SDK insufficiency is not in scope because the existing SDK methods remain in use. Authentication and endpoint parity remain unchanged because this fix does not alter the SDK session or endpoint.
 
 ### Key Entities
@@ -57,10 +58,10 @@ An operator uses the WAN VPN builder to create an organization VPN. The builder 
 
 ### Measurable Outcomes
 
-- **SC-001**: Every tested failed or incomplete inventory case stops before the builder asks for a VPN name.
+- **SC-001**: Every tested failed or incomplete inventory case, including an unnamed record or repeated link, stops before the builder asks for a VPN name.
 - **SC-002**: Every tested failed or incomplete inventory case makes zero VPN creation calls.
 - **SC-003**: A complete successful empty inventory remains distinct from an unavailable inventory.
-- **SC-004**: A complete successful inventory still rejects an existing VPN name before creation.
+- **SC-004**: A complete multi-page inventory rejects a duplicate name found on a later page before creation.
 
 ## Assumptions
 
