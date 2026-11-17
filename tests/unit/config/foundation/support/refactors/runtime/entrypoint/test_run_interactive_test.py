@@ -2,7 +2,7 @@
 
 Wave 13 P2 coverage lift — RunInteractiveTestManager is a thin
 orchestrator that late-binds MistHelper and passes org_id closures
-through to _build_interactive_test_runner. Cover the resolver, ctor,
+through to build_interactive_test_runner. Cover the resolver, ctor,
 getter/setter closures, and run() to close the 43% gap in one file.
 """
 
@@ -60,12 +60,12 @@ def test_get_org_id_returns_none_when_missing() -> None:
 
 
 def test_run_delegates_to_interactive_test_runner() -> None:
-    """run() builds a runner via _build_interactive_test_runner and coerces execute() to bool."""
+    """run() builds a runner via build_interactive_test_runner and coerces execute() to bool."""
     runner = MagicMock()  # WHY: runner exposes execute()
     runner.execute.return_value = True  # WHY: happy path returns truthy verdict
-    builder = MagicMock(return_value=runner)  # WHY: _build_interactive_test_runner returns our runner
+    builder = MagicMock(return_value=runner)  # WHY: build_interactive_test_runner returns our runner
     fake = _install_fake_misthelper()
-    fake._build_interactive_test_runner = builder  # WHY: attach builder on the fake MistHelper
+    fake.build_interactive_test_runner = builder  # WHY: attach builder on the fake MistHelper
     with patch.dict(sys.modules, {"MistHelper": fake}):
         manager = RunInteractiveTestManager()
         result = manager.run()  # WHY: exercise the orchestration entrypoint
@@ -82,7 +82,7 @@ def test_run_returns_false_when_runner_reports_failure() -> None:
     runner.execute.return_value = 0  # WHY: falsy verdict must be coerced to False
     builder = MagicMock(return_value=runner)
     fake = _install_fake_misthelper()
-    fake._build_interactive_test_runner = builder
+    fake.build_interactive_test_runner = builder
     with patch.dict(sys.modules, {"MistHelper": fake}):
         manager = RunInteractiveTestManager()
         assert manager.run() is False  # WHY: bool(0) -> False propagates as the return value

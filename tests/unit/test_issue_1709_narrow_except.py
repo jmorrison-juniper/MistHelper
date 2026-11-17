@@ -326,7 +326,7 @@ def test_check_token_rate_limit_rejects_unexpected_error(monkeypatch: pytest.Mon
 
 def test_introspect_apisession_catches_signature_error() -> None:
     """The API session introspector catches unsupported callable signatures."""
-    result = MistHelper._introspect_apisession_class(SimpleNamespace(APISession=42))  # int has no callable signature.
+    result = MistHelper.introspect_apisession_class(SimpleNamespace(APISession=42))  # int has no callable signature.
     assert result == (42, [])  # Preserve the empty-parameter fallback.
 
 
@@ -334,7 +334,7 @@ def test_introspect_apisession_rejects_unexpected_error(monkeypatch: pytest.Monk
     """The API session introspector lets an unexpected inspect defect escape."""
     monkeypatch.setattr(MistHelper.inspect, "signature", MagicMock(side_effect=RuntimeError("boom")))  # Defect.
     with pytest.raises(RuntimeError):  # Prove the narrowed handler does not hide unrelated defects.
-        MistHelper._introspect_apisession_class(SimpleNamespace(APISession=object))  # Execute handler site.
+        MistHelper.introspect_apisession_class(SimpleNamespace(APISession=object))  # Execute handler site.
 
 
 def test_log_session_attempt_traceback_catches_format_error(
@@ -431,7 +431,7 @@ def test_setup_runtime_flags_catches_fast_attr_error() -> None:
             raise AttributeError("fast")  # Simulate a broken argparse namespace seam.
 
     args = Args()  # Use a local class so the property affects only this test.
-    MistHelper._setup_runtime_flags(args)  # Runtime setup must keep startup controlled.
+    MistHelper.setup_runtime_flags(args)  # Runtime setup must keep startup controlled.
     assert MistHelper.MainEntrypoint.context.fast_mode_enabled is False  # Preserve the safe default.
 
 
@@ -449,14 +449,14 @@ def test_setup_runtime_flags_rejects_unexpected_error() -> None:
 
     args = Args()  # Use a local class so the property affects only this test.
     with pytest.raises(ValueError):  # Prove the narrowed handler does not hide unrelated defects.
-        MistHelper._setup_runtime_flags(args)  # Execute the narrowed handler site.
+        MistHelper.setup_runtime_flags(args)  # Execute the narrowed handler site.
 
 
 def test_configure_runtime_options_catches_emitter_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """The runtime options setup catches telemetry emitter file failures."""
     args = SimpleNamespace(output_format="csv", debug=False)  # Provide only the fields this function reads.
     monkeypatch.setattr(MistHelper, "TelemetryEmitter", MagicMock(side_effect=OSError("denied")))  # File failure.
-    MistHelper._configure_runtime_options(args)  # Runtime setup must keep telemetry optional.
+    MistHelper.configure_runtime_options(args)  # Runtime setup must keep telemetry optional.
     assert MistHelper.MainEntrypoint.context.progress_emitter is None  # Preserve the no-telemetry fallback.
 
 
@@ -465,4 +465,4 @@ def test_configure_runtime_options_rejects_unexpected_error(monkeypatch: pytest.
     args = SimpleNamespace(output_format="csv", debug=False)  # Provide only the fields this function reads.
     monkeypatch.setattr(MistHelper, "TelemetryEmitter", MagicMock(side_effect=RuntimeError("boom")))  # Defect.
     with pytest.raises(RuntimeError):  # Prove the narrowed handler does not hide unrelated defects.
-        MistHelper._configure_runtime_options(args)  # Execute the narrowed handler site.
+        MistHelper.configure_runtime_options(args)  # Execute the narrowed handler site.

@@ -88,7 +88,7 @@ def _load_menu_actions(wsgi_session: Any, wsgi_org_id: str) -> Any:
         if wsgi_session is not None:
             _MISTHELPER_MODULE.apisession = wsgi_session
             # Apply timeout adapter so API calls don't hang indefinitely
-            _MISTHELPER_MODULE._configure_session_timeout(wsgi_session)
+            _MISTHELPER_MODULE.configure_session_timeout(wsgi_session)
         if wsgi_org_id:
             _MISTHELPER_MODULE.org_id = wsgi_org_id
             os.environ["ORG_ID"] = wsgi_org_id

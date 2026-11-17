@@ -22,7 +22,7 @@ Do not publish this local repair.
 
 **Project Type**: CLI entry point with dynamic module exports and injected callbacks.
 
-**Performance Goals**: No runtime algorithm change.
+**Performance Goals**: No new network, file, or cache operation.
 
 **Constraints**: No ignores, disabled rules, Any casts, dummy references, removed live declarations, or weakened tests.
 
@@ -57,20 +57,22 @@ Supporting feature records belong under `design/`.
 
 1. Record the locked environment, live base, ownership, and baseline.
 2. Resolve local collection inference, exception scope, optional imports, and dynamic module methods.
-3. Declare the existing dynamically invoked helpers in the explicit export contract and its historical snapshot.
-4. Correct callbacks, site records, selector methods, and deferred initialization contracts.
-5. Add focused regression cases, then run strict analysis and applicable standard gates.
-6. Record exact outcomes and commit only verified owned files.
+3. Give verified host helpers public names and update every owned caller.
+4. Replace string-based mode lookup with direct typed handlers in the actual dispatcher.
+5. Correct callbacks, site records, selector methods, and deferred initialization contracts.
+6. Add focused regression cases, then run strict analysis and applicable standard gates.
+7. Record exact outcomes and commit only verified owned files.
 
 ## Validation
 
 The strict command is:
 
 ```text
-uvx --from pyright==1.1.414 pyright --project <session-files>/pyright-strict.json --outputjson MistHelper.py
+rtk bypass uvx --from pyright==1.1.414 pyright --project specs/numbered/0/0/1/2/3/0/1/3/4758-strict-pyright-repairs/design/contracts/pyright.json --outputjson
 ```
 
-The session configuration uses strict mode, Python 3.15, Darwin, the worktree dependency environment, and the repository import path.
+The committed configuration uses strict mode, Python 3.15, the worktree environment, and bounded third-party declarations.
+This explicit analysis does not replace the default project checks.
 Require `filesAnalyzed: 1`, `errorCount: 0`, and `warningCount: 0`.
 Preserve raw JSON and gate output in session artifacts.
 The feature analysis records exact completed commands and remaining blockers.
@@ -83,10 +85,18 @@ Broader module division requires a separate change and must not remove exported 
 
 ## Implementation decisions
 
-The existing export contract now names 44 dynamically accessed helpers.
-Their implementations remain unchanged.
-The historical public API snapshot records the same names.
-This is an explicit export contract, not an unused reference collection.
+Review rejected the original private-export expansion and dynamic-import substitutions.
+The correction restores the original 196 explicit exports and the historical snapshot.
+Static imports use the bounded declarations beside the committed analyzer configuration.
+Verified cross-module helpers receive public names without aliases.
+Their owned callers use those names through the existing resolver or WSGI host.
+The initializer handoff permits exactly four reference replacements.
+The actual mode dispatcher binds direct callbacks on each invocation.
+It preserves predicate order, short-circuit evaluation, and handler replacement before dispatch.
+No parallel registry, getter layer, or compatibility adapter exists.
+The dispatcher now builds its small local table instead of caching predicates globally.
+Its required typed dispatch remains in one existing function.
+See [the correction record](design/contracts/correction.md) for call paths, limitations, and remaining diagnostics.
 
 The module context type now has named, typed methods and one shared attribute mapping.
 Tests exercise all seven context names and ordinary module attributes.
@@ -107,4 +117,7 @@ No confirmation, backup, or production request occurs in the absent-session test
 
 The cache and site-record contracts remain blocked.
 Their owners require restoration and a narrow handoff before any source edit.
-The implementation must not claim zero strict errors until both contracts are released and verified.
+Nine historical or test-referenced declarations also retain unused-function diagnostics.
+Those diagnostics are not ownership blockers.
+Their removal requires a separate approved scope.
+The implementation must not claim zero strict errors while either group remains.

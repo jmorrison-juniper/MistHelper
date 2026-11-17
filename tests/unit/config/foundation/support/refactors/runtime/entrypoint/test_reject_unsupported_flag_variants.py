@@ -105,7 +105,7 @@ def test_application_bootstrap_parses_command_line_once(monkeypatch: pytest.Monk
     parsed_args = argparse.Namespace(skip_deps=True, test=False, testinteractive=False)  # WHY: Minimal stored result.
     parser = CountingParser(parsed_args)  # WHY: Count parse calls without running real argparse behavior.
     monkeypatch.setattr(  # WHY: Route bootstrap to the parser double.
-        "MistHelper._build_argument_parser", lambda: parser
+        "MistHelper.build_argument_parser", lambda: parser
     )
     bootstrap = ApplicationBootstrap(argv=["--skip-deps"])  # WHY: Constructing bootstrap is the only parse location.
     assert parser.parse_count == 1  # WHY: The command line must be parsed exactly one time.
