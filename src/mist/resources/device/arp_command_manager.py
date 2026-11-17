@@ -65,7 +65,7 @@ class ARPCommandManager:  # ARP WebSocket command manager.
         return mist_host, mist_apitoken  # Caller streams using these
 
     @staticmethod
-    def execute(site_id=None, device_id=None):  # Run the ARP command.
+    def execute(site_id: str | None = None, device_id: str | None = None) -> None:  # Type optional target identifiers.
         """Execute ARP command on a device and stream output via WebSocket (prompts for IDs when missing)."""
         site_id, device_id = ARPCommandManager._resolve_arp_target_ids(site_id, device_id)  # Resolve or prompt
         if not site_id or not device_id:  # Still missing — abort
