@@ -10,7 +10,8 @@ All ten residual errors require two reserved source contracts.
 
 The initial and refreshed `origin/main` revision is `b7a18b7ead7b1de5882bcd288203c015b1eef792`.
 The worktree HEAD matched that revision before edits.
-The final local commit identifier will be recorded on issue #4758.
+The implementation commit is `ed7f550066e16a21aabac1132ffbd7906ead8718`.
+The final verification-document commit identifier is recorded on issue #4758.
 No push, pull request, merge, or automatic merge is authorized.
 
 ## Requirement coverage
@@ -24,7 +25,7 @@ No push, pull request, merge, or automatic merge is authorized.
 | FR-005 | Narrow portal handoff, ARP ancestry, held-file comparison | Partial: API and cache handoffs unavailable |
 | FR-006 | Mocked regression suite and absent-session admission cases | Complete |
 | FR-007 | Separate issues #4825 and #4826 | Complete |
-| FR-008 | Explicit-path local commit procedure | Pending final commit evidence |
+| FR-008 | Local implementation commit and verification records | Complete |
 
 T003, T008, and T010 remain unchecked because ownership blocks completion.
 Do not treat their dependency status as a released hold.
@@ -229,9 +230,33 @@ The corrected command uses only the existing verified executable and changes no 
 | pyright-candidate.txt | `f70c074a4da622736ea5245234d9527bd1d5ef24ede36ee4a3000b9ea8cbd635` |
 | gates-final.txt | `c654b921f53640c38e2207ecf84cd9aa738f67ec45639457b0fe9236b0513594` |
 
-The test-quality input preflight passed.
+The test-quality input preflight passed after the implementation commit.
 It read and validated all four required inputs.
-The committed-diff analyzer remains pending until the local implementation commit.
+The committed-diff analyzer examined two changed test files and eight findings.
+It reported zero new findings against the unchanged baseline.
+Its summary reported two skipped checks and zero parse errors.
+
+The exact commands are:
+
+```text
+rtk git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+rtk git rev-parse --verify 'origin/main^{commit}'
+rtk bypass .venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides
+rtk bypass .venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt
+```
+
+The preflight result is `1 passed`.
+The analyzer result is:
+
+```text
+gate_scope: 2 files checked, 8 findings checked
+test_quality_analyzer: 8 findings (0/0/8/0), 2 skipped, 0 parse errors
+gate: 0 new findings vs baseline
+```
+
+`test-quality-preflight.txt` and `test-quality-final.txt` preserve the complete outputs.
+`symbols-final.txt` records the final six-source comparison and every intentional addition.
+No standard gate was represented as passing before it ran.
 
 Full-suite coverage, production safe sweeps, browser runs, and dependency audits were not run.
 This change alters no dependency manifest, browser element, or production configuration.
@@ -271,3 +296,15 @@ Dependency manifests remain unchanged.
 7. Check T003, T008, and T010 only after their evidence exists.
 
 Do not close issue #4758 or publish this branch while the ownership or publication holds remain active.
+
+## Local delivery
+
+The implementation commit contains 23 files.
+It includes the specification, plan, tasks, analysis, supporting records, tests, and generated references.
+The verification-document commit checks T012 and T016 after their evidence exists.
+Thirteen tasks are complete, and three ownership-dependent tasks remain unchecked.
+The repository auto-commit configuration disables the optional implementation hook.
+The explicit local commits preserve that setting and include the required coauthor trailer.
+
+The worktree has no uncommitted source repair.
+No remote branch, existing ref, dependency hold, or publication hold was removed.
