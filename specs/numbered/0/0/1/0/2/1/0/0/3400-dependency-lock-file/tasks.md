@@ -5,7 +5,7 @@
 - [x] T001 Write spec.md with the adopted decision and the assumptions.
 - [x] T002 Write plan.md with the staged slices and guardrails.
 - [x] T003 Write tasks.md and review the slice order for safe ordering.
-- [ ] T004 Open the S0 pull request and post the assumption on issue #3400.
+- [x] T004 Open the S0 pull request and post the assumption on issue #3400.
 
 ## S1 Declarations
 

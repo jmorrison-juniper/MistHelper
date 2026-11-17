@@ -62,6 +62,7 @@ QUALITY_GATES = {
     "pydocstyle",
     "interrogate",
     "test_quality_gate",
+    "dependency_lock",
 }
 EXPECTED_GATES: dict[Path, set[str]] = {
     CI_WORKFLOW: QUALITY_GATES
@@ -117,9 +118,10 @@ class TestTheWorkflowCallsTheSharedJob:
         needs = issue_job(relative_path)["needs"]  # Read the issue inputs from the workflow.
         assert assert_gate_inventory(relative_path, needs)  # Keep the contract assertion in the test function.
 
-    def test_the_gate_list_check_rejects_a_missing_gate(self) -> None:
-        """The direct proof must fail when the issue job loses the test quality gate."""
-        incomplete = sorted(EXPECTED_GATES[CI_WORKFLOW] - {"test_quality_gate"})  # Model the issue #3319 omission.
+    @pytest.mark.parametrize("missing_gate", ["test_quality_gate", "dependency_lock"])
+    def test_the_gate_list_check_rejects_a_missing_gate(self, missing_gate: str) -> None:
+        """The direct proof must fail when the issue job loses a required gate."""
+        incomplete = sorted(EXPECTED_GATES[CI_WORKFLOW] - {missing_gate})  # Model an omitted gate result.
         with pytest.raises(AssertionError, match="changed its gate list"):  # Prove that the guard rejects the omission.
             assert_gate_inventory(CI_WORKFLOW, incomplete)  # Run the same guard that checks the workflow.
 
