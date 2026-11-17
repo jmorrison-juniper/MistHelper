@@ -52,7 +52,7 @@ class SwitchToInteractiveLoginManager:
 
     SECURITY: Prompts the user for credentials. On failure the previous
     ``apisession`` and ``org_id`` globals are rolled back inside the
-    helper ``_attempt_interactive_login_with_rollback``.
+    helper ``attempt_interactive_login_with_rollback``.
 
     Usage:
         SwitchToInteractiveLoginManager().run()
@@ -78,8 +78,8 @@ class SwitchToInteractiveLoginManager:
         """
         logger.info("User initiated switch to interactive login")  # Operator action note (kept from original)
         misthelper = self._misthelper()  # Cache module handle for the helper lookups below
-        misthelper._print_switch_login_header()  # Show the explanatory banner
-        if not misthelper._prompt_switch_login_confirmation():  # User cancelled or EOF'd the prompt
+        misthelper.print_switch_login_header()  # Show the explanatory banner
+        if not misthelper.prompt_switch_login_confirmation():  # User cancelled or EOF'd the prompt
             logger.debug(  # Log cancel path for postmortem tracing
                 "SwitchToInteractiveLoginManager: user declined confirmation; staying on menu"
             )
@@ -92,14 +92,14 @@ class SwitchToInteractiveLoginManager:
         logger.info("SwitchToInteractiveLoginManager: attempting rollback-guarded login")  # Log attempt entry
         old_session = getattr(misthelper, "apisession", None)  # Preserve current session for rollback
         old_org_id = getattr(misthelper, "org_id", None)  # Preserve current org for rollback
-        if not misthelper._attempt_interactive_login_with_rollback(  # Try login. Restores on failure
+        if not misthelper.attempt_interactive_login_with_rollback(  # Try login. Restores on failure
             old_session, old_org_id
         ):
             logger.debug(  # Log rollback path for postmortem tracing
                 "SwitchToInteractiveLoginManager: interactive login failed; rolled back and staying on menu"
             )
             return  # Login failed but old session was restored -- stay running
-        misthelper._handle_interactive_login_success()  # Login succeeded -- show status and pick MSP/org
+        misthelper.handle_interactive_login_success()  # Login succeeded -- show status and pick MSP/org
         logger.debug(  # Log success path so callers can trace successful session swap
             "SwitchToInteractiveLoginManager: interactive login succeeded; session updated"
         )

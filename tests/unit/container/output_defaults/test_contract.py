@@ -242,7 +242,7 @@ class ExportIsolation:
             (data_exporter, "polyglot_hosts_unreachable"),  # Refuse optional host probes.
             (data_exporter, "DatabaseRouter"),  # Refuse router construction.
             (data_exporter.DataExporter, "_build_polyglot_router"),  # Refuse deferred construction too.
-            (self.module, "_establish_mist_session"),  # Refuse full authentication startup.
+            (self.module, "establish_mist_session"),  # Refuse full authentication startup.
             (self.module.MistSessionInitializer, "initialize"),  # Refuse token authentication.
             (self.module.MistSessionInteractiveInitializer, "initialize"),  # Refuse interactive authentication.
         ]
@@ -257,9 +257,9 @@ class ExportIsolation:
         logging.info("Parse and configure the explicit output selection %s", flag)  # Log a format, never a credential.
         arguments = [] if flag is None else ["--output-format", flag]  # An unset flag must use the real parser default.
         parsed = cast(
-            argparse.Namespace, self.module._build_argument_parser().parse_args(arguments)
+            argparse.Namespace, self.module.build_argument_parser().parse_args(arguments)
         )  # Keep choices real.
-        self.module._configure_runtime_options(parsed)  # Apply the real runtime selection to the isolated AppContext.
+        self.module.configure_runtime_options(parsed)  # Apply the real runtime selection to the isolated AppContext.
         self.module.TelemetryEmitter.assert_called_once_with(
             os.path.join("data", "test_events.jsonl")
         )  # No telemetry file.
@@ -371,7 +371,7 @@ class TestFormatSelection:
     def test_polyglot_is_not_a_cli_choice(self, isolated: ExportIsolation) -> None:
         """A readiness setting must not become a supported export flag."""
         isolated.monkeypatch.setenv("OUTPUT_FORMAT", "polyglot")  # Keep the environment alternative in play.
-        parser = isolated.module._build_argument_parser()  # Inspect the actual parser, not duplicate logic.
+        parser = isolated.module.build_argument_parser()  # Inspect the actual parser, not duplicate logic.
         choices = next(action.choices for action in parser._actions if action.dest == "output_format")
         assert list(choices) == ["csv", "sqlite"]  # Preserve every supported output choice.
         logging.info("Parse the unsupported explicit polyglot selection")  # Mark the required refusal action.

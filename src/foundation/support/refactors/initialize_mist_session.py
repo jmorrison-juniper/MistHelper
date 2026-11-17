@@ -162,19 +162,19 @@ class MistSessionInitializer:  # Token-based Mist session orchestration seam
             context.apisession = module_dict.pop("apisession")  # Move the legacy write into the context.
         if context.apisession:  # Already initialized -- skip all setup and return immediately.
             return True
-        loaded_mistapi = _MH._load_mistapi_module(_MH.mistapi)  # Ensure mistapi is available.
+        loaded_mistapi = _MH.load_mistapi_module(_MH.mistapi)  # Ensure mistapi is available.
         context.mistapi = loaded_mistapi  # Store the SDK module with the session context.
         if not loaded_mistapi:  # mistapi unavailable -- cannot proceed
             return False
         host, tokens = _MH._parse_api_tokens()  # Read MIST_HOST and MIST_APITOKEN from env
-        apisession_cls, sig_params = _MH._introspect_apisession_class(loaded_mistapi)  # Discover APISession + params
+        apisession_cls, sig_params = _MH.introspect_apisession_class(loaded_mistapi)  # Discover APISession + params
         new_apisession, successful_method, tried_variants = (  # Run all session strategies
-            _MH._attempt_all_session_strategies(apisession_cls, sig_params, tokens, host, loaded_mistapi)
+            _MH.attempt_all_session_strategies(apisession_cls, sig_params, tokens, host, loaded_mistapi)
         )
         context.apisession = new_apisession  # Store the discovered session in the explicit context.
         module_dict.pop("apisession", None)  # Keep the module dictionary free of the old session global.
         if not new_apisession:  # All strategies exhausted -- log tried variants and fail.
-            _MH._log_failed_session_variants(tried_variants)  # Report the attempted constructor shapes.
+            _MH.log_failed_session_variants(tried_variants)  # Report the attempted constructor shapes.
             return False  # Signal that no usable session exists.
         return bool(  # Configure once, then validate the freshly built session.
             MistSessionConfigurator.configure_once(context, new_apisession, successful_method)

@@ -124,14 +124,14 @@ def test_menu_291_handler_default_is_the_absent_marker() -> None:
 )
 def test_cli_kwargs_carry_the_tri_state_mode(arguments: list[str], expected: bool | None) -> None:
     """CLI dispatch must pass None when neither an explicit dry-run nor an explicit live mode is present."""
-    args = MistHelper._build_argument_parser().parse_args(arguments)  # WHY: exercise the actual root parser.
+    args = MistHelper.build_argument_parser().parse_args(arguments)  # WHY: exercise the actual root parser.
     kwargs = MistHelper._build_cli_func_kwargs(args, None, None)  # WHY: this builder feeds every CLI menu call.
     assert kwargs["dry_run"] is expected, f"arguments {arguments!r} must map to {expected}"
 
 
 def test_cli_rejects_both_destructive_modes() -> None:
     """The parser must reject contradictory dry-run and live-run flags."""
-    parser = MistHelper._build_argument_parser()  # WHY: the mutual exclusion belongs to the registered parser.
+    parser = MistHelper.build_argument_parser()  # WHY: the mutual exclusion belongs to the registered parser.
     with pytest.raises(SystemExit) as error:  # WHY: argparse reports invalid flag combinations with SystemExit.
         parser.parse_args(["--dry-run", "--live-run"])  # WHY: no run may carry two destructive modes.
     assert error.value.code == 2, "argparse must reject contradictory destructive modes"
