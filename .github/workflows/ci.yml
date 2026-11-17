@@ -331,10 +331,19 @@ jobs:
     name: "pytest (coverage gate)"
     needs:
       - pytest_coverage_shards
+      - dependency_lock
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
+      - name: Verify dependency lock job
+        env:
+          LOCK_RESULT: ${{ needs.dependency_lock.result }}
+        run: |
+          if [ "$LOCK_RESULT" != "success" ]; then
+            echo "::error::The dependency lock job finished with $LOCK_RESULT."
+            exit 1
+          fi
       - uses: actions/checkout@v7
         with:
           submodules: false
