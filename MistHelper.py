@@ -44,6 +44,7 @@ warnings.filterwarnings(
 
 import argparse  # Import argparse for command-line argument parsing (--menu, --test, --fast flags)
 import concurrent.futures  # High-level parallelism primitives for batched API calls
+import importlib  # Load optional packages without requiring third-party stub distributions.
 import inspect  # Introspect functions/classes at runtime (signatures, source lookup)
 import logging  # Import logging for structured logging to script.log and console
 import os  # Import os for file path operations, environment variables, and data/ directory setup
@@ -178,17 +179,17 @@ try:  # Try to import polyglot database layer for ArangoDB/Redis export backends
     DatabaseConfig: type[_DatabaseConfigImpl] | None = _DatabaseConfigImpl  # Class reference for DB config construction
     configure_db_logging: Callable[[], None] | None = _configure_db_logging_impl  # Logging setup callable
     DatabaseRouter: type[_DatabaseRouterImpl] | None = _DatabaseRouterImpl  # Class reference for DB router construction
-    DB_LAYER_AVAILABLE = True  # Set flag indicating database backends are available for export operations
 except ImportError:  # If database dependencies (python-arango, redis) not installed, gracefully disable
     DatabaseConfig = None  # None lets runtime guards detect DB-layer absence
     configure_db_logging = None  # None lets runtime guards detect DB-layer absence
     DatabaseRouter = None  # None lets runtime guards detect DB-layer absence
-    DB_LAYER_AVAILABLE = False  # Set flag to disable database output formats (CSV/SQLite only)
 
-    # Explicit public API surface (issue #895).
-    # A src.* submodule re-exports every name below for external
-    # consumers. Adding a name here MUST accompany a corresponding update to
-    # specs/1016-misthelper-suppression-cleanup/contracts/public_api_snapshot.txt.
+DB_LAYER_AVAILABLE = DatabaseConfig is not None  # Derive availability once from the completed optional import.
+
+# Explicit public API surface (issue #895).
+# A src.* submodule re-exports every name below for external
+# consumers. Adding a name here MUST accompany a corresponding update to
+# specs/1016-misthelper-suppression-cleanup/contracts/public_api_snapshot.txt.
 __all__ = [  # Preserve the existing behavior during the compliance refactor.
     "API_REQUEST_MAX_RETRIES",
     "API_REQUEST_RETRY_DELAY",
@@ -351,6 +352,50 @@ __all__ = [  # Preserve the existing behavior during the compliance refactor.
     "WebSocketManager",
     "WebSocketStreamTarget",
     "WiredClientManufacturerReportGenerator",
+    "_attempt_all_session_strategies",
+    "_attempt_interactive_login_with_rollback",
+    "_build_argument_parser",
+    "_build_interactive_test_runner",
+    "_build_systematic_test_options",
+    "_configure_runtime_options",
+    "_configure_session_timeout",
+    "_dispatch_main_mode",
+    "_early_dependency_check",
+    "_establish_mist_session",
+    "_execute_systematic_test_loop",
+    "_exit_on_unsupported_flag",
+    "_finalize_systematic_telemetry",
+    "_get_tuning_data_file_path",
+    "_handle_interactive_login_success",
+    "_initialize_deferred_imports",
+    "_initialize_dependencies",
+    "_initialize_systematic_telemetry",
+    "_install_default_request_timeout",
+    "_introspect_apisession_class",
+    "_is_help_invocation",
+    "_load_mistapi_module",
+    "_log_failed_session_variants",
+    "_print_switch_login_header",
+    "_print_systematic_banner",
+    "_print_systematic_pre_run_counts",
+    "_print_systematic_summary",
+    "_prompt_switch_login_confirmation",
+    "_reject_unsupported_flag_variants",
+    "_report_systematic_outcome",
+    "_resolve_systematic_test_context",
+    "_restore_session_globals_from_state",
+    "_run_capture_portal_mode",
+    "_run_cli_mode",
+    "_run_interactive_test_mode",
+    "_run_metrics_gateway_mode",
+    "_run_metrics_snmp",
+    "_run_mib_generator_mode",
+    "_run_systematic_test_mode",
+    "_run_tui_mode_and_exit",
+    "_run_web_portal_mode",
+    "_setup_runtime_flags",
+    "_snapshot_session_globals_to_state",
+    "_validate_initialized_session",
     "apisession",
     "argparse",
     "concurrent",
@@ -935,10 +980,10 @@ from src.operations.wan.wan_vpn_builder import WanVpnBuilder  # Import WAN VPN c
 
 def _get_installed_version(package_name: str) -> str:  # Look up the installed version string for a package
     """Get installed version of a package using importlib.metadata."""
-    try:  # Try to read version metadata from the installed distribution
-        from importlib.metadata import PackageNotFoundError  # Import the precise absence signal for metadata lookup
-        from importlib.metadata import version as get_version  # Import the stdlib version lookup (Python 3.8+)
+    from importlib.metadata import PackageNotFoundError  # Bind the exception before the guarded metadata lookup.
+    from importlib.metadata import version as get_version  # Keep the lookup local for dependency bootstrap.
 
+    try:  # Try to read version metadata from the installed distribution
         return get_version(package_name)  # Return the installed version string (for example '0.59.3')
     except (PackageNotFoundError, ValueError) as error:  # Missing metadata or a bad name must not stop startup
         logging.exception("Installed package version lookup failed for %s: %s", package_name, error)  # Keep trace
@@ -978,7 +1023,7 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
     proxies (for example Zscaler SSL inspection).
     """
     try:  # Network calls can fail many ways. Treat any failure as 'latest unknown'
-        requests_module = cast(Any, __import__("requests"))  # Import after bootstrap can repair requests
+        requests_module = __import__("requests")  # Import after bootstrap can repair requests.
         url = f"https://pypi.org/pypi/{package_name }/json"  # PyPI JSON API endpoint for this package's metadata
         if not url.startswith("https://"):  # Defence-in-depth: refuse any non-HTTPS scheme before dispatch
             raise ValueError("PyPI URL must use https scheme")  # Fail-closed guards against future url refactors
@@ -1018,7 +1063,7 @@ def _parse_requirements_file(
 
     SECURITY: only reads requirements.txt (no arbitrary file access). Skips comments/blanks/dev deps.
     """
-    packages = []  # Accumulate (name, spec) tuples to return to the dependency checker
+    packages: list[tuple[str, str]] = []  # Retain the dependency name and requirement text for each row.
     try:  # The file may be absent or unreadable. Handle that gracefully below
         with open(filepath, encoding="utf-8") as requirements_file:  # Open requirements.txt as UTF-8 text
             for line in requirements_file:  # Process one dependency line at a time
@@ -1098,7 +1143,7 @@ except ImportError:  # Extremely unlikely for a stdlib module, but guard anyway
 
 mistapi: Any = None  # Preserve the historical module global for tests and menu factories.
 try:  # Import the SDK without starting a session or touching the network.
-    import mistapi as _mistapi_impl  # Bind the SDK for import-time menu factories and tests.
+    _mistapi_impl = importlib.import_module("mistapi")  # Keep optional SDK loading consistent with deferred imports.
 
     mistapi = _mistapi_impl  # Preserve the historical module global without a bootstrap session.
 except ImportError:  # The bootstrap dependency check reports the missing SDK before runtime modes start.
@@ -1128,7 +1173,7 @@ except ImportError:  # pyte not installed
 
 try:  # paramiko is optional (used for direct SSH operations)
     _paramiko_impl = __import__("paramiko")  # Import by name so mypy does not require third-party stubs
-    _paramiko_any = cast(Any, _paramiko_impl)  # Treat optional SSH package as dynamic until a local Protocol exists
+    _paramiko_any = _paramiko_impl  # The dynamic import already supplies the optional SSH attributes.
     paramiko: ModuleType | None = _paramiko_impl  # Union type lets guards detect absence
     SSHClient: type[Any] | None = _paramiko_any.SSHClient  # Class handle for guarded use
     RejectPolicy: type[Any] | None = _paramiko_any.RejectPolicy  # Class handle for guarded use
@@ -1139,7 +1184,9 @@ except ImportError:  # paramiko not installed
 
     # Optional imports with fallbacks
 try:  # scourgify is optional (US street-address normalization)
-    from scourgify import normalize_address_record  # Normalize messy US addresses into structured fields
+    normalize_address_record: Callable[..., dict[str, str | None]] | None = importlib.import_module(
+        "scourgify"
+    ).normalize_address_record  # Preserve the optional normalizer's structured address result.
 except ImportError:  # scourgify not installed
     normalize_address_record = None  # None lets callers fall back to raw address strings
 
@@ -1382,7 +1429,7 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
         self._uv_available: bool = False  # Cached answer to 'is UV usable?'
         self._uv_checked: bool = False  # Whether the UV availability check ran
         self._last_uv_update_check: float | None = None  # Track when we last checked for UV updates
-        self._deferred_init_done: bool = False  # Whether the deferred (lazy) init ran
+        self.deferred_init_done: bool = False  # Let startup helpers record the completed deferred import cycle.
         self._initialization_complete: bool = False  # Whether full initialization finished
         self._initialization_success: bool = False  # Whether initialization succeeded
         self._cached_global_assignments: dict[str, Any] = {}  # Module globals to publish once imports complete
@@ -1717,7 +1764,7 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
 
     def _collect_packages_to_process(self) -> list[tuple[str, str]]:  # Build the installable (name, spec) list
         """Return (name, spec) pairs for required+optional packages, excluding built-in modules (spec is None)."""
-        packages_to_process = []  # Accumulate installable (name, spec) pairs
+        packages_to_process: list[tuple[str, str]] = []  # Keep package names paired with their requirement text.
         for pkg_name, pkg_spec in {**self.required_packages, **self.optional_packages}.items():  # Walk all packages
             if pkg_spec is not None:  # Skip built-in modules (no version spec)
                 packages_to_process.append((pkg_name, pkg_spec))  # Keep this installable package
@@ -1919,8 +1966,6 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
         self, module_name: str
     ) -> None:  # Preserve the existing behavior during the compliance refactor.
         """Invalidate import caches and purge stale failed entries so a post-install retry imports cleanly."""
-        import importlib  # Imported locally to invalidate caches only when needed.
-
         importlib.invalidate_caches()  # Force Python to notice the newly installed files.
         actual_import_name = self.import_name_mappings.get(module_name, module_name)  # Resolve package -> import name.
         for mod_name in (actual_import_name, module_name):  # Both names may be cached as failed.
@@ -2252,9 +2297,9 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
         try:  # The function may be an attribute or require a direct import
             normalize_func = getattr(module_obj, "normalize_address_record", None)  # Look for the normalize function
             if not normalize_func:  # Attribute missing -- import directly from scourgify
-                from scourgify import normalize_address_record  # Direct import fallback
-
-                normalize_func = normalize_address_record  # Rebind the direct-import result
+                normalize_func = importlib.import_module(
+                    "scourgify"
+                ).normalize_address_record  # Resolve the same package attribute after a missing hoist.
             globals()["normalize_address_record"] = normalize_func  # Bind the resolved function globally
         except (ImportError, AttributeError):  # Package present but function unavailable
             logging.debug("Could not import normalize_address_record from scourgify, using fallback")  # Note fallback
@@ -2507,7 +2552,9 @@ def _exit_on_unsupported_flag(
 
 
 try:  # Import the sanitizer class without configuring logging during module import.
-    from mistapi.__logger import LogSanitizer  # Keep the old exported name available for callers.
+    LogSanitizer: Callable[[], logging.Filter] | None = importlib.import_module(
+        "mistapi.__logger"
+    ).LogSanitizer  # Preserve the SDK logging filter factory when the optional module exists.
 except ImportError:  # Older mistapi versions may not publish the sanitizer.
     LogSanitizer = None  # Keep the exported name stable when mistapi lacks the class.
 
@@ -2574,6 +2621,7 @@ org_id: str | None  # MainEntrypoint.context owns the active organization identi
 FAST_MODE_RETRY_THREADS = 4  # Bootstrap updates this value from the environment.
 FAST_MODE_RETRY_MAX_RETRIES = 2  # Bootstrap updates this value from the environment.
 FAST_MODE_FALLBACK_THREADS = 8  # Bootstrap updates this value from the environment.
+RRM_DRY_RUN_DEFAULT = cast(bool | None, None)  # Keep the absent mode value and the handler's tri-state input contract.
 
 # Global configuration for output format (CSV or Redis/SQLite)
 # Default to CSV for general use, can be overridden by CLI flag
@@ -2595,89 +2643,42 @@ apisession: Any | None  # MainEntrypoint.context owns the authenticated Mist API
 msp_privileges: list[dict[str, Any]]  # MainEntrypoint.context owns the detected MSP grants.
 selected_msp: dict[str, Any] | None  # MainEntrypoint.context owns the selected MSP.
 
-sys.modules[__name__].__class__ = type(  # Preserve legacy attribute reads while the context owns the state.
-    "_MistHelperContextModule",  # Give the dynamic module type a diagnostic name.
-    (types.ModuleType,),  # Extend the normal module behavior only for context-owned names.
-    {
-        "__getattr__": lambda self, name: (
-            getattr(  # Route late module reads to the context without a state copy.
-                MainEntrypoint.context,  # Use the single entry-point context as the state owner.
-                {
-                    "apisession": "apisession",  # Keep old readers compatible until issue #1703 moves them.
-                    "org_id": "org_id",  # Keep old readers compatible until issue #1703 moves them.
-                    "msp_privileges": "msp_privileges",  # Keep old readers compatible until issue #1703 moves them.
-                    "selected_msp": "selected_msp",  # Keep old readers compatible until issue #1703 moves them.
-                    "OUTPUT_FORMAT": "output_format",  # Keep old readers compatible until issue #1703 moves them.
-                    "PROGRESS_EMITTER": "progress_emitter",  # Keep old readers compatible until issue #1703 moves them.
-                    "FAST_MODE_ENABLED": "fast_mode_enabled",  # Keep old readers compatible until issue #1703.
-                }[name],
-            )
-            if name
-            in {
-                "apisession",  # Treat the old session name as a context view.
-                "org_id",  # Treat the old organization name as a context view.
-                "msp_privileges",  # Treat the old MSP grants name as a context view.
-                "selected_msp",  # Treat the old MSP selection name as a context view.
-                "OUTPUT_FORMAT",  # Treat the old output format name as a context view.
-                "PROGRESS_EMITTER",  # Treat the old progress emitter name as a context view.
-                "FAST_MODE_ENABLED",  # Treat the old fast-mode flag name as a context view.
-            }
-            else (_ for _ in ()).throw(AttributeError(name))
-        ),  # Keep normal AttributeError behavior for unknown names.
-        "__setattr__": lambda self, name, value: (
-            setattr(  # Route legacy writes to the context during old tests.
-                MainEntrypoint.context,  # Use the same owner for every legacy write.
-                {
-                    "apisession": "apisession",  # Keep monkeypatch-based tests pointed at the context.
-                    "org_id": "org_id",  # Keep monkeypatch-based tests pointed at the context.
-                    "msp_privileges": "msp_privileges",  # Keep monkeypatch-based tests pointed at the context.
-                    "selected_msp": "selected_msp",  # Keep monkeypatch-based tests pointed at the context.
-                    "OUTPUT_FORMAT": "output_format",  # Keep monkeypatch-based tests pointed at the context.
-                    "PROGRESS_EMITTER": "progress_emitter",  # Keep monkeypatch-based tests pointed at the context.
-                    "FAST_MODE_ENABLED": "fast_mode_enabled",  # Keep monkeypatch-based tests pointed at the context.
-                }[name],
-                value,
-            )
-            if name
-            in {
-                "apisession",  # Treat the old session name as a context write.
-                "org_id",  # Treat the old organization name as a context write.
-                "msp_privileges",  # Treat the old MSP grants name as a context write.
-                "selected_msp",  # Treat the old MSP selection name as a context write.
-                "OUTPUT_FORMAT",  # Treat the old output format name as a context write.
-                "PROGRESS_EMITTER",  # Treat the old progress emitter name as a context write.
-                "FAST_MODE_ENABLED",  # Treat the old fast-mode flag name as a context write.
-            }
-            else types.ModuleType.__setattr__(self, name, value)
-        ),  # Preserve normal module writes for all other names.
-        "__delattr__": lambda self, name: (
-            setattr(  # Route legacy deletes to a null context value for old tests.
-                MainEntrypoint.context,  # Use the same owner for every legacy delete.
-                {
-                    "apisession": "apisession",  # Keep monkeypatch delete pointed at the context.
-                    "org_id": "org_id",  # Keep monkeypatch delete pointed at the context.
-                    "msp_privileges": "msp_privileges",  # Keep monkeypatch delete pointed at the context.
-                    "selected_msp": "selected_msp",  # Keep monkeypatch delete pointed at the context.
-                    "OUTPUT_FORMAT": "output_format",  # Keep monkeypatch delete pointed at the context.
-                    "PROGRESS_EMITTER": "progress_emitter",  # Keep monkeypatch delete pointed at the context.
-                    "FAST_MODE_ENABLED": "fast_mode_enabled",  # Keep monkeypatch delete pointed at the context.
-                }[name],
-                None,
-            )
-            if name
-            in {
-                "apisession",  # Treat the old session delete as a context clear.
-                "org_id",  # Treat the old organization delete as a context clear.
-                "msp_privileges",  # Treat the old MSP grants delete as a context clear.
-                "selected_msp",  # Treat the old MSP selection delete as a context clear.
-                "OUTPUT_FORMAT",  # Treat the old output format delete as a context clear.
-                "PROGRESS_EMITTER",  # Treat the old progress emitter delete as a context clear.
-                "FAST_MODE_ENABLED",  # Treat the old fast-mode flag delete as a context clear.
-            }
-            else types.ModuleType.__delattr__(self, name)
-        ),  # Preserve normal module deletes for all other names.
-    },
-)  # Install the compatibility type without adding a module-level symbol.
+
+class _MistHelperContextModule(types.ModuleType):
+    """Keep module attribute access connected to the active application context."""
+
+    _context_names: ClassVar[dict[str, str]] = {  # Use one mapping for reads, writes, and deletes.
+        "apisession": "apisession",
+        "org_id": "org_id",
+        "msp_privileges": "msp_privileges",
+        "selected_msp": "selected_msp",
+        "OUTPUT_FORMAT": "output_format",
+        "PROGRESS_EMITTER": "progress_emitter",
+        "FAST_MODE_ENABLED": "fast_mode_enabled",
+    }
+
+    def __getattr__(self, name: str) -> object:
+        """Read context-owned state without copying it into the module dictionary."""
+        if name not in self._context_names:  # Preserve normal missing-attribute behavior.
+            raise AttributeError(name)  # Unknown module names must not become context attributes.
+        return getattr(MainEntrypoint.context, self._context_names[name])  # Read the active context at call time.
+
+    def __setattr__(self, name: str, value: object) -> None:
+        """Write context-owned state while preserving ordinary module attributes."""
+        if name in self._context_names:  # Keep legacy writes connected to the active context.
+            setattr(MainEntrypoint.context, self._context_names[name], value)  # Preserve the supplied value.
+        else:  # Non-context names belong to the normal module namespace.
+            super().__setattr__(name, value)  # Preserve monkeypatch and import behavior.
+
+    def __delattr__(self, name: str) -> None:
+        """Clear context-owned state or delete an ordinary module attribute."""
+        if name in self._context_names:  # Preserve the historical context-clear behavior.
+            setattr(MainEntrypoint.context, self._context_names[name], None)  # Keep the existing absence value.
+        else:  # Non-context names retain normal module deletion rules.
+            super().__delattr__(name)  # Raise AttributeError when the module name does not exist.
+
+
+sys.modules[__name__].__class__ = _MistHelperContextModule  # Install typed methods without changing the state owner.
 
 
 def _snapshot_session_globals_to_state() -> (
@@ -2892,7 +2893,7 @@ def _load_mistapi_module(current_mistapi: Any) -> Any:  # Preserve the existing 
     if current_mistapi is not None:  # Already loaded -- return immediately without re-importing
         return current_mistapi  # Pass through existing module reference
     try:
-        import mistapi as mistapi_fallback  # Attempt direct import as fallback when global not yet set
+        mistapi_fallback = importlib.import_module("mistapi")  # Load the same SDK package only when absent.
 
         logger.debug("Loaded mistapi via fallback import in initialize_mist_session")  # Confirm load path
         return mistapi_fallback  # Return newly imported module
@@ -3828,7 +3829,7 @@ def _build_org_ap_upgrader(
 
 def _ws_cmd_deps() -> WebSocketCmdDeps:  # Preserve the existing behavior during the compliance refactor.
     """Create WebSocket command dependency context for the dispatch table."""
-    import mistapi.api.v1.sites.devices as _site_devices
+    _site_devices = importlib.import_module("mistapi.api.v1.sites.devices")  # Resolve the deferred SDK endpoint module.
 
     return WebSocketCmdDeps(  # Preserve the existing behavior during the compliance refactor.
         apisession=MainEntrypoint.context.apisession,
@@ -3838,6 +3839,15 @@ def _ws_cmd_deps() -> WebSocketCmdDeps:  # Preserve the existing behavior during
         list_devices_fn=_site_devices.listSiteDevices,
         safe_input_fn=InputUtils.safe_input,
     )
+
+
+def _build_policy_api() -> PolicyApi:
+    """Require the authenticated session before constructing a firmware policy workflow."""
+    session = MainEntrypoint.context.apisession  # Snapshot the active session so the guard applies to the same value.
+    if session is None:  # Firmware policy menus cannot operate without an authenticated session.
+        logger.error("Cannot start a firmware policy workflow because the Mist API session is not initialized.")
+        raise RuntimeError("The Mist API session is not initialized.")  # Stop before constructing any request client.
+    return PolicyApi(session)  # Pass the checked session without a cast or a replacement session.
 
     # ============================================================================
     # AUDIT ANALYSIS OPS CLASS
@@ -4839,7 +4849,9 @@ menu_actions: dict[str, Any] = {
     ),
     "291": GlobalImportManager.MenuEntry(  # Use named fields for menu 291.
         menu_id="291",  # Store key for drift checks.
-        handler=lambda dry_run=None: RrmResetOperation.run(dry_run=dry_run),
+        handler=lambda dry_run=RRM_DRY_RUN_DEFAULT: RrmResetOperation.run(
+            dry_run=dry_run
+        ),  # Type the absent default without changing its value or the lazy operation lookup.
         title=(
             " DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture "
             "(Requires typing 'OPTIMIZE' or 'RESET' to confirm, dry-run unless --live-run is given)"
@@ -4961,13 +4973,13 @@ menu_actions: dict[str, Any] = {
     "305": GlobalImportManager.MenuEntry(  # Require typed confirmation and complete verified settings backups.
         menu_id="305",
         handler=lambda: PolicyMenu(
-            api=PolicyApi(MainEntrypoint.context.apisession),
+            api=_build_policy_api(),
             inputs=PolicyMenuInputs(
                 organization=ConfigUtils.get_cached_or_prompted_org_id,
                 selectors=(
                     (
-                        lambda: _build_org_ap_upgrader(org_id="")._select_msps(),
-                        lambda msp: _build_org_ap_upgrader(org_id="")._select_orgs_from_msp(msp),
+                        lambda: _build_org_ap_upgrader(org_id="").select_msps(),
+                        lambda msp: _build_org_ap_upgrader(org_id="").select_orgs_from_msp(msp),
                     )
                     if MainEntrypoint.context.msp_privileges
                     else None
@@ -4988,7 +5000,7 @@ menu_actions: dict[str, Any] = {
     "306": GlobalImportManager.MenuEntry(
         menu_id="306",
         handler=lambda: RestoreMenu(
-            api=PolicyApi(MainEntrypoint.context.apisession),
+            api=_build_policy_api(),
             inputs=PolicyMenuInputs(
                 organization=ConfigUtils.get_cached_or_prompted_org_id,
                 stopped=ConfigUtils.check_stop_signal,
@@ -5903,8 +5915,8 @@ menu_actions: dict[str, Any] = {
             fetch_sites_fn=APICoreFetchUtils.all_sites_with_limit,
             check_stop_fn=ConfigUtils.check_stop_signal,
             dry_run=getattr(globals().get("args", None), "dry_run", False),
-            select_msps_fn=lambda: _build_org_ap_upgrader(org_id="")._select_msps(),
-            select_orgs_fn=lambda msp: _build_org_ap_upgrader(org_id="")._select_orgs_from_msp(msp),
+            select_msps_fn=lambda: _build_org_ap_upgrader(org_id="").select_msps(),
+            select_orgs_fn=lambda msp: _build_org_ap_upgrader(org_id="").select_orgs_from_msp(msp),
         ),
         title=(
             "Site Auto-Upgrade Configuration - Configure AP auto-upgrade settings "
@@ -7425,8 +7437,9 @@ def _report_mib_result(
 def _report_tqdm_status() -> None:  # Preserve the existing behavior during the compliance refactor.
     """Log whether the real tqdm landed in the global namespace after deferred imports."""
     logger.debug("_report_tqdm_status: checking tqdm namespace availability")  # Trace tqdm status check
+    module_globals: dict[str, object] = globals()  # Treat arbitrary namespace entries as objects for logging.
     if "tqdm" in global_assignments:  # tqdm injection succeeded -- confirm availability for progress bars
-        logger.info("tqdm is available in global namespace: %s", type(globals().get("tqdm")))  # Log tqdm availability
+        logger.info("tqdm is available in global namespace: %s", type(module_globals.get("tqdm")))  # Log availability.
     else:  # tqdm missing from resolved assignments -- progress bars will be non-functional
         logger.warning(
             "tqdm was not found in global assignments - progress bars will not be functional"
@@ -7438,10 +7451,11 @@ def _apply_deferred_assignments() -> None:  # Preserve the existing behavior dur
     logger.debug("_apply_deferred_assignments: publishing deferred symbols")  # Trace publish
     if not global_assignments:  # No symbols resolved -- nothing to publish to namespace
         return  # Skip injection entirely when the import cycle produced no assignments
-    for var_name, var_value in global_assignments.items():  # Publish each resolved symbol
+    assignments: dict[str, object] = global_assignments  # Namespace publication needs no package-specific members.
+    for var_name, var_value in assignments.items():  # Publish each resolved symbol.
         globals()[var_name] = var_value  # Inject the imported symbol into module scope for global reuse
         if var_name == "tqdm" and var_value is not None:  # Real tqdm replacing the stub warrants an explicit note
-            logger.info("Successfully imported real tqdm in deferred mode: %s", type(var_value))  # Log tqdm override
+            logger.info("Successfully imported real tqdm in deferred mode: %s", type(var_value))  # Log tqdm override.
     logger.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
     _report_tqdm_status()  # Log whether tqdm is available in the global namespace
 
@@ -7452,7 +7466,7 @@ def _run_deferred_import_cycle() -> None:  # Preserve the existing behavior duri
     init_success, assignments = import_manager.initialize_all_imports()  # Run full deferred import cycle
     globals()["success"] = init_success  # Preserve the legacy module name without a global statement.
     globals()["global_assignments"] = assignments  # Preserve downstream reads without a global statement.
-    import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
+    import_manager.deferred_init_done = True  # Mark complete to prevent duplicate initialization.
     _apply_deferred_assignments()  # Inject resolved symbols and report tqdm availability
     if not init_success:  # Non-fatal warning: caller decides whether to abort on partial import failure
         logger.warning("Some required imports failed - functionality may be limited")  # Warn limited functionality
@@ -7461,7 +7475,7 @@ def _run_deferred_import_cycle() -> None:  # Preserve the existing behavior duri
 def _initialize_deferred_imports() -> None:  # Preserve the existing behavior during the compliance refactor.
     """Initialize deferred module imports if not already completed at startup."""
     logger.debug("_initialize_deferred_imports: checking deferred import status")  # Log entry
-    already_done = hasattr(import_manager, "_deferred_init_done")  # Detect whether deferred init already ran
+    already_done = hasattr(import_manager, "deferred_init_done")  # Preserve the existing attribute-presence check.
     if not success and not global_assignments and not already_done:  # First-time deferred init required
         _run_deferred_import_cycle()  # Run the import cycle and publish resolved symbols
     elif already_done:  # Already initialized -- skip to avoid duplicate work
@@ -7789,7 +7803,7 @@ def _run_full_dependency_init(
     init_success, assignments = import_manager.initialize_all_imports(skip_deps=False)  # Run full import cycle
     globals()["success"] = init_success  # Preserve the legacy module name without a global statement.
     globals()["global_assignments"] = assignments  # Preserve downstream reads without a global statement.
-    import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
+    import_manager.deferred_init_done = True  # Mark complete to prevent duplicate initialization.
     _apply_dependency_assignments(skip_mode=False)  # Publish resolved symbols into module namespace
     if not init_success and not args.test:  # Abort on critical failure unless running in test mode
         logger.error("Critical dependencies missing. Exiting.")  # Log fatal dependency failure before exit
@@ -7805,7 +7819,7 @@ def _run_skip_dependency_init() -> None:  # Preserve the existing behavior durin
     init_success, assignments = import_manager.initialize_all_imports(skip_deps=True)  # Minimal import cycle
     globals()["success"] = init_success  # Preserve the legacy module name without a global statement.
     globals()["global_assignments"] = assignments  # Preserve downstream reads without a global statement.
-    import_manager._deferred_init_done = True  # Mark complete to prevent duplicate initialization
+    import_manager.deferred_init_done = True  # Mark complete to prevent duplicate initialization.
     _apply_dependency_assignments(skip_mode=True)  # Publish whatever symbols resolved even in skip mode
 
 
@@ -7814,7 +7828,7 @@ def _initialize_dependencies(
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Initialize deferred module imports based on --skip-deps flag, aborting on critical failure."""
     logger.debug("_initialize_dependencies: checking if dependency initialization is needed")  # Log entry
-    already_done = hasattr(import_manager, "_deferred_init_done")  # Detect whether deferred init already ran
+    already_done = hasattr(import_manager, "deferred_init_done")  # Preserve the existing attribute-presence check.
     if not _initialize_imports_now and not already_done:  # First-time deferred init required
         if args.skip_deps:  # Minimal path when the caller passed --skip-deps
             _run_skip_dependency_init()  # Run the minimal import cycle for core functionality only
@@ -7968,7 +7982,7 @@ def _ensure_tui_api_session() -> None:  # Preserve the existing behavior during 
 def _silence_console_handlers_for_tui() -> None:  # Preserve the existing behavior during the compliance refactor.
     """Remove non-file console handlers from the root logger so they do not disrupt the Rich UI."""
     root_logger = logging.getLogger()  # Access root logger to modify handlers.
-    console_handlers = [  # Identify console handlers to suppress during TUI.
+    console_handlers: list[logging.Handler] = [  # Retain the common handler contract after stream-type narrowing.
         h
         for h in root_logger.handlers
         if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)

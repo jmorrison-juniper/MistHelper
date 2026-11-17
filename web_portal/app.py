@@ -36,7 +36,7 @@ class WebPortalApp:
     @staticmethod
     def create_app(
         apisession: Any | None,
-        menu_actions: dict,
+        menu_actions: dict[str, Any],
         org_id: str | None,
     ) -> Flask:
         """Create and configure the Flask application instance."""
@@ -147,7 +147,7 @@ class WebPortalApp:
     def _inject_dependencies(
         app: Flask,
         apisession: Any | None,
-        menu_actions: dict,
+        menu_actions: dict[str, Any],
         org_id: str | None,
     ) -> None:
         """Store shared MistHelper objects on app.config."""
