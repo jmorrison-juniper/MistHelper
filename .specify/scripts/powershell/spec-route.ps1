@@ -63,6 +63,9 @@ function Get-SpecTimestampSeconds {
     $label = $Name.Substring(0, 15)
     $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
     $instant = [DateTimeOffset]::ParseExact($label, 'yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture, $styles)
+    if ($instant.ToString('yyyyMMdd-HHmmss', [Globalization.CultureInfo]::InvariantCulture) -cne $label) {
+        throw "Invalid timestamp feature name: $Name"
+    }
     $seconds = $instant.ToUnixTimeSeconds()
     if ($seconds -lt 0) {
         throw "Timestamp feature must be dated 1970 or later: $Name"
