@@ -1,13 +1,13 @@
 """RunInteractiveTestManager extracted from MistHelper.
 
 Runs the interactive-safe menu-option test flow used by ``--testinteractive``
-mode. Delegates runner construction to the ``_build_interactive_test_runner``
+mode. Delegates runner construction to the ``build_interactive_test_runner``
 helper that remains in MistHelper and preserves module-level ``org_id``
 mutation semantics through late-bound getattr/setattr closures on the
 MistHelper module.
 
 Runtime dependencies (``org_id`` module attribute, ``menu_actions`` global,
-``InteractiveTestRunner`` class, and the ``_build_interactive_test_runner``
+``InteractiveTestRunner`` class, and the ``build_interactive_test_runner``
 helper) are still owned by MistHelper.py. They are resolved lazily via
 ``importlib.import_module`` so the extracted module import-graph stays flat
 and monkeypatched attributes are honoured in tests.
@@ -45,7 +45,7 @@ class RunInteractiveTestManager:  # Manager class owning the run_interactive_tes
 
     Owns the top-level orchestration originally defined as
     ``run_interactive_test()`` in MistHelper.py. Delegates runner
-    construction to ``_build_interactive_test_runner`` in MistHelper and
+    construction to ``build_interactive_test_runner`` in MistHelper and
     preserves the module-level ``org_id`` mutation contract using
     getattr/setattr closures on the MistHelper module handle.
 
@@ -83,7 +83,7 @@ class RunInteractiveTestManager:  # Manager class owning the run_interactive_tes
             bool: Runner outcome — True if all tested options passed, False otherwise.
         """
         logger.info("Routing run_interactive_test to InteractiveTestRunner")  # Preserved original entry log
-        runner = self._misthelper()._build_interactive_test_runner(  # Build runner with context closures
+        runner = self._misthelper().build_interactive_test_runner(  # Build runner with context closures
             self._get_org_id, self._set_org_id
         )
         logger.info("Executing interactive test runner")  # Preserved log before invocation

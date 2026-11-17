@@ -113,7 +113,7 @@ def test_main_entrypoint_parses_command_line_once(monkeypatch: pytest.MonkeyPatc
         stored_namespaces.append(bootstrap.parsed_args)  # WHY: Later startup must reuse this object.
         raise _StartupReachedError  # WHY: Skip logging, dependency, and session work in this unit test.
 
-    monkeypatch.setattr("MistHelper._build_argument_parser", lambda: parser)  # WHY: Use the parser double.
+    monkeypatch.setattr("MistHelper.build_argument_parser", lambda: parser)  # WHY: Use the public parser double.
     monkeypatch.setattr(  # WHY: Stop the bootstrap at its first side-effect boundary.
         "src.foundation.support.refactors.main_entrypoint.ApplicationBootstrap._run_common_startup", stop_at_startup
     )

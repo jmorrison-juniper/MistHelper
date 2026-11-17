@@ -3,9 +3,12 @@
 from __future__ import annotations  # WHY: keep annotations cheap on Python 3.13.
 
 import ast  # WHY: inspect declarations without importing implementation details.
+import builtins
 import logging  # WHY: action logs help diagnose unit-test failures.
+import sys
 from pathlib import Path  # WHY: build paths without hardcoded separators.
 from types import SimpleNamespace  # WHY: create a small fake requests session.
+from typing import Any
 from unittest.mock import MagicMock  # WHY: isolate bootstrap side effects.
 
 import pytest  # WHY: use monkeypatch and tmp_path fixtures.
@@ -100,9 +103,9 @@ def test_second_web_bootstrap_call_uses_separate_context(monkeypatch: pytest.Mon
     logger.info("Patching bootstrap side effects for a two-call check")  # WHY: no file, network, or dependency work.
     startup = MagicMock(name="startup")  # WHY: count common startup calls.
     monkeypatch.setattr(ApplicationBootstrap, "_run_common_startup", startup)  # WHY: isolate bootstrap behavior.
-    monkeypatch.setattr(MistHelper, "_setup_runtime_flags", MagicMock(name="flags"), raising=False)  # WHY: avoid flags.
+    monkeypatch.setattr(MistHelper, "setup_runtime_flags", MagicMock(name="flags"), raising=False)  # WHY: avoid flags.
     dependency_mock = MagicMock(name="deps")  # WHY: avoid real dependency imports during the context test.
-    monkeypatch.setattr(MistHelper, "_initialize_dependencies", dependency_mock, raising=False)  # WHY: no imports.
+    monkeypatch.setattr(MistHelper, "initialize_dependencies", dependency_mock, raising=False)  # WHY: no imports.
     first = ApplicationBootstrap(parse_cli=False)  # WHY: build the first web bootstrap.
     second = ApplicationBootstrap(parse_cli=False)  # WHY: build the second web bootstrap.
     first.context.apisession = object()  # WHY: a session on one bootstrap must not leak to another.
@@ -211,25 +214,43 @@ class TestOptionalSdkLoading:
 
     def test_existing_sdk_does_not_import_again(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """An existing SDK module must bypass the optional import operation."""
-        importer = MagicMock(name="import_module")  # Observe import attempts without loading packages.
-        monkeypatch.setattr(MistHelper.importlib, "import_module", importer)  # Isolate the package boundary.
+        importer = MagicMock(name="__import__")  # Observe import attempts without loading packages.
+        monkeypatch.setattr(builtins, "__import__", importer)  # Isolate the static import boundary.
         sdk = object()  # Represent a previously supplied SDK module without starting a session.
-        assert MistHelper._load_mistapi_module(sdk) is sdk  # Preserve the supplied module identity.
+        assert MistHelper.load_mistapi_module(sdk) is sdk  # Preserve the supplied module identity.
         importer.assert_not_called()  # An existing module must avoid import side effects.
 
     def test_available_sdk_is_loaded_by_name(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A missing SDK handle must resolve the same package through the optional importer."""
-        importer = MagicMock(name="import_module")  # Keep package discovery local and deterministic.
-        monkeypatch.setattr(MistHelper.importlib, "import_module", importer)  # Replace package discovery only.
-        assert MistHelper._load_mistapi_module(None) is importer.return_value  # Return the resolved package identity.
-        importer.assert_called_once_with("mistapi")  # Do not change the required package name.
+        sdk = SimpleNamespace(APISession=object())  # Supply an SDK module without network or credentials.
+        monkeypatch.setitem(sys.modules, "mistapi", sdk)  # Exercise Python's normal static import behavior.
+        assert MistHelper.load_mistapi_module(None) is sdk  # Return the exact module from the import cache.
 
     def test_absent_sdk_retains_explicit_failure(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         """An unavailable SDK must retain the absence result and its operator error."""
-        importer = MagicMock(side_effect=ImportError("optional SDK unavailable"))  # Model a missing package.
-        monkeypatch.setattr(MistHelper.importlib, "import_module", importer)  # Prevent any real import or request.
-        assert MistHelper._load_mistapi_module(None) is None  # Preserve the existing failure signal.
-        importer.assert_called_once_with("mistapi")  # Fail only at the intended SDK boundary.
-        assert "Cannot import mistapi: optional SDK unavailable" in caplog.text  # Preserve the visible cause.
+        monkeypatch.setitem(sys.modules, "mistapi", None)  # Python treats this cache entry as a failed import.
+        assert MistHelper.load_mistapi_module(None) is None  # Preserve the existing failure signal.
+        assert "Cannot import mistapi:" in caplog.text  # Preserve the visible cause.
+        assert "None in sys.modules" in caplog.text  # Confirm failure came from the static import boundary.
+
+
+def test_wsgi_menu_loader_uses_public_timeout_contract() -> None:
+    """Keep the live menu path without executing WSGI authentication at import time."""
+    source = Path(MistHelper.__file__).with_name("wsgi.py").read_text(encoding="utf-8")
+    function = next(
+        node
+        for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == "_load_menu_actions"
+    )
+    timeout = MagicMock(name="configure_session_timeout")
+    actions = {"safe-menu": object()}
+    host = SimpleNamespace(configure_session_timeout=timeout, menu_actions=actions)
+    namespace: dict[str, Any] = {"Any": Any, "_MISTHELPER_MODULE": host, "logger": MagicMock(), "os": SimpleNamespace()}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "wsgi.py", "exec"), namespace)
+    session = object()
+    result = namespace["_load_menu_actions"](session, "")
+    timeout.assert_called_once_with(session)
+    assert host.apisession is session
+    assert result is actions
