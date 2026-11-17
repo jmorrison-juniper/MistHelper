@@ -33,6 +33,9 @@ class CorpusContentIndex:
         sizes = self._sizes()  # Build the size groups on first use.
         digest = hashlib.sha256(payload).hexdigest()  # Identity of the fetched bytes.
         known = self._by_digest.get(digest)  # A digest seen earlier in this run.
+        if known is not None and not known.exists():  # Reclassification may have moved the file.
+            self._refresh_size(len(payload))  # Find its new path among equal-size files.
+            known = self._by_digest.get(digest)  # Read the refreshed canonical path.
         if known is not None and known.exists():  # The canonical file is still present.
             return known  # Reuse it, so no second file is written.
         for path in sizes.get(len(payload), []):  # Only equal-size files can match.
@@ -44,6 +47,28 @@ class CorpusContentIndex:
             _LOGGER.debug("Found identical content at %s", known.name)  # Trace the match.
             return known  # The first sorted path is the canonical document.
         return None  # No stored file holds these bytes.
+
+    def _refresh_size(self, size: int) -> None:
+        """Refresh one size group after its canonical path disappears."""
+        sizes = self._sizes()  # Keep the current index mapping.
+        previous_paths = set(sizes.get(size, []))  # Track paths that may have moved.
+        _LOGGER.info("Refreshing stored PDFs of size %d under %s", size, self._root)  # Before scan.
+        for path in previous_paths:  # Remove stale hash state for this size group.
+            self._hashed.discard(path)  # Allow each current path to be checked again.
+        self._by_digest = {  # Remove cached matches whose path no longer exists.
+            digest: path  # Preserve the cached content identity.
+            for digest, path in self._by_digest.items()  # Inspect every cached match.
+            if path not in previous_paths or path.exists()  # Keep other and live paths.
+        }
+        current_paths = [  # Collect current candidates in stable order.
+            path  # Preserve the current file path.
+            for path in sorted(self._root.rglob("*.pdf"))  # Keep canonical selection repeatable.
+            if path.is_file() and path.stat().st_size == size  # Exclude other sizes and nonfiles.
+        ]
+        sizes[size] = current_paths  # Replace the stale size group with current paths.
+        for path in current_paths:  # Refresh each candidate digest.
+            self._remember(path, self._digest_file(path))  # Restore valid canonical matches.
+        _LOGGER.debug("Refreshed %d PDF candidates of size %d", len(current_paths), size)  # After scan.
 
     def register(self, path: Path, payload: bytes) -> None:
         """Record a newly written file as the canonical copy of its bytes."""
