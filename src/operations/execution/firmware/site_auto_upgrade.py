@@ -10,6 +10,7 @@ Extracted from MistHelper.py for maintainability.
 from __future__ import annotations  # WHY: PEP 604 union syntax and forward refs.
 
 import logging  # WHY: structured action-log info/debug lines per project standards.
+from collections.abc import Callable  # Type the MSP selector supplied by the entry point.
 from dataclasses import dataclass  # WHY: frozen slots kw_only config record.
 from typing import Any  # WHY: duck-typed DI callables and mistapi session.
 
@@ -167,7 +168,7 @@ class SiteAutoUpgradeConfigurator:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def execute(**cfg: Any) -> None:
+    def execute(*, select_orgs_fn: Callable[[dict[str, Any]], list[Any]] | None = None, **cfg: Any) -> None:
         """Entry point for menu system - checks MSP privileges."""
         logger.info("Starting Site Auto-Upgrade Configuration workflow")  # WHY: action-log workflow start.
         if cfg.get("dry_run"):  # WHY: advertise dry-run so operator is not surprised.
@@ -181,7 +182,7 @@ class SiteAutoUpgradeConfigurator:
         )
         msp_deps = SiteAutoUpgradeMspDeps(  # WHY: bundle 2 MSP-only extras.
             select_msps_fn=cfg.get("select_msps_fn"),
-            select_orgs_fn=cfg.get("select_orgs_fn"),
+            select_orgs_fn=select_orgs_fn,
         )
         SiteAutoUpgradeConfigurator._dispatch_mode(  # WHY: delegate MSP-vs-single-org decision to helper.
             core_deps, msp_deps, cfg.get("msp_privileges") or [], cfg["get_org_id_fn"]
