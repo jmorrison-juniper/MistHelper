@@ -30,14 +30,14 @@
 **Independent test**: Focused mocked regressions and symbol comparison pass.
 
 - [x] T011 [US2] Add focused edge and integration cases in the established entry-point test tree under `tests/unit/`. (delivered: tests/unit/refactors/test_app_context_session_state.py)
-- [ ] T012 [US2] Run applicable tests and standard gates, then record exact outcomes in `analysis.md`.
+- [x] T012 [US2] Run applicable tests and standard gates, then record exact outcomes in `analysis.md`. (delivered: analysis.md)
 - [x] T013 [US2] Compare module-level symbols against the base and record results in `analysis.md`. (delivered: analysis.md)
 
 ## Phase 5: Completion
 
 - [x] T014 Record unrelated defects separately and retain their issue references in `analysis.md`. (delivered: analysis.md)
 - [x] T015 Update the unique release note in `changelog.d/issue-4758-strict-pyright-repairs.md`. (delivered: changelog.d/issue-4758-strict-pyright-repairs.md)
-- [ ] T016 Commit verified local work and record the commit identifier without publication.
+- [x] T016 Commit verified local work and record the commit identifier without publication. (delivered: analysis.md)
 
 ## Dependencies and execution order
 
