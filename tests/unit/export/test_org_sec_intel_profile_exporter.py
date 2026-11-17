@@ -189,7 +189,8 @@ class TestProfileMenu:
         ):
             OrgSecIntelProfileExporter.profile()
 
-        mist_helper.DataExporter.write_with_format_selection.assert_called_once()
+        writer = mist_helper.DataExporter.write_with_format_selection
+        assert [call.args[0] for call in writer.call_args_list] == [[_profile()]]
 
     def test_no_org_returns_early(self, mist_helper: MagicMock) -> None:
         """A cancelled org prompt must not call the Mist API."""
