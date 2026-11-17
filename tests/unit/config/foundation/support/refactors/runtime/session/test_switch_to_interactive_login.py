@@ -13,7 +13,7 @@ Covers every branch of ``SwitchToInteractiveLoginManager`` plus the module-level
   interactive login fails and is rolled back, (c) interactive login succeeds
   and finalization runs.
 - ``_attempt_login_and_finalize``: reads old_session + old_org_id, forwards to
-  the rollback helper, and invokes ``_handle_interactive_login_success`` on
+  the rollback helper, and invokes ``handle_interactive_login_success`` on
   success only.
 
 Every MistHelper attribute the manager touches is monkeypatched onto the
@@ -43,18 +43,18 @@ def wired_misthelper(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     binding + call ordering. Each helper is a ``MagicMock`` (no ``spec=`` here
     because the underlying targets are free functions rather than a class).
     """
-    print_header = MagicMock(name="_print_switch_login_header")  # WHY: banner helper.
-    confirm = MagicMock(name="_prompt_switch_login_confirmation")  # WHY: user Y/N prompt.
-    attempt_login = MagicMock(name="_attempt_interactive_login_with_rollback")  # WHY: rollback-guarded login.
-    handle_success = MagicMock(name="_handle_interactive_login_success")  # WHY: post-login finalization.
+    print_header = MagicMock(name="print_switch_login_header")  # WHY: banner helper.
+    confirm = MagicMock(name="prompt_switch_login_confirmation")  # WHY: user Y/N prompt.
+    attempt_login = MagicMock(name="attempt_interactive_login_with_rollback")  # WHY: rollback-guarded login.
+    handle_success = MagicMock(name="handle_interactive_login_success")  # WHY: post-login finalization.
 
-    monkeypatch.setattr("MistHelper._print_switch_login_header", print_header, raising=False)  # WHY: proxy lookup.
-    monkeypatch.setattr("MistHelper._prompt_switch_login_confirmation", confirm, raising=False)  # WHY: proxy lookup.
+    monkeypatch.setattr("MistHelper.print_switch_login_header", print_header, raising=False)  # WHY: proxy lookup.
+    monkeypatch.setattr("MistHelper.prompt_switch_login_confirmation", confirm, raising=False)  # WHY: proxy lookup.
     monkeypatch.setattr(  # WHY: proxy lookup.
-        "MistHelper._attempt_interactive_login_with_rollback", attempt_login, raising=False
+        "MistHelper.attempt_interactive_login_with_rollback", attempt_login, raising=False
     )
     monkeypatch.setattr(  # WHY: proxy lookup.
-        "MistHelper._handle_interactive_login_success", handle_success, raising=False
+        "MistHelper.handle_interactive_login_success", handle_success, raising=False
     )
 
     # WHY: preserve old session/org_id sentinels so we can assert they get forwarded to rollback.
@@ -66,10 +66,10 @@ def wired_misthelper(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr("MistHelper.org_id", old_org, raising=False)  # WHY: read by _attempt_login_and_finalize.
 
     return {
-        "_print_switch_login_header": print_header,
-        "_prompt_switch_login_confirmation": confirm,
-        "_attempt_interactive_login_with_rollback": attempt_login,
-        "_handle_interactive_login_success": handle_success,
+        "print_switch_login_header": print_header,
+        "prompt_switch_login_confirmation": confirm,
+        "attempt_interactive_login_with_rollback": attempt_login,
+        "handle_interactive_login_success": handle_success,
         "old_session": old_session,
         "old_org_id": old_org,
     }
@@ -115,57 +115,57 @@ class TestSwitchToInteractiveLoginManagerRun:
 
     def test_run_declined_returns_true_and_skips_login(self, wired_misthelper: dict[str, Any]) -> None:
         """When the confirmation prompt returns False, no login attempt is made."""
-        wired_misthelper["_prompt_switch_login_confirmation"].return_value = False  # WHY: user cancelled.
+        wired_misthelper["prompt_switch_login_confirmation"].return_value = False  # WHY: user cancelled.
         manager = SwitchToInteractiveLoginManager()  # WHY: fresh manager under monkeypatched module.
 
         result = manager.run()  # WHY: exercise the decline branch.
 
         assert result is True  # WHY: always True so menu loop continues.
-        wired_misthelper["_print_switch_login_header"].assert_called_once_with()  # WHY: banner shown first.
-        wired_misthelper["_prompt_switch_login_confirmation"].assert_called_once_with()  # WHY: prompt fired.
+        wired_misthelper["print_switch_login_header"].assert_called_once_with()  # WHY: banner shown first.
+        wired_misthelper["prompt_switch_login_confirmation"].assert_called_once_with()  # WHY: prompt fired.
         # WHY: no downstream login attempt or finalization on decline.
-        wired_misthelper["_attempt_interactive_login_with_rollback"].assert_not_called()
-        wired_misthelper["_handle_interactive_login_success"].assert_not_called()
+        wired_misthelper["attempt_interactive_login_with_rollback"].assert_not_called()
+        wired_misthelper["handle_interactive_login_success"].assert_not_called()
 
     def test_run_login_failed_rolls_back_and_returns_true(self, wired_misthelper: dict[str, Any]) -> None:
         """When rollback-guarded login returns False, finalization is skipped."""
-        wired_misthelper["_prompt_switch_login_confirmation"].return_value = True  # WHY: user consented.
-        wired_misthelper["_attempt_interactive_login_with_rollback"].return_value = False  # WHY: login failed.
+        wired_misthelper["prompt_switch_login_confirmation"].return_value = True  # WHY: user consented.
+        wired_misthelper["attempt_interactive_login_with_rollback"].return_value = False  # WHY: login failed.
         manager = SwitchToInteractiveLoginManager()  # WHY: fresh manager.
 
         result = manager.run()  # WHY: exercise the failure branch.
 
         assert result is True  # WHY: run always returns True.
         # WHY: rollback helper called with the stashed old session + org id.
-        wired_misthelper["_attempt_interactive_login_with_rollback"].assert_called_once_with(
+        wired_misthelper["attempt_interactive_login_with_rollback"].assert_called_once_with(
             wired_misthelper["old_session"], wired_misthelper["old_org_id"]
         )
         # WHY: finalization skipped on failure.
-        wired_misthelper["_handle_interactive_login_success"].assert_not_called()
+        wired_misthelper["handle_interactive_login_success"].assert_not_called()
 
     def test_run_login_succeeded_invokes_finalization(self, wired_misthelper: dict[str, Any]) -> None:
         """When rollback-guarded login returns True, finalization runs exactly once."""
-        wired_misthelper["_prompt_switch_login_confirmation"].return_value = True  # WHY: user consented.
-        wired_misthelper["_attempt_interactive_login_with_rollback"].return_value = True  # WHY: login succeeded.
+        wired_misthelper["prompt_switch_login_confirmation"].return_value = True  # WHY: user consented.
+        wired_misthelper["attempt_interactive_login_with_rollback"].return_value = True  # WHY: login succeeded.
         manager = SwitchToInteractiveLoginManager()  # WHY: fresh manager.
 
         result = manager.run()  # WHY: exercise the success branch.
 
         assert result is True  # WHY: run always returns True.
-        wired_misthelper["_handle_interactive_login_success"].assert_called_once_with()  # WHY: finalization ran.
+        wired_misthelper["handle_interactive_login_success"].assert_called_once_with()  # WHY: finalization ran.
 
     def test_run_calls_ordered_pipeline(self, wired_misthelper: dict[str, Any]) -> None:
         """Pipeline order: banner -> confirm -> attempt -> handle_success on happy path."""
-        wired_misthelper["_prompt_switch_login_confirmation"].return_value = True  # WHY: happy path.
-        wired_misthelper["_attempt_interactive_login_with_rollback"].return_value = True  # WHY: happy path.
+        wired_misthelper["prompt_switch_login_confirmation"].return_value = True  # WHY: happy path.
+        wired_misthelper["attempt_interactive_login_with_rollback"].return_value = True  # WHY: happy path.
         manager = SwitchToInteractiveLoginManager()  # WHY: fresh manager.
 
         # WHY: use a call-order manager so we can assert relative ordering across mocks.
         order_manager = MagicMock()  # WHY: attach child mocks + inspect call order.
-        order_manager.attach_mock(wired_misthelper["_print_switch_login_header"], "banner")
-        order_manager.attach_mock(wired_misthelper["_prompt_switch_login_confirmation"], "confirm")
-        order_manager.attach_mock(wired_misthelper["_attempt_interactive_login_with_rollback"], "attempt")
-        order_manager.attach_mock(wired_misthelper["_handle_interactive_login_success"], "finalize")
+        order_manager.attach_mock(wired_misthelper["print_switch_login_header"], "banner")
+        order_manager.attach_mock(wired_misthelper["prompt_switch_login_confirmation"], "confirm")
+        order_manager.attach_mock(wired_misthelper["attempt_interactive_login_with_rollback"], "attempt")
+        order_manager.attach_mock(wired_misthelper["handle_interactive_login_success"], "finalize")
 
         manager.run()  # WHY: exercise the full pipeline.
 
@@ -180,8 +180,8 @@ class TestSwitchToInteractiveLoginManagerRun:
         self, wired_misthelper: dict[str, Any], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """apisession + org_id are read at call time, honoring late rebinding after construction."""
-        wired_misthelper["_prompt_switch_login_confirmation"].return_value = True  # WHY: reach rollback branch.
-        wired_misthelper["_attempt_interactive_login_with_rollback"].return_value = False  # WHY: keeps test minimal.
+        wired_misthelper["prompt_switch_login_confirmation"].return_value = True  # WHY: reach rollback branch.
+        wired_misthelper["attempt_interactive_login_with_rollback"].return_value = False  # WHY: keeps test minimal.
         manager = SwitchToInteractiveLoginManager()  # WHY: construct before rebinding.
         # WHY: rebind the module attributes AFTER construction.
         new_session = MagicMock(name="new_apisession")
@@ -190,6 +190,6 @@ class TestSwitchToInteractiveLoginManagerRun:
 
         manager.run()  # WHY: exercise call-time attribute lookup.
 
-        wired_misthelper["_attempt_interactive_login_with_rollback"].assert_called_once_with(
+        wired_misthelper["attempt_interactive_login_with_rollback"].assert_called_once_with(
             new_session, "new-org-id"
         )  # WHY: rebound values are picked up at call time (getattr fallback).

@@ -1,0 +1,9 @@
+{
+  "include": ["../../../../../../../../../../../../../MistHelper.py"],
+  "extraPaths": ["../../../../../../../../../../../../.."],
+  "venvPath": "../../../../../../../../../../../../..",
+  "venv": ".venv",
+  "stubPath": "third_party",
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.15"
+}
