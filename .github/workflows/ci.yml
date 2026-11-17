@@ -622,6 +622,24 @@ jobs:
           fi
           test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json "${scope[@]}"
 
+  dependency_lock:
+    name: "Dependency lock and exports"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Check dependency lock
+        run: uv lock --check
+      - name: Check requirements exports
+        run: python -m pytest -s -q tests/guardrails/test_dependency_export.py
+
   # ──────────────────────────────────────────────────────────────
   # PROJECT-SPECIFIC (remove or adapt when copying to other repos)
   # ──────────────────────────────────────────────────────────────
@@ -1278,6 +1296,7 @@ jobs:
       - pydocstyle
       - interrogate
       - test_quality_gate
+      - dependency_lock
       - codeql_register_check
       - ops_portal
       - ops_platform_pytest
