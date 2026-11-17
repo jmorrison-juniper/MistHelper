@@ -1055,7 +1055,7 @@ flowchart LR
 ## Menu 291
 
 - Title: DESTRUCTIVE: Optimize or reset site RRM with before and after plan capture (Requires typing 'OPTIMIZE' or 'RESET' to confirm, dry-run unless --live-run is given)
-- Handler: `lambda dry_run=None: RrmResetOperation.run(dry_run=dry_run)`
+- Handler: `lambda dry_run=RRM_DRY_RUN_DEFAULT: RrmResetOperation.run(dry_run=dry_run)`
 - Shared helpers: [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`PromptUtils`](README.md#promptutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver), [`SourceDependencyResolverService`](README.md#sourcedependencyresolverservice)
 - Endpoints: 2
 
@@ -1113,7 +1113,7 @@ The map finds no Mist API request for this menu option.
 ## Menu 305
 
 - Title: DESTRUCTIVE: Organization Auto-Upgrade Policy - Set model versions and restore all site inheritance (Requires typing 'CONFIGURE', verified full backups, supports --dry-run)
-- Handler: `lambda: PolicyMenu(api=PolicyApi(MainEntrypoint.context.apisession), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, selector...`
+- Handler: `lambda: PolicyMenu(api=_build_policy_api(), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, selectors=(lambda: _build_org_ap_...`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`RateLimitingUtils`](README.md#ratelimitingutils), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
 - Endpoints: 11
 
@@ -1154,7 +1154,7 @@ flowchart LR
 ## Menu 306
 
 - Title: DESTRUCTIVE: Restore organization and site firmware policies from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run)
-- Handler: `lambda: RestoreMenu(api=PolicyApi(MainEntrypoint.context.apisession), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, stopped...`
+- Handler: `lambda: RestoreMenu(api=_build_policy_api(), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, stopped=ConfigUtils.check_stop_s...`
 - Shared helpers: [`ConfigUtils`](README.md#configutils), [`InputUtils`](README.md#inpututils), [`MainEntrypoint`](README.md#mainentrypoint), [`RateLimitingUtils`](README.md#ratelimitingutils)
 - Endpoints: 7
 
