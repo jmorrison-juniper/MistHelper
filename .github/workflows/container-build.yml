@@ -10,6 +10,7 @@ on:
       - 'Dockerfile'
       - '__init__.py'
       - 'pyproject.toml'
+      - 'uv.lock'
       - 'wsgi.py'
       - 'wsgi_capture.py'
       - 'src/**'
@@ -87,16 +88,14 @@ jobs:
         with:
           python-version: '3.15'
 
-      - name: Install test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          # The unit tests import the external devtools package, which requirements-dev.txt pins.
-          pip install -r requirements-dev.txt
+      - name: Install pinned UV
+        run: python -m pip install uv==0.13.7  # Use the package manager version declared in pyproject.toml.
+
+      - name: Sync locked test dependencies
+        run: uv sync --locked --extra dev --no-install-project  # Use the committed lock without installing the project.
 
       - name: Run unit tests
-        run: |
-          python -m pytest tests/unit/ -v
+        run: uv run --locked --no-sync python -m pytest tests/unit/ -v  # Run tests with the synchronized interpreter.
 
   # Third job: Build and push container (only if tests pass). The shared
   # workflow in misthelper-devtools sets up QEMU and Buildx, logs in to GHCR,
