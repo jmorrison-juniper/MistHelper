@@ -41,7 +41,7 @@ class TestSystematicTestUnregisteredSemantics:
         """The synthetic key lands in the unsafe/skip list, never the safe (auto-run) list."""
         _install_synthetic_option(monkeypatch)
 
-        safe_options, unsafe_list, all_options = MistHelper._build_systematic_test_options()
+        safe_options, unsafe_list, all_options = MistHelper.build_systematic_test_options()
 
         assert _SYNTHETIC_KEY in all_options, "Synthetic option must be present in the full option set"
         assert _SYNTHETIC_KEY not in safe_options, "Unregistered option must never be auto-run in --test"

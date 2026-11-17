@@ -4,9 +4,18 @@
 
 This is a partial repair, not a strict-clean completion.
 The strict baseline has 108 errors.
-The candidate has 10 errors.
+The corrected candidate has 19 errors.
 Both reports analyze exactly one file and report zero warnings.
-All ten residual errors require two reserved source contracts.
+Ten errors require two reserved source contracts.
+Nine errors name preserved declarations without verified production callers.
+Those nine errors are not ownership blockers.
+The original ten-error candidate used rejected export and import approaches.
+The historical sections below retain that evidence, not an accepted completion claim.
+The [correction record](design/contracts/correction.md) gives the current commands, call paths, and residual map.
+The corrective artifact review maps all twelve requirements and success criteria to the sixteen tasks.
+Four tasks remain incomplete.
+SC-003 now records the requested public helper renames and unchanged explicit exports.
+Its previous literal name-preservation rule conflicted with that approved revision.
 
 The initial and refreshed `origin/main` revision is `b7a18b7ead7b1de5882bcd288203c015b1eef792`.
 The worktree HEAD matched that revision before edits.
@@ -19,7 +28,7 @@ No push, pull request, merge, or automatic merge is authorized.
 | Requirement | Evidence | Result |
 | - | - | - |
 | FR-001 | Live main comparison, locked bootstrap, baseline JSON | Complete |
-| FR-002 | Candidate strict report | Blocked: ten errors |
+| FR-002 | Corrected strict report | Incomplete: nineteen errors |
 | FR-003 | Focused state, import, selector, admission, and dry-run regressions | Complete for owned changes |
 | FR-004 | Source review, preserved declarations, unchanged rules | Complete |
 | FR-005 | Narrow portal handoff, ARP ancestry, held-file comparison | Partial: API and cache handoffs unavailable |
@@ -27,10 +36,12 @@ No push, pull request, merge, or automatic merge is authorized.
 | FR-007 | Separate issues #4825 and #4826 | Complete |
 | FR-008 | Local implementation commit and verification records | Complete |
 
-T003, T008, and T010 remain unchecked because ownership blocks completion.
+T003 and T008 remain unchecked because ownership blocks their completion.
+T007 remains unchecked for preserved declarations.
+T010 remains unchecked for both diagnostic groups.
 Do not treat their dependency status as a released hold.
 
-## Baseline and reports
+## Historical baseline and rejected candidate reports
 
 The environment uses Python 3.15.2, locked dependencies, Pyright 1.1.414, and PowerShell 7.7.0.
 The managed route came from `create-new-feature.ps1 -Json -DryRun -Number 4758 -ShortName strict-pyright-repairs`.
@@ -92,7 +103,7 @@ It is not represented as a second baseline execution.
 | reportConstantRedefinition | 1 |
 | reportPossiblyUnboundVariable | 1 |
 
-## Residual diagnostic map
+## Historical rejected-candidate diagnostic map
 
 Locations below refer to the final candidate `MistHelper.py`.
 
@@ -151,9 +162,9 @@ Its credential behavior and body remain unchanged.
 The held ARP test file remains unchanged.
 Issue #2861 remains open.
 
-The explicit export contract records the existing dynamically accessed helper names.
+The rejected candidate added private helper names to the explicit export contract.
+The correction removes all 44 additions and restores the historical snapshot.
 No helper implementation was deleted.
-The historical export snapshot contains the same additions.
 The named context module methods preserve all seven context fields.
 
 Menu 291 keeps its lazy operation lookup and exactly one `None` default.

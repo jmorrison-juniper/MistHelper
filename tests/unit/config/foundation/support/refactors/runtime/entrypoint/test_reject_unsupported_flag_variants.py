@@ -11,7 +11,9 @@ from typing import Any  # WHY: Type the mixed parser arguments in the test doubl
 
 import pytest  # WHY: Use pytest fixtures and SystemExit assertions.
 
-from src.foundation.support.refactors.main_entrypoint import MainEntrypoint  # WHY: Test the public CLI path.
+from src.foundation.support.refactors.main_entrypoint import (
+    ApplicationBootstrap,
+)  # WHY: Exercise the new bootstrap seam directly.
 
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[8]  # WHY: Locate the worktree root from this nested test file.
 
@@ -98,40 +100,24 @@ class CountingParser(argparse.ArgumentParser):
         return self.parsed_args  # WHY: Let the test compare object identity after parsing.
 
 
-class _StartupReachedError(Exception):
-    """Stop `MainEntrypoint.run` at the first startup side effect."""
-
-
-def test_main_entrypoint_parses_command_line_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The CLI path must parse the command line once and reuse that Namespace."""
+def test_application_bootstrap_parses_command_line_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The bootstrap must store the only parsed command-line namespace."""
     parsed_args = argparse.Namespace(skip_deps=True, test=False, testinteractive=False)  # WHY: Minimal stored result.
     parser = CountingParser(parsed_args)  # WHY: Count parse calls without running real argparse behavior.
-    stored_namespaces: list[argparse.Namespace] = []  # WHY: Capture the Namespace that startup receives.
-
-    def stop_at_startup(bootstrap: Any) -> None:
-        """Record the stored Namespace, then stop before any startup side effect."""
-        stored_namespaces.append(bootstrap.parsed_args)  # WHY: Later startup must reuse this object.
-        raise _StartupReachedError  # WHY: Skip logging, dependency, and session work in this unit test.
-
-    monkeypatch.setattr("MistHelper._build_argument_parser", lambda: parser)  # WHY: Use the parser double.
-    monkeypatch.setattr(  # WHY: Stop the bootstrap at its first side-effect boundary.
-        "src.foundation.support.refactors.main_entrypoint.ApplicationBootstrap._run_common_startup", stop_at_startup
+    monkeypatch.setattr(  # WHY: Route bootstrap to the parser double.
+        "MistHelper.build_argument_parser", lambda: parser
     )
-    monkeypatch.setattr(sys, "argv", ["MistHelper.py", "--skip-deps"])  # WHY: The CLI reads process arguments.
-    with pytest.raises(_StartupReachedError):  # WHY: The stub ends the run after the parse is stored.
-        MainEntrypoint.run()  # WHY: Exercise the public path that owns the single parse.
+    bootstrap = ApplicationBootstrap(argv=["--skip-deps"])  # WHY: Constructing bootstrap is the only parse location.
     assert parser.parse_count == 1  # WHY: The command line must be parsed exactly one time.
-    assert len(stored_namespaces) == 1  # WHY: Startup must receive exactly one stored Namespace.
-    assert stored_namespaces[0] is parsed_args  # WHY: Later startup must reuse the stored Namespace object.
+    assert bootstrap.parsed_args is parsed_args  # WHY: Later startup must reuse the stored Namespace object.
 
 
 def test_hyphenated_test_flag_uses_standard_argparse_error(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A misspelled flag must fail through argparse with status code 2."""
-    monkeypatch.setattr(sys, "argv", ["MistHelper.py", "--test-interactive"])  # WHY: Set the CLI argv.
     with pytest.raises(SystemExit) as excinfo:  # WHY: argparse exits on an unsupported option.
-        MainEntrypoint.run()  # WHY: The public entry point must reach the real parser before startup work.
+        ApplicationBootstrap(argv=["--test-interactive"])  # WHY: The removed raw variant guard no longer runs.
     captured = capsys.readouterr()  # WHY: Inspect the user-facing parser error.
     assert excinfo.value.code == 2  # WHY: argparse uses exit code 2 for usage errors.
     assert "unrecognized arguments" in captured.err  # WHY: The standard parser error must own this failure.

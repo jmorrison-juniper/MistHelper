@@ -152,7 +152,7 @@ class TestCredentialPreflight:
             login=False, capture_portal=True, test=False, testinteractive=False
         )  # WHY: match the direct --capture-portal invocation.
 
-        assert MistHelper._establish_mist_session(args) is None
+        assert MistHelper.establish_mist_session(args) is None
 
         session_initializer.assert_not_called()  # WHY: browser sign-in constructs the Mist session later.
 
@@ -163,7 +163,7 @@ class TestCredentialPreflight:
         args = argparse.Namespace(login=False, capture_portal=True, test=False, testinteractive=False)
 
         with pytest.raises(SystemExit) as exc_info:
-            MistHelper._establish_mist_session(args)
+            MistHelper.establish_mist_session(args)
 
         assert exc_info.value.code == 1
 
@@ -176,7 +176,7 @@ class TestCredentialPreflight:
         args = argparse.Namespace(login=False, capture_portal=False, test=False, testinteractive=False)
 
         with pytest.raises(SystemExit) as exc_info:
-            MistHelper._establish_mist_session(args)
+            MistHelper.establish_mist_session(args)
 
         assert exc_info.value.code == 1
         session_initializer.assert_not_called()  # WHY: the fail-closed rule remains before network work.
@@ -194,7 +194,7 @@ class TestCredentialPreflight:
         args = argparse.Namespace(login=False, capture_portal=False, test=True, testinteractive=False)
 
         with pytest.raises(SystemExit) as exc_info:
-            MistHelper._establish_mist_session(args)
+            MistHelper.establish_mist_session(args)
 
         assert exc_info.value.code == 1
         org_preflight.assert_not_called()
@@ -250,7 +250,7 @@ class TestCredentialPreflight:
         )
 
         with pytest.raises(SystemExit) as exc_info:
-            MistHelper._establish_mist_session(args)
+            MistHelper.establish_mist_session(args)
 
         assert (
             exc_info.value.code == 1
