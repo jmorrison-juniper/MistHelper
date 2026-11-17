@@ -55,7 +55,7 @@ def _namespace(fast: bool) -> argparse.Namespace:
 def test_fast_flag_sets_the_module_global(capsys: pytest.CaptureFixture[str]) -> None:
     """The ``--fast`` flag sets ``MistHelper.FAST_MODE_ENABLED`` to True."""
     MistHelper.FAST_MODE_ENABLED = False  # Start from the opposite value, so the test proves the write.
-    MistHelper._setup_runtime_flags(_namespace(fast=True))  # Apply the parsed command line flags.
+    MistHelper.setup_runtime_flags(_namespace(fast=True))  # Apply the parsed command line flags.
     capsys.readouterr()  # Drop the fast mode scope announcement, which this test does not read.
     assert MistHelper.FAST_MODE_ENABLED is True  # The module global, not a test double, holds the value.
 
@@ -63,7 +63,7 @@ def test_fast_flag_sets_the_module_global(capsys: pytest.CaptureFixture[str]) ->
 def test_no_fast_flag_clears_the_module_global() -> None:
     """A run without ``--fast`` sets ``MistHelper.FAST_MODE_ENABLED`` to False."""
     MistHelper.FAST_MODE_ENABLED = True  # Start from the opposite value, so the test proves the write.
-    MistHelper._setup_runtime_flags(_namespace(fast=False))  # Apply the parsed command line flags.
+    MistHelper.setup_runtime_flags(_namespace(fast=False))  # Apply the parsed command line flags.
     assert MistHelper.FAST_MODE_ENABLED is False  # The default run leaves fast mode off.
 
 

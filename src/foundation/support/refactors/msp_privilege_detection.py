@@ -16,8 +16,8 @@ module-global do so explicitly at the callsite:
 ``MistHelper.msp_privileges = detect_msp_privileges(apisession)``.
 
 Callsites rewritten in this PR:
-- MistHelper.py two internal calls (``_attempt_interactive_login_with_rollback``
-  and ``_establish_mist_session``) explicitly assign the return value to the
+- MistHelper.py two internal calls (``attempt_interactive_login_with_rollback``
+  and ``establish_mist_session``) explicitly assign the return value to the
   module-global cache.
 - ``src/foundation/support/refactors/initialize_mist_session_interactive.py`` already passed the
   session and returned the list to the LoginOrchestrator, which stashes it
