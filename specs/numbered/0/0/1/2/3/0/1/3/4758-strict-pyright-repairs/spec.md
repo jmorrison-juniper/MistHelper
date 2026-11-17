@@ -50,7 +50,7 @@ An operator retains the existing commands, menu operations, session state, and o
 
 - **FR-001**: Record the live main revision and strict baseline before source edits.
 - **FR-002**: Resolve all entry-point strict diagnostics with accurate contracts.
-- **FR-003**: Preserve runtime behavior, declarations, optional dependencies, and dynamic dispatch.
+- **FR-003**: Preserve runtime behavior, callable implementations, explicit exports, optional dependencies, and dynamic dispatch.
 - **FR-004**: Do not suppress diagnostics, weaken tests, add dummy references, or erase live declarations.
 - **FR-005**: Keep imported consumers consistent and obtain reserved-file handoffs before edits.
 - **FR-006**: Use mocked tests without production requests or destructive operations.
@@ -63,7 +63,7 @@ An operator retains the existing commands, menu operations, session state, and o
 
 - **SC-001**: The entry-point diagnostic report contains zero unresolved errors.
 - **SC-002**: Every focused behavior regression passes.
-- **SC-003**: No existing module-level declaration disappears.
+- **SC-003**: No callable implementation disappears. Verify approved host-helper renames against their owned callers and preserve existing explicit exports.
 - **SC-004**: Every completed task has recorded evidence.
 
 ## Assumptions
@@ -72,3 +72,4 @@ An operator retains the existing commands, menu operations, session state, and o
 - Existing ownership and publication holds remain active.
 - The app-managed branch replaces the branch-creation hook.
 - The active feature path remains command-scoped. The shared selector remains unchanged.
+- Review requires public names for verified host helpers and direct typed mode dispatch. It does not permit dummy exports or compatibility aliases.
