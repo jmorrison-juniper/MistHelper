@@ -66,8 +66,8 @@ Optional commit hooks remain deferred to the verified local commit.
 
 T003 remains incomplete for the archived API and cache owners.
 T008 retains their two unchanged source contracts.
-T007 retains nine preserved declarations without verified production callers.
-These nine diagnostics are not ownership blockers.
-The corrected host interfaces and actual mode dispatcher resolve the other unused-function diagnostics.
-T010 cannot pass while the ten held-contract errors and nine preserved-declaration errors remain.
+T007 retains the live authentication-status helper until its initializer caller receives a name-only handoff.
+The cleanup removes all nine audited declarations and four helpers used only by the removed code.
+The updated tests exercise real help, session validation, and dependency initialization behavior.
+T010 cannot pass while the ten API/cache errors and the live interface error remain.
 The portal and ARP handoffs do not release either source hold.

@@ -6,7 +6,8 @@ Covers `_MistHelperProxy.__getattr__`, `_mh_module`, and every branch of
 - mistapi load failure → returns False.
 - All session strategies fail → logs variants and returns False.
 - Happy path → configures timeout + validates session, returns True.
-- validate_initialized_session returning falsy → bool() converts to False.
+- The configuration seam returning falsy converts the result to False.
+- The real validation seam accepts supported reads and rejects missing methods.
 
 All MistHelper helper functions are published on the MistHelper module via
 `monkeypatch.setattr("MistHelper.<attr>", ..., raising=False)` so the `_MH`
@@ -15,6 +16,7 @@ proxy resolves to our doubles at call time. No source edits, no live I/O.
 
 from __future__ import annotations  # WHY: PEP 604 unions on Python 3.10+.
 
+from types import SimpleNamespace
 from typing import Any  # WHY: dict-of-mocks return-type annotation.
 from unittest.mock import MagicMock  # WHY: FR-008 mandates MagicMock doubles.
 
@@ -69,8 +71,6 @@ def _publish_helpers(monkeypatch: pytest.MonkeyPatch, **overrides: Any) -> dict[
             name="attempt_all_session_strategies"
         ),  # WHY: returns (session, method, tried).
         "log_failed_session_variants": MagicMock(name="log_failed_session_variants"),  # WHY: called only on failure.
-        "configure_session_timeout": MagicMock(name="configure_session_timeout"),  # WHY: called only on success.
-        "_validate_initialized_session": MagicMock(name="_validate_initialized_session"),  # WHY: returns truthy/falsy.
     }
 
     for name, mock in helpers.items():  # WHY: publish each helper on MistHelper so _MH proxy resolves.
@@ -127,6 +127,8 @@ class TestInitializeStrategiesFail:
             ["host", "token"],
         )  # WHY: (cls, sig_params) tuple.
         tried_variants = ["variant_a", "variant_b"]  # WHY: sentinel list for post-assert.
+        configure_once = MagicMock(name="configure_once")  # Observe the actual configuration boundary.
+        monkeypatch.setattr(MistSessionConfigurator, "configure_once", configure_once)
         helpers["attempt_all_session_strategies"].return_value = (
             None,
             None,
@@ -138,8 +140,7 @@ class TestInitializeStrategiesFail:
         assert helpers["log_failed_session_variants"].call_args.args == (
             tried_variants,
         )  # WHY: tried variants surfaced.
-        assert helpers["configure_session_timeout"].call_count == 0  # WHY: timeout config skipped.
-        assert helpers["_validate_initialized_session"].call_count == 0  # WHY: validation skipped.
+        configure_once.assert_not_called()  # A failed strategy must not configure or validate a session.
 
 
 class TestInitializeHappyPath:
@@ -184,8 +185,8 @@ class TestInitializeHappyPath:
         assert mh.apisession is new_session  # WHY: the context owns the new session.
         assert mh.MainEntrypoint.context.mistapi is loaded_mistapi  # WHY: the context owns the SDK module.
 
-    def test_validate_returns_falsy_bool_converts_to_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When _validate_initialized_session returns falsy (e.g., None), bool() → False."""
+    def test_configuration_returns_falsy_bool_converts_to_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A falsy result from the actual configuration seam must fail initialization."""
         monkeypatch.setattr("MistHelper.apisession", None, raising=False)  # WHY: not-initialized.
         monkeypatch.setattr("MistHelper.mistapi", None, raising=False)  # WHY: mistapi placeholder.
         helpers = _publish_helpers(monkeypatch)  # WHY: publish helpers.
@@ -208,3 +209,23 @@ class TestInitializeHappyPath:
         monkeypatch.setattr(MistSessionConfigurator, "configure_once", configure_once)  # WHY: isolate the seam result.
 
         assert MistSessionInitializer.initialize() is False  # WHY: bool(None) is False.
+
+
+class TestRealSessionValidation:
+    """Preserve method validation through the production configuration seam."""
+
+    @pytest.mark.parametrize("method_name", ["mist_get", "get"])
+    def test_supported_read_method_is_accepted(self, method_name: str) -> None:
+        """Either supported SDK read method must remain usable without a method patch."""
+        read = MagicMock(name=method_name)
+        session = SimpleNamespace(**{method_name: read})
+        assert MistSessionConfigurator._validate_methods(session, {"apitoken": "redacted"}) is True
+        assert vars(session) == {method_name: read}
+        read.assert_not_called()
+
+    def test_missing_read_method_is_rejected(self, caplog: pytest.LogCaptureFixture) -> None:
+        """An unusable SDK session must fail with its operator error and no added methods."""
+        session = SimpleNamespace()
+        assert MistSessionConfigurator._validate_methods(session, None) is False
+        assert "The Mist API session has no supported GET method" in caplog.text
+        assert vars(session) == {}

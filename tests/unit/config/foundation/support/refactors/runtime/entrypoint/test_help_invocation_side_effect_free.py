@@ -1,143 +1,80 @@
-"""Regression tests for issue #1641: `--help` / `-h` must be side-effect-free.
+"""Verify that the real parser handles help before bootstrap side effects."""
 
-Verifies that:
-1. `MistHelper._is_help_invocation` correctly detects `--help` and `-h` as full
-   tokens in the argv tail (and rejects substring matches / argv[0]).
-2. The module-load-time source contains the wiring that guards the early
-   dependency check with `_is_help_invocation`, and extends the deferred-imports
-   conditional to include help invocations.
-3. An end-to-end subprocess invocation of `python MistHelper.py --help` prints
-   usage to stdout and exits with code 0 without spending time on dependency
-   installation or heavy import initialisation.
-"""
+from __future__ import annotations
 
-from __future__ import annotations  # WHY: PEP 604 unions on Python 3.10+.
+import os
+import subprocess  # nosec B404  # Exercise the CLI with fixed arguments and no shell.
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock
 
-import importlib  # WHY: resolve the live MistHelper module for the helper.
-import os  # WHY: propagate environment (DISABLE_AUTO_INSTALL) to the subprocess.
-import subprocess  # nosec B404  # WHY: legitimate integration probe of the CLI entry point.
-import sys  # WHY: locate the current interpreter for the subprocess call.
-from pathlib import Path  # WHY: resolve MistHelper.py source path portably.
-from typing import Any  # WHY: helper accessor returns an untyped module attribute.
+import pytest
 
-import pytest  # WHY: parametrisation + skip markers for the slow subprocess case.
+import MistHelper
+from src.foundation.support.refactors.main_entrypoint import ApplicationBootstrap
 
 
-def _is_help() -> Any:
-    """Return the live `_is_help_invocation` callable from MistHelper.
+class TestHelpArgumentParsing:
+    """Exercise help, invalid arguments, and program names through the real parser."""
 
-    Why:
-        Resolved lazily so tests fail with a clear ImportError message if the
-        helper was accidentally removed or renamed, rather than a stale top-level
-        ImportError that would mask the actual regression.
+    @pytest.mark.parametrize(
+        "arguments",
+        [("--help",), ("-h",), ("--menu", "1", "--help"), ("-h", "--testinteractive"), ("-help",), ("--h",)],
+    )
+    def test_help_stops_before_startup(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], arguments: tuple[str, ...]
+    ) -> None:
+        """Help must exit before logs, dependency checks, or authentication can start."""
+        startup = MagicMock(side_effect=AssertionError("Help must stop before startup"))
+        monkeypatch.setattr(ApplicationBootstrap, "_run_common_startup", startup)
+        with pytest.raises(SystemExit) as error:
+            ApplicationBootstrap(argv=arguments).bootstrap_for_cli()
+        assert error.value.code == 0
+        assert "usage:" in capsys.readouterr().out.lower()
+        startup.assert_not_called()
 
-    Returns:
-        The bound callable ``MistHelper._is_help_invocation``.
-    """
-    import MistHelper as module  # WHY: inspect the root script entry.
+    @pytest.mark.parametrize("argument", ["--helpme", "help", "--HELP"])
+    def test_invalid_help_variants_fail_before_startup(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], argument: str
+    ) -> None:
+        """Invalid tokens must produce parser errors without dependency or session work."""
+        startup = MagicMock(side_effect=AssertionError("Invalid arguments must stop before startup"))
+        monkeypatch.setattr(ApplicationBootstrap, "_run_common_startup", startup)
+        with pytest.raises(SystemExit) as error:
+            ApplicationBootstrap(argv=[argument]).bootstrap_for_cli()
+        assert error.value.code == 2
+        assert "error:" in capsys.readouterr().err.lower()
+        startup.assert_not_called()
 
-    return module._is_help_invocation  # Access the helper as a module attribute.
-
-
-class TestIsHelpInvocation:
-    """`_is_help_invocation` detects `--help` / `-h` in the argv tail."""
-
-    def test_bare_double_dash_help_is_detected(self) -> None:
-        """`["prog", "--help"]` returns True."""
-        assert _is_help()(["MistHelper.py", "--help"]) is True  # WHY: canonical GNU-style help flag.
-
-    def test_bare_short_help_flag_is_detected(self) -> None:
-        """`["prog", "-h"]` returns True."""
-        assert _is_help()(["MistHelper.py", "-h"]) is True  # WHY: short-form alias must be honoured.
-
-    def test_help_combined_with_other_flags_is_detected(self) -> None:
-        """`--help` interleaved with unrelated flags is still detected."""
-        assert _is_help()(["MistHelper.py", "--menu", "1", "--help"]) is True  # WHY: prove full-tail scan.
-        assert _is_help()(["MistHelper.py", "-h", "--testinteractive"]) is True  # WHY: short form + other flag.
-
-    def test_empty_argv_and_program_only_are_not_detected(self) -> None:
-        """No tail, no match."""
-        assert _is_help()([]) is False  # WHY: baseline; empty argv is never a help invocation.
-        assert _is_help()(["MistHelper.py"]) is False  # WHY: argv[0] alone is not a help invocation.
-
-    def test_program_name_is_ignored_even_if_it_matches(self) -> None:
-        """argv[0] is intentionally skipped so a script named `--help` does not trip the guard."""
-        assert _is_help()(["--help"]) is False  # WHY: argv[0] is the program name, never a flag.
-
-    @pytest.mark.parametrize("bad_token", ["--helpme", "--h", "-help", "help", "--HELP"])
-    def test_substring_and_case_variants_are_not_detected(self, bad_token: str) -> None:
-        """Substring matches and case variants must NOT trigger help mode."""
-        assert _is_help()(["MistHelper.py", bad_token]) is False  # WHY: only exact `--help` / `-h` count.
-
-    def test_unrelated_flags_are_not_detected(self) -> None:
-        """Ordinary flag combinations do not match."""
-        assert _is_help()(["MistHelper.py", "--menu", "1", "--org", "abc"]) is False  # WHY: control case.
-
-
-class TestHelpInvocationGuardWiring:
-    """The bootstrap source lets argparse handle help before side effects."""
-
-    @staticmethod
-    def _mist_helper_source() -> str:
-        """Return the entrypoint source text.
-
-        Why:
-            The regression asserted here is about *module-load-time* behaviour
-            that pytest cannot re-trigger (MistHelper is imported once per test
-            session). Reading the source is the cleanest way to prove the guards
-            are wired without brittle import-time patching.
-
-        Returns:
-            UTF-8 source text of the currently imported MistHelper module.
-        """
-        module = importlib.import_module("src.foundation.support.refactors.main_entrypoint")  # Live module resolution.
-        assert module.__file__ is not None  # WHY: script modules always have __file__ set on disk.
-        return Path(module.__file__).read_text(encoding="utf-8")  # Read once; small enough for in-memory search.
-
-    def test_early_dependency_check_is_guarded(self) -> None:
-        """The dependency check runs only after argparse gets the first chance to exit."""
-        source = self._mist_helper_source()
-        assert "parser.parse_args(list(self.argv))" in source  # WHY: argparse owns help before startup work.
-        assert "self._run_dependency_check_if_needed()" in source  # WHY: dependency work moved behind bootstrap.
-
-    def test_deferred_imports_conditional_includes_help(self) -> None:
-        """The entrypoint reads process arguments in the bootstrap class only."""
-        source = self._mist_helper_source()
-        assert "self.argv = tuple(sys.argv[1:] if argv is None else argv)" in source  # WHY: one read site.
+    @pytest.mark.parametrize("process_arguments", [["MistHelper.py"], ["--help"]])
+    def test_program_name_is_not_a_help_argument(
+        self, monkeypatch: pytest.MonkeyPatch, process_arguments: list[str]
+    ) -> None:
+        """An absent argument tail must retain normal defaults, including a help-like program name."""
+        monkeypatch.setattr(sys, "argv", process_arguments)
+        bootstrap = ApplicationBootstrap()
+        assert bootstrap.argv == ()
+        assert bootstrap.parsed_args.menu is None
+        assert bootstrap.parsed_args.test is False
 
 
 class TestHelpSubprocessInvocation:
-    """End-to-end proof: `python MistHelper.py --help` renders usage without bootstrap."""
+    """Check both help flags in a fresh process without runtime files."""
 
-    def test_help_exits_cleanly_with_usage_on_stdout(self) -> None:
-        """`--help` prints usage to stdout and exits 0.
-
-        Why:
-            This is the acceptance criterion in issue #1641: help must succeed
-            even on a fresh interpreter where dependencies are not yet installed.
-            We set ``DISABLE_AUTO_INSTALL=true`` as a safety belt so a *failed*
-            guard would not brick the developer's environment mid-test.
-        """
-        import MistHelper as module  # WHY: inspect the root script entry.
-
-        assert isinstance(module.__file__, str)  # WHY: the subprocess path must come from a real module file.
-        script_path = Path(module.__file__)
-
-        env = os.environ.copy()  # Inherit the caller's environment (interpreter, PYTHONPATH, ...).
-        env["DISABLE_AUTO_INSTALL"] = "true"  # Belt-and-braces: even if guard fails, do not install anything.
-
-        result = subprocess.run(  # nosec B603  # Fixed argv list; no shell; controlled inputs.
-            [sys.executable, str(script_path), "--help"],
+    @pytest.mark.parametrize("flag", ["--help", "-h"])
+    def test_help_exits_without_runtime_files(self, tmp_path: Path, flag: str) -> None:
+        """The CLI must print usage and exit before it creates the data directory."""
+        environment = os.environ.copy()
+        environment["DISABLE_AUTO_INSTALL"] = "true"
+        result = subprocess.run(  # nosec B603  # The interpreter, script, and flags are controlled.
+            [sys.executable, str(Path(MistHelper.__file__).resolve()), flag],
             capture_output=True,
             text=True,
-            timeout=60,  # Generous ceiling; help must return promptly, not spend minutes on installs.
-            env=env,
-            check=False,  # We assert the return code explicitly below.
+            timeout=60,
+            env=environment,
+            cwd=tmp_path,
+            check=False,
         )
-
-        assert result.returncode == 0, (  # WHY: argparse exits 0 for --help by convention.
-            f"--help exited {result.returncode}; " f"stdout={result.stdout[:400]!r}; stderr={result.stderr[:400]!r}"
-        )
-        assert "usage" in result.stdout.lower(), (  # WHY: usage line MUST reach stdout (argparse default).
-            f"expected 'usage' in stdout; got {result.stdout[:400]!r}"
-        )
+        assert result.returncode == 0, (result.stdout[:400], result.stderr[:400])
+        assert "usage:" in result.stdout.lower()
+        assert not (tmp_path / "data").exists()
