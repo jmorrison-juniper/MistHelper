@@ -51,7 +51,7 @@ The existing rate-limit helper and its tests remain unchanged.
 
 ## Meaningful behavior checks
 
-Help tests execute the actual argument parser through `ApplicationBootstrap`.
+Help tests execute the actual argument parser through the public `MainEntrypoint.run` path.
 They verify both documented flags, mixed arguments, parser-supported abbreviations, and invalid tokens.
 They prove that a help-like program name is not an argument.
 A startup failure sentinel prevents dependency, log, or authentication work if parsing regresses.
@@ -62,6 +62,13 @@ The old helper rejected `-help`, but the actual parser accepts it.
 Python also always supplies a program name in ordinary process arguments.
 The replacement tests follow the real parser instead of retaining those artificial helper assumptions.
 No production parser setting changes.
+
+The first committed tests imported the whole `ApplicationBootstrap` class.
+The quality analyzer inferred HTTP risk from its unrelated SDK log-sanitizer import.
+Issue #4828 records that shared-tool defect for later repair.
+The revised tests call the actual CLI entry point and fail if it reaches context activation.
+They retain real parsing, stronger startup ordering, and the fresh subprocess checks.
+No fake HTTP case, changed rule, baseline entry, or dynamic import bypasses the finding.
 
 Session tests now observe `MistSessionConfigurator.configure_once`, not obsolete root mocks.
 A failed session strategy must never reach that boundary.
