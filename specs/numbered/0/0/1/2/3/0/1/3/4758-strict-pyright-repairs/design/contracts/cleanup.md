@@ -7,11 +7,12 @@ The nine original declarations have no remaining production caller.
 Four dependent helpers have callers only inside the removed code.
 All 196 explicit exports remain unchanged.
 No remaining root function body changes.
+The live authentication-status helper has its approved public name.
 
-The interim strict report contains eleven errors, zero warnings, and one analyzed file.
+The final strict report contains ten errors, zero warnings, and one analyzed file.
 Ten errors require the held API and cache contracts.
-One error names a live authentication-status helper with a held initializer caller.
-The requested name-only handoff remains pending.
+The earlier eleven-error report remains preserved.
+The additional initializer-reference handoff resolves its live authentication-status interface.
 This is not a strict-clean completion.
 
 ## Caller verification
@@ -46,7 +47,7 @@ Locations below identify definitions in commit `e5f796d9689e17b5a8ad7b5a43b0c349
 
 These definitions occupied 170 physical lines, excluding separating blank lines.
 The audit found no other removed root definition.
-AST comparison confirms identical remaining definitions and explicit exports.
+AST comparison confirms identical remaining bodies and explicit exports after accounting for the approved definition rename.
 The existing rate-limit helper and its tests remain unchanged.
 
 ## Meaningful behavior checks
@@ -104,11 +105,19 @@ The API annotation remains `all_sites_with_limit(org_id: str) -> list[dict[str, 
 The cache methods still require `generate_function: Callable[[], object]`.
 No caller cast, new adapter, or stub conceals either held source contract.
 
-Removing the dead validator exposes `reportUnusedFunction` on `_log_session_auth_status` at line 3314.
+Removing the dead validator exposed `reportUnusedFunction` on `_log_session_auth_status` at line 3314.
 Unlike the thirteen removed functions, it has a real production caller.
-`MistSessionConfigurator._validate_methods` calls `_MH._log_session_auth_status` at initializer line 144.
-The additional request covers only that reference and directly related documentation.
-Do not delete the live helper or add a dummy root reference.
+The additional handoff permits its definition rename to `log_session_auth_status` and the single initializer reference.
+`MistSessionConfigurator._validate_methods` now calls `_MH.log_session_auth_status` without changing arguments or control flow.
+The helper body, authentication detection, logs, return values, and all transport behavior remain unchanged.
+No alias or dummy root reference exists.
+
+The audit examines every initializer `_MH` private attribute and exact private string value.
+Before the rename, only `_log_session_auth_status` and `_parse_api_tokens` reference private root functions.
+The latter has surviving root callers in `_collect_credential_problems` at line 2878 and `_systematic_test_has_api_token` at line 6519.
+The string `_session` identifies the SDK transport attribute, not a root helper.
+No additional private interface requires a rename after this cleanup.
+The existing initializer test now observes the real public report for both supported read methods.
 
 ## Evidence
 
@@ -124,5 +133,5 @@ Compile, repository Ruff, Black, mypy, Bandit, docstrings, Pylint, and Vulture p
 Mypy checks 887 source files.
 Docstring coverage is 99.0 percent.
 Pylint scores 9.70 against the unchanged 9.5 threshold.
-The final issue comment will identify the immutable commit and post-commit quality result.
+The final issue comment identifies the immutable commit, refreshed reports, and post-commit quality result.
 No publication, merge, production operation, or hold release occurs.

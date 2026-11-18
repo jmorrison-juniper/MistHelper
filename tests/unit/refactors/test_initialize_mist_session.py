@@ -215,11 +215,15 @@ class TestRealSessionValidation:
     """Preserve method validation through the production configuration seam."""
 
     @pytest.mark.parametrize("method_name", ["mist_get", "get"])
-    def test_supported_read_method_is_accepted(self, method_name: str) -> None:
-        """Either supported SDK read method must remain usable without a method patch."""
+    def test_supported_read_method_is_accepted(self, method_name: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Either SDK read method must use the live public authentication report."""
         read = MagicMock(name=method_name)
         session = SimpleNamespace(**{method_name: read})
-        assert MistSessionConfigurator._validate_methods(session, {"apitoken": "redacted"}) is True
+        method = {"apitoken": "redacted"}
+        report = MagicMock(wraps=_MH.log_session_auth_status)
+        monkeypatch.setattr("MistHelper.log_session_auth_status", report)
+        assert MistSessionConfigurator._validate_methods(session, method) is True
+        report.assert_called_once_with(session, method)
         assert vars(session) == {method_name: read}
         read.assert_not_called()
 

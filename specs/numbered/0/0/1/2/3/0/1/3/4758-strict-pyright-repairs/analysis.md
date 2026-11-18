@@ -4,18 +4,17 @@
 
 This is a partial repair, not a strict-clean completion.
 The strict baseline has 108 errors.
-The cleanup candidate has eleven errors.
+The final interface candidate has ten errors.
 Both reports analyze exactly one file and report zero warnings.
 Ten errors require two reserved source contracts.
-One error names the live authentication-status helper with a held initializer caller.
-The requested name-only handoff remains pending.
+The additional name-only handoff resolves the live authentication-status interface.
 The cleanup removes all nine audited private declarations and four dependent helpers.
 The original ten-error candidate used rejected export and import approaches.
 The historical sections below retain that evidence, not an accepted completion claim.
 The [cleanup record](design/contracts/cleanup.md) gives the current commands, caller evidence, and residual map.
 The [correction record](design/contracts/correction.md) preserves the previous nineteen-error result.
 The corrective artifact review maps all twelve requirements and success criteria to the sixteen tasks.
-Four tasks remain incomplete.
+Three tasks remain incomplete.
 SC-003 preserves live implementations and explicit exports while allowing verified private-code removal and genuine host-interface renames.
 
 The initial and refreshed `origin/main` revision is `b7a18b7ead7b1de5882bcd288203c015b1eef792`.
@@ -29,7 +28,7 @@ No push, pull request, merge, or automatic merge is authorized.
 | Requirement | Evidence | Result |
 | - | - | - |
 | FR-001 | Live main comparison, locked bootstrap, baseline JSON | Complete |
-| FR-002 | Cleanup strict report | Incomplete: eleven errors |
+| FR-002 | Final interface strict report | Incomplete: ten errors |
 | FR-003 | Focused state, import, selector, admission, and dry-run regressions | Complete for owned changes |
 | FR-004 | Source review, preserved declarations, unchanged rules | Complete |
 | FR-005 | Narrow portal handoff, ARP ancestry, held-file comparison | Partial: API and cache handoffs unavailable |
@@ -38,7 +37,7 @@ No push, pull request, merge, or automatic merge is authorized.
 | FR-008 | Local implementation commit and verification records | Complete |
 
 T003 and T008 remain unchecked because ownership blocks their completion.
-T007 remains unchecked for the live authentication-status interface handoff.
+T007 is complete after the approved authentication-status interface rename.
 T010 remains unchecked for the held contracts.
 Do not treat their dependency status as a released hold.
 
@@ -321,7 +320,7 @@ The explicit local commits preserve that setting and include the required coauth
 The worktree has no uncommitted source repair.
 No remote branch, existing ref, dependency hold, or publication hold was removed.
 
-## Bounded cleanup verification
+## Historical bounded cleanup verification
 
 The cleanup removes thirteen verified unused private functions, including four dependent helpers.
 All remaining root definitions and all 196 explicit exports match commit `e5f796d9689e17b5a8ad7b5a43b0c349eb3dee90`.
@@ -346,3 +345,44 @@ Its quality gate found two new HTTP-coverage requirements caused by the broad bo
 Issue #4828 records that shared-tool inference defect.
 The revised help cases test the real public CLI entry point and parser.
 No analyzer setting, baseline, import visibility, or HTTP case conceals that defect.
+
+## Final approved interface verification
+
+The additional PR #4208 handoff permits one authentication-status reference and its directly related module documentation.
+The root definition now uses `log_session_auth_status`.
+The configurator calls that public name with the original session and method.
+AST comparison against `23053c8d4d2c05ed12571e7a8521aa86631d5337` proves the complete root change is the definition name.
+The initializer comparison permits only its module documentation and that one attribute name.
+All function bodies, arguments, control flow, authentication logs, transport settings, and explicit exports remain unchanged.
+
+The audit checks every initializer `_MH` private attribute and exact private string value.
+Before the rename, its private root references were `_log_session_auth_status` and `_parse_api_tokens`.
+The latter retains root callers in `_collect_credential_problems` and `_systematic_test_has_api_token`.
+The string `_session` names the SDK transport, not a root helper.
+No additional private interface requires a rename.
+`final-interface-audit-before.json` and `final-interface-preservation.json` preserve the exact locations and comparisons.
+
+The refreshed strict JSON and text report ten errors, zero warnings, and one analyzed file.
+Seven errors require the held API site-record return contract.
+Three errors require the held cache callback contract.
+The current line and rule map remains in the cleanup record.
+The committed configuration and bounded stubs remain unchanged.
+`pyright-interface.json` and `pyright-interface.txt` preserve the actual analyzer output.
+The final immutable handoff identifies matching commit-specific copies and their hashes.
+
+The established regression selection passes 1145 tests, with two documented skips and the existing Dash warning.
+After formatting, the initializer tests and managed route guards pass 67 tests.
+The real validation tests observe the public authentication report while executing its original body.
+Compile, repository Ruff, Black, mypy, Bandit, pydocstyle, interrogate, Pylint, and Vulture pass again.
+Mypy checks 887 source files.
+Docstring coverage remains 99.0 percent.
+Pylint remains 9.70 against the unchanged 9.5 threshold.
+`interface-gates-final.txt` and `interface-regressions.txt` preserve the expanded commands and outputs.
+The initial Black check requested only test-signature formatting.
+The formatter corrected it before the complete successful gate run.
+
+T007 is complete.
+T003, T008, and T010 remain unchecked for the archived API/cache owners and the absent zero-error result.
+Neither held source file, dependency manifests, held tests, nor publication permission changed.
+The final issue handoff records the post-commit quality preflight and comparison result.
+No push, pull request, merge, or production request occurs.
