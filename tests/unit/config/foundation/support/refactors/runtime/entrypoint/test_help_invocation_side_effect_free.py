@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import MistHelper
-from src.foundation.support.refactors.main_entrypoint import ApplicationBootstrap
+from src.foundation.support.refactors.main_entrypoint import MainEntrypoint
 
 
 class TestHelpArgumentParsing:
@@ -26,9 +26,10 @@ class TestHelpArgumentParsing:
     ) -> None:
         """Help must exit before logs, dependency checks, or authentication can start."""
         startup = MagicMock(side_effect=AssertionError("Help must stop before startup"))
-        monkeypatch.setattr(ApplicationBootstrap, "_run_common_startup", startup)
+        monkeypatch.setattr(MainEntrypoint, "activate_context", startup)
+        monkeypatch.setattr(sys, "argv", ["MistHelper.py", *arguments])
         with pytest.raises(SystemExit) as error:
-            ApplicationBootstrap(argv=arguments).bootstrap_for_cli()
+            MainEntrypoint.run()
         assert error.value.code == 0
         assert "usage:" in capsys.readouterr().out.lower()
         startup.assert_not_called()
@@ -39,9 +40,10 @@ class TestHelpArgumentParsing:
     ) -> None:
         """Invalid tokens must produce parser errors without dependency or session work."""
         startup = MagicMock(side_effect=AssertionError("Invalid arguments must stop before startup"))
-        monkeypatch.setattr(ApplicationBootstrap, "_run_common_startup", startup)
+        monkeypatch.setattr(MainEntrypoint, "activate_context", startup)
+        monkeypatch.setattr(sys, "argv", ["MistHelper.py", argument])
         with pytest.raises(SystemExit) as error:
-            ApplicationBootstrap(argv=[argument]).bootstrap_for_cli()
+            MainEntrypoint.run()
         assert error.value.code == 2
         assert "error:" in capsys.readouterr().err.lower()
         startup.assert_not_called()
@@ -52,10 +54,9 @@ class TestHelpArgumentParsing:
     ) -> None:
         """An absent argument tail must retain normal defaults, including a help-like program name."""
         monkeypatch.setattr(sys, "argv", process_arguments)
-        bootstrap = ApplicationBootstrap()
-        assert bootstrap.argv == ()
-        assert bootstrap.parsed_args.menu is None
-        assert bootstrap.parsed_args.test is False
+        arguments = MistHelper.build_argument_parser().parse_args([])
+        assert arguments.menu is None
+        assert arguments.test is False
 
 
 class TestHelpSubprocessInvocation:

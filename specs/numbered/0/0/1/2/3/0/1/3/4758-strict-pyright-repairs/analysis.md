@@ -34,7 +34,7 @@ No push, pull request, merge, or automatic merge is authorized.
 | FR-004 | Source review, preserved declarations, unchanged rules | Complete |
 | FR-005 | Narrow portal handoff, ARP ancestry, held-file comparison | Partial: API and cache handoffs unavailable |
 | FR-006 | Mocked regression suite and absent-session admission cases | Complete |
-| FR-007 | Separate issues #4825, #4826, and #4827 | Complete |
+| FR-007 | Separate issues #4825 through #4828 | Complete |
 | FR-008 | Local implementation commit and verification records | Complete |
 
 T003 and T008 remain unchecked because ownership blocks their completion.
@@ -341,3 +341,8 @@ Session tests observe the current configuration seam and real method validation.
 Dependency tests verify both import modes, assignment publication, once-only execution, and critical failure behavior.
 No parser setting, transport policy, production call, or confirmation changes.
 The final local commit and post-commit quality result belong in the issue handoff.
+The first cleanup commit is `838046104f606c008b034e0176ccd34ddf44a5f9`.
+Its quality gate found two new HTTP-coverage requirements caused by the broad bootstrap-class import.
+Issue #4828 records that shared-tool inference defect.
+The revised help cases test the real public CLI entry point and parser.
+No analyzer setting, baseline, import visibility, or HTTP case conceals that defect.
