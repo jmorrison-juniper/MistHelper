@@ -3311,7 +3311,7 @@ def _log_detected_auth(
         logger.debug("Session has readable token attribute - authentication appears configured")  # attribute path
 
 
-def _log_session_auth_status(
+def log_session_auth_status(
     session: Any, successful_method: Any
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Log the authentication status of an initialized session.

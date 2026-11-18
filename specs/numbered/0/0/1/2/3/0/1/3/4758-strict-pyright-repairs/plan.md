@@ -90,7 +90,8 @@ The correction restores the original 196 explicit exports and the historical sna
 Static imports use the bounded declarations beside the committed analyzer configuration.
 Verified cross-module helpers receive public names without aliases.
 Their owned callers use those names through the existing resolver or WSGI host.
-The initializer handoff permits exactly four reference replacements.
+The first initializer handoff permits exactly four references inside `initialize()`.
+The additional handoff permits the authentication-status reference and its directly related module documentation.
 The actual mode dispatcher binds direct callbacks on each invocation.
 It preserves predicate order, short-circuit evaluation, and handler replacement before dispatch.
 No parallel registry, getter layer, or compatibility adapter exists.
@@ -121,5 +122,7 @@ The bounded cleanup removes nine private declarations after caller verification.
 It replaces obsolete test doubles with real parser, validation, and dependency initialization cases.
 Four dependent private helpers have no callers outside the removed code.
 The authentication-status helper remains live through the session configurator.
-Its public rename requires a narrow initializer-reference handoff.
+Its public rename uses the additional name-only initializer-reference handoff.
+The remaining `_parse_api_tokens` reference has two surviving direct root callers.
+No additional private interface needs a rename after the cleanup.
 The implementation must not claim zero strict errors while held contracts remain.
