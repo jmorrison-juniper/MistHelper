@@ -520,7 +520,11 @@ testpaths = [
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
+# Block the Dash pytest plugin (issue #4826). Its `pytest_addhooks` hook uses an
+# old-style marker that pytest 10 removes. This repository installs `dash` without
+# the `testing` extra, so the plugin has no effect here. When Dash removes the
+# marker, or a test needs a Dash fixture, remove this option.
+addopts = "-v --tb=short -p no:dash"
 markers = [
     "integration: tests that call the real Mist API (require .env credentials)",
     "live: tests that call a real Juniper service API. They run only with JUNIPER_LIVE_TESTS=1.",
