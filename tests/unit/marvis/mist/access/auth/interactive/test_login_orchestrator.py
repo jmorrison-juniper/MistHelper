@@ -9,7 +9,8 @@ Covers every branch of ``LoginOrchestrator`` including:
 - ``_log_login_inputs``, ``_create_api_session`` (with None guard), ``_clear_pre_existing_token``.
 - ``_initial_login``, ``_needs_two_factor`` (all 3 shapes), ``_handle_two_factor`` (None + success).
 - ``_is_authenticated``, ``_report_auth_failure`` (dict error + string error + None response).
-- ``_finalize_session``, ``_configure_session_timeout`` (success + swallowed error).
+- ``_finalize_session`` (state cache and MSP announcement).
+- Import resolution of the real orchestrator source, with no ``sys.modules`` stub.
 - ``_announce_msp_privileges`` (with grants + without grants).
 - ``_handle_connection_error``, ``_handle_value_error`` (token+401 branch + generic branch).
 - ``_handle_generic_error``, ``_print_generic_error_message`` (credential/2FA/401/fallback branches).
@@ -20,10 +21,14 @@ No live network, no MistHelper import touched. MagicMock(spec=...) mandatory on 
 
 from __future__ import annotations  # WHY: PEP 604 unions in test type hints.
 
+import ast
+import importlib.util
+import inspect
 import logging  # WHY: caplog verification of structured warning/info/debug lines.
 from collections.abc import Callable  # WHY: Callable typing for injected fake callbacks.
+from pathlib import Path
 from types import ModuleType  # WHY: fallback import tests assert the concrete module shape.
-from typing import Any, cast  # WHY: dict[str, Any] annotations + cast(Any, x) for dynamic attr writes.
+from typing import Any  # WHY: dict[str, Any] annotations for the orchestrator state bag.
 from unittest.mock import MagicMock, patch  # WHY: mandatory spec= mocks + patch decorators.
 
 import pytest  # WHY: fixtures + parametrize.
@@ -525,76 +530,51 @@ class TestReportAuthFailure:
 
 
 class TestFinalizeSession:
-    """``_finalize_session`` caches session, configures timeout, announces MSPs."""
+    """``_finalize_session`` caches session and announces MSPs."""
 
     def test_full_finalize_sequence(self, caplog: pytest.LogCaptureFixture) -> None:
-        """State cached, timeout configured, MSP privileges announced."""
+        """State cached and MSP privileges announced."""
         orch = _make_orchestrator()
         fake_session = MagicMock(spec=object)
         with (
-            patch.object(LoginOrchestrator, "_configure_session_timeout") as fake_timeout,
             patch.object(LoginOrchestrator, "_announce_msp_privileges") as fake_msp,
             caplog.at_level(logging.INFO),
         ):
             orch._finalize_session(fake_session, "u@e.com", "api.mist.com")
         assert orch.state["apisession"] is fake_session  # WHY: state cache-back.
-        fake_timeout.assert_called_once_with(fake_session)  # WHY: timeout helper invoked.
         fake_msp.assert_called_once()  # WHY: MSP announcement invoked.
         assert "+ Login successful!" in caplog.text  # WHY: legacy console routed via logger.
         assert "Interactive login successful for u@e.com to api.mist.com" in caplog.text  # WHY: legacy log.
 
 
-class TestConfigureSessionTimeout:
-    """``_configure_session_timeout`` best-effort delegation to session_timeout helper."""
+def _imported_module_names(source_file: Path) -> set[str]:
+    """Return the absolute module names that a source file imports, including deferred imports."""
+    tree = ast.parse(source_file.read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for node in ast.walk(tree):  # WHY: deferred imports sit inside function bodies, so walk the whole tree.
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            names.add(node.module)
+    return names
 
-    def test_success_delegates_to_helper(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Import succeeds → helper called with the session."""
-        import sys  # WHY: inject a fake module into sys.modules for deferred import.
-        import types  # WHY: build a ModuleType stub for the deferred import target.
 
-        fake_module = types.ModuleType(
-            "src.mist.access.auth.session_timeout"
-        )  # WHY: real module type for import machinery.
-        fake_helper = MagicMock()  # WHY: replaced helper we can assert on.
-        cast(Any, fake_module).configure_session_timeout = fake_helper  # WHY: cast(Any) satisfies mypy + ruff.
-        monkeypatch.setitem(sys.modules, "src.mist.access.auth.session_timeout", fake_module)
-        fake_session = MagicMock(spec=object)
-        LoginOrchestrator._configure_session_timeout(fake_session)
-        fake_helper.assert_called_once_with(fake_session)  # WHY: delegation contract.
+def _module_resolves(module_name: str) -> bool:
+    """Return True when the import system finds the module in the real source tree."""
+    try:
+        return importlib.util.find_spec(module_name) is not None
+    except ModuleNotFoundError:  # WHY: a missing parent package raises instead of returning None.
+        return False
 
-    def test_swallowed_exception_does_not_propagate(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        """Helper raises → SUT swallows silently (legacy contract)."""
-        import sys  # WHY: inject fake module for the deferred import.
-        import types  # WHY: build a ModuleType stub.
 
-        fake_module = types.ModuleType("src.mist.access.auth.session_timeout")
+class TestImportResolution:
+    """Imports in the login orchestrator resolve in the real tree, not only in test stubs."""
 
-        def _boom(_session: Any) -> None:
-            raise RuntimeError("timeout wiring broken")  # WHY: reach the except Exception branch.
-
-        cast(Any, fake_module).configure_session_timeout = _boom  # WHY: cast(Any) satisfies mypy + ruff.
-        monkeypatch.setitem(sys.modules, "src.mist.access.auth.session_timeout", fake_module)
-        with caplog.at_level(logging.DEBUG):
-            LoginOrchestrator._configure_session_timeout(MagicMock(spec=object))  # SUT should not raise.
-        assert "timeout wiring broken" in caplog.text  # WHY: swallowed optional timeout failure must be observable.
-
-    def test_missing_module_swallowed(self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
-        """When the deferred import fails, the SUT swallows the ImportError silently."""
-        import builtins  # WHY: force ImportError from the deferred import hook.
-
-        real_import = builtins.__import__  # WHY: all unrelated imports must still work.
-
-        def blocked_import(name: str, *args: Any, **kwargs: Any) -> Any:
-            if name == "src.mist.access.auth.session_timeout":  # WHY: target only the optional helper.
-                raise ImportError("session timeout missing")  # WHY: exercise the missing-module branch.
-            return real_import(name, *args, **kwargs)  # WHY: keep all other imports normal.
-
-        monkeypatch.setattr(builtins, "__import__", blocked_import)
-        with caplog.at_level(logging.DEBUG):
-            LoginOrchestrator._configure_session_timeout(MagicMock(spec=object))  # SUT should not raise.
-        assert "session timeout missing" in caplog.text  # WHY: swallowed optional import failure must be observable.
+    def test_every_imported_module_resolves(self) -> None:
+        """A stale deferred import fails here. Existing tests inject stubs and hide it."""
+        orchestrator_file = Path(inspect.getfile(LoginOrchestrator))
+        unresolved = sorted(name for name in _imported_module_names(orchestrator_file) if not _module_resolves(name))
+        assert unresolved == []
 
 
 class TestAnnounceMspPrivileges:

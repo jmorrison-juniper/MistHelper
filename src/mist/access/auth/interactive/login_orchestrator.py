@@ -113,7 +113,7 @@ class LoginOrchestrator:
         if not self._is_authenticated(login_result):  # Login still failed after any 2FA
             self._report_auth_failure(login_result)  # Print + log legacy auth failure message
             return False  # Propagate failure to the caller
-        self._finalize_session(apisession, email, host)  # Cache session, configure timeout, MSPs
+        self._finalize_session(apisession, email, host)  # Cache session and announce MSPs
         return True  # Login completed successfully
 
     @staticmethod
@@ -224,24 +224,12 @@ class LoginOrchestrator:
         self.state["apisession"] = None  # Drop any partially established session reference
 
     def _finalize_session(self, apisession: Any, email: str, host: str) -> None:
-        """Persist the session, configure timeout, and announce MSP privileges."""
+        """Persist the session and announce MSP privileges."""
         self.state["apisession"] = apisession  # Cache the live session for the rest of the app
         logger.warning("")  # Blank spacer matches legacy output exactly
         logger.warning("  + Login successful!")  # Legacy console message routed via logger
         logger.info("Interactive login successful for %s to %s", email, host)  # Legacy info log
-        self._configure_session_timeout(apisession)  # Best-effort timeout configuration
         self._announce_msp_privileges()  # Detect and print MSP grants
-
-    @staticmethod
-    def _configure_session_timeout(apisession: Any) -> None:
-        """Best-effort: configure the session timeout if the helper is available."""
-        logger.debug("Configuring session timeout (best-effort)")  # Trace before optional helper
-        try:
-            from src.mist.access.auth.session_timeout import configure_session_timeout  # Deferred import
-
-            configure_session_timeout(apisession)  # Apply project-wide session timeout settings
-        except Exception as error:  # WHY: an optional step must never fail the login.
-            logging.debug("Session timeout configuration skipped: %s", error)  # Make the skip visible.
 
     def _announce_msp_privileges(self) -> None:
         """Detect MSP privileges via the injected callback and echo the result."""
