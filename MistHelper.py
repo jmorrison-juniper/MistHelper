@@ -1512,9 +1512,8 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
             if result.returncode == 0:  # pip reported success
                 logger.info("UV package manager installed successfully via pip")  # Confirm the install
                 return True  # UV is now available
-            else:  # pip returned an error
-                logger.error("Failed to install UV via pip: %s", result.stderr)  # Log pip's error output
-                return False  # UV remains unavailable
+            logger.error("Failed to install UV via pip: %s", result.stderr)  # Log pip's error output
+            return False  # UV remains unavailable
         except (TimeoutExpired, SubprocessError) as e:  # pip process hung or failed to launch
             logging.error("Failed to install UV package manager: %s", e)  # Log the exception
             return False  # UV remains unavailable
@@ -1648,9 +1647,8 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
             if result.returncode == 0:  # pip reported a successful install
                 logger.info("Successfully installed %s with pip", package_spec)  # Confirm success
                 return True  # Installation done
-            else:  # pip install failed
-                logger.error("Failed to install %s with pip: %s", package_spec, result.stderr)  # Log pip's error output
-                return False  # Signal failure to the caller
+            logger.error("Failed to install %s with pip: %s", package_spec, result.stderr)  # Log pip's error output
+            return False  # Signal failure to the caller
         except (TimeoutExpired, SubprocessError) as e:  # pip hung or failed to launch
             logging.error("Failed to install %s with pip: %s", package_spec, e)  # Log the exception detail
             return False  # Signal failure to the caller
@@ -2946,16 +2944,16 @@ def _check_token_rate_limit(
                 "Token %s is rate-limited (HTTP 429)", label
             )  # Preserve the existing behavior during the compliance refactor.
             return True  # Confirmed rate-limited -- skip this token
-        elif response.status_code == 200:  # HTTP 200 = OK = token is functional
+        if response.status_code == 200:  # HTTP 200 = OK = token is functional
             logger.debug(
                 "Token %s is available (HTTP 200)", label
             )  # Preserve the existing behavior during the compliance refactor.
             return False  # Token is usable -- include in available list
-        else:  # Any unexpected status treated as unavailable (defensive)
-            logger.warning(
-                "Token %s returned unexpected status %d", label, response.status_code
-            )  # Preserve the existing behavior during the compliance refactor.
-            return True  # Treat unexpected response as unavailable for safety
+        # Any unexpected status treated as unavailable (defensive)
+        logger.warning(
+            "Token %s returned unexpected status %d", label, response.status_code
+        )  # Preserve the existing behavior during the compliance refactor.
+        return True  # Treat unexpected response as unavailable for safety
     except (
         ImportError,
         OSError,
@@ -8237,7 +8235,7 @@ def dispatch_main_mode(
             _run_mib_generator_mode,
         ),
         (lambda a: bool(getattr(a, "metrics_gateway", False)), _run_metrics_gateway_mode),
-        (lambda a: _has_meaningful_cli_args(a), _run_cli_mode),
+        (_has_meaningful_cli_args, _run_cli_mode),
     )  # Resolve real handlers per dispatch so rebinding remains visible without a string or getter registry.
     for predicate, handler in modes:  # Stop on the first predicate that matches.
         if predicate(args):  # Preserve the existing behavior during the compliance refactor.
