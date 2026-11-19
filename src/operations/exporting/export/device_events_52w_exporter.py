@@ -35,7 +35,7 @@ _LOG_NO_ORG = "No org_id available. Exiting."  # WHY: Early-exit reason when org
 _LOG_EMPTY = "No device events found for the 52-week period."  # WHY: Empty-result branch info line
 _LOG_HEADER = "Using CSV header with %s fields for OrgDeviceEvents_52w.csv"  # WHY: Header shape trace
 _LOG_RESUME = "Resuming OrgDeviceEvents_52w from checkpoint token: %s"  # WHY: Checkpoint resume trace
-_LOG_CHECKPOINT_READ_FAIL = "Could not read checkpoint file %s: %s"  # WHY: Non-fatal read failure warn
+_LOG_CHECKPOINT_READ_FAIL = "Could not read checkpoint file %s: %s"  # WHY: Read failure is logged as an error
 _LOG_CHECKPOINT_WRITE_FAIL = "Could not write checkpoint file %s: %s"  # WHY: Non-fatal write failure warn
 _LOG_CHECKPOINT_REMOVE_FAIL = "Could not remove checkpoint file after completion"  # WHY: Debug-only removal miss
 _LOG_ATTEMPT_FAIL = "Attempt %s/%s to fetch page failed: %s"  # WHY: Retry attempt trace
@@ -79,6 +79,8 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
             return  # WHY: Abort export when no org context is available
         csv_file, checkpoint_file = self._paths()  # WHY: Resolve stable output paths
         search_after = self._read_checkpoint(checkpoint_file)  # WHY: Resume token if present
+        if search_after is not None and self.output_format != _SQLITE_FORMAT:  # WHY: CSV resume needs its file
+            self._require_csv_present(csv_file)  # WHY: Refuse before any page is requested
         buffered_rows, next_token = self._preload_rows(  # WHY: Preload rows to derive stable header
             _DEFAULT_LIMIT,
             _DEFAULT_DURATION,
@@ -88,7 +90,9 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
         if not buffered_rows:  # WHY: Empty result branch - emit empty output and exit
             return self._handle_empty_result()  # WHY: Empty branch short-circuits streaming
         header_fields = self._build_header(buffered_rows)  # WHY: Freeze schema before streaming loop
-        self._write_initial_batch(csv_file, buffered_rows, header_fields)  # WHY: Write preload rows once
+        self._write_initial_batch(  # WHY: Resumed runs append after the rows already written
+            csv_file, buffered_rows, header_fields, resuming=search_after is not None
+        )
         self._write_checkpoint(checkpoint_file, next_token)  # WHY: Persist resume token after batch
         self._finalize_streaming(next_token, csv_file, header_fields, checkpoint_file)  # WHY: Delegate tail
 
@@ -141,9 +145,10 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
         try:
             with open(checkpoint_file, encoding=_ENCODING) as handle:  # WHY: Read persisted resume token
                 token = handle.read().strip()  # WHY: Strip trailing newline written by _write_checkpoint
-        except Exception as error:  # WHY: Any read failure downgrades to non-fatal warn
-            self.logger.warning(_LOG_CHECKPOINT_READ_FAIL, checkpoint_file, error)  # WHY: Trace failure
-            return None  # WHY: Read failure treated as no checkpoint (fresh run)
+        except Exception as error:  # WHY: Any read failure must stop the export, not restart it
+            self.logger.error(_LOG_CHECKPOINT_READ_FAIL, checkpoint_file, error)  # WHY: Trace failure
+            message = "Could not read checkpoint file %s. Output and checkpoint are unchanged. Export stopped."
+            raise RuntimeError(message % checkpoint_file) from error  # WHY: Keep output and token
         if not token:  # WHY: Empty file behaves like missing checkpoint
             return None  # WHY: Empty token behaves like no resume token
         self.logger.info(_LOG_RESUME, token)  # WHY: Trace which token we are resuming from
@@ -244,21 +249,65 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
         self.logger.debug(_LOG_RETRY_WAIT, sleep_time)  # WHY: Trace planned wait
         time.sleep(sleep_time)  # WHY: Actual delay before next attempt
 
+    def _write_sqlite_batch(self, rows: list[dict[str, Any]]) -> None:  # WHY: Stop when a batch is not saved
+        """Write one batch to the SQLite backend and raise when the writer reports failure."""
+        saved = self.data_exporter.write_with_format_selection(  # WHY: Backend picks SQLite via options
+            rows,
+            _TABLE_NAME,
+            api_function_name=_API_FUNCTION_NAME,
+            backend_options=ExportBackendOptions(format_override=_SQLITE_FORMAT),  # WHY: #470
+        )
+        if not saved:  # WHY: A False result means the rows were not stored
+            message = "SQLite write failed for table %s. The checkpoint was not advanced."
+            self.logger.error(message, _TABLE_NAME)  # WHY: Operator-visible failure
+            raise RuntimeError(message % _TABLE_NAME)  # WHY: Caller must not record progress
+
+    def _refuse_resume(self, csv_file: str, reason: str) -> None:  # WHY: One refusal shape for every check
+        """Log and raise a resume refusal. Callers run this before any write."""
+        template = (
+            "Cannot resume into %s. %s Output and checkpoint are unchanged. "
+            "To start over, remove the checkpoint file. Warning: the next run replaces the CSV."
+        )
+        self.logger.error(template, csv_file, reason)  # WHY: Operator-visible refusal
+        raise RuntimeError(template % (csv_file, reason))  # WHY: Caller stops with the same reason
+
+    def _require_csv_present(self, csv_file: str) -> None:  # WHY: Earlier rows exist only in this file
+        """Refuse a resume when the CSV file is missing."""
+        if not os.path.exists(csv_file):  # WHY: A new file would hide the rows already exported
+            self._refuse_resume(csv_file, "The CSV file is missing.")
+
+    def _require_resumable_csv(self, csv_file: str, header_fields: list[str]) -> None:  # WHY: Guard before append
+        """Refuse a resume unless the CSV header matches and the last row is complete."""
+        with open(csv_file, newline="", encoding=_ENCODING) as handle:  # WHY: Read the header as csv wrote it
+            existing_header = next(csv.reader(handle), None)  # WHY: None means the file has no header
+        if existing_header != header_fields:  # WHY: Appended rows must match the file columns exactly
+            self._refuse_resume(csv_file, "The CSV header does not match the export fields.")
+        if not self._ends_with_line_break(csv_file):  # WHY: Appending after a partial row corrupts it
+            self._refuse_resume(csv_file, "The CSV ends in a partial row.")
+
+    @staticmethod
+    def _ends_with_line_break(csv_file: str) -> bool:  # WHY: A complete CSV row ends with a line break
+        """Return True when the CSV file ends with a line break byte."""
+        with open(csv_file, "rb") as handle:  # WHY: Binary read gives the exact final byte
+            handle.seek(-1, os.SEEK_END)  # WHY: Position on the last byte of a non-empty file
+            return handle.read(1) == b"\n"  # WHY: DictWriter ends each row with a line break
+
     def _write_initial_batch(  # WHY: First-batch writer picks CSV-truncate or SQLite backend
         self,
         csv_file: str,
         rows: list[dict[str, Any]],
         header_fields: list[str],
+        resuming: bool = False,  # WHY: Resumed CSV runs append to the rows already written
     ) -> None:
         """Write initial preload rows to destination output."""
         if self.output_format == _SQLITE_FORMAT:  # WHY: SQLite branch dispatches to backend writer
-            self.data_exporter.write_with_format_selection(  # WHY: Backend picks SQLite via options
-                rows,
-                _TABLE_NAME,
-                api_function_name=_API_FUNCTION_NAME,
-                backend_options=ExportBackendOptions(format_override=_SQLITE_FORMAT),  # WHY: #470
-            )
+            self._write_sqlite_batch(rows)  # WHY: Raises when the batch is not saved
             return  # WHY: SQLite branch fully handled - skip CSV writer
+        if resuming:  # WHY: Keep the rows written before the checkpoint
+            self._require_resumable_csv(csv_file, header_fields)  # WHY: Refuse before any write
+            self.logger.info("Appending resumed rows to %s.", csv_file)  # WHY: Trace the resumed append
+            self._append_rows(csv_file, rows, header_fields)  # WHY: Append after the existing rows
+            return  # WHY: Resumed CSV batch fully handled - skip the truncating writer
         with open(csv_file, "w", newline="", encoding=_ENCODING) as handle:  # WHY: Fresh CSV file
             writer = csv.DictWriter(handle, fieldnames=header_fields)  # WHY: Fixed schema for consistency
             writer.writeheader()  # WHY: Emit header row once
@@ -272,12 +321,7 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
     ) -> None:
         """Append normalized rows to destination output."""
         if self.output_format == _SQLITE_FORMAT:  # WHY: SQLite branch dispatches to backend writer
-            self.data_exporter.write_with_format_selection(  # WHY: Backend picks SQLite via options
-                rows,
-                _TABLE_NAME,
-                api_function_name=_API_FUNCTION_NAME,
-                backend_options=ExportBackendOptions(format_override=_SQLITE_FORMAT),  # WHY: #470
-            )
+            self._write_sqlite_batch(rows)  # WHY: Raises before the checkpoint can advance
             return  # WHY: SQLite branch fully handled - skip CSV append
         with open(csv_file, "a", newline="", encoding=_ENCODING) as handle:  # WHY: Append to CSV
             writer = csv.DictWriter(handle, fieldnames=header_fields)  # WHY: Reuse frozen schema
@@ -296,7 +340,10 @@ class DeviceEvents52wExporter:  # WHY: Public streaming exporter bound to a sing
             self._write_checkpoint(request.checkpoint_file, next_token)  # WHY: Persist resume point
 
     def _write_checkpoint(self, checkpoint_file: str, token: str | None) -> None:  # WHY: Resume-token persist
-        """Persist continuation token checkpoint for resume support."""
+        """Persist continuation token checkpoint for resume support.
+
+        A failed write can duplicate the last appended CSV batch on the next resume. SQLite stays idempotent.
+        """
         if not token:  # WHY: Guard - nothing to persist without a token
             return  # WHY: Skip persistence when no continuation token exists
         try:
