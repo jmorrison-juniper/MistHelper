@@ -141,7 +141,7 @@ class CacheUtils:
         return sorted(fieldnames)  # Sort so the CSV column order is deterministic
 
     @staticmethod
-    def _write_data_rows_to_csv(writer: csv.DictWriter, data: dict[str, list[dict[str, Any]]]) -> int:  # type: ignore[type-arg]
+    def _write_data_rows_to_csv(writer: csv.DictWriter[str], data: dict[str, list[dict[str, Any]]]) -> int:
         """Write every row from every section through writer. Return total row count."""
         row_count = 0  # Tally rows actually written so the caller can log the total
         for section in data.values():  # Iterate sections in insertion order. Keys are unused here

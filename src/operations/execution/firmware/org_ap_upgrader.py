@@ -451,7 +451,7 @@ class OrgLevelAPFirmwareUpgrader:
 
     def select_msps(self) -> list[Any]:
         """Select MSPs for upgrade."""
-        logger.debug("Entering _select_msps()")  # WHY: action-log after operation
+        logger.debug("Entering select_msps()")  # WHY: action-log after operation
         print("")  # WHY: surface user-facing message
         print("-" * 70)  # WHY: surface user-facing message
         print("  STEP 1: MSP Selection")  # WHY: surface user-facing message

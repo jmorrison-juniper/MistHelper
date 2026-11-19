@@ -13,7 +13,7 @@ _RADON_TIMEOUT_SECONDS = 300
 
 TARGETS = {
     "MistHelper.py": [
-        "_early_dependency_check",
+        "early_dependency_check",
         "_execute_site_capture_loop",
         "start_org_packet_capture",
         "device_events_52w",
