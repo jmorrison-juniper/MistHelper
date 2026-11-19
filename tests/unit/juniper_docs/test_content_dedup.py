@@ -69,3 +69,28 @@ def test_index_drops_canonical_path_that_was_removed(tmp_path: Path) -> None:
     assert index.find(_PDF) == stored  # Present, so it matches.
     stored.unlink()
     assert index.find(_PDF) is None  # Removed, so it no longer matches.
+
+
+def test_index_finds_canonical_file_after_reclassification_move(tmp_path: Path) -> None:
+    """A canonical PDF remains findable after reclassification moves its path."""
+    original = tmp_path / "uncategorized" / "guide.pdf"  # Initial harvest path.
+    original.parent.mkdir(parents=True)  # Make the temporary source folder.
+    original.write_bytes(_PDF)  # Store a valid PDF before indexing.
+    index = CorpusContentIndex(tmp_path)  # Index the configured test corpus.
+    assert index.find(_PDF) == original  # Cache the original canonical path.
+    moved = tmp_path / "uncategorized" / "classified" / "guide.pdf"  # Reclassified path.
+    moved.parent.mkdir(parents=True)  # Make the target category folder.
+    original.replace(moved)  # Simulate the runner moving the PDF after indexing.
+    assert index.find(_PDF) == moved  # Return the current path instead of writing a copy.
+
+
+def test_index_finds_remaining_duplicate_after_canonical_is_removed(tmp_path: Path) -> None:
+    """A remaining matching PDF replaces a removed canonical path."""
+    canonical = tmp_path / "a.pdf"  # Stable sorting selects this path first.
+    remaining = tmp_path / "b.pdf"  # This copy remains after the first path disappears.
+    canonical.write_bytes(_PDF)  # Create the first identical PDF.
+    remaining.write_bytes(_PDF)  # Create a second identical PDF.
+    index = CorpusContentIndex(tmp_path)  # Index both temporary files.
+    assert index.find(_PDF) == canonical  # Confirm the first path is canonical.
+    canonical.unlink()  # Simulate removal of the canonical copy.
+    assert index.find(_PDF) == remaining  # Reuse the remaining matching path.
