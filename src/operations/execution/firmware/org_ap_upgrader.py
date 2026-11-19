@@ -62,7 +62,7 @@ class OrgAPUpgraderConfig:  # WHY: declare OrgAPUpgraderConfig class
             raise TypeError("org_id must be a string")  # WHY: fail-fast on wrong identity type
         # WHY: apisession=None is permitted here. Every network-call site guards it explicitly
         # WHY: (see _fetch_org_aps, _step3_fetch_firmware_stats, _step4_fetch_available_firmware,
-        # WHY: _select_orgs_from_msp) and returns False/[] for graceful degradation.
+        # WHY: select_orgs_from_msp) and returns False/[] for graceful degradation.
 
     def _validate_di_hooks(self) -> None:  # WHY: declare private helper _validate_di_hooks
         """Enforce that every DI hook is either None or callable."""
@@ -290,7 +290,7 @@ class OrgLevelAPFirmwareUpgrader:
     def _msp_phase_select(self) -> list[Any] | None:  # WHY: declare private helper _msp_phase_select
         """MSP phase 1: select MSPs and gather orgs. Returns None if user cancels."""
         logger.info("MSP phase: select MSPs and collect orgs")  # WHY: phase entry audit
-        selected_msps = self._select_msps()  # WHY: user picks one or more MSPs
+        selected_msps = self.select_msps()  # WHY: user picks one or more MSPs
         if not selected_msps:  # WHY: cancellation guard on MSP selection
             print("  X Cancelled - no MSP selected")  # WHY: user-visible cancel notice
             logger.warning("MSP selection cancelled")  # WHY: audit trail
@@ -332,7 +332,7 @@ class OrgLevelAPFirmwareUpgrader:
         """Collect orgs from each selected MSP."""
         selected_orgs: list[Any] = []  # WHY: assign computed value
         for msp in selected_msps:  # WHY: iterate collection
-            orgs = self._select_orgs_from_msp(msp)  # WHY: compute orgs
+            orgs = self.select_orgs_from_msp(msp)  # WHY: compute orgs
             if orgs:  # WHY: branch on condition
                 selected_orgs.extend(orgs)  # WHY: advance computation
         return selected_orgs  # WHY: return computed result
@@ -449,9 +449,9 @@ class OrgLevelAPFirmwareUpgrader:
     # MSP / ORG SELECTION
     # =========================================================================
 
-    def _select_msps(self) -> list[Any]:
+    def select_msps(self) -> list[Any]:
         """Select MSPs for upgrade."""
-        logger.debug("Entering _select_msps()")  # WHY: action-log after operation
+        logger.debug("Entering select_msps()")  # WHY: action-log after operation
         print("")  # WHY: surface user-facing message
         print("-" * 70)  # WHY: surface user-facing message
         print("  STEP 1: MSP Selection")  # WHY: surface user-facing message
@@ -585,7 +585,7 @@ class OrgLevelAPFirmwareUpgrader:
         logger.info("User selected %s MSP(s)", len(selected))  # WHY: action-log before operation
         return selected  # WHY: return computed result
 
-    def _select_orgs_from_msp(self, msp: dict[str, Any]) -> list[Any]:  # WHY: declare private helper _select_orgs_from_
+    def select_orgs_from_msp(self, msp: dict[str, Any]) -> list[Any]:  # Expose the selector used by policy menus.
         """Select organizations from a specific MSP (PCPP: prepare -> compute -> present)."""
         logger.info("Selecting orgs from MSP %s", msp.get("msp_name"))  # WHY: phase entry audit
         msp_id, msp_name = self._prepare_msp_identity(msp)  # WHY: extract stable id + name

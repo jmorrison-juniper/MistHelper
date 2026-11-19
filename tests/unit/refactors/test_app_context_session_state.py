@@ -3,9 +3,12 @@
 from __future__ import annotations  # WHY: keep annotations cheap on Python 3.13.
 
 import ast  # WHY: inspect declarations without importing implementation details.
+import builtins
 import logging  # WHY: action logs help diagnose unit-test failures.
+import sys
 from pathlib import Path  # WHY: build paths without hardcoded separators.
 from types import SimpleNamespace  # WHY: create a small fake requests session.
+from typing import Any
 from unittest.mock import MagicMock  # WHY: isolate bootstrap side effects.
 
 import pytest  # WHY: use monkeypatch and tmp_path fixtures.
@@ -100,9 +103,9 @@ def test_second_web_bootstrap_call_uses_separate_context(monkeypatch: pytest.Mon
     logger.info("Patching bootstrap side effects for a two-call check")  # WHY: no file, network, or dependency work.
     startup = MagicMock(name="startup")  # WHY: count common startup calls.
     monkeypatch.setattr(ApplicationBootstrap, "_run_common_startup", startup)  # WHY: isolate bootstrap behavior.
-    monkeypatch.setattr(MistHelper, "_setup_runtime_flags", MagicMock(name="flags"), raising=False)  # WHY: avoid flags.
+    monkeypatch.setattr(MistHelper, "setup_runtime_flags", MagicMock(name="flags"), raising=False)  # WHY: avoid flags.
     dependency_mock = MagicMock(name="deps")  # WHY: avoid real dependency imports during the context test.
-    monkeypatch.setattr(MistHelper, "_initialize_dependencies", dependency_mock, raising=False)  # WHY: no imports.
+    monkeypatch.setattr(MistHelper, "initialize_dependencies", dependency_mock, raising=False)  # WHY: no imports.
     first = ApplicationBootstrap(parse_cli=False)  # WHY: build the first web bootstrap.
     second = ApplicationBootstrap(parse_cli=False)  # WHY: build the second web bootstrap.
     first.context.apisession = object()  # WHY: a session on one bootstrap must not leak to another.
@@ -124,3 +127,130 @@ def test_bootstrap_can_share_explicit_context() -> None:
     logger.debug("Explicit context was reused: %s", first.context is second.context)  # WHY: report sharing status.
     assert first.context is context  # WHY: the constructor must respect an explicit context.
     assert second.context is context  # WHY: no hidden context is allowed when the caller passes one.
+
+
+class TestTypedModuleContext:
+    """Preserve context routing and policy admission through typed module methods."""
+
+    @pytest.mark.parametrize(
+        ("module_name", "context_name"),
+        (
+            ("apisession", "apisession"),
+            ("org_id", "org_id"),
+            ("msp_privileges", "msp_privileges"),
+            ("selected_msp", "selected_msp"),
+            ("OUTPUT_FORMAT", "output_format"),
+            ("PROGRESS_EMITTER", "progress_emitter"),
+            ("FAST_MODE_ENABLED", "fast_mode_enabled"),
+        ),
+    )
+    def test_context_reads_writes_and_deletes(
+        self, monkeypatch: pytest.MonkeyPatch, module_name: str, context_name: str
+    ) -> None:
+        """Module access must target the current context without storing duplicate state."""
+        context = AppContext()  # Isolate all state changes from other tests.
+        monkeypatch.setattr(MainEntrypoint, "context", context)  # Select a fresh state owner.
+        sentinel = object()  # Distinguish forwarded identity from an accidental copied value.
+        setattr(MistHelper, module_name, sentinel)  # Exercise the actual module assignment method.
+        assert getattr(context, context_name) is sentinel  # The context must receive the exact supplied value.
+        assert getattr(MistHelper, module_name) is sentinel  # Module reads must observe that same state owner.
+        assert module_name not in vars(MistHelper)  # The module must not create a second state location.
+        delattr(MistHelper, module_name)  # Exercise the historical context-clear operation.
+        assert getattr(context, context_name) is None  # Deletion must retain the existing absence value.
+
+    def test_ordinary_attributes_and_missing_names(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Normal module names retain ordinary assignment, deletion, and failure behavior."""
+        name = "typed_context_test_attribute"  # Use a unique name outside the context mapping.
+        sentinel = object()  # A unique value proves ordinary module storage.
+        monkeypatch.setattr(MistHelper, name, sentinel, raising=False)  # Register cleanup before testing deletion.
+        assert vars(MistHelper)[name] is sentinel  # Unmapped values must stay on the module.
+        delattr(MistHelper, name)  # Remove the ordinary module attribute through the typed method.
+        with pytest.raises(AttributeError, match=name):  # Unknown reads must not create context state.
+            getattr(MistHelper, name)  # Read the deleted attribute through the actual module.
+        with pytest.raises(AttributeError, match=name):  # Repeated deletion must preserve the standard failure.
+            delattr(MistHelper, name)  # Delete a name that no longer exists.
+        setattr(MistHelper, name, sentinel)  # Let monkeypatch restore the original missing-name state.
+
+    def test_policy_requires_session_before_client_creation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A missing session must fail before either destructive policy menu constructs its client."""
+        monkeypatch.setattr(MainEntrypoint, "context", AppContext())  # Remove authenticated state without credentials.
+        client = MagicMock(name="PolicyApi")  # Record construction without any SDK operation.
+        monkeypatch.setattr(MistHelper, "PolicyApi", client)  # Keep the failure check entirely local.
+        for menu_id in ("305", "306"):  # Both policy handlers use the same validated construction boundary.
+            with pytest.raises(RuntimeError, match="Mist API session is not initialized"):  # Require explicit failure.
+                MistHelper.menu_actions[menu_id].handler()  # Stop before confirmation, backup, or API work.
+        client.assert_not_called()  # Neither menu may construct a client with an absent session.
+
+    def test_policy_preserves_authenticated_session(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Policy construction must use the exact authenticated context session."""
+        context = AppContext(apisession=object())  # An identity sentinel replaces the real SDK session.
+        monkeypatch.setattr(MainEntrypoint, "context", context)  # Isolate authenticated state from other tests.
+        client = MagicMock(name="PolicyApi")  # Avoid all SDK requests and request-controller setup.
+        monkeypatch.setattr(MistHelper, "PolicyApi", client)  # Observe the construction contract only.
+        result = MistHelper._build_policy_api()  # Exercise the checked success path.
+        client.assert_called_once_with(context.apisession)  # Preserve the session without substitution or copying.
+        assert result is client.return_value  # Return the exact client built for that session.
+
+    def test_site_upgrade_selectors_remain_lazy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Menu construction must not resolve an organization before a selector runs."""
+        monkeypatch.setattr(MainEntrypoint, "context", AppContext())  # Remove state from other menu tests.
+        builder = MagicMock(name="upgrader_builder")  # Replace all organization resolution and SDK access.
+        configure = MagicMock(name="configure")  # Capture callback wiring without changing any policy.
+        monkeypatch.setattr(MistHelper, "_build_org_ap_upgrader", builder)  # Observe lazy construction.
+        monkeypatch.setattr(MistHelper.SiteAutoUpgradeConfigurator, "execute", configure)  # Stop before dispatch.
+        MistHelper.menu_actions["168"].handler()  # Assemble the actual menu arguments without running selectors.
+        builder.assert_not_called()  # Organization prompts must remain deferred until a selector runs.
+        callbacks = configure.call_args.kwargs  # Inspect the callbacks supplied by the actual menu handler.
+        callbacks["select_msps_fn"]()  # Exercise public MSP selection only after explicit invocation.
+        builder.assert_called_once_with(org_id="")  # Preserve the existing organization override.
+        builder.return_value.select_msps.assert_called_once_with()  # Preserve the original selector arguments.
+        msp = {"msp_id": "test-msp"}  # Use a noncredential identity record for organization selection.
+        callbacks["select_orgs_fn"](msp)  # Exercise the typed callback with the original input object.
+        builder.return_value.select_orgs_from_msp.assert_called_once_with(msp)  # Preserve the MSP record.
+
+
+class TestOptionalSdkLoading:
+    """Keep the optional SDK import boundary independent of credentials and network access."""
+
+    def test_existing_sdk_does_not_import_again(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An existing SDK module must bypass the optional import operation."""
+        importer = MagicMock(name="__import__")  # Observe import attempts without loading packages.
+        monkeypatch.setattr(builtins, "__import__", importer)  # Isolate the static import boundary.
+        sdk = object()  # Represent a previously supplied SDK module without starting a session.
+        assert MistHelper.load_mistapi_module(sdk) is sdk  # Preserve the supplied module identity.
+        importer.assert_not_called()  # An existing module must avoid import side effects.
+
+    def test_available_sdk_is_loaded_by_name(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A missing SDK handle must resolve the same package through the optional importer."""
+        sdk = SimpleNamespace(APISession=object())  # Supply an SDK module without network or credentials.
+        monkeypatch.setitem(sys.modules, "mistapi", sdk)  # Exercise Python's normal static import behavior.
+        assert MistHelper.load_mistapi_module(None) is sdk  # Return the exact module from the import cache.
+
+    def test_absent_sdk_retains_explicit_failure(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """An unavailable SDK must retain the absence result and its operator error."""
+        monkeypatch.setitem(sys.modules, "mistapi", None)  # Python treats this cache entry as a failed import.
+        assert MistHelper.load_mistapi_module(None) is None  # Preserve the existing failure signal.
+        assert "Cannot import mistapi:" in caplog.text  # Preserve the visible cause.
+        assert "None in sys.modules" in caplog.text  # Confirm failure came from the static import boundary.
+
+
+def test_wsgi_menu_loader_uses_public_timeout_contract() -> None:
+    """Keep the live menu path without executing WSGI authentication at import time."""
+    source = Path(MistHelper.__file__).with_name("wsgi.py").read_text(encoding="utf-8")
+    function = next(
+        node
+        for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == "_load_menu_actions"
+    )
+    timeout = MagicMock(name="configure_session_timeout")
+    actions = {"safe-menu": object()}
+    host = SimpleNamespace(configure_session_timeout=timeout, menu_actions=actions)
+    namespace: dict[str, Any] = {"Any": Any, "_MISTHELPER_MODULE": host, "logger": MagicMock(), "os": SimpleNamespace()}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "wsgi.py", "exec"), namespace)
+    session = object()
+    result = namespace["_load_menu_actions"](session, "")
+    timeout.assert_called_once_with(session)
+    assert host.apisession is session
+    assert result is actions

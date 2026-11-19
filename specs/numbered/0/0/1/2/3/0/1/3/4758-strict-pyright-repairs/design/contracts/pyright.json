@@ -1,0 +1,13 @@
+{
+  "include": [
+    "../../../../../../../../../../../../../MistHelper.py",
+    "../../../../../../../../../../../../../src/foundation/persistence/cache/cache_utils.py",
+    "../../../../../../../../../../../../../src/mist/access/api/api_core_fetch_utils.py"
+  ],
+  "extraPaths": ["../../../../../../../../../../../../.."],
+  "venvPath": "../../../../../../../../../../../../..",
+  "venv": ".venv",
+  "stubPath": "third_party",
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.15"
+}

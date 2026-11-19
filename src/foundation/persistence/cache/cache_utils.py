@@ -49,7 +49,7 @@ class CacheUtils:
     @staticmethod
     def check_and_generate_csv(
         file_name: str,
-        generate_function: Callable,  # type: ignore[type-arg]
+        generate_function: Callable[[], object],
         freshness_minutes: int | None = None,
     ) -> bool:
         """Return True if file_name's CSV exists and is fresh. Otherwise run generate_function.
@@ -93,7 +93,7 @@ class CacheUtils:
             return False  # Treat unreadable metadata as stale
 
     @staticmethod
-    def _run_csv_generator(generate_function: Callable, file_name: str) -> bool:  # type: ignore[type-arg]  # Run generator
+    def _run_csv_generator(generate_function: Callable[[], object], file_name: str) -> bool:  # Run generator
         """Invoke the generate_function to produce the CSV. Return True on success, False on failure."""
         logger.info("* Running %s to generate %s...", generate_function.__name__, file_name)  # Log before generating
         try:  # The generator may raise. Never let that crash the caller
@@ -141,7 +141,7 @@ class CacheUtils:
         return sorted(fieldnames)  # Sort so the CSV column order is deterministic
 
     @staticmethod
-    def _write_data_rows_to_csv(writer: csv.DictWriter, data: dict[str, list[dict[str, Any]]]) -> int:  # type: ignore[type-arg]
+    def _write_data_rows_to_csv(writer: csv.DictWriter[str], data: dict[str, list[dict[str, Any]]]) -> int:
         """Write every row from every section through writer. Return total row count."""
         row_count = 0  # Tally rows actually written so the caller can log the total
         for section in data.values():  # Iterate sections in insertion order. Keys are unused here

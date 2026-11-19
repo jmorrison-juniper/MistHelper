@@ -35,7 +35,7 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
     """
 
     @staticmethod
-    def all_sites_with_limit(org_id: str) -> list[dict]:  # type: ignore[type-arg]
+    def all_sites_with_limit(org_id: str) -> list[dict[str, Any]]:
         """Fetch all sites with unified pagination.
 
         Args:
@@ -53,7 +53,7 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
         return mistapi.get_all(response=response, mist_session=mh.apisession)  # type: ignore[no-any-return]
 
     @staticmethod
-    def all_inventory_with_limit(org_id: str) -> list[dict]:  # type: ignore[type-arg]
+    def all_inventory_with_limit(org_id: str) -> list[dict[str, Any]]:
         """Fetch full org inventory with unified pagination.
 
         Args:

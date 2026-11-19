@@ -13,6 +13,7 @@ import argparse  # WHY: MagicMock(spec=argparse.ArgumentParser) contract typing.
 import logging
 from collections.abc import Callable, Iterator  # WHY: tests type handler fixtures.
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any  # WHY: mocks dict holds both MagicMock and Namespace objects.
 from unittest.mock import MagicMock, call  # WHY: FR-008 mandates MagicMock(spec=...) + call-order verification.
 
@@ -48,15 +49,14 @@ def wired_misthelper(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     input_utils_mock = MagicMock()  # WHY: InputUtils.ensure_tqdm_available() only; no spec class available here.
     mocks: dict[str, Any] = {  # WHY: bundle every entrypoint dependency (MagicMock + Namespace + parser handle).
-        "_initialize_deferred_imports": MagicMock(name="_initialize_deferred_imports"),
         "InputUtils": input_utils_mock,
-        "_build_argument_parser": MagicMock(return_value=parser_mock, name="_build_argument_parser"),
-        "_setup_runtime_flags": MagicMock(name="_setup_runtime_flags"),
-        "_initialize_dependencies": MagicMock(name="_initialize_dependencies"),
-        "_establish_mist_session": MagicMock(name="_establish_mist_session"),
+        "build_argument_parser": MagicMock(return_value=parser_mock, name="build_argument_parser"),
+        "setup_runtime_flags": MagicMock(name="setup_runtime_flags"),
+        "initialize_dependencies": MagicMock(name="initialize_dependencies"),
+        "establish_mist_session": MagicMock(name="establish_mist_session"),
         "_systematic_test_has_api_token": MagicMock(return_value=True, name="_systematic_test_has_api_token"),
-        "_configure_runtime_options": MagicMock(name="_configure_runtime_options"),
-        "_dispatch_main_mode": MagicMock(name="_dispatch_main_mode"),
+        "configure_runtime_options": MagicMock(name="configure_runtime_options"),
+        "dispatch_main_mode": MagicMock(name="dispatch_main_mode"),
     }
     bootstrap_startup_mock = MagicMock(name="_run_common_startup")  # WHY: avoid real file and dependency startup.
     monkeypatch.setattr(ApplicationBootstrap, "_run_common_startup", bootstrap_startup_mock)  # WHY: isolate run().
@@ -66,6 +66,53 @@ def wired_misthelper(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     mocks["_parsed_args"] = parsed_args  # WHY: expose the namespace instance for identity assertions.
     mocks["_run_common_startup"] = bootstrap_startup_mock  # WHY: expose the bootstrap boundary assertion.
     return mocks  # WHY: hand the wiring back to the test for call-order + arg assertions.
+
+
+class TestDeferredDependencyInitialization:
+    """Keep the live dependency path, publication, and once-only guard observable."""
+
+    @pytest.fixture
+    def manager(self, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+        """Replace only the import boundary while the real initializer controls its state."""
+        manager = SimpleNamespace(initialize_all_imports=MagicMock(return_value=(True, {})))
+        monkeypatch.setattr(MistHelper, "import_manager", manager)
+        monkeypatch.setattr(MistHelper, "_initialize_imports_now", False)
+        monkeypatch.setattr(MistHelper, "global_assignments", {})
+        monkeypatch.setattr(MistHelper, "success", False)
+        return manager
+
+    @pytest.mark.parametrize("skip_deps", [False, True])
+    def test_initialization_publishes_assignments_once(
+        self, monkeypatch: pytest.MonkeyPatch, manager: SimpleNamespace, skip_deps: bool
+    ) -> None:
+        """Full and minimal startup must publish the same objects without a second import."""
+        sentinel = object()
+        manager.initialize_all_imports.return_value = (True, {"cleanup_dependency_probe": sentinel})
+        monkeypatch.setattr(MistHelper, "cleanup_dependency_probe", None, raising=False)
+        arguments = argparse.Namespace(skip_deps=skip_deps, test=False)
+        MistHelper.initialize_dependencies(arguments)
+        MistHelper.initialize_dependencies(arguments)
+        manager.initialize_all_imports.assert_called_once_with(skip_deps=skip_deps)
+        assert MistHelper.cleanup_dependency_probe is sentinel
+        assert MistHelper.success is True
+        assert manager.deferred_init_done is True
+
+    def test_critical_import_failure_stops_startup(self, manager: SimpleNamespace) -> None:
+        """A missing critical dependency must retain the non-test failure exit."""
+        manager.initialize_all_imports.return_value = (False, {})
+        with pytest.raises(SystemExit) as error:
+            MistHelper.initialize_dependencies(argparse.Namespace(skip_deps=False, test=False))
+        assert error.value.code == 1
+        assert MistHelper.success is False
+        manager.initialize_all_imports.assert_called_once_with(skip_deps=False)
+
+    def test_test_mode_records_failed_imports_without_aborting(self, manager: SimpleNamespace) -> None:
+        """The systematic test path must retain its explicit partial-import state."""
+        manager.initialize_all_imports.return_value = (False, {})
+        MistHelper.initialize_dependencies(argparse.Namespace(skip_deps=False, test=True))
+        assert MistHelper.success is False
+        assert manager.deferred_init_done is True
+        manager.initialize_all_imports.assert_called_once_with(skip_deps=False)
 
 
 class TestMistHelperProxy:
@@ -104,31 +151,40 @@ def _menu_entry(menu_id: str, handler, title: str) -> MenuEntry:
 class TestMainEntrypointRun:
     """`MainEntrypoint.run` drives the eight-step pipeline in declared order."""
 
+    def test_empty_argument_list_reaches_normal_startup(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An empty parser input follows normal startup instead of the help exit path."""
+        startup = MagicMock(side_effect=RuntimeError("Normal startup was reached"))  # WHY: stop at context setup.
+        monkeypatch.setattr(MainEntrypoint, "activate_context", startup)  # WHY: distinguish startup from help.
+        bootstrap = ApplicationBootstrap(argv=[])  # WHY: pass the actual empty argument list to argparse.
+        with pytest.raises(RuntimeError, match="Normal startup was reached"):  # WHY: normal startup must proceed.
+            bootstrap.bootstrap_for_cli()  # WHY: use the real bootstrap and parser path.
+        startup.assert_called_once()  # WHY: context activation proves argparse did not exit for help.
+
     def test_run_invokes_pipeline_steps_in_order(self, wired_misthelper: dict[str, Any]) -> None:
         """Each of the eight pipeline steps is called exactly once in the documented order."""
         MainEntrypoint.run()  # WHY: exercise the full CLI entrypoint under mocked dependencies.
 
         # Assert each step was called exactly once (existence + arity are covered by argument checks below).
-        assert wired_misthelper["_build_argument_parser"].call_count == 1  # WHY: step 1 builds the parser.
+        assert wired_misthelper["build_argument_parser"].call_count == 1  # WHY: step 1 builds the parser.
         assert wired_misthelper["_parser"].parse_args.call_count == 1  # WHY: step 2 parses exactly once.
         assert wired_misthelper["_run_common_startup"].call_count == 1  # WHY: step 3 runs explicit bootstrap work.
         assert wired_misthelper["InputUtils"].ensure_tqdm_available.call_count == 1  # WHY: step 4 sets tqdm.
-        assert wired_misthelper["_setup_runtime_flags"].call_count == 1  # WHY: step 5 propagates flags.
-        assert wired_misthelper["_initialize_dependencies"].call_count == 1  # WHY: step 6 initializes deps.
-        assert wired_misthelper["_establish_mist_session"].call_count == 1  # WHY: step 7 authenticates.
+        assert wired_misthelper["setup_runtime_flags"].call_count == 1  # WHY: step 5 propagates flags.
+        assert wired_misthelper["initialize_dependencies"].call_count == 1  # WHY: step 6 initializes deps.
+        assert wired_misthelper["establish_mist_session"].call_count == 1  # WHY: step 7 authenticates.
         assert wired_misthelper["_systematic_test_has_api_token"].call_count == 1  # WHY: step 7 checks token state.
-        assert wired_misthelper["_configure_runtime_options"].call_count == 1  # WHY: step 8 applies runtime options.
-        assert wired_misthelper["_dispatch_main_mode"].call_count == 1  # WHY: step 9 dispatches the mode.
+        assert wired_misthelper["configure_runtime_options"].call_count == 1  # WHY: step 8 applies runtime options.
+        assert wired_misthelper["dispatch_main_mode"].call_count == 1  # WHY: step 9 dispatches the mode.
 
     def test_run_forwards_parsed_args_to_downstream_steps(self, wired_misthelper: dict[str, Any]) -> None:
         """Steps 5-8 all receive the exact Namespace returned by parser.parse_args()."""
         MainEntrypoint.run()  # WHY: single invocation drives every downstream step with the same args namespace.
         expected_args = wired_misthelper["_parsed_args"]  # WHY: identity object we expect to see propagated.
-        assert wired_misthelper["_setup_runtime_flags"].call_args == call(expected_args)  # WHY: step 5 args-pass.
-        assert wired_misthelper["_initialize_dependencies"].call_args == call(expected_args)  # WHY: step 6 args-pass.
-        assert wired_misthelper["_establish_mist_session"].call_args == call(expected_args)  # WHY: step 7 args-pass.
-        assert wired_misthelper["_configure_runtime_options"].call_args == call(expected_args)  # WHY: step 8a pass.
-        assert wired_misthelper["_dispatch_main_mode"].call_args == call(expected_args)  # WHY: step 8b args-pass.
+        assert wired_misthelper["setup_runtime_flags"].call_args == call(expected_args)  # WHY: step 5 args-pass.
+        assert wired_misthelper["initialize_dependencies"].call_args == call(expected_args)  # WHY: step 6 args-pass.
+        assert wired_misthelper["establish_mist_session"].call_args == call(expected_args)  # WHY: step 7 args-pass.
+        assert wired_misthelper["configure_runtime_options"].call_args == call(expected_args)  # WHY: step 8a pass.
+        assert wired_misthelper["dispatch_main_mode"].call_args == call(expected_args)  # WHY: step 8b args-pass.
 
     def test_run_replaces_active_context_for_each_invocation(self, wired_misthelper: dict[str, Any]) -> None:
         """Each CLI invocation receives a fresh active context."""
@@ -146,8 +202,8 @@ class TestMainEntrypointRun:
 
         MainEntrypoint.run()  # WHY: exercise the entrypoint branch that must run offline.
 
-        wired_misthelper["_establish_mist_session"].assert_not_called()  # WHY: no-token --test must not auth.
-        wired_misthelper["_dispatch_main_mode"].assert_called_once_with(
+        wired_misthelper["establish_mist_session"].assert_not_called()  # WHY: no-token --test must not auth.
+        wired_misthelper["dispatch_main_mode"].assert_called_once_with(
             wired_misthelper["_parsed_args"]
         )  # WHY: the test dispatcher must still run.
 
@@ -158,8 +214,8 @@ class TestMainEntrypointRun:
 
         MainEntrypoint.run()  # WHY: exercise the offline interactive-safe test startup path.
 
-        wired_misthelper["_establish_mist_session"].assert_not_called()  # WHY: no-token mode must not auth.
-        wired_misthelper["_dispatch_main_mode"].assert_called_once_with(
+        wired_misthelper["establish_mist_session"].assert_not_called()  # WHY: no-token mode must not auth.
+        wired_misthelper["dispatch_main_mode"].assert_called_once_with(
             wired_misthelper["_parsed_args"]
         )  # WHY: the runner must emit credential skips and fail zero exercise.
 
@@ -170,7 +226,7 @@ class TestMainEntrypointRun:
 
         MainEntrypoint.run()  # WHY: exercise the unchanged live-test startup path.
 
-        wired_misthelper["_establish_mist_session"].assert_called_once_with(
+        wired_misthelper["establish_mist_session"].assert_called_once_with(
             wired_misthelper["_parsed_args"]
         )  # WHY: token-backed --test must behave as before.
 
@@ -182,7 +238,7 @@ class TestMainEntrypointRun:
 
         MainEntrypoint.run()  # WHY: exercise the login branch with no environment token.
 
-        wired_misthelper["_establish_mist_session"].assert_called_once_with(
+        wired_misthelper["establish_mist_session"].assert_called_once_with(
             wired_misthelper["_parsed_args"]
         )  # WHY: --login must still build a session.
 
@@ -225,7 +281,7 @@ class TestMistHelperMenuAndModeCaches:
         ]  # WHY: the cache must not serve stale keys or alter menu text.
 
     def test_dispatch_main_mode_keeps_handler_order_and_late_binding(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """The cached mode table preserves first-match dispatch and handler rebinding."""
+        """The ordered mode declarations preserve first-match dispatch and handler rebinding."""
         calls: list[str] = []  # WHY: record the selected handler for each synthetic mode.
 
         def make_handler(name: str) -> Callable[[argparse.Namespace], None]:
@@ -280,11 +336,15 @@ class TestMistHelperMenuAndModeCaches:
         for mode_name in mode_names:
             values = dict(base)  # WHY: isolate one flag per dispatch case.
             values[mode_name] = True  # WHY: select the mode under test.
-            MistHelper._dispatch_main_mode(argparse.Namespace(**values))  # WHY: exercise the cached table.
+            MistHelper.dispatch_main_mode(argparse.Namespace(**values))  # WHY: exercise the ordered dispatch.
+        priority_values = dict(base)  # WHY: verify that overlapping modes keep first-match precedence.
+        priority_values["test"] = True  # WHY: select the first registered mode.
+        priority_values["testinteractive"] = True  # WHY: also select a later mode.
+        MistHelper.dispatch_main_mode(argparse.Namespace(**priority_values))  # WHY: the first mode must win.
         cli_values = dict(base)  # WHY: build the explicit CLI dispatch case.
         cli_values["menu"] = "1"  # WHY: a menu value is a meaningful CLI argument.
-        MistHelper._dispatch_main_mode(argparse.Namespace(**cli_values))  # WHY: exercise CLI branch.
-        MistHelper._dispatch_main_mode(argparse.Namespace(**base))  # WHY: exercise fallback branch.
+        MistHelper.dispatch_main_mode(argparse.Namespace(**cli_values))  # WHY: exercise CLI branch.
+        MistHelper.dispatch_main_mode(argparse.Namespace(**base))  # WHY: exercise fallback branch.
 
         assert calls == [
             "test",
@@ -295,6 +355,7 @@ class TestMistHelperMenuAndModeCaches:
             "metrics_snmp",
             "mib_generate",
             "metrics_gateway",
+            "test",
             "cli",
             "interactive",
         ]  # WHY: cached predicates and late-bound handlers must match the original behavior.

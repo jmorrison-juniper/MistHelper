@@ -3,16 +3,15 @@
 Owns the token-based Mist API session initialization originally defined
 as the top-level `initialize_mist_session` function in MistHelper.py, and
 re-lands it as a class-body method per FR-005. The two MistHelper
-callsites (entrypoint `_establish_mist_session` token path and TUI
+callsites (entrypoint `establish_mist_session` token path and TUI
 guard `_ensure_tui_api_session`) are rewritten in the same PR to invoke
 the class method. No wrapper shim remains in MistHelper.py after this
 extraction.
 
 MistHelper module-globals (`apisession`, `mistapi`) and helper functions
-(`_load_mistapi_module`, `_parse_api_tokens`,
-`_introspect_apisession_class`, `_attempt_all_session_strategies`,
-`_log_failed_session_variants`, `_configure_session_timeout`,
-`_validate_initialized_session`) are resolved lazily through the `_MH`
+(`load_mistapi_module`, `_parse_api_tokens`,
+`introspect_apisession_class`, `attempt_all_session_strategies`,
+`log_failed_session_variants`, `log_session_auth_status`) are resolved lazily through the `_MH`
 proxy so live re-bindings after interactive login and test
 monkeypatching are honoured. Assignments back to `apisession` /
 `mistapi` are mirrored via `setattr` on the MistHelper module so token
@@ -141,7 +140,7 @@ class MistSessionConfigurator:
         if not (hasattr(session, "mist_get") or hasattr(session, "get")):  # Need one supported GET method.
             _MH.logging.error("The Mist API session has no supported GET method")  # Tell the operator the cause.
             return False  # A session that cannot read Mist Cloud is unusable.
-        _MH._log_session_auth_status(session, method)  # Reuse the existing auth-status report.
+        _MH.log_session_auth_status(session, method)  # Reuse the existing auth-status report.
         return True  # The session shape is usable.
 
 
@@ -162,19 +161,19 @@ class MistSessionInitializer:  # Token-based Mist session orchestration seam
             context.apisession = module_dict.pop("apisession")  # Move the legacy write into the context.
         if context.apisession:  # Already initialized -- skip all setup and return immediately.
             return True
-        loaded_mistapi = _MH._load_mistapi_module(_MH.mistapi)  # Ensure mistapi is available.
+        loaded_mistapi = _MH.load_mistapi_module(_MH.mistapi)  # Ensure mistapi is available.
         context.mistapi = loaded_mistapi  # Store the SDK module with the session context.
         if not loaded_mistapi:  # mistapi unavailable -- cannot proceed
             return False
         host, tokens = _MH._parse_api_tokens()  # Read MIST_HOST and MIST_APITOKEN from env
-        apisession_cls, sig_params = _MH._introspect_apisession_class(loaded_mistapi)  # Discover APISession + params
+        apisession_cls, sig_params = _MH.introspect_apisession_class(loaded_mistapi)  # Discover APISession + params
         new_apisession, successful_method, tried_variants = (  # Run all session strategies
-            _MH._attempt_all_session_strategies(apisession_cls, sig_params, tokens, host, loaded_mistapi)
+            _MH.attempt_all_session_strategies(apisession_cls, sig_params, tokens, host, loaded_mistapi)
         )
         context.apisession = new_apisession  # Store the discovered session in the explicit context.
         module_dict.pop("apisession", None)  # Keep the module dictionary free of the old session global.
         if not new_apisession:  # All strategies exhausted -- log tried variants and fail.
-            _MH._log_failed_session_variants(tried_variants)  # Report the attempted constructor shapes.
+            _MH.log_failed_session_variants(tried_variants)  # Report the attempted constructor shapes.
             return False  # Signal that no usable session exists.
         return bool(  # Configure once, then validate the freshly built session.
             MistSessionConfigurator.configure_once(context, new_apisession, successful_method)
