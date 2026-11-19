@@ -77,7 +77,7 @@ The operator opens a dialog that needs no keyword.
 
 - **SC-001**: The cold-start test fails when `initialFocus` is removed, and passes with it.
 - **SC-002**: The full ops-portal Vitest suite passes.
-- **SC-003**: Browser validation of the issue steps is open. It must pass before the pull request is marked ready.
+- **SC-003**: Browser validation of the issue steps passed. A Playwright 1.65.0 check with headless Chromium 158 exited 0 in four runs with the fix. Without `initialFocus`, the same check exited 1.
 
 ## Assumptions
 

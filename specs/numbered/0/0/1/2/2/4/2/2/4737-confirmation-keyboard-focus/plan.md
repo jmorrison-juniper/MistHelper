@@ -54,7 +54,7 @@ The first portal of a module instance renders its children after an extra pass. 
 
 A module instance keeps the portal state. The cold-start test therefore lives in its own file, so it renders the first dialog of that module instance.
 
-The browser mechanism is not verified by this candidate. The jsdom result matches the reported browser result, and browser validation remains open.
+The browser mechanism is not verified by this candidate. The jsdom and browser checks both match the reported result.
 
 ## Data and Contracts
 
@@ -79,4 +79,4 @@ Run the mutation check. Remove `initialFocus` from the dialog, run `npm test -- 
 - `npm run lint`: exit 0 with two existing warnings in files this change does not touch.
 - `npm test`: exit 0. Two test files and 19 tests passed.
 - Mutation check: removing `initialFocus` fails the cold-start test and leaves the other 18 tests passing.
-- Browser validation: not run.
+- Browser validation: passed. A Playwright 1.65.0 check with headless Chromium 158 exited 0 in four runs with the fix, and exited 1 without `initialFocus`.

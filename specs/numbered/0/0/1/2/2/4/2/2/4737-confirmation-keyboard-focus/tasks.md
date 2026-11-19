@@ -24,10 +24,10 @@
 - [x] T009 Run typecheck, lint, and the full Vitest suite in `ops-portal/`.
 - [x] T010 Run the mutation check and confirm that the cold-start test fails without `initialFocus`.
 - [x] T011 Add `changelog.d/issue-4737-confirmation-dialog-keyboard-focus.md`.
-- [ ] T012 Run browser validation of the issue steps.
+- [x] T012 Run browser validation of the issue steps. Exit codes: fix 0 in four runs, without `initialFocus` 1.
 - [ ] T013 Open the pull request after browser validation and human review.
 
 ## Dependencies and Execution
 
 T001 through T003 precede implementation. T004 precedes T005 and T006.
-T009 and T010 precede the local commit. T012 and T013 remain open after the commit.
+T009 and T010 precede the local commit. T013 remains open after the commit.
