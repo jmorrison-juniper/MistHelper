@@ -183,7 +183,7 @@ except ImportError:  # If database dependencies (python-arango, redis) not insta
     configure_db_logging = None  # None lets runtime guards detect DB-layer absence
     DatabaseRouter = None  # None lets runtime guards detect DB-layer absence
 
-DB_LAYER_AVAILABLE = DatabaseConfig is not None  # Derive availability once from the completed optional import.
+DB_LAYER_AVAILABLE: bool = DatabaseConfig is not None  # Preserve the exported optional-layer status as a typed value.
 
 # Explicit public API surface (issue #895).
 # A src.* submodule re-exports every name below for external
@@ -1035,11 +1035,8 @@ def _parse_requirements_file(
         logging.warning("Error parsing requirements file: %s", parse_error, exc_info=True)  # Keep the traceback
         return []  # Fail safe with an empty list rather than crashing startup
 
-        # _early_dependency_check_legacy_impl removed per issue #431 (ARCH-NAMING +
-        # dead-code). The function (~430 lines, cyclomatic 64) was a leftover legacy
-        # implementation never called from anywhere -- production startup uses the
-        # canonical early_dependency_check() defined below which delegates to the
-        # extracted src/foundation/runtime/bootstrap/* orchestrator.
+        # The unused 430-line legacy checker was removed per issue #431.
+        # Startup uses early_dependency_check() and the extracted bootstrap modules.
 
 
 def early_dependency_check() -> None:  # Public entry point. Delegates to the extracted bootstrap modules
@@ -2537,7 +2534,7 @@ org_id: str | None  # MainEntrypoint.context owns the active organization identi
 FAST_MODE_RETRY_THREADS = 4  # Bootstrap updates this value from the environment.
 FAST_MODE_RETRY_MAX_RETRIES = 2  # Bootstrap updates this value from the environment.
 FAST_MODE_FALLBACK_THREADS = 8  # Bootstrap updates this value from the environment.
-RRM_DRY_RUN_DEFAULT = cast(bool | None, None)  # Keep the absent mode value and the handler's tri-state input contract.
+RRM_DRY_RUN_DEFAULT: bool | None = cast(bool | None, None)  # Preserve absent input for three-state RRM mode selection.
 
 # Global configuration for output format (CSV or Redis/SQLite)
 # Default to CSV for general use, can be overridden by CLI flag

@@ -21,7 +21,7 @@
 - [x] T007 [US1] Express actual dynamic dispatch contracts without dummy references in `MistHelper.py`. (delivered: MistHelper.py)
 - [x] T008 [US1] Correct required shared callback and record contracts under `src/`.
 - [x] T009 [US1] Resolve the reserved portal signature contract in `web_portal/app.py` after handoff. (delivered: web_portal/app.py)
-- [ ] T010 [US1] Record a verified zero-error strict report in `analysis.md`.
+- [x] T010 [US1] Record a verified zero-error strict report in `analysis.md`.
 
 ## Phase 4: User Story 2 - Preserve behavior
 
@@ -62,11 +62,11 @@ Measure strict diagnostics after each coherent group.
 Preserve unchecked tasks when an ownership blocker prevents completion.
 Optional commit hooks remain deferred to the verified local commit.
 
-## Remaining work
+## Completion
 
-T007 includes the approved authentication-status definition and initializer-reference rename.
-The initializer audit found no additional private helper without a surviving root caller.
-The cleanup removes all nine audited declarations and four helpers used only by the removed code.
-The updated tests exercise real help, session validation, and dependency initialization behavior.
-T008 and T003 are complete under the later direct authorization.
-T010 remains open until the refreshed-main combined strict report passes.
+The final branch starts from current `origin/main` at `26ac261392ac29119fa4f83e30c6ce9a0df12ab3`.
+Strict Pyright reports zero errors across three files.
+The focused regression selection passes 410 tests with one existing warning.
+The annotation audit confirms unchanged API and cache function bodies and defaults.
+The symbol audit reports intentional public renames and verified dead-code removals.
+The publication slot remains outside this implementation task.

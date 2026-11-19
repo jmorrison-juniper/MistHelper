@@ -1,26 +1,29 @@
-# Research
+# Original research record
 
-## Baseline
+This record describes the initial analysis.
+The final combined result is in [analysis.md](../analysis.md).
 
-Decision: Use Pyright 1.1.414 with Python 3.15.2 and locked worktree dependencies.
-Rationale: This reproduces the coordinator's 108 errors on the exact live main revision.
-Alternative: The first configuration used an unsupported absolute include and analyzed zero files.
-That report is invalid. The corrected command explicitly selects `MistHelper.py` and analyzes one file.
+## Original baseline
+
+The initial task base reported 108 errors with Pyright 1.1.414 and Python 3.15.2.
+The final combined candidate starts from `origin/main` commit `26ac261392ac29119fa4f83e30c6ce9a0df12ab3`.
+It analyzes the entry point and two shared contracts with zero errors and zero warnings.
+The first configuration used an unsupported absolute include and analyzed zero files.
+That report is invalid.
 
 ## Dynamic access
 
-Decision: Preserve dynamically called functions and module context behavior.
-Rationale: Runtime consumers use string lookup, which does not establish a static reference.
-Alternative: Deleting functions or adding unused reference collections would conceal the contract problem.
+Production consumers use the existing resolver or direct module access.
+The repair makes verified cross-module helpers public and updates their owned consumers.
+It removes private declarations only after a tracked reference audit.
+It adds no unused reference collection or compatibility alias.
 
 ## Ownership
 
-Decision: Request a narrow portal signature handoff before edits.
-Rationale: `WebPortalApp.create_app` exposes an unparameterized menu dictionary.
-Alternative: A caller-side cast would conceal the source contract.
+The owners granted narrow handoffs for the portal signature and two annotation-only contracts.
+The repair changes no other owner-controlled behavior.
 
 ## Prior work
 
-No local or remote branch named for issue #4758 was found.
-Unreachable commit subjects did not identify the earlier shared-type repair.
-No existing ref was removed or rewritten.
+At initial discovery, no local or remote branch named for issue #4758 was available.
+The repair preserves earlier refs and commits.

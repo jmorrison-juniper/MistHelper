@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import MistHelper
-from src.foundation.support.refactors.main_entrypoint import MainEntrypoint
+from src.foundation.support.refactors.main_entrypoint import ApplicationBootstrap, MainEntrypoint
 
 
 class TestHelpArgumentParsing:
@@ -47,6 +47,15 @@ class TestHelpArgumentParsing:
         assert error.value.code == 2
         assert "error:" in capsys.readouterr().err.lower()
         startup.assert_not_called()
+
+    def test_empty_argument_list_is_not_help(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An empty parser input follows normal startup instead of the help exit path."""
+        startup = MagicMock(side_effect=RuntimeError("Normal startup was reached"))
+        monkeypatch.setattr(MainEntrypoint, "activate_context", startup)
+        bootstrap = ApplicationBootstrap(argv=[])
+        with pytest.raises(RuntimeError, match="Normal startup was reached"):
+            bootstrap.bootstrap_for_cli()
+        startup.assert_called_once()
 
     @pytest.mark.parametrize(
         "process_arguments",
