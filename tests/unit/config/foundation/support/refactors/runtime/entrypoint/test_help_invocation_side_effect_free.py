@@ -48,15 +48,20 @@ class TestHelpArgumentParsing:
         assert "error:" in capsys.readouterr().err.lower()
         startup.assert_not_called()
 
-    @pytest.mark.parametrize("process_arguments", [["MistHelper.py"], ["--help"]])
+    @pytest.mark.parametrize(
+        "process_arguments",
+        [["MistHelper.py"], ["--help"], ["MistHelper.py", "--menu", "1"]],
+    )
     def test_program_name_is_not_a_help_argument(
         self, monkeypatch: pytest.MonkeyPatch, process_arguments: list[str]
     ) -> None:
-        """An absent argument tail must retain normal defaults, including a help-like program name."""
+        """Only parsed arguments trigger help, and normal startup remains reachable."""
+        startup = MagicMock(side_effect=RuntimeError("Normal startup was reached"))
+        monkeypatch.setattr(MainEntrypoint, "activate_context", startup)
         monkeypatch.setattr(sys, "argv", process_arguments)
-        arguments = MistHelper.build_argument_parser().parse_args([])
-        assert arguments.menu is None
-        assert arguments.test is False
+        with pytest.raises(RuntimeError, match="Normal startup was reached"):
+            MainEntrypoint.run()
+        startup.assert_called_once()
 
 
 class TestHelpSubprocessInvocation:

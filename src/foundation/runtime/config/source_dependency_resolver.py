@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)  # Use this module name in log records.
 class SourceDependencyResolverService:
     """Resolve legacy source dependency names through canonical source owners."""
 
+    CSV_FRESHNESS_MINUTES: int  # Match the integer setting returned by the source settings module.
+
     _context_names = {  # Map legacy state names to the application context fields.
         "apisession": "apisession",  # Keep session reads pointed at the active context.
         "org_id": "org_id",  # Keep organization reads pointed at the active context.
