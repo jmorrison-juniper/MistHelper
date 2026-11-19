@@ -35,7 +35,7 @@ class APICoreFetchUtils:  # Low-level Mist API fetch helpers.
     """
 
     @staticmethod
-    def all_sites_with_limit(org_id: str) -> list[dict]:  # type: ignore[type-arg]
+    def all_sites_with_limit(org_id: str) -> list[dict[str, Any]]:
         """Fetch all sites with unified pagination.
 
         Args:
