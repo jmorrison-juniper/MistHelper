@@ -1,4 +1,8 @@
-# Corrective review and remaining work
+# Historical corrective review
+
+This record describes commit `e5f796d9689e17b5a8ad7b5a43b0c349eb3dee90`, before the bounded private-code cleanup.
+The [cleanup record](cleanup.md) supersedes its remaining-declaration classification and results.
+The original rejected approaches remain rejected.
 
 ## Result
 
