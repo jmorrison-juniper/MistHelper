@@ -7,7 +7,7 @@
 
 ## Phase 2: Foundational contracts
 
-- [ ] T003 Confirm reserved dependency handoffs in `analysis.md` before affected edits.
+- [x] T003 Confirm the narrow annotation handoffs in `analysis.md` before affected edits.
 - [x] T004 Record the complete diagnostic groups and source contract choices in `analysis.md`. (delivered: analysis.md)
 
 ## Phase 3: User Story 1 - Trust diagnostics
@@ -19,7 +19,7 @@
 - [x] T005 [US1] Correct local inferred collections and exception scope in `MistHelper.py`. (delivered: MistHelper.py)
 - [x] T006 [US1] Correct optional import contracts and typed dynamic module methods in `MistHelper.py`. (delivered: MistHelper.py)
 - [x] T007 [US1] Express actual dynamic dispatch contracts without dummy references in `MistHelper.py`. (delivered: MistHelper.py)
-- [ ] T008 [US1] Correct required shared callback and record contracts under `src/`.
+- [x] T008 [US1] Correct required shared callback and record contracts under `src/`.
 - [x] T009 [US1] Resolve the reserved portal signature contract in `web_portal/app.py` after handoff. (delivered: web_portal/app.py)
 - [ ] T010 [US1] Record a verified zero-error strict report in `analysis.md`.
 
@@ -62,13 +62,11 @@ Measure strict diagnostics after each coherent group.
 Preserve unchecked tasks when an ownership blocker prevents completion.
 Optional commit hooks remain deferred to the verified local commit.
 
-## Blocked work
+## Remaining work
 
-T003 remains incomplete for the archived API and cache owners.
-T008 retains their two unchanged source contracts.
 T007 includes the approved authentication-status definition and initializer-reference rename.
 The initializer audit found no additional private helper without a surviving root caller.
 The cleanup removes all nine audited declarations and four helpers used only by the removed code.
 The updated tests exercise real help, session validation, and dependency initialization behavior.
-T010 cannot pass while the ten API/cache errors remain.
-The portal and ARP handoffs do not release either source hold.
+T008 and T003 are complete under the later direct authorization.
+T010 remains open until the refreshed-main combined strict report passes.
