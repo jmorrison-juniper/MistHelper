@@ -88,16 +88,17 @@ def test_read_checkpoint_returns_none_for_empty_file(tmp_path: Path) -> None:
     assert exporter._read_checkpoint(str(checkpoint_file)) is None  # Empty yields None
 
 
-def test_read_checkpoint_handles_read_failure_and_warns(tmp_path: Path) -> None:
-    """_read_checkpoint must warn and return None if the file open fails."""
+def test_read_checkpoint_raises_and_logs_error_when_read_fails(tmp_path: Path) -> None:
+    """_read_checkpoint must log an error and raise when the file exists but cannot be read."""
     checkpoint_file = tmp_path / "will_fail.checkpoint"  # Path will exist to bypass guard
     checkpoint_file.write_text("ignored", encoding="utf-8")  # Force existence
-    logger = MagicMock()  # Capture warning
+    logger = MagicMock()  # Capture error
     exporter = _build_exporter(logger=logger)
     with patch("builtins.open", side_effect=OSError("boom")):  # Force read to fail
-        assert exporter._read_checkpoint(str(checkpoint_file)) is None
-    logger.warning.assert_called_once()  # Verify the read failure emitted one warning.
-    assert str(checkpoint_file) in logger.warning.call_args.args  # Verify the warning named the bad checkpoint.
+        with pytest.raises(RuntimeError, match="checkpoint"):  # A failed read must stop the export
+            exporter._read_checkpoint(str(checkpoint_file))
+    logger.error.assert_called_once()  # Verify the read failure logged one error.
+    assert str(checkpoint_file) in logger.error.call_args.args  # Verify the error named the bad checkpoint.
 
 
 def test_write_checkpoint_writes_token_to_file(tmp_path: Path) -> None:
@@ -516,3 +517,230 @@ def test_export_empty_result_branch_writes_zero_rows_and_returns(tmp_path: Path,
     data_exporter.write_with_format_selection.assert_called_once_with(
         [], "OrgDeviceEvents_52w.csv", api_function_name="searchOrgDeviceEvents"
     )  # WHY: empty write keeps endpoint metadata.
+
+
+def _identity_utils() -> MagicMock:
+    """Return a data-processing stub that passes rows through and derives the header from row keys."""
+    utils = MagicMock(name="data_processing_utils")  # Stub for flatten, escape, and header helpers
+    utils.flatten_nested_fields.side_effect = lambda rows: rows  # Rows pass through unchanged
+    utils.escape_multiline.side_effect = lambda rows: rows  # Rows pass through unchanged
+    utils.get_unique_keys.side_effect = lambda rows: sorted({key for row in rows for key in row})  # Sorted union
+    return utils
+
+
+def _api_returning(pages: list[SimpleNamespace]) -> MagicMock:
+    """Return a mistapi stub that answers each search call with the next page."""
+    mistapi = MagicMock(name="mistapi")  # Stub for the device-event search endpoint
+    mistapi.api.v1.orgs.devices.searchOrgDeviceEvents.side_effect = pages  # One page per call
+    return mistapi
+
+
+def _completion_logged(logger: MagicMock) -> bool:
+    """Return True when the logger received a completion message."""
+    return any("exported to" in str(call.args[0]) for call in logger.info.call_args_list)  # Completion lines only
+
+
+def test_export_stops_without_touching_output_when_checkpoint_cannot_be_read(tmp_path: Path, monkeypatch) -> None:
+    """An unreadable checkpoint must stop the export before any page, CSV write, or checkpoint removal."""
+    monkeypatch.chdir(tmp_path)  # Sandbox the data directory
+    data_dir = tmp_path / "data"  # Output directory used by the exporter
+    data_dir.mkdir()  # Create it before the fixtures are written
+    csv_file = data_dir / "OrgDeviceEvents_52w.csv"  # Earlier output that must survive
+    csv_file.write_text("id\nbefore\n", encoding="utf-8")  # Earlier row from a prior run
+    checkpoint = data_dir / "OrgDeviceEvents_52w.org-1.checkpoint"  # Checkpoint that must survive
+    checkpoint.write_text("fixture-cursor", encoding="utf-8")  # Resume token from a prior run
+    real_open = open  # Keep the real open for every path except the checkpoint
+
+    def _deny_checkpoint_read(path, *args, **kwargs):  # Fail only the checkpoint read
+        if str(path).endswith(checkpoint.name):  # Match the checkpoint by its file name
+            raise PermissionError("denied")  # Simulate a read the operating system refuses
+        return real_open(path, *args, **kwargs)  # Every other path opens normally
+
+    mistapi = _api_returning([SimpleNamespace(data={"results": [{"id": "after"}]})])  # Must not be reached
+    exporter = _build_exporter(
+        mistapi=mistapi,
+        data_processing_utils=_identity_utils(),
+        output_format="csv",
+        logger=MagicMock(name="logger"),
+    )
+    with patch("builtins.open", side_effect=_deny_checkpoint_read):  # Apply the denial to the export
+        with pytest.raises(RuntimeError, match="checkpoint"):  # The export must stop and say why
+            exporter.export()
+    assert csv_file.read_text(encoding="utf-8") == "id\nbefore\n"  # Earlier rows are not discarded
+    assert checkpoint.read_text(encoding="utf-8") == "fixture-cursor"  # Checkpoint is not removed
+    mistapi.api.v1.orgs.devices.searchOrgDeviceEvents.assert_not_called()  # No page is requested
+
+
+def test_sqlite_export_stops_without_completion_when_first_write_fails(tmp_path: Path, monkeypatch) -> None:
+    """A False SQLite result on the first batch must raise, keep the checkpoint, and log no completion."""
+    monkeypatch.chdir(tmp_path)  # Sandbox the data directory
+    data_dir = tmp_path / "data"  # Output directory used by the exporter
+    data_dir.mkdir()  # Create it before the checkpoint is written
+    checkpoint = data_dir / "OrgDeviceEvents_52w.org-1.checkpoint"  # Per-org checkpoint path
+    checkpoint.write_text("existing-resume-token", encoding="utf-8")  # Token from an earlier run
+    data_exporter = MagicMock(name="data_exporter")  # Backend writer stub
+    data_exporter.write_with_format_selection.return_value = False  # Writer reports that no rows were saved
+    logger = MagicMock(name="logger")  # Capture completion log
+    exporter = _build_exporter(
+        mistapi=_api_returning([SimpleNamespace(data={"results": [{"id": "e1"}]})]),  # One page, no next token
+        data_processing_utils=_identity_utils(),
+        data_exporter=data_exporter,
+        output_format="sqlite",
+        logger=logger,
+    )
+    with pytest.raises(RuntimeError, match="SQLite"):  # The failed write must stop the export
+        exporter.export()
+    assert checkpoint.read_text(encoding="utf-8") == "existing-resume-token"  # Checkpoint kept for recovery
+    assert not _completion_logged(logger)  # No success message after a failed write
+
+
+def test_sqlite_export_keeps_checkpoint_at_last_saved_batch_when_later_write_fails(tmp_path: Path, monkeypatch) -> None:
+    """A False SQLite result on a streamed batch must keep the checkpoint at the last saved position."""
+    monkeypatch.chdir(tmp_path)  # Sandbox the data directory
+    data_exporter = MagicMock(name="data_exporter")  # Backend writer stub
+    data_exporter.write_with_format_selection.side_effect = [True, False]  # Preload batch saved, streamed batch not
+    logger = MagicMock(name="logger")  # Capture completion log
+    mistapi = _api_returning(
+        [
+            SimpleNamespace(data={"results": [{"id": "e1"}], "next": "tok-a"}),  # Preload page 1
+            SimpleNamespace(data={"results": [{"id": "e2"}], "next": "tok-b"}),  # Preload page 2
+            SimpleNamespace(data={"results": [{"id": "e3"}], "next": "tok-c"}),  # Preload page 3
+            SimpleNamespace(data={"results": [{"id": "e4"}]}),  # Streamed page that fails to save
+        ]
+    )
+    exporter = _build_exporter(
+        mistapi=mistapi,
+        data_processing_utils=_identity_utils(),
+        data_exporter=data_exporter,
+        output_format="sqlite",
+        logger=logger,
+    )
+    with pytest.raises(RuntimeError, match="SQLite"):  # The failed streamed write must stop the export
+        exporter.export()
+    checkpoint = tmp_path / "data" / "OrgDeviceEvents_52w.org-1.checkpoint"  # Per-org checkpoint path
+    assert checkpoint.read_text(encoding="utf-8") == "tok-c"  # Resume point after the last saved batch
+    assert not _completion_logged(logger)  # No success message after a failed write
+
+
+def test_sqlite_export_completes_and_removes_checkpoint_when_writes_succeed(tmp_path: Path, monkeypatch) -> None:
+    """Successful SQLite writes must keep the completion message and the checkpoint cleanup."""
+    monkeypatch.chdir(tmp_path)  # Sandbox the data directory
+    data_dir = tmp_path / "data"  # Output directory used by the exporter
+    data_dir.mkdir()  # Create it before the checkpoint is written
+    checkpoint = data_dir / "OrgDeviceEvents_52w.org-1.checkpoint"  # Per-org checkpoint path
+    checkpoint.write_text("resume-tok", encoding="utf-8")  # Token from an earlier run
+    data_exporter = MagicMock(name="data_exporter")  # Backend writer stub
+    data_exporter.write_with_format_selection.return_value = True  # Writer reports success
+    logger = MagicMock(name="logger")  # Capture completion log
+    exporter = _build_exporter(
+        mistapi=_api_returning([SimpleNamespace(data={"results": [{"id": "e1"}]})]),  # One page, no next token
+        data_processing_utils=_identity_utils(),
+        data_exporter=data_exporter,
+        output_format="sqlite",
+        logger=logger,
+    )
+    exporter.export()  # Trigger the successful SQLite export
+    assert not checkpoint.exists()  # Completed export removes its checkpoint
+    logger.info.assert_any_call(
+        "All org device events (52w) exported to SQLite table OrgDeviceEvents_52w (DB: %s)", "data/mist_data.db"
+    )  # Completion names the database path
+
+
+def test_resumed_csv_append_keeps_earlier_rows_and_adds_new_rows(tmp_path: Path, monkeypatch) -> None:
+    """A resume whose header matches the CSV must keep the earlier rows and append the new ones."""
+    monkeypatch.chdir(tmp_path)  # Sandbox the data directory
+    data_dir = tmp_path / "data"  # Output directory used by the exporter
+    data_dir.mkdir()  # Create it before the fixtures are written
+    csv_file = data_dir / "OrgDeviceEvents_52w.csv"  # Earlier output from the prior run
+    csv_file.write_text("id,type\nbefore,x\n", encoding="utf-8")  # Header and one earlier row
+    checkpoint = data_dir / "OrgDeviceEvents_52w.org-1.checkpoint"  # Resume point from the prior run
+    checkpoint.write_text("fixture-cursor", encoding="utf-8")  # Resume token
+    mistapi = _api_returning(
+        [SimpleNamespace(data={"results": [{"id": "after-1", "type": "y"}, {"id": "after-2", "type": "z"}]})]
+    )  # One page with no next token
+    exporter = _build_exporter(
+        mistapi=mistapi,
+        data_processing_utils=_identity_utils(),
+        output_format="csv",
+        logger=MagicMock(name="logger"),
+    )
+    exporter.export()  # Trigger the resumed CSV export
+    assert csv_file.read_text(encoding="utf-8").splitlines() == [
+        "id,type",
+        "before,x",
+        "after-1,y",
+        "after-2,z",
+    ]  # One header, the earlier row, then the new rows
+    assert not checkpoint.exists()  # Completed export removes its checkpoint
+    _, kwargs = mistapi.api.v1.orgs.devices.searchOrgDeviceEvents.call_args  # Inspect the resume request
+    assert kwargs["search_after"] == "fixture-cursor"  # The request continues from the saved token
+
+
+def test_resumed_csv_refuses_when_header_differs_and_keeps_bytes(tmp_path: Path, monkeypatch) -> None:
+    """A resume whose header differs from the CSV must refuse and leave the CSV and checkpoint bytes unchanged."""
+    monkeypatch.chdir(tmp_path)  # Sandbox the data directory
+    data_dir = tmp_path / "data"  # Output directory used by the exporter
+    data_dir.mkdir()  # Create it before the fixtures are written
+    csv_file = data_dir / "OrgDeviceEvents_52w.csv"  # Earlier output from the prior run
+    csv_file.write_text("id,type\nbefore,x\n", encoding="utf-8")  # Header and one earlier row
+    checkpoint = data_dir / "OrgDeviceEvents_52w.org-1.checkpoint"  # Resume point from the prior run
+    checkpoint.write_text("fixture-cursor", encoding="utf-8")  # Resume token
+    csv_bytes = csv_file.read_bytes()  # Snapshot the CSV before the refusal
+    checkpoint_bytes = checkpoint.read_bytes()  # Snapshot the checkpoint before the refusal
+    mistapi = _api_returning([SimpleNamespace(data={"results": [{"id": "after", "status": "ok"}]})])
+    exporter = _build_exporter(
+        mistapi=mistapi,
+        data_processing_utils=_identity_utils(),
+        output_format="csv",
+        logger=MagicMock(name="logger"),
+    )
+    with pytest.raises(RuntimeError, match="header"):  # The refusal names the header mismatch
+        exporter.export()
+    assert csv_file.read_bytes() == csv_bytes  # Earlier rows and header are not truncated or replaced
+    assert checkpoint.read_bytes() == checkpoint_bytes  # Resume token is not removed or rewritten
+
+
+def test_resume_refuses_when_csv_is_missing_and_keeps_checkpoint(tmp_path: Path, monkeypatch) -> None:
+    """A resume with no CSV file must refuse before any page is requested and keep the checkpoint."""
+    monkeypatch.chdir(tmp_path)  # Sandbox the data directory
+    data_dir = tmp_path / "data"  # Output directory used by the exporter
+    data_dir.mkdir()  # Create it before the checkpoint is written
+    checkpoint = data_dir / "OrgDeviceEvents_52w.org-1.checkpoint"  # Resume point from the prior run
+    checkpoint.write_text("fixture-cursor", encoding="utf-8")  # Resume token
+    checkpoint_bytes = checkpoint.read_bytes()  # Snapshot the checkpoint before the refusal
+    mistapi = _api_returning([SimpleNamespace(data={"results": [{"id": "after"}]})])  # Must not be reached
+    exporter = _build_exporter(
+        mistapi=mistapi,
+        data_processing_utils=_identity_utils(),
+        output_format="csv",
+        logger=MagicMock(name="logger"),
+    )
+    with pytest.raises(RuntimeError, match="missing"):  # The refusal names the missing CSV
+        exporter.export()
+    assert not (data_dir / "OrgDeviceEvents_52w.csv").exists()  # No partial CSV is created
+    assert checkpoint.read_bytes() == checkpoint_bytes  # Resume token is not removed or rewritten
+    mistapi.api.v1.orgs.devices.searchOrgDeviceEvents.assert_not_called()  # No page is requested
+
+
+def test_resumed_csv_refuses_when_last_row_is_partial(tmp_path: Path, monkeypatch) -> None:
+    """A CSV whose last row lacks its line break must refuse a resume and keep its bytes unchanged."""
+    monkeypatch.chdir(tmp_path)  # Sandbox the data directory
+    data_dir = tmp_path / "data"  # Output directory used by the exporter
+    data_dir.mkdir()  # Create it before the fixtures are written
+    csv_file = data_dir / "OrgDeviceEvents_52w.csv"  # Output cut short by an interrupted append
+    csv_file.write_text("id,type\nbefore,x", encoding="utf-8")  # The last row has no line break
+    checkpoint = data_dir / "OrgDeviceEvents_52w.org-1.checkpoint"  # Resume point from the prior run
+    checkpoint.write_text("fixture-cursor", encoding="utf-8")  # Resume token
+    csv_bytes = csv_file.read_bytes()  # Snapshot the CSV before the refusal
+    checkpoint_bytes = checkpoint.read_bytes()  # Snapshot the checkpoint before the refusal
+    mistapi = _api_returning([SimpleNamespace(data={"results": [{"id": "after", "type": "y"}]})])
+    exporter = _build_exporter(
+        mistapi=mistapi,
+        data_processing_utils=_identity_utils(),
+        output_format="csv",
+        logger=MagicMock(name="logger"),
+    )
+    with pytest.raises(RuntimeError, match="partial row"):  # The refusal names the partial row
+        exporter.export()
+    assert csv_file.read_bytes() == csv_bytes  # The new row is not glued to the partial row
+    assert checkpoint.read_bytes() == checkpoint_bytes  # Resume token is not removed or rewritten
