@@ -2,7 +2,7 @@
 
 The endpoint is read-only and returns paginated device rows. This module keeps
 the prompts, SDK call, pagination, and standard output selection together so
-menu 248 behaves like the other search exports.
+menu 254 behaves like the other search exports.
 """
 
 from __future__ import annotations
@@ -91,7 +91,7 @@ class OrgInventorySearchExporter:
 
     @staticmethod
     def inventory() -> None:
-        """Search organization inventory and export the result (menu 248)."""
+        """Search organization inventory and export the result (menu 254)."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Organization Inventory Search:")
         logger.info("Starting the %s export...", _OPERATION)

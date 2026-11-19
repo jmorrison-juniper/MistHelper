@@ -34,9 +34,8 @@ The coordinator assignment prohibits publication, shared selector changes, and G
 The same assignment prohibits rebase, merge, and issue closure.
 These limits keep the candidate local and exclude deployment.
 Optional commit hooks are deferred until applicable checks pass.
-I calculated the numeric route with Python.
-The required PowerShell `Resolve-SpecFeaturePath` resolver has not run.
-The route has eight base-5 digits.
+I first calculated the numeric route with Python.
+The PowerShell `Resolve-SpecFeaturePath` resolver confirmed the eight-digit route.
 
 ## Project Structure
 

@@ -29,7 +29,7 @@
 
 The required transport section identifies the existing SDK method.
 The local assignment defines the accepted initial status as an integer from 200 through 299.
-I calculated the numeric route with Python. The required PowerShell resolver has not run.
+I first calculated the route with Python. The required PowerShell resolver now confirms it.
 The eight base-5 digits of 4716 are `00122331`.
 No feature-creation or publication hook ran for this local candidate.
 The shared feature selector remains unchanged.

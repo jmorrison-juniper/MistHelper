@@ -27,6 +27,10 @@ does.
 Menu 164 builds WAN VPNs from gateway profiles. It uses no profile data from a
 failed Mist response.
 
+Menu 254 searches organization inventory. It reports an initial request failure
+instead of an empty result. It reports a failed output write without claiming
+that the export succeeded.
+
 Menu 280 exports the alert digest handover report. Use it to group recent alarms
 for a shift change.
 
