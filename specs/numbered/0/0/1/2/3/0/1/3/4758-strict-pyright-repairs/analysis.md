@@ -19,7 +19,7 @@ Both commands exit 0.
 The exact reports are `pyright-final.json` and `pyright-final.txt` in the session evidence directory.
 
 The focused selection passes 410 tests with one existing Dash warning.
-The help test passes 16 cases.
+The parser and bootstrap tests pass 16 cases across the help and entry-point test modules.
 It covers `--help`, `-h`, parser-supported abbreviations, invalid help tokens, program-name handling, unrelated flags, and side-effect-free subprocess calls.
 The explicit export list remains equal to current main with 196 names.
 AST comparison confirms that all 16 shared API and cache function bodies and defaults remain unchanged.

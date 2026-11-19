@@ -70,36 +70,39 @@ Python also always supplies a program name in ordinary process arguments.
 The replacement tests follow the real parser instead of retaining those artificial helper assumptions.
 No production parser setting changes.
 
-The first committed tests imported the whole `ApplicationBootstrap` class.
-The quality analyzer inferred HTTP risk from its unrelated SDK log-sanitizer import.
-Issue #4828 records that shared-tool defect for later repair.
-The revised tests call the actual CLI entry point and fail if it reaches context activation.
-They retain real parsing, stronger startup ordering, and the fresh subprocess checks.
+The first help-test revision imported `ApplicationBootstrap`.
+The committed-change analyzer reported two new HTTP-mode findings in that module.
+Issue #4828 tracks the shared detector inference.
+The final help module imports only `MainEntrypoint`.
+The empty-argument bootstrap test now lives in `test_main_entrypoint.py`, which already imports `ApplicationBootstrap`.
+The parser tests use actual CLI parsing and fail if help reaches context activation.
+They retain real parsing, startup ordering, and fresh subprocess checks.
 No fake HTTP case, changed rule, baseline entry, or dynamic import bypasses the finding.
 
 The test mapping below identifies the replacement behavior checks.
 
 | Removed private seam | Replacement check |
 | - | - |
-| `_is_help_invocation` | `TestHelpArgumentParsing.test_help_stops_before_startup`, `test_program_name_is_not_a_help_argument`, and `TestHelpSubprocessInvocation.test_help_exits_without_runtime_files` |
-| `_reject_unsupported_flag_variants` | `test_invalid_help_variants_fail_before_startup` and `test_hyphenated_test_flag_uses_standard_argparse_error` |
-| `_exit_on_unsupported_flag` | `test_hyphenated_test_flag_uses_standard_argparse_error` |
-| `_snapshot_session_globals_to_state` | `test_context_reads_writes_and_deletes` and `test_two_app_context_instances_do_not_share_state` |
-| `_restore_session_globals_from_state` | `test_context_reads_writes_and_deletes` and `test_two_app_context_instances_do_not_share_state` |
-| `_validate_initialized_session` | `test_supported_read_method_is_accepted` and `test_missing_read_method_is_rejected` |
-| `_install_default_request_timeout` | No root caller or root test existed. `test_wsgi_menu_loader_uses_public_timeout_contract` checks the live timeout interface at `tests/unit/refactors/test_app_context_session_state.py:239`. |
-| `_get_tuning_data_file_path` | No root caller or root test existed. A distinct helper in `src/foundation/support/utils/rate_limiting.py` is tested at `tests/unit/config/standalone/foundation/support/utilities/network/test_rate_limiting.py:885`. |
-| `_initialize_deferred_imports` | No production call existed. The obsolete mock key was removed. `test_initialization_publishes_assignments_once` checks live dependency setup, and `test_help_stops_before_startup` checks the parser boundary. |
+| `_is_help_invocation` | `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_help_invocation_side_effect_free.py`: `test_help_stops_before_startup`, `test_program_name_is_not_a_help_argument`, and `TestHelpSubprocessInvocation.test_help_exits_without_runtime_files` |
+| `_reject_unsupported_flag_variants` | `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_help_invocation_side_effect_free.py`: `test_invalid_help_variants_fail_before_startup`; `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_reject_unsupported_flag_variants.py`: `test_hyphenated_test_flag_uses_standard_argparse_error` |
+| `_exit_on_unsupported_flag` | `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_reject_unsupported_flag_variants.py`: `test_hyphenated_test_flag_uses_standard_argparse_error` |
+| `_snapshot_session_globals_to_state` | `tests/unit/refactors/test_app_context_session_state.py`: `test_context_reads_writes_and_deletes` and `test_two_app_context_instances_do_not_share_state` |
+| `_restore_session_globals_from_state` | `tests/unit/refactors/test_app_context_session_state.py`: `test_context_reads_writes_and_deletes` and `test_two_app_context_instances_do_not_share_state` |
+| `_validate_initialized_session` | `tests/unit/refactors/test_initialize_mist_session.py`: `test_supported_read_method_is_accepted` and `test_missing_read_method_is_rejected` |
+| `_install_default_request_timeout` | No root caller or root test existed. `tests/unit/refactors/test_app_context_session_state.py::test_wsgi_menu_loader_uses_public_timeout_contract` checks the live timeout interface at line 239. |
+| `_get_tuning_data_file_path` | No root caller or root test existed. A distinct helper in `src/foundation/support/utils/rate_limiting.py:65` is tested at `tests/unit/config/standalone/foundation/support/utilities/network/test_rate_limiting.py:885`. |
+| `_initialize_deferred_imports` | No production call existed. The obsolete mock key was removed. `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_main_entrypoint.py::TestDeferredDependencyInitialization.test_initialization_publishes_assignments_once` checks live setup, and `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_help_invocation_side_effect_free.py::TestHelpArgumentParsing.test_help_stops_before_startup` checks the parser boundary. |
 
 The help test now uses real parser cases instead of direct calls to the deleted predicate.
-Its five test methods cover 16 cases and pass.
+Its four test methods cover 15 cases.
+The entry-point test covers the empty argument list through the real bootstrap.
 
 | Removed test method | Replacement behavior check |
 | - | - |
 | `test_bare_double_dash_help_is_detected` | `TestHelpArgumentParsing.test_help_stops_before_startup` and `TestHelpSubprocessInvocation.test_help_exits_without_runtime_files` cover `--help`. |
 | `test_bare_short_help_flag_is_detected` | The same methods cover `-h`. |
 | `test_help_combined_with_other_flags_is_detected` | `test_help_stops_before_startup` covers both combined flag sequences. |
-| `test_empty_argv_and_program_only_are_not_detected` | `test_empty_argument_list_is_not_help` covers an empty parser input. `test_program_name_is_not_a_help_argument` covers the program-only case. |
+| `test_empty_argv_and_program_only_are_not_detected` | `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_main_entrypoint.py::TestMainEntrypointRun.test_empty_argument_list_reaches_normal_startup` covers empty parser input. `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_help_invocation_side_effect_free.py::test_program_name_is_not_a_help_argument` covers program-only input. |
 | `test_program_name_is_ignored_even_if_it_matches` | `test_program_name_is_not_a_help_argument` covers `sys.argv == ["--help"]`. |
 | `test_substring_and_case_variants_are_not_detected` | `test_invalid_help_variants_fail_before_startup` covers `--helpme`, `help`, and `--HELP`. The real parser accepts `--h` and `-help` as help forms, so `test_help_stops_before_startup` covers those forms. |
 | `test_unrelated_flags_are_not_detected` | `test_program_name_is_not_a_help_argument` covers `--menu 1 --org abc`. |
