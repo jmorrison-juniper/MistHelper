@@ -28,7 +28,8 @@
 ## Notes
 
 The required transport section identifies the existing SDK method.
-The user supplied the exact accepted status contract.
-PowerShell is absent. The numeric route uses the eight base-5 digits of 4716: `00122331`.
-Branch-creation and publication hooks are not permitted by this assignment.
+The local assignment defines the accepted initial status as an integer from 200 through 299.
+I calculated the numeric route with Python. The required PowerShell resolver has not run.
+The eight base-5 digits of 4716 are `00122331`.
+No feature-creation or publication hook ran for this local candidate.
 The shared feature selector remains unchanged.

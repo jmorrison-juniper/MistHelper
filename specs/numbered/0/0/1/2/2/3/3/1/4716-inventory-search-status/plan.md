@@ -30,10 +30,13 @@ The source package, test directory, and changelog directory have existing struct
 This repair edits existing source and test children and adds only its required unique changelog.
 A separate incremental action can divide those established directories without changing this repair.
 No new directory has more than five children.
-The user prohibits publication, shared selector changes, and Git configuration changes.
-Those restrictions override deployment and branch-creation hooks for this local assignment.
+The coordinator assignment prohibits publication, shared selector changes, and Git configuration changes.
+The same assignment prohibits rebase, merge, and issue closure.
+These limits keep the candidate local and exclude deployment.
 Optional commit hooks are deferred until applicable checks pass.
-PowerShell setup is unavailable. The route follows the verified eight-digit numeric algorithm.
+I calculated the numeric route with Python.
+The required PowerShell `Resolve-SpecFeaturePath` resolver has not run.
+The route has eight base-5 digits.
 
 ## Project Structure
 
