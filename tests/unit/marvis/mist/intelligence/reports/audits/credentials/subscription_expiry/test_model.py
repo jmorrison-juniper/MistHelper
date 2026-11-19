@@ -8,9 +8,11 @@ from src.mist.intelligence.reports.subscription_expiry.model import (
     CONTRACT_RECORD_ABSENT_NOTE,
     MISSING_VALUE,
     ConsoleSummary,
+    CrossOrgSubscriptionInventoryModel,
     JsiContractSource,
     LicenseSummarySource,
     LicenseUsageSource,
+    OrganizationScope,
     ReportContext,
     SubscriptionExpiryModel,
 )
@@ -128,3 +130,74 @@ def test_summary_counts_defaults_and_counted_rows() -> None:
     assert summary.subscription_band_counts["31-90 days"] == 0  # Missing bands keep zero default.
     assert summary.contract_bucket_counts["more than 12 months"] == 1  # Long contract row is counted.
     assert summary.contract_bucket_counts["Expired"] == 0  # Missing buckets keep zero default.
+
+
+def test_cross_org_purchase_and_balance_reconcile() -> None:
+    """Purchased, entitled, in-use, unused, and over-entitlement values stay separate."""
+    organization = OrganizationScope(
+        org_id="org-1",
+        org_name="T-Mobile",
+        msp_id="msp-1",
+        source="msp",
+        request_status="success",
+    )  # Build a synthetic MSP organization.
+    summary = LicenseSummarySource(
+        entitled={"SUB-SSR": 2},
+        licenses=[
+            {
+                "id": "license-1",
+                "type": "SUB-SSR",
+                "quantity": 3,
+                "remaining_quantity": 2,
+                "start_time": "2024-01-31",
+                "end_time": "2027-01-31",
+                "created_time": "2024-01-30",
+            }
+        ],
+    )  # Build a dated purchase and entitlement fixture.
+    usages = [LicenseUsageSource(usages={"SUB-SSR": 1})]  # Build one in-use value.
+    purchases = CrossOrgSubscriptionInventoryModel.build_purchase_rows(
+        organization, summary.licenses, date(2026, 11, 19)
+    )  # Score one purchase row.
+    balances = CrossOrgSubscriptionInventoryModel.build_subscription_balances(
+        organization, summary, usages, date(2026, 11, 19)
+    )  # Score one balance row.
+    assert purchases[0].deal_period == "post-original-deal"  # The 2024 start follows the 2023 deal.
+    assert purchases[0].start_date == "2024-01-31"  # The purchase start survives normalization.
+    assert purchases[0].end_date == "2027-01-31"  # The purchase end survives normalization.
+    assert balances[0].purchased_quantity == 3  # Purchased quantity comes from the license record.
+    assert balances[0].entitled_quantity == 2  # Entitlement comes from the summary map.
+    assert balances[0].in_use_quantity == 1  # In-use quantity is the sum of usage rows.
+    assert balances[0].unused_entitlement == 1  # Entitlement minus in-use stays visible.
+    assert balances[0].over_entitlement == 0  # No over-entitlement exists in this fixture.
+
+
+def test_cross_org_stock_and_jsi_join_keep_missing_evidence() -> None:
+    """Unassigned stock appears once and JSI evidence stays serial-specific."""
+    organization = OrganizationScope(
+        org_id="org-1",
+        org_name="T-Mobile",
+        source="direct",
+        request_status="success",
+    )  # Build a direct organization.
+    inventory = [
+        {"serial": "SSR1", "mac": "mac-1", "model": "SSR130", "type": "gateway", "name": "branch"},
+        {"serial": "AP1", "mac": "mac-2", "model": "AP43", "type": "ap", "site_id": "site-1"},
+    ]  # Include one stock record and one assigned record.
+    jsi = [
+        JsiContractSource(
+            serial="OTHER",
+            model="AP43",
+            status="Active",
+            has_support=True,
+        )
+    ]  # Include JSI evidence that does not match the stock serial.
+    stock_rows = CrossOrgSubscriptionInventoryModel.build_stock_rows(organization, inventory, jsi)  # Build stock.
+    contract_rows = CrossOrgSubscriptionInventoryModel.build_contract_rows(organization, jsi)  # Build evidence.
+    assert len(stock_rows) == 1  # The assigned AP must not enter the stock view.
+    assert stock_rows[0].serial == "SSR1"  # The SSR serial identifies the stock asset.
+    assert stock_rows[0].model == "SSR130"  # The stock model remains visible.
+    assert stock_rows[0].license_review_required == "yes"  # Stock requires a license review.
+    assert stock_rows[0].jsi_match_status == "no-match"  # A different JSI serial is not a match.
+    assert contract_rows[0].serial == "OTHER"  # Contract evidence keeps its own serial.
+    assert contract_rows[0].contract_end_date == MISSING_VALUE  # Missing JSI date remains Missing.

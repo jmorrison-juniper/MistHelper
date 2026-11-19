@@ -2,13 +2,22 @@
 
 from __future__ import annotations  # Keep annotations import-safe during tests.
 
+import csv  # Write explicit header-only CSV files for empty reports.
 import logging  # Record operation actions for operator traceability.
+import os  # Read direct organization and customer name settings without prompts.
+from dataclasses import replace  # Preserve organization scope while changing status.
+from pathlib import Path  # Build data paths with the platform path library.
 from typing import Any  # Type injectable test seams without importing root modules.
 
+from src.foundation.models.dataclasses.export_backend_options import ExportBackendOptions  # Force CSV for the report.
 from src.foundation.runtime.config.source_dependency_resolver import (
     SourceDependencyResolver,
 )  # Resolve root-owned runtime dependencies.
-from src.mist.intelligence.reports.subscription_expiry.client import JsiAccountNotLinkedError, SubscriptionExpiryClient
+from src.mist.intelligence.reports.subscription_expiry.client import (
+    JsiAccountNotLinkedError,
+    SubscriptionExpiryClient,
+    SubscriptionExpiryClientError,
+)
 from src.mist.intelligence.reports.subscription_expiry.model import (
     CONTRACT_BUCKETS,
     CONTRACT_RECORD_ABSENT_NOTE,
@@ -17,6 +26,10 @@ from src.mist.intelligence.reports.subscription_expiry.model import (
     SUBSCRIPTION_BANDS,
     ConsoleSummary,
     ContractExpiryRow,
+    CrossOrgSubscriptionInventoryModel,
+    JsiContractSource,
+    LicenseSummarySource,
+    OrganizationScope,
     ReportContext,
     SubscriptionExpiryModel,
     SubscriptionExpiryRow,
@@ -45,6 +58,15 @@ CONTRACT_COLUMNS = (  # Preserve required columns when there are no source contr
     "bucket",
     "note",
 )
+SOURCE_ATTRIBUTION = (
+    "MistOrgLicensingComparison by jmorrison-juniper is licensed under "
+    "CC BY-NC-SA 4.0 (https://creativecommons.org/licenses/by-nc-sa/4.0/)."
+)  # Preserve source terms in the migrated report.
+CROSS_ORG_ORGANIZATION_STATUS_FILENAME = "CrossOrgOrganizationStatus.csv"
+CROSS_ORG_SUBSCRIPTION_PURCHASE_FILENAME = "CrossOrgSubscriptionPurchase.csv"
+CROSS_ORG_SUBSCRIPTION_BALANCE_FILENAME = "CrossOrgSubscriptionBalance.csv"
+CROSS_ORG_STOCK_INVENTORY_FILENAME = "CrossOrgStockInventory.csv"
+CROSS_ORG_CONTRACT_EVIDENCE_FILENAME = "CrossOrgContractEvidence.csv"
 
 
 class SubscriptionExpiryReport:
@@ -155,3 +177,385 @@ class SubscriptionExpiryReport:
         for bucket in CONTRACT_BUCKETS:  # Print every required contract bucket.
             print(f"  {bucket}: {summary.contract_bucket_counts[bucket]}")  # Print contract bucket count.
         logger.debug("Printed subscription and contract expiry summary")  # Log after console output.
+
+
+class CrossOrgSubscriptionInventoryReport:
+    """Run the complete cross-org subscription and stock inventory report."""
+
+    @staticmethod
+    def run() -> None:
+        """Resolve active organization context and run the cross-org report."""
+        logger.info("Starting the cross-org subscription and stock inventory report")  # Log operation start.
+        dependencies = SourceDependencyResolver  # Resolve runtime dependencies.
+        active_org_id = (
+            getattr(dependencies, "org_id", "") or os.getenv("org_id") or os.getenv("ORG_ID") or ""
+        )  # Use cached values without a prompt.
+        active_org_name = (
+            getattr(dependencies, "org_name", "") or os.getenv("END_CUSTOMER_NAME") or active_org_id or "Unknown"
+        )  # Preserve a readable fallback name.
+        client = SubscriptionExpiryClient(dependencies.apisession)  # Build the SDK client.
+        CrossOrgSubscriptionInventoryReport._run_with_client(
+            str(active_org_id),
+            str(active_org_name),
+            client,
+            dependencies,
+        )  # Execute the complete report.
+        logger.debug("Finished the cross-org subscription and stock inventory report")  # Log completion.
+
+    @staticmethod
+    def _safe_payload(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Neutralize formula-like strings and add source attribution."""
+        payload: list[dict[str, Any]] = []  # Accumulate formula-safe rows.
+        for row in rows:  # Walk each result row.
+            safe_row: dict[str, Any] = {"source_attribution": SOURCE_ATTRIBUTION}  # Add source terms.
+            for key, value in row.items():  # Walk each source cell.
+                if isinstance(value, str) and value.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")):
+                    safe_row[key] = "'" + value  # Neutralize spreadsheet formulas.
+                else:
+                    safe_row[key] = value  # Preserve the source value.
+            payload.append(safe_row)  # Add one formula-safe row.
+        return payload  # Return portable CSV payload.
+
+    @staticmethod
+    def _write_empty_csv(filename: str, fieldnames: list[str]) -> None:
+        """Write one header-only CSV with no fake data row."""
+        path = Path("data") / filename  # Build the platform-safe data path.
+        path.parent.mkdir(parents=True, exist_ok=True)  # Create data for a new worktree.
+        logger.info("Writing empty cross-org report header to %s", path)  # Log before file output.
+        with path.open("w", newline="", encoding="utf-8") as csv_file:  # Open the report for writing.
+            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)  # Use explicit header order.
+            writer.writeheader()  # Write headers without a fake Missing row.
+        logger.debug("Wrote header-only cross-org report %s", path)  # Log after file output.
+
+    @staticmethod
+    def _export_reports(
+        organization_rows: list[dict[str, Any]],
+        purchase_rows: list[dict[str, Any]],
+        balance_rows: list[dict[str, Any]],
+        stock_rows: list[dict[str, Any]],
+        contract_rows: list[dict[str, Any]],
+        dependencies: Any,
+    ) -> None:
+        """Export five linked CSV reports through DataExporter."""
+        reports = (
+            (
+                organization_rows,
+                CROSS_ORG_ORGANIZATION_STATUS_FILENAME,
+                "CrossOrgOrganizationStatus",
+                [
+                    "msp_id",
+                    "org_id",
+                    "org_name",
+                    "source",
+                    "request_status",
+                    "error",
+                    "source_attribution",
+                ],
+            ),
+            (
+                purchase_rows,
+                CROSS_ORG_SUBSCRIPTION_PURCHASE_FILENAME,
+                "CrossOrgSubscriptionPurchase",
+                [
+                    "msp_id",
+                    "org_id",
+                    "org_name",
+                    "record_id",
+                    "subscription_id",
+                    "order_id",
+                    "subscription_type",
+                    "quantity",
+                    "remaining_quantity",
+                    "start_date",
+                    "end_date",
+                    "created_date",
+                    "deal_period",
+                    "source",
+                    "source_attribution",
+                ],
+            ),
+            (
+                balance_rows,
+                CROSS_ORG_SUBSCRIPTION_BALANCE_FILENAME,
+                "CrossOrgSubscriptionBalance",
+                [
+                    "msp_id",
+                    "org_id",
+                    "org_name",
+                    "subscription_type",
+                    "purchased_quantity",
+                    "entitled_quantity",
+                    "in_use_quantity",
+                    "unused_entitlement",
+                    "over_entitlement",
+                    "status",
+                    "start_date",
+                    "end_date",
+                    "days_remaining",
+                    "band",
+                    "source_attribution",
+                ],
+            ),
+            (
+                stock_rows,
+                CROSS_ORG_STOCK_INVENTORY_FILENAME,
+                "CrossOrgStockInventory",
+                [
+                    "msp_id",
+                    "org_id",
+                    "org_name",
+                    "serial",
+                    "mac",
+                    "model",
+                    "name",
+                    "device_type",
+                    "deployment_status",
+                    "license_review_required",
+                    "jsi_match_status",
+                    "contract_status",
+                    "contract_end_date",
+                    "source_attribution",
+                ],
+            ),
+            (
+                contract_rows,
+                CROSS_ORG_CONTRACT_EVIDENCE_FILENAME,
+                "CrossOrgContractEvidence",
+                [
+                    "msp_id",
+                    "org_id",
+                    "org_name",
+                    "serial",
+                    "model",
+                    "status",
+                    "has_support",
+                    "claimed",
+                    "contract_end_date",
+                    "request_status",
+                    "source_attribution",
+                ],
+            ),
+        )  # Define report payload, name, API key, and field order.
+        for rows, filename, api_name, fieldnames in reports:  # Export each report once.
+            if not rows:  # Empty source data needs headers, not fake rows.
+                CrossOrgSubscriptionInventoryReport._write_empty_csv(filename, fieldnames)  # Write header-only.
+                continue  # Do not call the shared exporter with fake rows.
+            payload = CrossOrgSubscriptionInventoryReport._safe_payload(rows)  # Neutralize formula text.
+            logger.info("Exporting cross-org report %s", filename)  # Log before export.
+            dependencies.DataExporter.write_with_format_selection(
+                payload,
+                filename,
+                api_function_name=api_name,
+                fieldnames=fieldnames,
+                backend_options=ExportBackendOptions(format_override="csv"),
+            )  # Write CSV through the shared exporter.
+            logger.debug("Exported %d rows to %s", len(payload), filename)  # Log export count.
+
+    @staticmethod
+    def _print_summary(
+        organization_rows: list[dict[str, Any]],
+        purchase_rows: list[dict[str, Any]],
+        balance_rows: list[dict[str, Any]],
+        stock_rows: list[dict[str, Any]],
+        contract_rows: list[dict[str, Any]],
+    ) -> None:
+        """Print concise counts for every cross-org report category."""
+        success_count = sum(
+            1 for row in organization_rows if row.get("request_status") in ("success", "partial")
+        )  # Count organizations with usable data.
+        failed_count = sum(
+            1 for row in organization_rows if row.get("request_status") in ("failed", "unavailable")
+        )  # Count organizations with failures.
+        print("Cross-org subscription inventory summary:")  # Print summary heading.
+        print(f"  Organizations discovered: {len(organization_rows)}")  # Print org count.
+        print(f"  Organizations with data: {success_count}")  # Print usable count.
+        print(f"  Organizations with failure: {failed_count}")  # Print failure count.
+        print(f"  Subscription purchase rows: {len(purchase_rows)}")  # Print purchase count.
+        print(f"  Subscription balance rows: {len(balance_rows)}")  # Print balance count.
+        print(f"  Stock inventory rows: {len(stock_rows)}")  # Print stock count.
+        print(f"  Contract evidence rows: {len(contract_rows)}")  # Print contract count.
+
+    @staticmethod
+    def _run_with_client(
+        active_org_id: str,
+        active_org_name: str,
+        client: SubscriptionExpiryClient,
+        dependencies: Any,
+    ) -> None:
+        """Run the cross-org source reads and exports."""
+        organizations, discovery_failures = client.discover_organizations(
+            active_org_id,
+            active_org_name,
+        )  # Discover authorized scope.
+        organization_status_rows: list[dict[str, Any]] = [
+            failure.to_dict() for failure in discovery_failures
+        ]  # Add discovery failures first.
+        if not organizations:  # No authorized organization exists.
+            if not organization_status_rows:  # Discovery returned no visible failure.
+                organization_status_rows.append(
+                    OrganizationScope(
+                        org_id=active_org_id or MISSING_VALUE,
+                        org_name=active_org_name or MISSING_VALUE,
+                        source="none",
+                        request_status="failed",
+                        error="No accessible organization",
+                    ).to_dict()
+                )  # Name the no-access condition.
+            CrossOrgSubscriptionInventoryReport._export_reports(
+                organization_status_rows,
+                [],
+                [],
+                [],
+                [],
+                dependencies,
+            )  # Export failure status and empty reports.
+            CrossOrgSubscriptionInventoryReport._print_summary(
+                organization_status_rows,
+                [],
+                [],
+                [],
+                [],
+            )  # Print zero and failure counts.
+            return  # Stop without success-shaped subscription data.
+
+        purchase_rows: list[dict[str, Any]] = []  # Accumulate purchase evidence.
+        balance_rows: list[dict[str, Any]] = []  # Accumulate balance evidence.
+        stock_rows: list[dict[str, Any]] = []  # Accumulate stock evidence.
+        contract_rows: list[dict[str, Any]] = []  # Accumulate contract evidence.
+        report_date = __import__("datetime").datetime.now(__import__("datetime").UTC).date()  # Use UTC run date.
+        organization_status_by_id: dict[str, OrganizationScope] = {}  # Track final organization status.
+        for organization in organizations:  # Read one authorized organization at a time.
+            logger.info("Reading cross-org data for %s", organization.org_id)  # Log before org reads.
+            success_count = 0  # Count successful source reads.
+            errors: list[str] = []  # Collect visible source failures.
+            summary: LicenseSummarySource | None = None  # Hold license summary.
+            usages: list[Any] = []  # Hold usage rows.
+            inventory: list[dict[str, Any]] = []  # Hold inventory rows.
+            jsi: list[JsiContractSource] | None = []  # Hold JSI evidence.
+            try:  # Read license summary.
+                summary = client.fetch_license_summary(organization.org_id)  # Fetch summary.
+                success_count += 1  # Count successful source read.
+            except SubscriptionExpiryClientError as error:  # License summary failed.
+                errors.append(str(error))  # Preserve safe status text.
+            try:  # Read license usage.
+                usages = client.fetch_license_usage_by_site(organization.org_id)  # Fetch usage.
+                success_count += 1  # Count successful source read.
+            except SubscriptionExpiryClientError as error:  # License usage failed.
+                errors.append(str(error))  # Preserve safe status text.
+            try:  # Read inventory.
+                inventory = client.fetch_inventory(organization.org_id)  # Fetch inventory pages.
+                success_count += 1  # Count successful source read.
+            except SubscriptionExpiryClientError as error:  # Inventory failed.
+                errors.append(str(error))  # Preserve safe status text.
+            try:  # Read JSI evidence.
+                jsi = client.search_jsi_assets_and_contracts(organization.org_id)  # Fetch JSI rows.
+                success_count += 1  # Count successful source read.
+            except JsiAccountNotLinkedError:  # JSI account is unavailable.
+                jsi = None  # Mark JSI evidence unavailable.
+                errors.append("JSI account not linked")  # Preserve visible condition.
+            except SubscriptionExpiryClientError as error:  # JSI request failed.
+                jsi = None  # Mark JSI evidence unavailable.
+                errors.append(str(error))  # Preserve safe status text.
+            if summary is not None:  # Summary is usable.
+                purchase_rows.extend(
+                    row.to_dict()
+                    for row in CrossOrgSubscriptionInventoryModel.build_purchase_rows(
+                        organization,
+                        summary.licenses,
+                        report_date,
+                    )
+                )  # Add purchase rows.
+                balance_rows.extend(
+                    row.to_dict()
+                    for row in CrossOrgSubscriptionInventoryModel.build_subscription_balances(
+                        organization,
+                        summary,
+                        usages,
+                        report_date,
+                    )
+                )  # Add balance rows.
+            stock_rows.extend(
+                row.to_dict()
+                for row in CrossOrgSubscriptionInventoryModel.build_stock_rows(
+                    organization,
+                    inventory,
+                    jsi,
+                )
+            )  # Add stock rows.
+            contract_rows.extend(
+                row.to_dict()
+                for row in CrossOrgSubscriptionInventoryModel.build_contract_rows(
+                    organization,
+                    jsi,
+                )
+            )  # Add contract rows.
+            if success_count == 4:  # Every source read succeeded.
+                request_status = "success"
+            elif success_count > 0:  # At least one source read succeeded.
+                request_status = "partial"
+            else:  # No source read succeeded.
+                request_status = "failed"
+            organization_status_by_id[organization.org_id] = replace(
+                organization,
+                request_status=request_status,
+                error="; ".join(errors) if errors else None,
+            )  # Preserve final organization status.
+
+        seen_msp_ids: set[str] = set()  # Avoid repeated MSP license reads.
+        for organization in organizations:  # Walk organization scopes.
+            msp_id = organization.msp_id  # Read the MSP grant.
+            if not msp_id or msp_id in seen_msp_ids:  # Skip missing or duplicate MSP IDs.
+                continue  # Keep one MSP license read.
+            seen_msp_ids.add(msp_id)  # Remember this MSP.
+            fetch_msp_licenses = getattr(client, "fetch_msp_licenses", None)  # Locate optional method.
+            if fetch_msp_licenses is None:  # Synthetic or old client lacks MSP licenses.
+                continue  # Preserve organization evidence.
+            msp_payload = fetch_msp_licenses(msp_id)  # Read optional MSP purchase evidence.
+            if not isinstance(msp_payload, dict):  # MSP endpoint denied or returned no mapping.
+                continue  # Continue with org summary evidence.
+            msp_records = msp_payload.get("licenses")  # Read MSP license records.
+            if not isinstance(msp_records, list):  # MSP records are unavailable.
+                continue  # Keep organization evidence.
+            for organization_record in organizations:  # Match MSP records to organizations.
+                matching_records = [
+                    record
+                    for record in msp_records
+                    if isinstance(record, dict)
+                    and (record.get("org_id") == organization_record.org_id or not record.get("org_id"))
+                ]  # Match by org ID or preserve unknown scope.
+                purchase_rows.extend(
+                    row.to_dict()
+                    for row in CrossOrgSubscriptionInventoryModel.build_purchase_rows(
+                        organization_record,
+                        matching_records,
+                        report_date,
+                    )
+                )  # Add MSP purchase evidence.
+
+        organization_status_rows.extend(
+            organization_status.to_dict() for organization_status in organization_status_by_id.values()
+        )  # Add organization status rows.
+        deduplicated_purchase_rows: dict[tuple[str, str, str], dict[str, Any]] = {}  # Dedupe purchase evidence.
+        for purchase_row in purchase_rows:  # Walk organization plus MSP purchases.
+            key = (
+                str(purchase_row.get("org_id", MISSING_VALUE)),
+                str(purchase_row.get("record_id", MISSING_VALUE)),
+                str(purchase_row.get("subscription_type", MISSING_VALUE)),
+            )  # Use org, record, and type as the purchase key.
+            deduplicated_purchase_rows.setdefault(key, purchase_row)  # Keep the first source row.
+        deduplicated_purchase_payload = list(deduplicated_purchase_rows.values())  # Materialize rows.
+        CrossOrgSubscriptionInventoryReport._export_reports(
+            organization_status_rows,
+            deduplicated_purchase_payload,
+            balance_rows,
+            stock_rows,
+            contract_rows,
+            dependencies,
+        )  # Export all five reports.
+        CrossOrgSubscriptionInventoryReport._print_summary(
+            organization_status_rows,
+            deduplicated_purchase_payload,
+            balance_rows,
+            stock_rows,
+            contract_rows,
+        )  # Print linked result counts.

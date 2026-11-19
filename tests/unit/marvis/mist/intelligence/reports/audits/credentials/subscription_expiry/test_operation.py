@@ -13,11 +13,13 @@ from src.mist.intelligence.reports.subscription_expiry.model import (
     JsiContractSource,
     LicenseSummarySource,
     LicenseUsageSource,
+    OrganizationScope,
     ReportContext,
 )
 from src.mist.intelligence.reports.subscription_expiry.operation import (
     CONTRACT_FILENAME,
     SUBSCRIPTION_FILENAME,
+    CrossOrgSubscriptionInventoryReport,
     SubscriptionExpiryReport,
 )
 
@@ -33,6 +35,8 @@ class FakeExporter:
         data: list[dict[str, object]],
         filename: str,
         api_function_name: str,
+        fieldnames: list[str] | None = None,
+        backend_options: object | None = None,
     ) -> bool:
         """Record one export call."""
         self.calls.append((data, filename, api_function_name))  # Capture the export payload for assertions.
@@ -100,3 +104,69 @@ def test_report_continues_with_empty_contracts_for_no_linked_jsi_account(capsys:
     assert contract_row["contract_state"] == STATE_UNSUPPORTED  # The row states that contract support is absent.
     assert contract_row["note"] == CONTRACT_RECORD_ABSENT_NOTE  # The row explains the missing JSI contract record.
     assert "Expired: 0" in captured  # Empty contract rows produce zero bucket counts.
+
+
+def test_cross_org_report_exports_linked_reports(capsys: object) -> None:
+    """The cross-org operation exports four exporter calls plus a header-only contract report."""
+    exporter = FakeExporter()  # Capture export calls without file I/O.
+    dependencies = FakeDependencies(exporter)  # Inject the fake exporter.
+
+    class FakeCrossOrgClient:
+        """Fake cross-org client with one successful organization."""
+
+        def discover_organizations(self, _org_id: str, _org_name: str) -> tuple[list[object], list[object]]:
+            return [
+                OrganizationScope(
+                    org_id="org-1",
+                    org_name="T-Mobile",
+                    source="direct",
+                    request_status="success",
+                )
+            ], []  # Return one synthetic authorized organization.
+
+        def fetch_license_summary(self, _org_id: str) -> LicenseSummarySource:
+            return LicenseSummarySource(
+                entitled={"SUB-SSR": 2},
+                licenses=[{"type": "SUB-SSR", "quantity": 2, "end_time": "2027-01-31"}],
+            )
+
+        def fetch_license_usage_by_site(self, _org_id: str) -> list[LicenseUsageSource]:
+            return [LicenseUsageSource(usages={"SUB-SSR": 1})]
+
+        def fetch_inventory(self, _org_id: str) -> list[dict[str, object]]:
+            return [{"serial": "SSR1", "model": "SSR130", "type": "gateway"}]
+
+        def search_jsi_assets_and_contracts(self, _org_id: str) -> list[JsiContractSource]:
+            return []
+
+    CrossOrgSubscriptionInventoryReport._run_with_client(
+        "org-1",
+        "T-Mobile",
+        FakeCrossOrgClient(),
+        dependencies,
+    )  # Run the synthetic cross-org operation.
+    filenames = [call[1] for call in exporter.calls]  # Read export names.
+    captured = capsys.readouterr().out  # Capture the console summary.
+    assert len(filenames) == 4  # Header-only contract evidence writes no exporter call.
+    assert "CrossOrgOrganizationStatus.csv" in filenames  # Organization status is present.
+    assert "CrossOrgSubscriptionPurchase.csv" in filenames  # Purchase records are present.
+    assert "CrossOrgSubscriptionBalance.csv" in filenames  # Balance records are present.
+    assert "CrossOrgStockInventory.csv" in filenames  # Stock inventory is present.
+    assert "CrossOrgContractEvidence.csv" not in filenames  # Header-only contract evidence uses a direct file write.
+    assert "Cross-org subscription inventory summary:" in captured  # The console summary is printed.
+
+
+def test_cross_org_empty_export_writes_header_only(tmp_path: object, monkeypatch: object) -> None:
+    """An empty report writes headers and no fake Missing data row."""
+    import csv
+
+    data_path = tmp_path / "data"  # Isolate the empty report under pytest temp storage.
+    monkeypatch.chdir(tmp_path)  # Make the report write inside the test directory.
+    fieldnames = ["org_id", "org_name", "source", "request_status"]  # Use a stable header contract.
+    CrossOrgSubscriptionInventoryReport._write_empty_csv("EmptyCrossOrg.csv", fieldnames)  # Write headers.
+    output_path = data_path / "EmptyCrossOrg.csv"  # Resolve the isolated output path.
+    with output_path.open(newline="", encoding="utf-8") as csv_file:  # Read the generated CSV.
+        reader = csv.DictReader(csv_file)  # Parse header and rows.
+        rows = list(reader)  # Materialize data rows.
+    assert reader.fieldnames == fieldnames  # Preserve the exact header order.
+    assert rows == []  # No fake Missing row exists.

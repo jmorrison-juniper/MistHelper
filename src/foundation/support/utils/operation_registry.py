@@ -533,6 +533,7 @@ class OperationRegistry:
             ),
         },
         "307": {"category": "safe"},
+        "308": {"category": "safe"},
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",
