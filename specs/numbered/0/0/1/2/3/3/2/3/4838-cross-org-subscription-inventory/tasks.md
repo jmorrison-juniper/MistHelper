@@ -120,7 +120,7 @@
 - [X] T042 [P] Add an operator runbook in `documentation/cross-org-subscription-stock.md`. (delivered: cross-org-subscription-stock.md)
 - [X] T043 [P] Run `python scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map`. (delivered: menu references regenerated)
 - [X] T044 [P] Add a dated or issue change fragment under `changelog.d/`. (delivered: issue-4838-cross-org-subscription-stock.md)
-- [X] T045 Run compile, Ruff, Black, mypy, targeted pytest, complexity, and test-quality gates for the changed files. (delivered: 52 focused tests pass; compile, Ruff, and Black pass)
+- [X] T045 Run compile, Ruff, Black, mypy, targeted pytest, complexity, and test-quality gates for the changed files. (delivered: 54 focused tests pass; 104 menu, SDK, and guardrail tests pass; compile, Ruff, Black, mypy, Bandit, Radon, and test-quality preflight pass)
 - [X] T046 Run a live direct-organization report for T-Mobile USA Validation Lab. (delivered: 41 purchase, 22 balance, 1 stock, 2 contract rows)
 - [ ] T047 Run an interactive MSP report only after authorized email, password, and 2FA session access is available.
 - [X] T048 Review the final diff, update menu counts, and open the pull request for issue 4838. (delivered: local implementation complete; PR pending final CI)

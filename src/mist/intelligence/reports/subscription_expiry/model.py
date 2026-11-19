@@ -601,6 +601,111 @@ class CrossOrgSubscriptionInventoryModel:
         return sorted(rows, key=lambda row: (row.subscription_type, row.start_date, row.record_id))
 
     @staticmethod
+    def _aggregate_usage(usages: list[LicenseUsageSource]) -> dict[str, int]:
+        """Sum usage values by normalized subscription type."""
+        usage_by_type: dict[str, int] = {}  # Accumulate usage across sites.
+        for usage in usages:  # Walk each site usage row.
+            for subscription_type, usage_value in usage.usages.items():  # Walk each usage value.
+                if type(usage_value) is int and usage_value >= 0:  # Accept whole usage counts.
+                    normalized_type = str(subscription_type).upper()  # Normalize source type.
+                    usage_by_type[normalized_type] = usage_by_type.get(normalized_type, 0) + usage_value
+        return usage_by_type  # Return the usage sum.
+
+    @staticmethod
+    def _subscription_types(
+        summary: LicenseSummarySource,
+        usage_by_type: dict[str, int],
+    ) -> set[str]:
+        """Union entitlement, usage, and dated license types."""
+        subscription_types = set(summary.entitled) | set(usage_by_type)  # Union entitlement and usage.
+        subscription_types.update(
+            str(record.get("type")).upper()
+            for record in summary.licenses
+            if isinstance(record, dict) and record.get("type")
+        )  # Add dated purchase types.
+        return subscription_types  # Return all subscription types.
+
+    @staticmethod
+    def _license_rows(summary: LicenseSummarySource, subscription_type: str) -> list[dict[str, Any]]:
+        """Match license records to one normalized subscription type."""
+        return [
+            record
+            for record in summary.licenses
+            if isinstance(record, dict) and str(record.get("type") or "").upper() == subscription_type
+        ]  # Return matching records.
+
+    @staticmethod
+    def _purchased_quantity(license_rows: list[dict[str, Any]]) -> int | str:
+        """Sum valid purchase quantities or return Missing."""
+        purchased_values = [
+            CrossOrgSubscriptionInventoryModel._whole_count(record.get("quantity")) for record in license_rows
+        ]  # Normalize purchase quantities.
+        if not any(isinstance(value, int) for value in purchased_values):  # No valid quantity exists.
+            return MISSING_VALUE  # Return Missing.
+        return sum(value for value in purchased_values if isinstance(value, int))  # Sum valid quantities.
+
+    @staticmethod
+    def _balance_values(
+        entitled_quantity: int | str,
+        in_use_quantity: int | str,
+    ) -> tuple[int | str, int | str]:
+        """Calculate unused entitlement and over-entitlement quantities."""
+        if not isinstance(entitled_quantity, int) or not isinstance(in_use_quantity, int):  # Missing count.
+            return MISSING_VALUE, MISSING_VALUE  # Keep both balances Missing.
+        unused = max(entitled_quantity - in_use_quantity, 0)  # Clamp unused to zero.
+        over = max(in_use_quantity - entitled_quantity, 0)  # Clamp over-use to zero.
+        return unused, over  # Return both quantities.
+
+    @staticmethod
+    def _start_date(license_rows: list[dict[str, Any]]) -> date | None:
+        """Select the earliest valid purchase start date."""
+        start_dates = [
+            SubscriptionExpiryModel.normalize_date(record.get("start_time")) for record in license_rows
+        ]  # Parse purchase starts.
+        valid_starts = [value for value in start_dates if value is not None]  # Keep valid starts.
+        return min(valid_starts) if valid_starts else None  # Return earliest valid start.
+
+    @staticmethod
+    def _balance_row(
+        organization: OrganizationScope,
+        subscription_type: str,
+        license_rows: list[dict[str, Any]],
+        purchased_quantity: int | str,
+        entitled_quantity: int | str,
+        in_use_quantity: int | str,
+        unused: int | str,
+        over: int | str,
+        start_date: date | None,
+        end_date: date | None,
+        raw_days: int | str,
+    ) -> SubscriptionBalanceRow:
+        """Build one subscription balance row."""
+        days_remaining = max(raw_days, 0) if isinstance(raw_days, int) else MISSING_VALUE  # Clamp expired.
+        status = SubscriptionExpiryModel._subscription_status(
+            license_rows,
+            entitled_quantity,
+            in_use_quantity,
+            raw_days,
+        )  # Reuse status logic.
+        band = SubscriptionExpiryModel._subscription_band(raw_days)  # Reuse band logic.
+        return SubscriptionBalanceRow(
+            msp_id=organization.msp_id or MISSING_VALUE,
+            org_id=organization.org_id,
+            org_name=organization.org_name,
+            subscription_type=subscription_type,
+            purchased_quantity=purchased_quantity,
+            entitled_quantity=entitled_quantity,
+            in_use_quantity=in_use_quantity,
+            unused_entitlement=unused,
+            over_entitlement=over,
+            status=status,
+            start_date=SubscriptionExpiryModel._date_text(start_date),
+            end_date=SubscriptionExpiryModel._date_text(end_date),
+            days_remaining=days_remaining,
+            band=band,
+        )  # Build one balance row.
+
+    @staticmethod
     def build_subscription_balances(
         organization: OrganizationScope,
         summary: LicenseSummarySource,
@@ -608,77 +713,41 @@ class CrossOrgSubscriptionInventoryModel:
         report_date: date,
     ) -> list[SubscriptionBalanceRow]:
         """Build one purchased and used balance row for each subscription type."""
-        usage_by_type: dict[str, int] = {}  # Accumulate usage across all sites.
-        for usage in usages:  # Walk each site usage row.
-            for subscription_type, usage_value in usage.usages.items():  # Walk each usage map.
-                if type(usage_value) is int and usage_value >= 0:  # Accept only whole usage counts.
-                    normalized_type = str(subscription_type).upper()  # Normalize the source type.
-                    usage_by_type[normalized_type] = usage_by_type.get(normalized_type, 0) + usage_value
-        subscription_types = set(summary.entitled) | set(usage_by_type)  # Union entitlement and usage.
-        subscription_types.update(
-            str(record.get("type")).upper()
-            for record in summary.licenses
-            if isinstance(record, dict) and record.get("type")
-        )  # Add dated purchase types.
+        usage_by_type = CrossOrgSubscriptionInventoryModel._aggregate_usage(usages)  # Sum usage.
+        subscription_types = CrossOrgSubscriptionInventoryModel._subscription_types(
+            summary,
+            usage_by_type,
+        )  # Union types.
         rows: list[SubscriptionBalanceRow] = []  # Accumulate balance rows.
         for subscription_type in sorted(subscription_types):  # Produce stable output.
-            license_rows = [
-                record
-                for record in summary.licenses
-                if isinstance(record, dict) and str(record.get("type") or "").upper() == subscription_type
-            ]  # Match purchase records.
-            purchased_values = [
-                CrossOrgSubscriptionInventoryModel._whole_count(record.get("quantity")) for record in license_rows
-            ]  # Normalize purchase quantities.
-            purchased_quantity = (
-                sum(value for value in purchased_values if isinstance(value, int))
-                if any(isinstance(value, int) for value in purchased_values)
-                else MISSING_VALUE
-            )  # Sum valid values or keep Missing.
+            license_rows = CrossOrgSubscriptionInventoryModel._license_rows(summary, subscription_type)  # Match.
+            purchased_quantity = CrossOrgSubscriptionInventoryModel._purchased_quantity(license_rows)  # Sum.
             entitled_quantity = CrossOrgSubscriptionInventoryModel._whole_count(
                 summary.entitled.get(subscription_type)
-            )  # Normalize entitlement.
+            )  # Normalize.
             in_use_quantity = CrossOrgSubscriptionInventoryModel._whole_count(
                 usage_by_type.get(subscription_type)
-            )  # Normalize usage.
-            unused = (
-                max(entitled_quantity - in_use_quantity, 0)
-                if isinstance(entitled_quantity, int) and isinstance(in_use_quantity, int)
-                else MISSING_VALUE
-            )  # Calculate unused entitlement.
-            over = (
-                max(in_use_quantity - entitled_quantity, 0)
-                if isinstance(entitled_quantity, int) and isinstance(in_use_quantity, int)
-                else MISSING_VALUE
-            )  # Calculate over entitlement.
+            )  # Normalize.
+            unused, over = CrossOrgSubscriptionInventoryModel._balance_values(
+                entitled_quantity,
+                in_use_quantity,
+            )  # Calculate both balances.
             end_date = SubscriptionExpiryModel._subscription_end_date(license_rows)  # Reuse date logic.
             raw_days = (end_date - report_date).days if end_date else MISSING_VALUE  # Calculate days.
-            days_remaining = max(raw_days, 0) if isinstance(raw_days, int) else MISSING_VALUE  # Clamp expired.
-            status = SubscriptionExpiryModel._subscription_status(
-                license_rows, entitled_quantity, in_use_quantity, raw_days
-            )  # Reuse status logic.
-            band = SubscriptionExpiryModel._subscription_band(raw_days)  # Reuse band logic.
-            start_dates = [
-                SubscriptionExpiryModel.normalize_date(record.get("start_time")) for record in license_rows
-            ]  # Parse purchase starts.
-            valid_starts = [value for value in start_dates if value is not None]  # Keep valid starts.
-            start_date = min(valid_starts) if valid_starts else None  # Earliest purchase start.
+            start_date = CrossOrgSubscriptionInventoryModel._start_date(license_rows)  # Earliest purchase.
             rows.append(
-                SubscriptionBalanceRow(
-                    msp_id=organization.msp_id or MISSING_VALUE,
-                    org_id=organization.org_id,
-                    org_name=organization.org_name,
-                    subscription_type=subscription_type,
-                    purchased_quantity=purchased_quantity,
-                    entitled_quantity=entitled_quantity,
-                    in_use_quantity=in_use_quantity,
-                    unused_entitlement=unused,
-                    over_entitlement=over,
-                    status=status,
-                    start_date=SubscriptionExpiryModel._date_text(start_date),
-                    end_date=SubscriptionExpiryModel._date_text(end_date),
-                    days_remaining=days_remaining,
-                    band=band,
+                CrossOrgSubscriptionInventoryModel._balance_row(
+                    organization,
+                    subscription_type,
+                    license_rows,
+                    purchased_quantity,
+                    entitled_quantity,
+                    in_use_quantity,
+                    unused,
+                    over,
+                    start_date,
+                    end_date,
+                    raw_days,
                 )
             )  # Build one balance row.
         logger.debug("Built %d cross-org balance rows", len(rows))  # Log balance count.
@@ -692,56 +761,97 @@ class CrossOrgSubscriptionInventoryModel:
     ) -> list[StockInventoryRow]:
         """Build one stock row for each unassigned inventory asset."""
         logger.info("Building stock rows for %s", organization.org_id)  # Log before stock scoring.
-        jsi_by_serial = (
-            {source.serial: source for source in jsi if isinstance(source, JsiContractSource) and source.serial}
-            if jsi is not None
-            else {}
-        )  # Index JSI evidence by serial.
+        jsi_by_serial = CrossOrgSubscriptionInventoryModel._jsi_by_serial(jsi)  # Index JSI evidence.
         rows: list[StockInventoryRow] = []  # Accumulate stock evidence.
         seen: set[tuple[str, str, str]] = set()  # Deduplicate inventory records.
         for record in inventory:  # Walk every live inventory record.
-            if not isinstance(record, dict) or record.get("site_id"):  # Assigned devices stay out of stock.
+            row = CrossOrgSubscriptionInventoryModel._stock_row(
+                organization,
+                record,
+                jsi,
+                jsi_by_serial,
+            )  # Build one stock record.
+            if row is None:  # Assigned or malformed inventory.
                 continue  # Skip assigned inventory.
-            serial = CrossOrgSubscriptionInventoryModel._text(record.get("serial"))  # Normalize serial.
-            mac = CrossOrgSubscriptionInventoryModel._text(record.get("mac"))  # Normalize MAC.
-            model = CrossOrgSubscriptionInventoryModel._text(record.get("model"))  # Normalize model.
-            key = (serial, mac, model)  # Build a visible duplicate key.
+            key = (row.serial, row.mac, row.model)  # Build a visible duplicate key.
             if key in seen:  # Skip repeated stock records.
                 continue  # Keep one row per inventory asset.
             seen.add(key)  # Remember this stock asset.
-            jsi_match = jsi_by_serial.get(serial if serial != MISSING_VALUE else "")  # Find serial evidence.
-            match_status = (
-                "unavailable" if jsi is None else "matched" if jsi_match is not None else "no-match"
-            )  # Score JSI evidence availability.
-            contract_status = CrossOrgSubscriptionInventoryModel._text(
-                jsi_match.status if jsi_match is not None else MISSING_VALUE
-            )  # Preserve JSI status.
-            if jsi_match is not None and jsi_match.has_support is True and contract_status == MISSING_VALUE:
-                contract_status = "Active"  # has_support is evidence of active support.
-            contract_end_date = (
-                SubscriptionExpiryModel._date_text(SubscriptionExpiryModel._contract_end_date(jsi_match))
-                if jsi_match is not None
-                else MISSING_VALUE
-            )  # Preserve only a valid JSI date.
-            rows.append(
-                StockInventoryRow(
-                    msp_id=organization.msp_id or MISSING_VALUE,
-                    org_id=organization.org_id,
-                    org_name=organization.org_name,
-                    serial=serial,
-                    mac=mac,
-                    model=model,
-                    name=CrossOrgSubscriptionInventoryModel._text(record.get("name")),
-                    device_type=CrossOrgSubscriptionInventoryModel._inventory_type(record),
-                    deployment_status="stock",
-                    license_review_required="yes",
-                    jsi_match_status=match_status,
-                    contract_status=contract_status,
-                    contract_end_date=contract_end_date,
-                )
-            )  # Build one stock row.
+            rows.append(row)  # Add the stock row.
         logger.debug("Built %d cross-org stock rows", len(rows))  # Log stock count.
         return sorted(rows, key=lambda row: (row.device_type, row.model, row.serial))
+
+    @staticmethod
+    def _jsi_by_serial(jsi: list[JsiContractSource] | None) -> dict[str, JsiContractSource]:
+        """Index JSI evidence by serial number."""
+        if jsi is None:  # JSI evidence is unavailable.
+            return {}  # Return no evidence.
+        return {
+            source.serial: source for source in jsi if isinstance(source, JsiContractSource) and source.serial
+        }  # Index only serial-bearing evidence.
+
+    @staticmethod
+    def _stock_row(
+        organization: OrganizationScope,
+        record: dict[str, Any],
+        jsi: list[JsiContractSource] | None,
+        jsi_by_serial: dict[str, JsiContractSource],
+    ) -> StockInventoryRow | None:
+        """Build one stock row or return None for assigned inventory."""
+        if not isinstance(record, dict) or record.get("site_id"):  # Assigned devices stay out of stock.
+            return None  # Skip assigned inventory.
+        serial = CrossOrgSubscriptionInventoryModel._text(record.get("serial"))  # Normalize serial.
+        mac = CrossOrgSubscriptionInventoryModel._text(record.get("mac"))  # Normalize MAC.
+        model = CrossOrgSubscriptionInventoryModel._text(record.get("model"))  # Normalize model.
+        jsi_match = jsi_by_serial.get(serial if serial != MISSING_VALUE else "")  # Find serial evidence.
+        match_status = CrossOrgSubscriptionInventoryModel._jsi_match_status(jsi, jsi_match)  # Score match.
+        contract_status = CrossOrgSubscriptionInventoryModel._stock_contract_status(jsi_match)  # Preserve status.
+        contract_end_date = CrossOrgSubscriptionInventoryModel._stock_contract_end_date(jsi_match)  # Preserve date.
+        return StockInventoryRow(
+            msp_id=organization.msp_id or MISSING_VALUE,
+            org_id=organization.org_id,
+            org_name=organization.org_name,
+            serial=serial,
+            mac=mac,
+            model=model,
+            name=CrossOrgSubscriptionInventoryModel._text(record.get("name")),
+            device_type=CrossOrgSubscriptionInventoryModel._inventory_type(record),
+            deployment_status="stock",
+            license_review_required="yes",
+            jsi_match_status=match_status,
+            contract_status=contract_status,
+            contract_end_date=contract_end_date,
+        )  # Build one stock row.
+
+    @staticmethod
+    def _jsi_match_status(
+        jsi: list[JsiContractSource] | None,
+        jsi_match: JsiContractSource | None,
+    ) -> str:
+        """Score JSI match availability."""
+        if jsi is None:  # JSI evidence is unavailable.
+            return "unavailable"  # Mark unavailable.
+        if jsi_match is not None:  # Serial evidence matched.
+            return "matched"  # Mark matched.
+        return "no-match"  # Mark no serial match.
+
+    @staticmethod
+    def _stock_contract_status(jsi_match: JsiContractSource | None) -> str:
+        """Preserve JSI contract status or Missing."""
+        if jsi_match is None:  # No JSI evidence exists.
+            return MISSING_VALUE  # Keep status missing.
+        status = CrossOrgSubscriptionInventoryModel._text(jsi_match.status)  # Normalize status.
+        if status == MISSING_VALUE and jsi_match.has_support is True:  # has_support proves support.
+            return "Active"  # Map positive support to Active.
+        return status  # Return JSI status.
+
+    @staticmethod
+    def _stock_contract_end_date(jsi_match: JsiContractSource | None) -> str:
+        """Preserve only a valid JSI contract end date."""
+        if jsi_match is None:  # No JSI evidence exists.
+            return MISSING_VALUE  # Keep date missing.
+        end_date = SubscriptionExpiryModel._contract_end_date(jsi_match)  # Reuse date parser.
+        return SubscriptionExpiryModel._date_text(end_date)  # Return ISO date or Missing.
 
     @staticmethod
     def build_contract_rows(

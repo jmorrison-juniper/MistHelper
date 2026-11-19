@@ -6,6 +6,7 @@ import csv  # Write explicit header-only CSV files for empty reports.
 import logging  # Record operation actions for operator traceability.
 import os  # Read direct organization and customer name settings without prompts.
 from dataclasses import replace  # Preserve organization scope while changing status.
+from datetime import date  # Type report date for source scoring.
 from pathlib import Path  # Build data paths with the platform path library.
 from typing import Any  # Type injectable test seams without importing root modules.
 
@@ -29,6 +30,7 @@ from src.mist.intelligence.reports.subscription_expiry.model import (
     CrossOrgSubscriptionInventoryModel,
     JsiContractSource,
     LicenseSummarySource,
+    LicenseUsageSource,
     OrganizationScope,
     ReportContext,
     SubscriptionExpiryModel,
@@ -387,37 +389,15 @@ class CrossOrgSubscriptionInventoryReport:
             active_org_id,
             active_org_name,
         )  # Discover authorized scope.
-        organization_status_rows: list[dict[str, Any]] = [
-            failure.to_dict() for failure in discovery_failures
-        ]  # Add discovery failures first.
+        organization_status_rows = [failure.to_dict() for failure in discovery_failures]  # Add failures.
         if not organizations:  # No authorized organization exists.
-            if not organization_status_rows:  # Discovery returned no visible failure.
-                organization_status_rows.append(
-                    OrganizationScope(
-                        org_id=active_org_id or MISSING_VALUE,
-                        org_name=active_org_name or MISSING_VALUE,
-                        source="none",
-                        request_status="failed",
-                        error="No accessible organization",
-                    ).to_dict()
-                )  # Name the no-access condition.
-            CrossOrgSubscriptionInventoryReport._export_reports(
+            CrossOrgSubscriptionInventoryReport._export_no_organizations(
+                active_org_id,
+                active_org_name,
                 organization_status_rows,
-                [],
-                [],
-                [],
-                [],
                 dependencies,
-            )  # Export failure status and empty reports.
-            CrossOrgSubscriptionInventoryReport._print_summary(
-                organization_status_rows,
-                [],
-                [],
-                [],
-                [],
-            )  # Print zero and failure counts.
+            )  # Export no-access evidence.
             return  # Stop without success-shaped subscription data.
-
         purchase_rows: list[dict[str, Any]] = []  # Accumulate purchase evidence.
         balance_rows: list[dict[str, Any]] = []  # Accumulate balance evidence.
         stock_rows: list[dict[str, Any]] = []  # Accumulate stock evidence.
@@ -425,113 +405,22 @@ class CrossOrgSubscriptionInventoryReport:
         report_date = __import__("datetime").datetime.now(__import__("datetime").UTC).date()  # Use UTC run date.
         organization_status_by_id: dict[str, OrganizationScope] = {}  # Track final organization status.
         for organization in organizations:  # Read one authorized organization at a time.
-            logger.info("Reading cross-org data for %s", organization.org_id)  # Log before org reads.
-            success_count = 0  # Count successful source reads.
-            errors: list[str] = []  # Collect visible source failures.
-            summary: LicenseSummarySource | None = None  # Hold license summary.
-            usages: list[Any] = []  # Hold usage rows.
-            inventory: list[dict[str, Any]] = []  # Hold inventory rows.
-            jsi: list[JsiContractSource] | None = []  # Hold JSI evidence.
-            try:  # Read license summary.
-                summary = client.fetch_license_summary(organization.org_id)  # Fetch summary.
-                success_count += 1  # Count successful source read.
-            except SubscriptionExpiryClientError as error:  # License summary failed.
-                errors.append(str(error))  # Preserve safe status text.
-            try:  # Read license usage.
-                usages = client.fetch_license_usage_by_site(organization.org_id)  # Fetch usage.
-                success_count += 1  # Count successful source read.
-            except SubscriptionExpiryClientError as error:  # License usage failed.
-                errors.append(str(error))  # Preserve safe status text.
-            try:  # Read inventory.
-                inventory = client.fetch_inventory(organization.org_id)  # Fetch inventory pages.
-                success_count += 1  # Count successful source read.
-            except SubscriptionExpiryClientError as error:  # Inventory failed.
-                errors.append(str(error))  # Preserve safe status text.
-            try:  # Read JSI evidence.
-                jsi = client.search_jsi_assets_and_contracts(organization.org_id)  # Fetch JSI rows.
-                success_count += 1  # Count successful source read.
-            except JsiAccountNotLinkedError:  # JSI account is unavailable.
-                jsi = None  # Mark JSI evidence unavailable.
-                errors.append("JSI account not linked")  # Preserve visible condition.
-            except SubscriptionExpiryClientError as error:  # JSI request failed.
-                jsi = None  # Mark JSI evidence unavailable.
-                errors.append(str(error))  # Preserve safe status text.
-            if summary is not None:  # Summary is usable.
-                purchase_rows.extend(
-                    row.to_dict()
-                    for row in CrossOrgSubscriptionInventoryModel.build_purchase_rows(
-                        organization,
-                        summary.licenses,
-                        report_date,
-                    )
-                )  # Add purchase rows.
-                balance_rows.extend(
-                    row.to_dict()
-                    for row in CrossOrgSubscriptionInventoryModel.build_subscription_balances(
-                        organization,
-                        summary,
-                        usages,
-                        report_date,
-                    )
-                )  # Add balance rows.
-            stock_rows.extend(
-                row.to_dict()
-                for row in CrossOrgSubscriptionInventoryModel.build_stock_rows(
-                    organization,
-                    inventory,
-                    jsi,
-                )
-            )  # Add stock rows.
-            contract_rows.extend(
-                row.to_dict()
-                for row in CrossOrgSubscriptionInventoryModel.build_contract_rows(
-                    organization,
-                    jsi,
-                )
-            )  # Add contract rows.
-            if success_count == 4:  # Every source read succeeded.
-                request_status = "success"
-            elif success_count > 0:  # At least one source read succeeded.
-                request_status = "partial"
-            else:  # No source read succeeded.
-                request_status = "failed"
-            organization_status_by_id[organization.org_id] = replace(
+            CrossOrgSubscriptionInventoryReport._read_one_organization(
                 organization,
-                request_status=request_status,
-                error="; ".join(errors) if errors else None,
-            )  # Preserve final organization status.
-
-        seen_msp_ids: set[str] = set()  # Avoid repeated MSP license reads.
-        for organization in organizations:  # Walk organization scopes.
-            msp_id = organization.msp_id  # Read the MSP grant.
-            if not msp_id or msp_id in seen_msp_ids:  # Skip missing or duplicate MSP IDs.
-                continue  # Keep one MSP license read.
-            seen_msp_ids.add(msp_id)  # Remember this MSP.
-            fetch_msp_licenses = getattr(client, "fetch_msp_licenses", None)  # Locate optional method.
-            if fetch_msp_licenses is None:  # Synthetic or old client lacks MSP licenses.
-                continue  # Preserve organization evidence.
-            msp_payload = fetch_msp_licenses(msp_id)  # Read optional MSP purchase evidence.
-            if not isinstance(msp_payload, dict):  # MSP endpoint denied or returned no mapping.
-                continue  # Continue with org summary evidence.
-            msp_records = msp_payload.get("licenses")  # Read MSP license records.
-            if not isinstance(msp_records, list):  # MSP records are unavailable.
-                continue  # Keep organization evidence.
-            for organization_record in organizations:  # Match MSP records to organizations.
-                matching_records = [
-                    record
-                    for record in msp_records
-                    if isinstance(record, dict)
-                    and (record.get("org_id") == organization_record.org_id or not record.get("org_id"))
-                ]  # Match by org ID or preserve unknown scope.
-                purchase_rows.extend(
-                    row.to_dict()
-                    for row in CrossOrgSubscriptionInventoryModel.build_purchase_rows(
-                        organization_record,
-                        matching_records,
-                        report_date,
-                    )
-                )  # Add MSP purchase evidence.
-
+                client,
+                report_date,
+                purchase_rows,
+                balance_rows,
+                stock_rows,
+                contract_rows,
+                organization_status_by_id,
+            )  # Read and score one organization.
+        CrossOrgSubscriptionInventoryReport._read_msp_purchases(
+            organizations,
+            client,
+            report_date,
+            purchase_rows,
+        )  # Read optional MSP license evidence.
         organization_status_rows.extend(
             organization_status.to_dict() for organization_status in organization_status_by_id.values()
         )  # Add organization status rows.
@@ -559,3 +448,248 @@ class CrossOrgSubscriptionInventoryReport:
             stock_rows,
             contract_rows,
         )  # Print linked result counts.
+
+    @staticmethod
+    def _export_no_organizations(
+        active_org_id: str,
+        active_org_name: str,
+        organization_status_rows: list[dict[str, Any]],
+        dependencies: Any,
+    ) -> None:
+        """Export failure status and empty reports when no organization is accessible."""
+        if not organization_status_rows:  # Discovery returned no visible failure.
+            organization_status_rows.append(
+                OrganizationScope(
+                    org_id=active_org_id or MISSING_VALUE,
+                    org_name=active_org_name or MISSING_VALUE,
+                    source="none",
+                    request_status="failed",
+                    error="No accessible organization",
+                ).to_dict()
+            )  # Name the no-access condition.
+        CrossOrgSubscriptionInventoryReport._export_reports(
+            organization_status_rows,
+            [],
+            [],
+            [],
+            [],
+            dependencies,
+        )  # Export failure status and empty reports.
+        CrossOrgSubscriptionInventoryReport._print_summary(
+            organization_status_rows,
+            [],
+            [],
+            [],
+            [],
+        )  # Print zero and failure counts.
+
+    @staticmethod
+    def _read_summary(
+        client: SubscriptionExpiryClient,
+        org_id: str,
+        errors: list[str],
+    ) -> tuple[LicenseSummarySource | None, int]:
+        """Read one license summary and count success."""
+        try:  # Read license summary.
+            return client.fetch_license_summary(org_id), 1  # Return data and success.
+        except SubscriptionExpiryClientError as error:  # License summary failed.
+            errors.append(str(error))  # Preserve safe status text.
+            return None, 0  # Return no data and no success.
+
+    @staticmethod
+    def _read_usage(
+        client: SubscriptionExpiryClient,
+        org_id: str,
+        errors: list[str],
+    ) -> tuple[list[LicenseUsageSource], int]:
+        """Read one license usage source and count success."""
+        try:  # Read license usage.
+            return client.fetch_license_usage_by_site(org_id), 1  # Return usage and success.
+        except SubscriptionExpiryClientError as error:  # License usage failed.
+            errors.append(str(error))  # Preserve safe status text.
+            return [], 0  # Return no data and no success.
+
+    @staticmethod
+    def _read_inventory(
+        client: SubscriptionExpiryClient,
+        org_id: str,
+        errors: list[str],
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Read one inventory source and count success."""
+        try:  # Read inventory.
+            return client.fetch_inventory(org_id), 1  # Return inventory and success.
+        except SubscriptionExpiryClientError as error:  # Inventory failed.
+            errors.append(str(error))  # Preserve safe status text.
+            return [], 0  # Return no data and no success.
+
+    @staticmethod
+    def _read_jsi(
+        client: SubscriptionExpiryClient,
+        org_id: str,
+        errors: list[str],
+    ) -> tuple[list[JsiContractSource] | None, int]:
+        """Read JSI evidence and preserve unavailable status."""
+        try:  # Read JSI evidence.
+            return client.search_jsi_assets_and_contracts(org_id), 1  # Return JSI and success.
+        except JsiAccountNotLinkedError:  # JSI account is unavailable.
+            errors.append("JSI account not linked")  # Preserve visible condition.
+            return None, 0  # Return unavailable JSI and no success.
+        except SubscriptionExpiryClientError as error:  # JSI request failed.
+            errors.append(str(error))  # Preserve safe status text.
+            return None, 0  # Return unavailable JSI and no success.
+
+    @staticmethod
+    def _read_one_organization(
+        organization: OrganizationScope,
+        client: SubscriptionExpiryClient,
+        report_date: date,
+        purchase_rows: list[dict[str, Any]],
+        balance_rows: list[dict[str, Any]],
+        stock_rows: list[dict[str, Any]],
+        contract_rows: list[dict[str, Any]],
+        organization_status_by_id: dict[str, OrganizationScope],
+    ) -> None:
+        """Read and score one organization."""
+        logger.info("Reading cross-org data for %s", organization.org_id)  # Log before org reads.
+        success_count = 0  # Count successful source reads.
+        errors: list[str] = []  # Collect visible source failures.
+        summary, summary_success = CrossOrgSubscriptionInventoryReport._read_summary(
+            client,
+            organization.org_id,
+            errors,
+        )  # Read license summary.
+        usages, usage_success = CrossOrgSubscriptionInventoryReport._read_usage(
+            client,
+            organization.org_id,
+            errors,
+        )  # Read license usage.
+        inventory, inventory_success = CrossOrgSubscriptionInventoryReport._read_inventory(
+            client,
+            organization.org_id,
+            errors,
+        )  # Read inventory.
+        jsi, jsi_success = CrossOrgSubscriptionInventoryReport._read_jsi(
+            client,
+            organization.org_id,
+            errors,
+        )  # Read JSI evidence.
+        success_count = summary_success + usage_success + inventory_success + jsi_success  # Sum success.
+        if summary is not None:  # Summary is usable.
+            purchase_rows.extend(
+                row.to_dict()
+                for row in CrossOrgSubscriptionInventoryModel.build_purchase_rows(
+                    organization,
+                    summary.licenses,
+                    report_date,
+                )
+            )  # Add purchase rows.
+            balance_rows.extend(
+                row.to_dict()
+                for row in CrossOrgSubscriptionInventoryModel.build_subscription_balances(
+                    organization,
+                    summary,
+                    usages,
+                    report_date,
+                )
+            )  # Add balance rows.
+        stock_rows.extend(
+            row.to_dict()
+            for row in CrossOrgSubscriptionInventoryModel.build_stock_rows(
+                organization,
+                inventory,
+                jsi,
+            )
+        )  # Add stock rows.
+        contract_rows.extend(
+            row.to_dict()
+            for row in CrossOrgSubscriptionInventoryModel.build_contract_rows(
+                organization,
+                jsi,
+            )
+        )  # Add contract rows.
+        request_status = "success" if success_count == 4 else "partial" if success_count > 0 else "failed"
+        organization_status_by_id[organization.org_id] = replace(
+            organization,
+            request_status=request_status,
+            error="; ".join(errors) if errors else None,
+        )  # Preserve final organization status.
+
+    @staticmethod
+    def _read_msp_purchases(
+        organizations: list[OrganizationScope],
+        client: SubscriptionExpiryClient,
+        report_date: date,
+        purchase_rows: list[dict[str, Any]],
+    ) -> None:
+        """Read optional MSP purchase evidence once per MSP."""
+        for msp_id in CrossOrgSubscriptionInventoryReport._unique_msp_ids(organizations):  # Read each MSP once.
+            msp_records = CrossOrgSubscriptionInventoryReport._fetch_msp_records(client, msp_id)  # Read MSP evidence.
+            if not msp_records:  # MSP evidence is unavailable.
+                continue  # Preserve organization evidence.
+            CrossOrgSubscriptionInventoryReport._add_msp_purchase_rows(
+                organizations,
+                msp_records,
+                report_date,
+                purchase_rows,
+            )  # Add matched MSP purchases.
+
+    @staticmethod
+    def _unique_msp_ids(organizations: list[OrganizationScope]) -> list[str]:
+        """Return one ordered MSP ID for each organization grant."""
+        seen_msp_ids: set[str] = set()  # Avoid repeated MSP license reads.
+        msp_ids: list[str] = []  # Accumulate unique ordered IDs.
+        for organization in organizations:  # Walk organization scopes.
+            msp_id = organization.msp_id  # Read the MSP grant.
+            if msp_id and msp_id not in seen_msp_ids:  # Accept only a new valid MSP ID.
+                seen_msp_ids.add(msp_id)  # Remember this MSP.
+                msp_ids.append(msp_id)  # Preserve discovery order.
+        return msp_ids  # Return deduplicated MSP IDs.
+
+    @staticmethod
+    def _fetch_msp_records(
+        client: SubscriptionExpiryClient,
+        msp_id: str,
+    ) -> list[dict[str, Any]]:
+        """Fetch and validate optional MSP license records."""
+        fetch_msp_licenses = getattr(client, "fetch_msp_licenses", None)  # Locate optional method.
+        if fetch_msp_licenses is None:  # Synthetic or old client lacks MSP licenses.
+            return []  # Preserve organization evidence.
+        msp_payload = fetch_msp_licenses(msp_id)  # Read optional MSP purchase evidence.
+        if not isinstance(msp_payload, dict):  # MSP endpoint denied or returned no mapping.
+            return []  # Continue with organization evidence.
+        msp_records = msp_payload.get("licenses")  # Read MSP license records.
+        if not isinstance(msp_records, list):  # MSP records are unavailable.
+            return []  # Keep organization evidence.
+        return [record for record in msp_records if isinstance(record, dict)]  # Return mapping records only.
+
+    @staticmethod
+    def _add_msp_purchase_rows(
+        organizations: list[OrganizationScope],
+        msp_records: list[dict[str, Any]],
+        report_date: date,
+        purchase_rows: list[dict[str, Any]],
+    ) -> None:
+        """Match MSP purchase records to organizations and append rows."""
+        for organization in organizations:  # Match MSP records to organizations.
+            matching_records = CrossOrgSubscriptionInventoryReport._matching_msp_records(
+                organization,
+                msp_records,
+            )  # Match by org ID or unknown scope.
+            purchase_rows.extend(
+                row.to_dict()
+                for row in CrossOrgSubscriptionInventoryModel.build_purchase_rows(
+                    organization,
+                    matching_records,
+                    report_date,
+                )
+            )  # Add MSP purchase evidence.
+
+    @staticmethod
+    def _matching_msp_records(
+        organization: OrganizationScope,
+        msp_records: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Match one MSP record set to one organization."""
+        return [
+            record for record in msp_records if record.get("org_id") == organization.org_id or not record.get("org_id")
+        ]  # Match explicit org IDs or preserve unknown scope.

@@ -170,3 +170,65 @@ def test_cross_org_empty_export_writes_header_only(tmp_path: object, monkeypatch
         rows = list(reader)  # Materialize data rows.
     assert reader.fieldnames == fieldnames  # Preserve the exact header order.
     assert rows == []  # No fake Missing row exists.
+
+
+def test_cross_org_msp_purchase_read_runs_once_for_duplicate_grants() -> None:
+    """One MSP grant produces one MSP license request for all matched organizations."""
+    exporter = FakeExporter()  # Capture export calls without file I/O.
+    dependencies = FakeDependencies(exporter)  # Inject the fake exporter.
+    fetched_msp_ids: list[str] = []  # Track MSP license request IDs.
+
+    class FakeMspCrossOrgClient:
+        """Fake client with duplicate organizations under one MSP grant."""
+
+        def discover_organizations(self, _org_id: str, _org_name: str) -> tuple[list[object], list[object]]:
+            organizations = [
+                OrganizationScope(
+                    org_id="org-1",
+                    org_name="Campus",
+                    msp_id="msp-1",
+                    source="msp",
+                    request_status="success",
+                ),
+                OrganizationScope(
+                    org_id="org-2",
+                    org_name="Branch",
+                    msp_id="msp-1",
+                    source="msp",
+                    request_status="success",
+                ),
+            ]  # Return two organizations with one MSP grant.
+            return organizations, []  # Return synthetic discovery scope.
+
+        def fetch_msp_licenses(self, msp_id: str) -> dict[str, object]:
+            fetched_msp_ids.append(msp_id)  # Record one MSP license request.
+            return {
+                "licenses": [
+                    {"org_id": "org-1", "type": "SUB-SSR", "quantity": 2, "end_time": "2027-01-31"},
+                    {"org_id": "org-2", "type": "SUB-AP", "quantity": 5, "end_time": "2027-02-28"},
+                ]
+            }  # Return one purchase row for each organization.
+
+        def fetch_license_summary(self, _org_id: str) -> LicenseSummarySource:
+            return LicenseSummarySource(entitled={}, licenses=[])  # Avoid organization purchase overlap.
+
+        def fetch_license_usage_by_site(self, _org_id: str) -> list[LicenseUsageSource]:
+            return []  # Return no synthetic usage data.
+
+        def fetch_inventory(self, _org_id: str) -> list[dict[str, object]]:
+            return []  # Return no stock inventory data.
+
+        def search_jsi_assets_and_contracts(self, _org_id: str) -> list[JsiContractSource]:
+            return []  # Return no contract evidence.
+
+    CrossOrgSubscriptionInventoryReport._run_with_client(
+        "org-1",
+        "Campus",
+        FakeMspCrossOrgClient(),
+        dependencies,
+    )  # Run synthetic duplicate-MSP orchestration.
+    purchase_call = next(
+        call for call in exporter.calls if call[1] == "CrossOrgSubscriptionPurchase.csv"
+    )  # Locate the purchase report export.
+    assert fetched_msp_ids == ["msp-1"]  # The duplicate grant causes one MSP request.
+    assert len(purchase_call[0]) == 2  # Each organization receives one matched MSP purchase row.

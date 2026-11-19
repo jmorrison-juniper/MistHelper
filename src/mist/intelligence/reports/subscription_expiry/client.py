@@ -83,94 +83,129 @@ class SubscriptionExpiryClient:
     ) -> tuple[list[OrganizationScope], list[OrganizationScope]]:
         """Discover direct and MSP organizations granted to the active profile."""
         logger.info("Discovering cross-org organization scope")  # Log before discovery.
-        organizations: dict[str, OrganizationScope] = {}  # Deduplicate by organization ID.
-        failures: list[OrganizationScope] = []  # Preserve discovery errors.
-        if active_org_id:  # The configured or active organization is a known direct fallback.
-            organizations[active_org_id] = OrganizationScope(
-                org_id=active_org_id,
-                org_name=active_org_name or active_org_id,
-                source="direct",
-                request_status="success",
-            )  # Add direct organization scope.
+        organizations = self._direct_organizations(active_org_id, active_org_name)  # Seed direct scope.
         status_code, profile = self.fetch_profile()  # Read profile grants.
-        if status_code != 200:  # Profile read failed.
-            failures.append(
-                OrganizationScope(
-                    org_id=active_org_id or MISSING_VALUE,
-                    org_name=active_org_name or MISSING_VALUE,
-                    source="profile",
-                    request_status="failed",
-                    error=f"HTTP {status_code}",
-                )
-            )  # Preserve visible profile failure.
-            logger.error("Profile discovery failed with HTTP %s", status_code)  # Surface status.
+        failures = self._profile_failure(active_org_id, active_org_name, status_code)  # Preserve profile failure.
         privileges = profile.get("privileges") if isinstance(profile, dict) else None  # Read grants.
         if not isinstance(privileges, list):  # Invalid profile grants need a visible failure.
+            privileges = []  # Keep direct organization scope and stop MSP parsing.
             if status_code == 200:  # Only successful profile reads get this shape.
-                privileges = []  # Keep direct organization scope.
                 logger.warning("Profile returned no organization grant list")  # Name missing grant data.
-            else:  # Profile status was not successful.
-                privileges = []  # Stop MSP parsing.
         for privilege in privileges:  # Walk each profile grant.
             if not isinstance(privilege, dict):  # Skip malformed grants.
                 continue  # Keep only mapping grants.
-            direct_org_id = privilege.get("org_id")  # Read direct org grant.
-            if isinstance(direct_org_id, str) and direct_org_id:  # Valid direct grant.
-                organizations.setdefault(
-                    direct_org_id,
-                    OrganizationScope(
-                        org_id=direct_org_id,
-                        org_name=privilege.get("org_name") or privilege.get("name") or direct_org_id,
-                        source="direct",
-                        request_status="success",
-                    ),
-                )  # Add direct grant without replacing active org name.
+            self._add_direct_privilege(organizations, privilege)  # Add direct grant.
             msp_id = privilege.get("msp_id")  # Read MSP grant.
-            if not isinstance(msp_id, str) or not msp_id:  # Skip missing MSP grants.
-                continue  # No MSP organization call is possible.
-            response = self._request_with_retry(
-                "listMspOrgs",
-                msp_id,
-                lambda msp_id=msp_id: mistapi.api.v1.msps.orgs.listMspOrgs(
-                    self.apisession,
-                    msp_id,
-                ),
-            )  # Call the SDK MSP organization endpoint.
-            status_code = getattr(response, "status_code", None)  # Read MSP discovery status.
-            payload = self._response_payload(response)  # Normalize MSP organization data.
-            if status_code != 200 or not isinstance(payload, list):  # MSP discovery failed.
-                failures.append(
-                    OrganizationScope(
-                        org_id=MISSING_VALUE,
-                        org_name=f"MSP {msp_id}",
-                        msp_id=msp_id,
-                        source="msp",
-                        request_status="failed",
-                        error=f"HTTP {status_code}" if status_code is not None else "Invalid MSP organization list",
-                    )
-                )  # Preserve visible MSP failure.
-                continue  # Keep direct organizations.
-            for org in payload:  # Walk each MSP organization.
-                if not isinstance(org, dict):  # Skip malformed org rows.
-                    continue  # Keep only mapping rows.
-                org_id = org.get("id")  # Read organization ID.
-                if not isinstance(org_id, str) or not org_id:  # Skip missing IDs.
-                    continue  # An organization call needs an ID.
-                organizations.setdefault(
-                    org_id,
-                    OrganizationScope(
-                        org_id=org_id,
-                        org_name=org.get("name") or org_id,
-                        msp_id=msp_id,
-                        source="msp",
-                        request_status="success",
-                    ),
-                )  # Add MSP organization once.
+            if isinstance(msp_id, str) and msp_id:  # Valid MSP grant.
+                self._discover_msp(msp_id, organizations, failures)  # Add MSP organizations.
         logger.debug(
             "Discovered %d organizations and %d discovery failures",
             len(organizations),
             len(failures),
         )  # Log discovery counts.
+        return self._order_organizations(organizations, active_org_id), failures  # Return stable scope.
+
+    @staticmethod
+    def _direct_organizations(active_org_id: str, active_org_name: str) -> dict[str, OrganizationScope]:
+        """Seed direct organization scope from the active context."""
+        if not active_org_id:  # No configured organization exists.
+            return {}  # Keep an empty direct scope.
+        return {
+            active_org_id: OrganizationScope(
+                org_id=active_org_id,
+                org_name=active_org_name or active_org_id,
+                source="direct",
+                request_status="success",
+            )
+        }  # Seed one direct organization.
+
+    @staticmethod
+    def _profile_failure(
+        active_org_id: str,
+        active_org_name: str,
+        status_code: int | None,
+    ) -> list[OrganizationScope]:
+        """Build visible profile failure scope."""
+        if status_code == 200:  # A successful profile has no discovery failure.
+            return []  # Return no failure.
+        return [
+            OrganizationScope(
+                org_id=active_org_id or MISSING_VALUE,
+                org_name=active_org_name or MISSING_VALUE,
+                source="profile",
+                request_status="failed",
+                error=f"HTTP {status_code}",
+            )
+        ]  # Preserve profile failure.
+
+    @staticmethod
+    def _add_direct_privilege(
+        organizations: dict[str, OrganizationScope],
+        privilege: dict[str, Any],
+    ) -> None:
+        """Add one direct organization privilege."""
+        direct_org_id = privilege.get("org_id")  # Read direct organization.
+        if not isinstance(direct_org_id, str) or not direct_org_id:  # Skip malformed direct grants.
+            return  # Keep only valid IDs.
+        organizations.setdefault(
+            direct_org_id,
+            OrganizationScope(
+                org_id=direct_org_id,
+                org_name=privilege.get("org_name") or privilege.get("name") or direct_org_id,
+                source="direct",
+                request_status="success",
+            ),
+        )  # Add direct organization scope.
+
+    def _discover_msp(
+        self,
+        msp_id: str,
+        organizations: dict[str, OrganizationScope],
+        failures: list[OrganizationScope],
+    ) -> None:
+        """Discover organizations under one MSP grant."""
+        response = self._request_with_retry(
+            "listMspOrgs",
+            msp_id,
+            lambda: mistapi.api.v1.msps.orgs.listMspOrgs(self.apisession, msp_id),
+        )  # Call MSP organization discovery.
+        status_code = getattr(response, "status_code", None)  # Read MSP status.
+        payload = self._response_payload(response)  # Normalize MSP payload.
+        if status_code != 200 or not isinstance(payload, list):  # MSP discovery failed.
+            failures.append(
+                OrganizationScope(
+                    org_id=MISSING_VALUE,
+                    org_name=f"MSP {msp_id}",
+                    msp_id=msp_id,
+                    source="msp",
+                    request_status="failed",
+                    error=f"HTTP {status_code}" if status_code is not None else "Invalid MSP organization list",
+                )
+            )  # Preserve visible failure.
+            return  # Keep direct organizations.
+        for org in payload:  # Walk each MSP organization.
+            if not isinstance(org, dict):  # Skip malformed org rows.
+                continue  # Keep only mapping rows.
+            org_id = org.get("id")  # Read organization ID.
+            if not isinstance(org_id, str) or not org_id:  # Skip missing IDs.
+                continue  # An organization call needs an ID.
+            organizations.setdefault(
+                org_id,
+                OrganizationScope(
+                    org_id=org_id,
+                    org_name=org.get("name") or org_id,
+                    msp_id=msp_id,
+                    source="msp",
+                    request_status="success",
+                ),
+            )  # Add MSP organization once.
+
+    @staticmethod
+    def _order_organizations(
+        organizations: dict[str, OrganizationScope],
+        active_org_id: str,
+    ) -> list[OrganizationScope]:
+        """Place the active organization first and then MSP organizations."""
         ordered_organizations = list(organizations.values())  # Preserve direct organizations before MSP additions.
         if active_org_id in organizations:  # Keep the active/direct organization first.
             active_organization = organizations.pop(active_org_id)  # Remove direct for stable placement.
@@ -178,7 +213,7 @@ class SubscriptionExpiryClient:
                 active_organization,
                 *organizations.values(),
             ]  # Place direct before MSP organizations.
-        return ordered_organizations, failures  # Return the stable organization order.
+        return ordered_organizations  # Return the stable organization order.
 
     def fetch_inventory(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch all inventory pages for one organization."""
