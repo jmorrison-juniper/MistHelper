@@ -2,8 +2,11 @@
 
 ## Final combined candidate
 
-The branch `fix/4758-strict-pyright-session` starts at current `origin/main` commit `26ac261392ac29119fa4f83e30c6ce9a0df12ab3`.
-The implementation and focused-test commit is `16425ba761a070c8eb51ceb919491f58e4386f7d`.
+The branch `fix/4758-strict-pyright-session` now starts at current `origin/main` commit `390f535dab7331cdc6c95d808a850019dffe04d5`.
+The pre-rebase implementation and focused-test commits remain on `preserve/strict-pyright-session-28212ef`.
+Main advanced through PR #4839 during final validation.
+The branch was rebased onto that commit with no overlapping changed paths.
+The requested branch name already exists locally, so this candidate keeps its separate session branch.
 The strict baseline on the original task base had 108 errors.
 The final strict run analyzes three files and reports zero errors and zero warnings.
 
@@ -33,7 +36,7 @@ No imports changed.
 | Changed-file `py_compile` | Exit 0 |
 | CI-path mypy | Exit 0, 887 source files |
 | Bandit on changed production files | Exit 0 |
-| STE on the seven edited feature records | Exit 0, scores from 95 to 99 |
+| STE on the seven edited feature records | Exit 0, scores from 94 to 99 |
 | STE on `documentation/CONTRIBUTING-MistHelper.md` | Exit 0, score 98 |
 | Test-quality preflight | Exit 0, one test passed |
 | Test-quality committed-change gate | Exit 0, 18 files and 10 findings checked, two skipped, zero parse errors, zero new findings |
