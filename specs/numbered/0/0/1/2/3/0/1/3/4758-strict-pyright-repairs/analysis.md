@@ -1,29 +1,117 @@
 # Analysis and local verification
 
-## Status
+## Final combined candidate
 
-This is a partial repair, not a strict-clean completion.
-The strict baseline has 108 errors.
-Candidate one has 19 errors.
-Candidate two has 10 errors after its separate dead-code cleanup.
-Candidate three has 9 errors after its annotation-only changes.
-Each report analyzes exactly one file and reports zero warnings.
-Candidate three resolves the ten API and cache contract errors.
-Its remaining nine errors name declarations without verified production callers.
-Those nine errors are not ownership blockers.
-The original ten-error candidate used rejected export and import approaches.
-The historical sections below retain that evidence, not an accepted completion claim.
-The [correction record](design/contracts/correction.md) gives the current commands, call paths, and residual map.
-The corrective artifact review maps all eleven requirements and success criteria to the sixteen tasks.
-Candidate three leaves two tasks incomplete.
-SC-003 now records the requested public helper renames and unchanged explicit exports.
-Its previous literal name-preservation rule conflicted with that approved revision.
+The branch `fix/4758-strict-pyright-session` starts at current `origin/main` commit `26ac261392ac29119fa4f83e30c6ce9a0df12ab3`.
+The implementation and focused-test commit is `16425ba761a070c8eb51ceb919491f58e4386f7d`.
+The strict baseline on the original task base had 108 errors.
+The final strict run analyzes three files and reports zero errors and zero warnings.
 
-The split-candidate evidence is historical.
-The current replay starts from `origin/main` at `a00e99c73d42654bf302999214a63735f0dc980c`.
-The final combined report and gate results are not recorded yet.
+Run strict Pyright with this command:
 
-### Candidate three verification
+```text
+rtk bypass uvx --from pyright==1.1.414 pyright --project specs/numbered/0/0/1/2/3/0/1/3/4758-strict-pyright-repairs/design/contracts/pyright.json --outputjson
+```
+
+The JSON summary reports `filesAnalyzed: 3`, `errorCount: 0`, and `warningCount: 0`.
+Text mode reports `0 errors, 0 warnings, 0 informations`.
+Both commands exit 0.
+The exact reports are `pyright-final.json` and `pyright-final.txt` in the session evidence directory.
+
+The focused selection passes 410 tests with one existing Dash warning.
+The help test passes 16 cases.
+It covers `--help`, `-h`, parser-supported abbreviations, invalid help tokens, program-name handling, unrelated flags, and side-effect-free subprocess calls.
+The explicit export list remains equal to current main with 196 names.
+AST comparison confirms that all 16 shared API and cache function bodies and defaults remain unchanged.
+The five source annotations type two API list returns, two cache callbacks, and the CSV writer.
+No imports changed.
+
+| Check | Result |
+| - | - |
+| Full Ruff | Exit 0 |
+| Full Black | Exit 0, 2,589 files unchanged |
+| Changed-file `py_compile` | Exit 0 |
+| CI-path mypy | Exit 0, 887 source files |
+| Bandit on changed production files | Exit 0 |
+| STE on the seven edited feature records | Exit 0, scores from 95 to 99 |
+| STE on `documentation/CONTRIBUTING-MistHelper.md` | Exit 0, score 98 |
+| Test-quality preflight | Exit 0, one test passed |
+| Test-quality committed-change gate | Exit 0, 18 files and 10 findings checked, two skipped, zero parse errors, zero new findings |
+| `symbol-diff --base origin/main MistHelper.py` | Exit 1, intentional change: 41 lost and 31 added names |
+| Menu reference generators | Both exit 0 and leave no changed files |
+| `git diff --check origin/main...HEAD` | Exit 0 |
+| STE check for the contributor symbol map | Exit 0, score 98/100 |
+
+`symbol-diff --base origin/main MistHelper.py` exits 1 because the entry-point interface changed.
+It reports 41 lost and 31 added names.
+The changes comprise 27 verified public renames, 13 unused private removals, one removed private mode table, and four new typed declarations.
+The [correction record](design/contracts/correction.md) maps each public name to its production consumer.
+The [cleanup record](design/contracts/cleanup.md) lists each removed declaration and its prior references.
+The contributor symbol map now uses live names.
+The whole-tree audit found no removed-root reference, resolver lookup, mock key, or dynamic root access in production code or tests.
+The only same-name runtime helper is the separate rate-limit function in `rate_limiting.py` and its test.
+Historical changelog, compliance, and feature records retain names from their original context.
+One JSON evidence inventory retains captured pre-rename log strings under `detail`.
+No configuration or automation file contains an old helper name.
+The explicit export list remains unchanged with 196 names.
+`DB_LAYER_AVAILABLE` existed in both optional-import branches and in `__all__` before this repair.
+Its assignment now states the same Boolean value once after the guarded imports.
+
+| Old private name | Public name | Verified production consumer |
+| - | - | - |
+| `_build_argument_parser` | `build_argument_parser` | `MainEntrypoint` in `src/foundation/support/refactors/main_entrypoint.py` |
+| `_setup_runtime_flags` | `setup_runtime_flags` | `ApplicationBootstrap` in `src/foundation/support/refactors/main_entrypoint.py` |
+| `_initialize_dependencies` | `initialize_dependencies` | `ApplicationBootstrap` in `src/foundation/support/refactors/main_entrypoint.py` |
+| `_configure_runtime_options` | `configure_runtime_options` | `ApplicationBootstrap` in `src/foundation/support/refactors/main_entrypoint.py` |
+| `_early_dependency_check` | `early_dependency_check` | `ApplicationBootstrap` in `src/foundation/support/refactors/main_entrypoint.py` |
+| `_establish_mist_session` | `establish_mist_session` | `ApplicationBootstrap` in `src/foundation/support/refactors/main_entrypoint.py` |
+| `_dispatch_main_mode` | `dispatch_main_mode` | `MainEntrypoint` in `src/foundation/support/refactors/main_entrypoint.py` |
+| `_print_systematic_banner` | `print_systematic_banner` | `RunSystematicTestManager` in `src/foundation/support/refactors/run_systematic_test.py` |
+| `_build_systematic_test_options` | `build_systematic_test_options` | `RunSystematicTestManager` in `src/foundation/support/refactors/run_systematic_test.py` |
+| `_print_systematic_pre_run_counts` | `print_systematic_pre_run_counts` | `RunSystematicTestManager` in `src/foundation/support/refactors/run_systematic_test.py` |
+| `_initialize_systematic_telemetry` | `initialize_systematic_telemetry` | `RunSystematicTestManager` in `src/foundation/support/refactors/run_systematic_test.py` |
+| `_resolve_systematic_test_context` | `resolve_systematic_test_context` | `RunSystematicTestManager` in `src/foundation/support/refactors/run_systematic_test.py` |
+| `_execute_systematic_test_loop` | `execute_systematic_test_loop` | `RunSystematicTestManager` in `src/foundation/support/refactors/run_systematic_test.py` |
+| `_finalize_systematic_telemetry` | `finalize_systematic_telemetry` | `RunSystematicTestManager` in `src/foundation/support/refactors/run_systematic_test.py` |
+| `_print_systematic_summary` | `print_systematic_summary` | `RunSystematicTestManager` in `src/foundation/support/refactors/run_systematic_test.py` |
+| `_report_systematic_outcome` | `report_systematic_outcome` | `RunSystematicTestManager` in `src/foundation/support/refactors/run_systematic_test.py` |
+| `_build_interactive_test_runner` | `build_interactive_test_runner` | `RunInteractiveTestManager` in `src/foundation/support/refactors/run_interactive_test.py` |
+| `_print_switch_login_header` | `print_switch_login_header` | `SwitchToInteractiveLoginManager` in `src/foundation/support/refactors/switch_to_interactive_login.py` |
+| `_prompt_switch_login_confirmation` | `prompt_switch_login_confirmation` | `SwitchToInteractiveLoginManager` in `src/foundation/support/refactors/switch_to_interactive_login.py` |
+| `_attempt_interactive_login_with_rollback` | `attempt_interactive_login_with_rollback` | `SwitchToInteractiveLoginManager` in `src/foundation/support/refactors/switch_to_interactive_login.py` |
+| `_handle_interactive_login_success` | `handle_interactive_login_success` | `SwitchToInteractiveLoginManager` in `src/foundation/support/refactors/switch_to_interactive_login.py` |
+| `_load_mistapi_module` | `load_mistapi_module` | `MistSessionInitializer` in `src/foundation/support/refactors/initialize_mist_session.py` |
+| `_introspect_apisession_class` | `introspect_apisession_class` | `MistSessionInitializer` in `src/foundation/support/refactors/initialize_mist_session.py` |
+| `_attempt_all_session_strategies` | `attempt_all_session_strategies` | `MistSessionInitializer` in `src/foundation/support/refactors/initialize_mist_session.py` |
+| `_log_failed_session_variants` | `log_failed_session_variants` | `MistSessionInitializer` in `src/foundation/support/refactors/initialize_mist_session.py` |
+| `_configure_session_timeout` | `configure_session_timeout` | `_load_menu_actions` in `wsgi.py` |
+| `_log_session_auth_status` | `log_session_auth_status` | `MistSessionConfigurator` in `src/foundation/support/refactors/initialize_mist_session.py` |
+
+These are real cross-module resolver contracts.
+`SourceDependencyResolverService._resolve_host_symbol` resolves the host module with `getattr`.
+The new public names match each live consumer.
+The Python source and test scan found no old root-helper reference, mock key, or old resolver string.
+Historical artifacts retain old names as history or captured log text.
+
+| Added or consolidated name | Existing behavior and reason |
+| - | - |
+| `_MistHelperContextModule` | A named `ModuleType` class replaces a generated type factory. Its read, write, and delete methods keep the existing module-to-`AppContext` behavior and provide static method contracts. `test_context_reads_writes_and_deletes` and `test_two_app_context_instances_do_not_share_state` cover this behavior. |
+| `DB_LAYER_AVAILABLE: bool` | This existing exported flag keeps its `True` or `False` result. One assignment after optional imports replaces equal branch assignments. The export list does not change. |
+| `RRM_DRY_RUN_DEFAULT: bool \| None` | This typed `None` default preserves the RRM handler's tri-state input and its lazy call path. `test_menu_291_handler_default_is_the_absent_marker` verifies the menu default. |
+| `_build_policy_api` | This typed builder checks the authenticated session and serves the real menu 305 and 306 handlers. `test_policy_requires_session_before_client_creation` and `test_policy_preserves_authenticated_session` verify both paths. |
+
+The removed nine private seams have no root caller through `getattr`, `_MH`, `MistHelper`, or a string-keyed lookup in `src`, `scripts`, or tests.
+The four dependent helpers had callers only inside the removed private chain.
+The cleanup record names all nine seams, each prior test reference, and its replacement behavior test.
+The API and cache source diffs change five annotations and no imports.
+AST comparison confirms that all 16 function bodies and defaults remain unchanged.
+
+The split-candidate results below are historical.
+They do not describe the final branch.
+The corrective artifact review maps all requirements and success criteria to the task list.
+All implementation tasks are complete.
+
+### Historical candidate-three verification
 
 Candidate three uses `fix/4758-strict-annotations` at commit `e47dce4232b6c5ee6731ec48d4e6a33ffd4d578d`.
 Its base is `origin/main` at `19bec34ea1edfae30782fc0f23dde44b3516e369`.
@@ -66,17 +154,16 @@ No push, pull request, merge, or automatic merge is authorized.
 | Requirement | Evidence | Result |
 | - | - | - |
 | FR-001 | Live main comparison, locked bootstrap, baseline JSON | Complete |
-| FR-002 | Candidate-three strict report | Incomplete: nine errors |
+| FR-002 | Final strict report | Complete: zero errors across three files |
 | FR-003 | Focused state, import, selector, admission, and dry-run regressions | Complete for owned changes |
 | FR-004 | Source review, preserved declarations, unchanged rules | Complete |
 | FR-005 | Narrow portal and annotation authorization, ARP ancestry, source comparison | Complete for the authorized changes |
 | FR-006 | Mocked regression suite and absent-session admission cases | Complete |
-| FR-007 | Separate issues #4825 through #4828 | Complete |
+| FR-007 | Separate issues #4825, #4826, and #4828 | Complete |
 | FR-008 | Local implementation commit and verification records | Complete |
 
-Candidate three completes T003 and T008 under the direct user authorization.
-T007 is complete after the approved cleanup and public-interface corrections.
-T010 remains unchecked until the refreshed-main combined report passes.
+T003, T007, T008, T009, and T010 are complete.
+The final strict report and all required focused evidence exist.
 
 ## Historical baseline and rejected candidate reports
 
@@ -337,6 +424,9 @@ Issue #4826 records the Dash plugin's deprecated `pytest_addhooks` marker config
 Current tests pass, but the warning identifies future pytest compatibility work.
 Dependency manifests remain unchanged.
 
+Issue #4828 records the test-quality analyzer inference defect.
+Issues #4825, #4826, and #4828 remain open.
+
 ## Historical bounded completion procedure
 
 1. Restore both archived owner sessions through the application.
@@ -387,7 +477,10 @@ Issue #4828 records that shared-tool inference defect.
 The revised help cases test the real public CLI entry point and parser.
 No analyzer setting, baseline, import visibility, or HTTP case conceals that defect.
 
-## Final approved interface verification
+## Historical pre-annotation interface verification
+
+This section records the ten-error candidate before the API and cache annotations.
+Its error count and incomplete-task notes do not describe the final combined candidate above.
 
 The additional PR #4208 handoff permits one authentication-status reference and its directly related module documentation.
 The root definition now uses `log_session_auth_status`.
@@ -403,13 +496,11 @@ The string `_session` names the SDK transport, not a root helper.
 No additional private interface requires a rename.
 `final-interface-audit-before.json` and `final-interface-preservation.json` preserve the exact locations and comparisons.
 
-The refreshed strict JSON and text report ten errors, zero warnings, and one analyzed file.
-Seven errors require the held API site-record return contract.
-Three errors require the held cache callback contract.
-The current line and rule map remains in the cleanup record.
-The committed configuration and bounded stubs remain unchanged.
-`pyright-interface.json` and `pyright-interface.txt` preserve the actual analyzer output.
-The final immutable handoff identifies matching commit-specific copies and their hashes.
+At this stage, the strict report had ten errors and one analyzed file.
+Seven errors required the API site-record return contract.
+Three errors required the cache callback contract.
+The later authorized annotations resolve these errors.
+The final reports are `pyright-final.json` and `pyright-final.txt`.
 
 The established regression selection passes 1145 tests, with two documented skips and the existing Dash warning.
 After formatting, the initializer tests and managed route guards pass 67 tests.
@@ -422,8 +513,7 @@ Pylint remains 9.70 against the unchanged 9.5 threshold.
 The initial Black check requested only test-signature formatting.
 The formatter corrected it before the complete successful gate run.
 
-T007 is complete.
-T003, T008, and T010 remain unchecked for the archived API/cache owners and the absent zero-error result.
-Neither held source file, dependency manifests, held tests, nor publication permission changed.
-The final issue handoff records the post-commit quality preflight and comparison result.
-No push, pull request, merge, or production request occurs.
+At this historical stage, T003, T008, and T010 remained unchecked.
+The user later authorized the annotation-only API and cache changes.
+The final combined report completes T010.
+No production request occurs.

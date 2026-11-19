@@ -1,5 +1,11 @@
 # Verified private-code cleanup
 
+## Historical checkpoint
+
+This record describes the cleanup stage before the final API and cache annotations.
+Its ten-error strict result is historical.
+The final combined report is in [analysis.md](../../analysis.md).
+
 ## Result
 
 The bounded cleanup removes thirteen unused private root functions.
@@ -9,17 +15,17 @@ All 196 explicit exports remain unchanged.
 No remaining root function body changes.
 The live authentication-status helper has its approved public name.
 
-The final strict report contains ten errors, zero warnings, and one analyzed file.
-Ten errors require the held API and cache contracts.
+At this cleanup stage, the strict report contained ten errors and one analyzed file.
+The later authorized API and cache annotations resolve those errors.
 The earlier eleven-error report remains preserved.
 The additional initializer-reference handoff resolves its live authentication-status interface.
-This is not a strict-clean completion.
+This checkpoint was not strict-clean.
 
 ## Caller verification
 
 The audit parsed 2587 tracked Python files.
 It examined name loads, attribute receivers, and exact lookup strings.
-The source search also examined the removed names in production modules and tests.
+The source search checked `getattr`, `_MH`, `MistHelper`, and string-keyed references in `src/`, `scripts/`, and `tests/`.
 Historical documentation is not a runtime caller.
 
 The open pull-request comparison found no overlap with the three test edits.
@@ -71,6 +77,39 @@ The revised tests call the actual CLI entry point and fail if it reaches context
 They retain real parsing, stronger startup ordering, and the fresh subprocess checks.
 No fake HTTP case, changed rule, baseline entry, or dynamic import bypasses the finding.
 
+The test mapping below identifies the replacement behavior checks.
+
+| Removed private seam | Replacement check |
+| - | - |
+| `_is_help_invocation` | `TestHelpArgumentParsing.test_help_stops_before_startup`, `test_program_name_is_not_a_help_argument`, and `TestHelpSubprocessInvocation.test_help_exits_without_runtime_files` |
+| `_reject_unsupported_flag_variants` | `test_invalid_help_variants_fail_before_startup` and `test_hyphenated_test_flag_uses_standard_argparse_error` |
+| `_exit_on_unsupported_flag` | `test_hyphenated_test_flag_uses_standard_argparse_error` |
+| `_snapshot_session_globals_to_state` | `test_context_reads_writes_and_deletes` and `test_two_app_context_instances_do_not_share_state` |
+| `_restore_session_globals_from_state` | `test_context_reads_writes_and_deletes` and `test_two_app_context_instances_do_not_share_state` |
+| `_validate_initialized_session` | `test_supported_read_method_is_accepted` and `test_missing_read_method_is_rejected` |
+| `_install_default_request_timeout` | No root caller or root test existed. `test_wsgi_menu_loader_uses_public_timeout_contract` checks the live timeout interface at `tests/unit/refactors/test_app_context_session_state.py:239`. |
+| `_get_tuning_data_file_path` | No root caller or root test existed. A distinct helper in `src/foundation/support/utils/rate_limiting.py` is tested at `tests/unit/config/standalone/foundation/support/utilities/network/test_rate_limiting.py:885`. |
+| `_initialize_deferred_imports` | No production call existed. The obsolete mock key was removed. `test_initialization_publishes_assignments_once` checks live dependency setup, and `test_help_stops_before_startup` checks the parser boundary. |
+
+The help test now uses real parser cases instead of direct calls to the deleted predicate.
+Its five test methods cover 16 cases and pass.
+
+| Removed test method | Replacement behavior check |
+| - | - |
+| `test_bare_double_dash_help_is_detected` | `TestHelpArgumentParsing.test_help_stops_before_startup` and `TestHelpSubprocessInvocation.test_help_exits_without_runtime_files` cover `--help`. |
+| `test_bare_short_help_flag_is_detected` | The same methods cover `-h`. |
+| `test_help_combined_with_other_flags_is_detected` | `test_help_stops_before_startup` covers both combined flag sequences. |
+| `test_empty_argv_and_program_only_are_not_detected` | `test_empty_argument_list_is_not_help` covers an empty parser input. `test_program_name_is_not_a_help_argument` covers the program-only case. |
+| `test_program_name_is_ignored_even_if_it_matches` | `test_program_name_is_not_a_help_argument` covers `sys.argv == ["--help"]`. |
+| `test_substring_and_case_variants_are_not_detected` | `test_invalid_help_variants_fail_before_startup` covers `--helpme`, `help`, and `--HELP`. The real parser accepts `--h` and `-help` as help forms, so `test_help_stops_before_startup` covers those forms. |
+| `test_unrelated_flags_are_not_detected` | `test_program_name_is_not_a_help_argument` covers `--menu 1 --org abc`. |
+| `test_early_dependency_check_is_guarded` | `test_help_stops_before_startup` and the subprocess check prove that help exits before startup. |
+| `test_deferred_imports_conditional_includes_help` | The same parser and subprocess checks prove that help exits before deferred startup work. |
+| `test_help_exits_cleanly_with_usage_on_stdout` | `TestHelpSubprocessInvocation.test_help_exits_without_runtime_files` covers both `--help` and `-h`, usage output, exit code, and absence of runtime files. |
+
+The empty argument case uses `ApplicationBootstrap(argv=[])`.
+The case remains safe because the test replaces context activation with a failing mock.
+
 Session tests now observe `MistSessionConfigurator.configure_once`, not obsolete root mocks.
 A failed session strategy must never reach that boundary.
 Real validation cases accept `mist_get` and `get`, reject an absent read method, and preserve the session shape.
@@ -82,11 +121,12 @@ A second call performs no additional import.
 Critical import failure retains exit code 1.
 Test mode retains the explicit failed-import state without aborting.
 
-## Remaining contracts
+## Contracts at this cleanup checkpoint
 
-The API source and cache source remain byte-identical to the base.
+At this checkpoint, the API and cache sources remained byte-identical to the base.
+The later user instruction authorized annotation-only changes in both files.
+Their function bodies and defaults remain unchanged.
 Dependency manifests and held tests remain unchanged.
-The two archived owners still require restoration and narrow handoffs.
 
 | Current line | Rule | Held contract |
 | - | - | - |
@@ -101,9 +141,9 @@ The two archived owners still require restoration and narrow handoffs.
 | 7870 | `reportUnknownMemberType` | API site records |
 | 7871 | `reportUnknownArgumentType` | API site records |
 
-The API annotation remains `all_sites_with_limit(org_id: str) -> list[dict[str, Any]]`.
-The cache methods still require `generate_function: Callable[[], object]`.
-No caller cast, new adapter, or stub conceals either held source contract.
+The final API annotation is `all_sites_with_limit(org_id: str) -> list[dict[str, Any]]`.
+The final cache methods use `generate_function: Callable[[], object]`.
+No caller cast, new adapter, or stub conceals either source contract.
 
 Removing the dead validator exposed `reportUnusedFunction` on `_log_session_auth_status` at line 3314.
 Unlike the thirteen removed functions, it has a real production caller.
@@ -133,5 +173,5 @@ Compile, repository Ruff, Black, mypy, Bandit, docstrings, Pylint, and Vulture p
 Mypy checks 887 source files.
 Docstring coverage is 99.0 percent.
 Pylint scores 9.70 against the unchanged 9.5 threshold.
-The final issue comment identifies the immutable commit, refreshed reports, and post-commit quality result.
-No publication, merge, production operation, or hold release occurs.
+The final issue update records the refreshed reports and post-commit quality result.
+No push, pull request, merge, or production operation occurs.

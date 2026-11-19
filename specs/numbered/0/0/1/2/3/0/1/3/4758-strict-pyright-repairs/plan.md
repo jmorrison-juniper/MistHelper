@@ -4,9 +4,11 @@
 
 ## Summary
 
-Resolve the 108 strict diagnostics on main `b7a18b7ead7b1de5882bcd288203c015b1eef792`.
+Resolve strict entry-point diagnostics and their required API and cache contracts.
 Preserve dynamic entry points and correct shared contracts.
-Do not publish this local repair.
+The final candidate starts from current main `26ac261392ac29119fa4f83e30c6ce9a0df12ab3`.
+The final strict report has zero errors across three files.
+Do not push or open a pull request until the coordinator opens a publication slot.
 
 ## Technical Context
 
@@ -36,9 +38,9 @@ Do not publish this local repair.
 - Track broader module division separately from this behavior-preserving repair.
 - Use typed class methods for new behavior.
 - Keep external requests mocked and retain production confirmation boundaries.
-- Do not edit dependency manifests reserved by PR #4806.
-- Obtain a narrow handoff before editing `web_portal/app.py`, reserved by PR #4208.
-- The user assignment prohibits publication. Push, PR, merge, container build, and deployment remain deferred.
+- Keep dependency manifests unchanged in this repair.
+- Use the granted narrow handoff for `web_portal/app.py`, which PR #4208 also changes.
+- Do not push, open a pull request, merge, build a container, or deploy before the coordinator opens a slot.
 - Unique process records enter only this managed feature and its own changelog fragment.
 
 The app-created branch replaces the branch-creation hook.
@@ -73,9 +75,9 @@ rtk bypass uvx --from pyright==1.1.414 pyright --project specs/numbered/0/0/1/2/
 
 The committed configuration uses strict mode, Python 3.15, the worktree environment, and bounded third-party declarations.
 This explicit analysis does not replace the default project checks.
-Require `filesAnalyzed: 1`, `errorCount: 0`, and `warningCount: 0`.
+Require `filesAnalyzed: 3`, `errorCount: 0`, and `warningCount: 0`.
 Preserve raw JSON and gate output in session artifacts.
-The feature analysis records exact completed commands and remaining blockers.
+The feature analysis records exact commands, results, and intentional symbol changes.
 
 ## Complexity Tracking
 
@@ -116,9 +118,8 @@ Policy menus reject an absent session before client construction.
 Authenticated sessions retain their identity.
 No confirmation, backup, or production request occurs in the absent-session tests.
 
-Candidate one retained the cache and site-record contracts. Candidate three applies the authorized annotations and preserves both method bodies.
-Nine historical or test-referenced declarations also retain unused-function diagnostics.
-Those diagnostics are not ownership blockers. Candidate two removes them on its separate branch.
-The implementation must not claim zero strict errors while any strict diagnostic remains.
-The refreshed-main replay includes the approved API and cache annotations.
-The final strict result must be recorded after the replay and its regressions pass.
+The combined candidate applies the authorized API and cache annotations without changing their function bodies or defaults.
+It removes nine unused private declarations and four helpers used only by those declarations.
+It renames verified cross-module helpers to explicit public names and updates their owned consumers.
+The implementation keeps all explicit exports unchanged.
+The final strict report and focused regression results are recorded in [analysis.md](analysis.md).
