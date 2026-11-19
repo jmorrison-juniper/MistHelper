@@ -960,21 +960,30 @@ class TestSimpleDelegates:
             == "security intel profiles"
         )
 
-    def test_invites(self, fake_mh):
-        """listOrgInvites is not exposed by the current mistapi SDK; patch it in."""
+    def test_invites(self, fake_mh, monkeypatch):
+        """The export binds the SDK list call when mistapi provides one."""
+        from src.operations.exporting.export import org_export_utils as mod
         from src.operations.exporting.export.org_export_utils import OrgExportUtils
 
-        with (
-            patch(
-                "mistapi.api.v1.orgs.invites.listOrgInvites",
-                new=MagicMock(),
-                create=True,
-            ),
-            patch.object(OrgExportUtils, "export_data") as export,
-        ):
+        list_invites = MagicMock(name="listOrgInvites")
+        monkeypatch.setattr(mod.mistapi.api.v1.orgs.invites, "listOrgInvites", list_invites, raising=False)
+        with patch.object(OrgExportUtils, "export_data") as export:
             OrgExportUtils._invites()
+        assert export.call_args.kwargs["api_call"] is list_invites
         assert export.call_args.kwargs["data_type"] == "invites"
         assert export.call_args.kwargs["sort_key"] == "email"
+
+    def test_invites_without_sdk_list_call_logs_error_and_skips(self, fake_mh, monkeypatch, caplog):
+        """Without an SDK list call, the export logs an error, writes no file, and does not raise."""
+        from src.operations.exporting.export import org_export_utils as mod
+        from src.operations.exporting.export.org_export_utils import OrgExportUtils
+
+        monkeypatch.delattr(mod.mistapi.api.v1.orgs.invites, "listOrgInvites", raising=False)
+        with caplog.at_level(logging.ERROR, logger=LOGGER_NAME):
+            OrgExportUtils._invites()
+        fake_mh.APIDataFetcher.assert_not_called()
+        error_messages = [record.getMessage() for record in caplog.records if record.levelno == logging.ERROR]
+        assert any("listOrgInvites" in message and "OrgInvites.csv" in message for message in error_messages)
 
 
 # ---------------------------------------------------------------------------
