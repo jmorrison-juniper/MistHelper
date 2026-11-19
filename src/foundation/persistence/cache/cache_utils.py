@@ -49,7 +49,7 @@ class CacheUtils:
     @staticmethod
     def check_and_generate_csv(
         file_name: str,
-        generate_function: Callable,  # type: ignore[type-arg]
+        generate_function: Callable[[], object],
         freshness_minutes: int | None = None,
     ) -> bool:
         """Return True if file_name's CSV exists and is fresh. Otherwise run generate_function.
@@ -93,7 +93,7 @@ class CacheUtils:
             return False  # Treat unreadable metadata as stale
 
     @staticmethod
-    def _run_csv_generator(generate_function: Callable, file_name: str) -> bool:  # type: ignore[type-arg]  # Run generator
+    def _run_csv_generator(generate_function: Callable[[], object], file_name: str) -> bool:  # Run generator
         """Invoke the generate_function to produce the CSV. Return True on success, False on failure."""
         logger.info("* Running %s to generate %s...", generate_function.__name__, file_name)  # Log before generating
         try:  # The generator may raise. Never let that crash the caller
