@@ -41,9 +41,22 @@ def fake_mh() -> Any:
     fake.apisession = MagicMock()  # WHY: every Mist API call takes the session first.
     fake.InputUtils = MagicMock()  # WHY: the prompts call InputUtils.safe_input.
     fake.InputUtils.safe_input = MagicMock(return_value="")  # WHY: a real string supports strip.
-    with patch.dict(sys.modules, {"MistHelper": fake}):  # WHY: the proxy imports by name.
-        _MH.bind_root_module(fake)  # WHY: source packages read the injected host instead of importing it.
+    with (
+        patch.dict(sys.modules, {"MistHelper": fake}),
+        patch.object(_MH, "_root_module", fake),  # Restore the previous resolver host at fixture teardown.
+    ):
         yield fake  # WHY: the test body runs with the fake in place.
+
+
+def test_fake_host_fixture_restores_previous_resolver() -> None:
+    """Prevent a fixture host from overriding later selected-organization requests."""
+    from contextlib import closing
+
+    previous = _MH._root_module
+    with closing(fake_mh.__wrapped__()) as fixture:
+        fake = next(fixture)
+        assert _MH._root_module is fake
+    assert _MH._root_module is previous
 
 
 @pytest.fixture
@@ -691,11 +704,12 @@ class TestApplyChangesDispatch:
             manager._apply_changes()  # WHY: run the dispatch.
         assert not (site_spy.called or template_spy.called or org_spy.called)
 
-    def test_an_api_failure_is_contained(self, manager: WLANRadiusTimerManager) -> None:
+    def test_an_api_failure_is_contained(self, manager: WLANRadiusTimerManager, capsys: Any) -> None:
         """A raised error must not crash the menu after the confirmation."""
         manager.selected_wlan = {"id": "w1", "_inheritance_level": "site"}  # WHY: set the scope.
         with patch.object(manager, "_update_site_wlan", side_effect=OSError("no route")):
             manager._apply_changes()  # WHY: the call must swallow the error.
+        assert "Error applying changes: no route" in capsys.readouterr().out
 
 
 class TestSiteWlanUpdate:

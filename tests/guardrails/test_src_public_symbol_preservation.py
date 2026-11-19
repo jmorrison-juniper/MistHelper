@@ -103,6 +103,67 @@ INTENTIONAL_SYMBOL_REMOVALS: dict[str, set[str]] = {
     # organization path. The site fallback import and its status constant are
     # removed on purpose, and the matching unit tests are removed in the same change.
     "src/mist/intelligence/reports/client_fingerprint_census/client.py": {"_HTTP_NOT_FOUND", "insights"},
+    # Issue #4200 removes package aliases. All callers use the concrete canonical modules.
+    "src/interfaces/wan_performance/__init__.py": {
+        "CircuitIdentity",
+        "GatewayIdentity",
+        "HourlyMeasurement",
+        "MetricMeasurement",
+        "PeerPathIdentity",
+        "SiteIdentity",
+        "SnapshotClient",
+        "__all__",
+    },
+    "src/interfaces/wan_performance/collection/__init__.py": {
+        "GatewayInsights",
+        "PeerQualityInsights",
+        "PeerSnapshotMetrics",
+        "SnapshotClient",
+        "SnapshotRecords",
+        "SnapshotStates",
+        "__all__",
+    },
+    "src/interfaces/wan_performance/domain/__init__.py": {
+        "CircuitIdentity",
+        "GatewayIdentity",
+        "HourlyMeasurement",
+        "MetricMeasurement",
+        "PeerPathIdentity",
+        "SiteIdentity",
+        "__all__",
+    },
+    # Issue #4200 uses supported scalar peer statistics, not undocumented metric-row arrays.
+    "src/interfaces/wan_performance/collection/peer_insights.py": {
+        "HourlyMeasurement",
+        "MistSession",
+        "PEER_INTERVAL_SECONDS",
+        "PEER_ROW_LIMIT",
+        "PeerQualityInsights",
+        "PeerResponseValidator",
+        "timedelta",
+    },
+    # Issue #4200 puts positional rate validation in GatewayInsights and records in SnapshotRates.
+    "src/interfaces/wan_performance/collection/snapshot_client.py": {
+        "GatewayInsightSampleBuilder",
+        "GatewayInsightValidator",
+        "RATE_METRICS",
+        "SNAPSHOT_PAGE_LIMIT",
+        "SnapshotPageValidator",
+        "SnapshotRates",
+    },
+    # Issue #4200 builds exact scalar/sample records through the current identity and record subjects.
+    "src/interfaces/wan_performance/collection/snapshot_records.py": {
+        "IdentityValidator",
+        "InsightRecordBuilder",
+        "SiteIdentity",
+        "hashlib",
+        "json",
+    },
+    # Issue #4200 uses explicit finite/missing/coverage validators without a compatibility class.
+    "src/interfaces/wan_performance/domain/measurement.py": {"MetricValueValidator"},
+    "src/interfaces/wan_performance/domain/metric_validation.py": {"MetricValueValidator"},
+    # Issue #4200 types the Redis boundary directly instead of retaining the Any import.
+    "src/interfaces/wan_performance/integration/refresh_store.py": {"Any"},
 }  # Record each reviewed module-level removal, so the guard reports only an unapproved loss.
 
 

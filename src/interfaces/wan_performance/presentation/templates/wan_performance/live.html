@@ -1,0 +1,776 @@
+{% extends "base.html" %}
+{% block title %}WAN Performance - {{ config.PORTAL.title }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/wan_performance.css') }}">
+{% endblock %}
+{% block content %}
+<section class="container-fluid wan-performance" data-testid="wan-live-{{ kind }}">
+    <h1>WAN Performance{% if kind != "overview" %}: {{ kind }}{% endif %}</h1>
+    <a href="{{ url_for('wan_performance.live.sle') }}" data-testid="wan-live-sle-link">Inspect cached-site SLE data</a>
+    <p data-testid="wan-live-data-state">Live snapshot{% if stale %} — stale{% endif %}.
+        These are latest observations, not full-hour measurements.
+        Unknown values do not mean healthy service.</p>
+    {% if instant %}<p>Collected at {{ instant.isoformat() }} UTC.</p>{% endif %}
+    {% if partial %}<div role="alert">Partial results. A fixed page cap excluded records or link-event history.</div>{% endif %}
+    {% if error %}<div class="alert alert-warning" role="alert" data-testid="wan-live-error">{{ error }}</div>{% endif %}
+    <nav aria-label="Cached site navigation" data-testid="wan-cached-sites">
+        <form method="get" action="{{ url_for('wan_performance.live.overview') }}">
+            <label for="wan-cached-site">Site in the cached organization pages</label>
+            <select id="wan-cached-site" name="site_id" data-testid="wan-cached-site">
+                <option value="">All cached sites</option>
+                {% for site_id in gateways|map(attribute="site.site_id")|unique(case_sensitive=true)|sort(case_sensitive=true) %}
+                <option value="{{ site_id }}"{% if filters.get("site_id") == site_id %} selected{% endif %}>{{ site_id }}</option>
+                {% endfor %}
+            </select>
+            {% if window %}<input type="hidden" name="window" value="{{ window.key }}">{% endif %}
+            <button type="submit" class="btn btn-secondary" data-testid="wan-cached-site-open">Open cached site</button>
+        </form>
+        <ul>{% for site_id in gateways|map(attribute="site.site_id")|unique(case_sensitive=true)|sort(case_sensitive=true) %}
+            <li><a href="{{ url_for('wan_performance.live.site', site_id=site_id, window=window.key if window else none) }}" data-testid="wan-cached-site-link">{{ site_id }}</a></li>
+        {% endfor %}</ul>
+        <p>These identifiers reflect cached pages, not complete organization inventory.
+            Site views do not combine persisted identity histories.</p>
+    </nav>
+    <form method="get" data-testid="wan-retained-controls">
+        {% for name, value in request.args.items() if name in ["gateway_id", "site_id", "path_key", "q", "sort", "direction", "rank_metric", "rank_source", "rank_direction", "observation_threshold"] %}
+        <input type="hidden" name="{{ name }}" value="{{ value }}">
+        {% endfor %}
+        <label for="wan-retained-selection">Retained UTC observation window</label>
+        <select id="wan-retained-selection" name="window" data-testid="wan-retained-selection">
+            <option value="">Default cache and summaries</option>
+            {% for key, label in [("6h", "6 hours"), ("12h", "12 hours"), ("24h", "24 hours"), ("7d", "7 days")] %}
+            <option value="{{ key }}"{% if window and window.key == key %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-secondary" data-testid="wan-retained-apply">Open retained window</button>
+        <p>A retained window requires one selected gateway, port, or peer.
+            It shows stored hourly projections without interpolation, backfill, or new aggregation.</p>
+    </form>
+    <section data-testid="wan-observation-ranking">
+        <a href="{{ url_for('wan_performance.live.replacements') }}" data-testid="wan-replacements-link">Operator declarations and replacement policies</a>
+        <h2>Designed replacement v1: observation ranking</h2>
+        <p>Rank existing values, not inferred device quality. The population follows this route, not complete organization inventory.
+            Cached ranking precedes lexical table filtering. Retained ranking uses one selected identity and window.
+            Missing values remain absent. Exact units never change. No additional acquisition or history query runs.</p>
+        <form method="get">
+            {% for name, value in request.args.items() if name not in ['rank_source', 'rank_metric', 'rank_direction', 'download', 'page'] %}
+            <input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+            <label for="wan-ranking-source">Observation population</label>
+            <select id="wan-ranking-source" name="rank_source" data-testid="wan-ranking-source">
+                {% for value in ['cached', 'retained'] %}<option value="{{ value }}"{% if ranking.options.source == value %} selected{% endif %}>{{ value }}</option>{% endfor %}
+            </select>
+            <label for="wan-ranking-metric">Exact metric and unit</label>
+            <select id="wan-ranking-metric" name="rank_metric" data-testid="wan-ranking-metric">
+                <option value="">Select a metric and unit</option>
+                {% for token, label in ranking.choices %}<option value="{{ token }}"{% if token == request.args.get('rank_metric') %} selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <label for="wan-ranking-direction">Numeric order</label>
+            <select id="wan-ranking-direction" name="rank_direction" data-testid="wan-ranking-direction">
+                <option value="desc"{% if ranking.options.direction == 'desc' %} selected{% endif %}>Descending</option>
+                <option value="asc"{% if ranking.options.direction == 'asc' %} selected{% endif %}>Ascending</option>
+            </select>
+            <button data-testid="wan-ranking-apply" type="submit">Rank existing observations</button>
+        </form>
+        {% if ranking.error %}<p role="status" data-testid="wan-ranking-state">{{ ranking.error }}</p>
+        {% else %}
+        <p data-testid="wan-ranking-counts">Population: {{ ranking.counts.population }}. Eligible: {{ ranking.counts.eligible }}.
+            Displayed: {{ ranking.counts.shown }} of at most 20. Missing metric: {{ ranking.counts.missing.metric }}.
+            Missing value: {{ ranking.counts.missing.value }}. Incompatible unit: {{ ranking.counts.unit_mismatch }}.
+            Source completeness remains unknown.</p>
+        <div class="table-responsive"><table class="table" data-testid="wan-ranking-rows">
+            <thead><tr><th>Full identity</th><th>UTC observation hour</th><th>Collection time</th>
+                <th>{{ ranking.options.metric }} [{{ ranking.options.unit }}]</th></tr></thead>
+            <tbody>{% for row in ranking.rows %}<tr><td>{% for name, value in row.identity.items() %}{{ name }}={{ value }} {% endfor %}</td>
+                <td>{{ row.hour }}</td><td>{{ row.collected }}</td><td>{{ row.value }}</td></tr>
+                {% else %}<tr><td colspan="4">No present observation has this exact metric and unit.</td></tr>{% endfor %}</tbody>
+        </table></div>
+        {% endif %}
+    </section>
+    {% if kind != "site" %}
+    <form method="post" action="{{ url_for('wan_performance.live.refresh') }}">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        {% if kind == "gateway" and filters %}
+        <input type="hidden" name="gateway_id" value="{{ filters.gateway_id }}">
+        <input type="hidden" name="site_id" value="{{ filters.site_id }}">
+        {% elif kind == "overview" %}
+        <fieldset class="mb-3">
+            <legend class="h6">Optional selected gateway</legend>
+            <label for="wan-live-gateway-site">Site ID</label>
+            <input id="wan-live-gateway-site" data-testid="wan-live-gateway-site" name="site_id" type="text">
+            <label for="wan-live-gateway-mac">Gateway MAC</label>
+            <input id="wan-live-gateway-mac" data-testid="wan-live-gateway-mac" name="gateway_id" type="text">
+            <p>Leave both fields empty for port and peer snapshots. Supply both fields to refresh any gateway in the selected organization.</p>
+        </fieldset>
+        {% endif %}
+        <button class="btn btn-primary" type="submit" data-testid="wan-live-refresh">{% if kind == "gateway" %}Refresh selected gateway and current snapshots{% else %}Refresh current snapshots{% endif %}</button>
+    </form>
+    {% else %}
+    <p>This site view reads cached data only.
+        For organization-wide refresh, <a href="{{ url_for('wan_performance.live.overview') }}">open the WAN overview</a>.</p>
+    {% endif %}
+    {% if kind == "port" and filters %}
+    <form class="mt-3" method="post" action="{{ url_for('wan_performance.live.refresh_port') }}">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <input type="hidden" name="gateway_id" value="{{ filters.gateway_id }}">
+        <input type="hidden" name="site_id" value="{{ filters.site_id }}">
+        <input type="hidden" name="port_name" value="{{ filters.port_name }}">
+        <button class="btn btn-secondary" type="submit" data-testid="wan-live-port-history-refresh">Collect selected port insight hour</button>
+        <p>This separate refresh permits at most fourteen SDK requests.
+            It collects insight and event data for one completed UTC hour.
+            It also reads scalar port statistics without source metric timestamps.
+            It stores six aligned 10-minute rate samples and raw utilization percentages.
+            It also stores event-derived up and down minutes and link transitions.
+            It does not replace the current snapshot or claim complete historical coverage.</p>
+    </form>
+    {% endif %}
+    {% if kind == "peer" and records|length == 1 and records[0].identity.peer_mac is defined %}
+    {% set peer = records[0].identity %}
+    <form class="mt-3" method="post" action="{{ url_for('wan_performance.live.refresh_peer') }}">
+        {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+        <input type="hidden" name="gateway_id" value="{{ peer.gateway.gateway_id }}">
+        <input type="hidden" name="site_id" value="{{ peer.gateway.site.site_id }}">
+        <input type="hidden" name="port_name" value="{{ peer.port_name }}">
+        <input type="hidden" name="peer_port_id" value="{{ peer.peer_port_id }}">
+        <input type="hidden" name="peer_mac" value="{{ peer.peer_mac }}">
+        <input type="hidden" name="tunnel_identity" value="{{ peer.tunnel_identity }}">
+        <button class="btn btn-secondary" type="submit" data-testid="wan-live-peer-history-refresh">Collect selected peer snapshot</button>
+        <p>This request reads at most five bounded organization-stat pages, then matches the full peer identity locally.
+            It stores scalar values with poll time. The API last_seen field is not a metric timestamp.</p>
+    </form>
+    {% endif %}
+    <p>The background worker can refresh every 300 seconds when enabled and when shared admission and a history store are ready.
+        Overview refresh permits at most ten stats requests. Selected gateway refresh permits at most fourteen requests.
+        Each refresh shares the 300-second organization cooldown.
+        The common session transport also accounts for normal, paginated, and fast-mode API attempts.</p>
+    {% if kind == "overview" %}
+    <details data-testid="wan-live-gateway-list">
+        <summary>Gateways in the cached pages</summary>
+        <ul>{% for gateway in gateways %}
+            <li><a href="{{ url_for('wan_performance.live.gateway', gateway_id=gateway.gateway_id, site_id=gateway.site.site_id, window=window.key if window else none) }}">{{ gateway.site.site_id }} / {{ gateway.gateway_id }}</a></li>
+            {% else %}<li>No gateways appear in the cached pages.</li>{% endfor %}</ul>
+        <p>This list reflects bounded pages, not a complete organization inventory. Use the optional fields for another known gateway.</p>
+    </details>
+    {% endif %}
+    {% if gateway_statistics %}
+    <section class="portal-card mt-3" data-testid="wan-gateway-statistics">
+        <h2>Cached gateway discovery fields</h2>
+        <div class="table-responsive">
+            <table class="table">
+                <thead><tr><th>Reported field</th><th>Cached value</th></tr></thead>
+                <tbody>{% for label, value in gateway_statistics.rows %}
+                    <tr><th scope="row">{{ label }}</th><td>{{ value }}</td></tr>
+                {% endfor %}</tbody>
+            </table>
+        </div>
+        <p>These fields require matching selected-gateway discovery in the cache.
+            CPU and memory sample times are not supplied. Device uptime is not link availability.
+            Gateway last observed is not a metric sample time.
+            No new request, history record, or availability calculation supplies these fields.</p>
+    </section>
+    {% endif %}
+    <div class="row g-3 mt-3">
+        <article class="col-sm-4 portal-card" data-testid="wan-live-utilization"><h2 class="h6">Utilization</h2><p>Directional point-in-time samples appear below. Mbps link speed supplies capacity. Missing or invalid values remain unknown.</p></article>
+        <article class="col-sm-4 portal-card"><h2 class="h6">Congestion duration</h2><p>Summaries count complete 10-minute sample intervals above each threshold. Missing samples remain unknown.</p></article>
+        <article class="col-sm-4 portal-card"><h2 class="h6">Availability</h2><p>Summaries use link events. Time before the first event remains unknown. A no-event hour uses the current cached state for the full hour.</p></article>
+    </div>
+    <section class="mt-4">
+        <h2>Gateways, WAN ports, and VPN paths</h2>
+        <p>The table and CSV export show the latest cache, independently of any retained UTC window.</p>
+        <form method="get" class="mb-3" data-testid="wan-table-controls">
+            {% for name, value in request.args.items() if name in ["gateway_id", "site_id", "path_key", "window"] %}
+            <input type="hidden" name="{{ name }}" value="{{ value }}">
+            {% endfor %}
+            <label for="wan-table-filter">Identity text</label>
+            <input id="wan-table-filter" name="q" value="{{ table.options.query }}" maxlength="128" data-testid="wan-table-filter">
+            <label for="wan-table-sort">Lexical sort</label>
+            <select id="wan-table-sort" name="sort" data-testid="wan-table-sort">
+                {% for value, label in [("site_id", "Site"), ("gateway_id", "Gateway"), ("port_name", "Port"), ("peer_mac", "Peer")] %}
+                <option value="{{ value }}"{% if table.options.sort == value %} selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <label for="wan-table-direction">Direction</label>
+            <select id="wan-table-direction" name="direction" data-testid="wan-table-direction">
+                <option value="asc"{% if not table.options.descending %} selected{% endif %}>Ascending</option>
+                <option value="desc"{% if table.options.descending %} selected{% endif %}>Descending</option>
+            </select>
+            <button type="submit" class="btn btn-secondary" data-testid="wan-table-apply">Apply table controls</button>
+        </form>
+        <p data-testid="wan-table-page">Page {{ table.options.page }} of {{ table.pages }}.
+            {{ table.matching|length }} matching cached observations. Ten rows per page.
+            These independent controls do not establish inventory completeness or performance ranking.</p>
+        {% if table.options.page > 1 %}<a href="{{ table.options.url(page=table.options.page - 1) }}" data-testid="wan-table-previous">Previous page</a>{% endif %}
+        {% if table.options.page < table.pages %}<a href="{{ table.options.url(page=table.options.page + 1) }}" data-testid="wan-table-next">Next page</a>{% endif %}
+        <a href="{{ table.options.url(download='csv', page=1) }}" data-testid="wan-table-export">Export all matching cached observations as CSV</a>
+        <p>CSV contains UTC observation hours, collection times, units, missing reasons, and provenance.
+            It is not a historical backfill. Text formula prefixes receive an apostrophe.</p>
+        <div class="table-responsive">
+        <table class="table" data-testid="wan-live-records">
+            <thead><tr><th>Site</th><th>Gateway</th><th>Port</th><th>Peer</th><th>Measurements</th></tr></thead>
+            <tbody>
+            {% for record in table.rows %}
+            {% set gateway = record.identity.gateway if record.identity.gateway is defined else record.identity %}
+            <tr>
+                <td>{{ gateway.site.site_id }}</td>
+                <td><a data-testid="wan-live-gateway-link" href="{{ url_for('wan_performance.live.gateway', gateway_id=gateway.gateway_id, site_id=gateway.site.site_id, window=window.key if window else none) }}">{{ gateway.gateway_id }}</a></td>
+                {% if record.identity.port_name is defined %}
+                <td><a data-testid="wan-live-port-link" href="{{ url_for('wan_performance.live.port', site_id=record.identity.gateway.site.site_id, port_name=record.identity.port_name, gateway_id=record.identity.gateway.gateway_id, window=window.key if window else none) }}">{{ record.identity.port_name }}</a></td>
+                {% else %}<td data-testid="wan-live-gateway-insights">Gateway insight hour: {{ record.hour_start_utc.isoformat() }}</td>{% endif %}
+                <td>{% if record.identity.peer_mac is defined %}
+                    <a data-testid="wan-live-peer-link" href="{{ url_for('wan_performance.live.peer', site_id=record.identity.gateway.site.site_id, peer_mac=record.identity.peer_mac, path_key=record.identity.tunnel_identity, window=window.key if window else none) }}">{{ record.identity.peer_mac }}</a>
+                    <small>Path key {{ record.identity.tunnel_identity }}</small>
+                    {% else %}Not a VPN path{% endif %}</td>
+                <td>{% for name, metric in record.metrics.items() %}
+                    <div>{{ name }}: {% if metric.value is not none %}{{ metric.value }} {{ metric.unit }}{% else %}Unknown{% if metric.missing_reason %}: {{ metric.missing_reason }}{% endif %}{% endif %}</div>
+                    {% endfor %}
+                    {% if states.get(record.natural_key) %}
+                    <div data-testid="wan-live-current-state">
+                        {% for name, value in states[record.natural_key].items() %}<div>{{ name }}: {{ value }}</div>{% endfor %}
+                        <small>Current cached state does not establish availability duration.</small>
+                    </div>
+                    {% endif %}</td>
+            </tr>
+            {% else %}<tr><td colspan="5">No cached observations match the identity filter. No live call ran for this page.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </section>
+    {% if window %}
+    <details open data-testid="wan-retained-window">
+        <summary>Retained hourly observations: {{ window.key }}</summary>
+        <p data-testid="wan-retained-bounds">{{ window.start.isoformat() }} inclusive to {{ window.end.isoformat() }} exclusive.
+            The interval excludes the current UTC hour.</p>
+        <p>These values are retained hourly projections, not raw samples or full-hour measurements.
+            Bucket presence does not establish elapsed coverage, metric completeness, or healthy service.
+            No interpolation or backfill ran. Independent projection statistics do not establish source aggregation.</p>
+        {% if retained and not retained.error %}
+        <p data-testid="wan-retained-coverage">{{ retained.records|length }} retained hour buckets of {{ window.expected_hours }} expected.
+            Missing retained buckets: {{ retained.missing_hours }}.
+            Measurement completeness remains unknown.</p>
+        {% if retained.records %}
+        <dl>{% for name, value in retained.records[0].identity.to_dict().items() %}
+            <dt>{{ name }}</dt><dd class="text-break">{{ value }}</dd>
+        {% endfor %}</dl>
+        {% endif %}
+        <section aria-label="Designed hourly-projection statistics">
+            <h2>Designed replacement v1: observation statistics</h2>
+            <p>Each present hourly projection has one equal weight. These are not raw-sample or duration-weighted statistics.
+                Missing values have no weight. Exact metric names and units remain separate.
+                Plot selection, visibility, and zoom do not change this full-window report.</p>
+            <form method="get" action="{{ table.options.url(download='', observation_threshold='') }}">
+                {% for name, value in request.args.items() %}
+                {% if name not in ['observation_threshold', 'download'] %}
+                <input type="hidden" name="{{ name }}" value="{{ value }}">
+                {% endif %}{% endfor %}
+                <label for="wan-observation-threshold">Percentage threshold (0 through 100)</label>
+                <input id="wan-observation-threshold" data-testid="wan-observation-threshold" type="number"
+                    name="observation_threshold" value="{{ observation_threshold }}" min="0" max="100" step="1" required>
+                <button type="submit" data-testid="wan-observation-apply">Apply observation threshold</button>
+            </form>
+            <p>Only percentage metrics use this threshold. Values must be strictly above it.
+                Runs count adjacent observed UTC hour keys, not elapsed duration or availability.</p>
+            <div class="table-responsive"><table class="table" data-testid="wan-observation-statistics">
+                <thead><tr><th>Metric</th><th>Unit</th><th>Present values</th><th>Minimum</th><th>Mean</th>
+                    <th>nearest-rank p95</th><th>Maximum</th><th>Above {{ observation_threshold }}%</th>
+                    <th>Longest adjacent observed-hour run</th></tr></thead>
+                <tbody>{% for row in observation_statistics %}<tr>
+                    <td>{{ row.name }}</td><td>{{ row.unit }}</td><td>{{ row.count }}</td><td>{{ row.minimum }}</td>
+                    <td>{{ row.mean }}</td><td>{{ row.p95 }}</td><td>{{ row.maximum }}</td>
+                    <td>{{ row.above if row.above is not none else 'Not a percentage metric' }}</td>
+                    <td>{{ row.longest if row.longest is not none else 'Not a percentage metric' }}</td>
+                </tr>{% else %}<tr><td colspan="9">Observation statistics are unavailable. No present retained metric values exist.</td></tr>
+                {% endfor %}</tbody>
+            </table></div>
+        </section>
+        <section data-testid="wan-retained-plots" aria-label="Discrete retained projection plots">
+            <p>Points do not identify source metric sample times. Each point belongs to its labeled UTC hour bucket.
+                Missing values and hours have no points. No line implies continuous measurement.
+                The table preserves exact values, collection times, and missing reasons.</p>
+            {% for plot in plots %}
+            {% set values = plot.points|map(attribute=3)|list %}
+            <figure class="wan-panel" data-testid="wan-retained-chart">
+                <figcaption class="text-break">{{ plot.name }} ({{ plot.unit }}).
+                    Plot extent: {{ values|min }} to {{ values|max }}.
+                    Measurement completeness remains unknown.</figcaption>
+                <div style="display:flex;flex-wrap:wrap;gap:.5rem" aria-label="Retained plot controls">
+                    <button type="button" class="btn btn-sm btn-secondary active" disabled aria-pressed="true"
+                            data-plot-action="toggle-points" data-testid="wan-retained-toggle-points">Show points</button>
+                    {% for action, label in [("zoom-in", "Zoom in"), ("zoom-out", "Zoom out"), ("earlier", "Earlier UTC"), ("later", "Later UTC"), ("reset", "Reset view"), ("png", "Download PNG")] %}
+                    <button type="button" class="btn btn-sm btn-secondary" disabled
+                            data-plot-action="{{ action }}" data-testid="wan-retained-{{ action }}">{{ label }}</button>
+                    {% endfor %}
+                </div>
+                <p role="status" data-testid="wan-retained-visibility-status">Point display is enabled.</p>
+                <label class="d-block">Inspect an exact retained observation
+                    <select data-testid="wan-retained-point-selection" style="width:100%;max-width:100%" disabled>
+                        <option value="">Select an observation</option>
+                        {% for x_position, y_position, hour, value, collected in plot.points %}
+                        <option value="{{ loop.index0 }}">{{ plot.name }}: {{ value }} {{ plot.unit }}. UTC bucket {{ hour }}. Collected {{ collected }}.</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <p role="status" class="text-break" data-testid="wan-retained-point-details">Select an observation.
+                    Exact values remain in the table.</p>
+                <p role="status" class="text-break" data-testid="wan-retained-chart-status">Chart controls need JavaScript.
+                    Exact values remain in the table.</p>
+                <details data-testid="wan-retained-rectangle-controls">
+                    <summary>Select existing points in a rectangle</summary>
+                    <fieldset>
+                        <legend class="fs-6">Bounds are percentages of the visible plot, not metric values.
+                            Missing values and hours remain in the table.</legend>
+                        {% for edge, default in [("left", 0), ("right", 100), ("top", 0), ("bottom", 100)] %}
+                        <label class="d-block">{{ edge|capitalize }} edge (%)
+                            <input type="number" min="0" max="100" step="any" value="{{ default }}" disabled
+                                   style="width:6rem" data-testid="wan-retained-rectangle-{{ edge }}">
+                        </label>
+                        {% endfor %}
+                    </fieldset>
+                    <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+                        {% for action, label in [("mode", "Drag rectangle"), ("apply", "Apply bounds"), ("clear", "Clear selection")] %}
+                        <button type="button" class="btn btn-sm btn-secondary" disabled data-rectangle-action="{{ action }}"
+                                {% if action == "mode" %}aria-pressed="false"{% endif %}
+                                data-testid="wan-retained-rectangle-{{ action }}">{{ label }}</button>
+                        {% endfor %}
+                    </div>
+                    <p role="status" class="text-break" data-testid="wan-retained-rectangle-status">Rectangle controls need JavaScript.
+                        No aggregate or source polygon behavior is implied.</p>
+                    <ul class="text-break" data-testid="wan-retained-rectangle-results"></ul>
+                </details>
+                <svg class="wan-chart" viewBox="0 0 640 230" role="img"
+                     style="--wan-series-color: var(--bs-info, #0dcaf0);"
+                     data-window-start="{{ retained.window.start.isoformat() }}"
+                     data-window-end="{{ retained.window.end.isoformat() }}"
+                     data-testid="wan-retained-plot"
+                     aria-label="{{ plot.name }}: {{ plot.unit }}. Discrete retained hourly projections.">
+                    <path class="wan-chart-gridline" d="M32 35H620 M32 100H620 M32 165H620"/>
+                    <text class="wan-chart-axis-label" x="620" y="30">{{ values|max }}</text>
+                    <text class="wan-chart-axis-label" x="620" y="182">{{ values|min }}</text>
+                    <rect fill="none" stroke="currentColor" style="display:none;pointer-events:none"
+                          data-testid="wan-retained-rectangle-outline"/>
+                    {% for x_position, y_position, hour, value, collected in plot.points %}
+                    <circle class="wan-chart-point" cx="{{ x_position }}" cy="{{ y_position }}" r="4"
+                            data-plot-x="{{ x_position }}"
+                            data-testid="wan-retained-point" data-hour="{{ hour }}" data-value="{{ value }}">
+                        <title>{{ hour }} UTC bucket: {{ value }} {{ plot.unit }}. Collected at {{ collected }}.</title>
+                    </circle>
+                    {% endfor %}
+                    <text class="wan-chart-label" x="135" y="214" data-window-start>Window start UTC</text>
+                    <text class="wan-chart-label" x="505" y="214" data-window-end>Window end UTC</text>
+                </svg>
+            </figure>
+            {% else %}
+            <p data-testid="wan-retained-plots-empty">No present metric values are available to plot.
+                This does not mean zero or healthy service.</p>
+            {% endfor %}
+        </section>
+        <div class="table-responsive"><table class="table" data-testid="wan-retained-records">
+            <thead><tr><th>Observation hour UTC</th><th>Collected at UTC</th><th>Provenance</th><th>Retained values</th></tr></thead>
+            <tbody>{% for record in retained.records %}<tr>
+                <td>{{ record.hour_start_utc.isoformat() }}</td><td>{{ record.collected_at_utc.isoformat() }}</td><td>{{ record.provenance }}</td>
+                <td>{% for name, metric in record.metrics.items() %}
+                    <div>{{ name }}: {% if metric.value is not none %}{{ metric.value }} {{ metric.unit }}{% else %}Unknown{% if metric.missing_reason %}: {{ metric.missing_reason }}{% endif %}{% endif %}</div>
+                {% endfor %}</td>
+            </tr>{% else %}<tr><td colspan="4">No retained observations exist in this window. This does not mean healthy service.</td></tr>{% endfor %}</tbody>
+        </table></div>
+        {% else %}
+        <p role="alert" data-testid="wan-retained-unavailable">{{ retained.error if retained else "Retained observations are unavailable because cache or history validation failed." }}</p>
+        {% endif %}
+    </details>
+    {% endif %}
+    {% if not window and kind in ["gateway", "port", "peer"] %}
+    <details data-testid="wan-live-history">
+        <summary>Persisted observation summaries</summary>
+        <p>Port and peer hours retain the last observation. Gateway hours use catalog-validated insight samples.
+            These are not full-hour averages.
+            Rolling 3-hour, 12-hour, and 24-hour windows end at the latest retained observation.
+            The utilization p95 uses raw samples within each hour. Weekly and monthly p95 use the maximum daily p95.
+            Congestion duration uses complete 10-minute sample intervals.
+            Link availability excludes unknown time before the first event.</p>
+        {% if history_error %}<p role="alert">{{ history_error }}</p>{% endif %}
+        {% for summary in summaries %}
+            <h3>{{ summary.period.kind }}: {{ summary.period.start.isoformat() }} to {{ summary.period.end.isoformat() }}</h3>
+            <p>{{ summary.observed_hours }} observed hours of {{ summary.period.expected_hours }}.</p>
+            {% for name, values in summary.metrics.items() %}<p>{{ name }}: mean {{ values[0] }}, maximum {{ values[1] }}, observed p95 {{ values[2] }} {{ values[3] }}</p>{% endfor %}
+            {% if summary.congestion_durations %}
+            <div data-testid="wan-live-congestion-duration">
+                <h4>Sample-based congestion duration</h4>
+                <p>Each counted sample represents 10 minutes above the threshold.
+                    Hours with missing samples do not contribute a duration.</p>
+                {% for duration in summary.congestion_durations %}
+                <p>Above {{ duration.threshold_percent }}%: {{ duration.minutes }} minutes across
+                    {{ duration.complete_hours }} complete hours of {{ duration.expected_hours }} expected hours.</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if summary.link_event_summary %}
+            <div data-testid="wan-live-link-event-summary">
+                <h4>Link-event availability</h4>
+                <p>{{ summary.link_event_summary.complete_hours }} complete event windows of
+                    {{ summary.link_event_summary.expected_hours }} expected hours.
+                    {% if summary.link_event_summary.up_minutes is not none and summary.link_event_summary.down_minutes is not none %}
+                    Known state covers {{ summary.link_event_summary.up_minutes + summary.link_event_summary.down_minutes }} minutes
+                    in {{ summary.link_event_summary.known_hours }} hours.
+                    {% else %}
+                    Known state duration: Unknown. No complete duration hours exist.
+                    {% endif %}
+                    Up: {{ summary.link_event_summary.up_minutes if summary.link_event_summary.up_minutes is not none else "Unknown" }} minutes.
+                    Down: {{ summary.link_event_summary.down_minutes if summary.link_event_summary.down_minutes is not none else "Unknown" }} minutes.
+                    Matching transitions: {{ summary.link_event_summary.flap_count if summary.link_event_summary.flap_count is not none else "Unknown" }}.
+                    Up percentage of known minutes:
+                    {{ summary.link_event_summary.observed_up_percent if summary.link_event_summary.observed_up_percent is not none else "Unknown" }}.</p>
+                <p>Time before the first event remains unknown.
+                    If no event occurs, the current cached status represents the full hour.
+                    A page-capped event search remains unknown.</p>
+            </div>
+            {% endif %}
+            {% if summary.threshold_observations %}
+            <div data-testid="wan-live-threshold-observations">
+                <h4>Observed-hour threshold counts</h4>
+                <p>These are retained snapshot counts, not measured congestion duration.
+                    Missing, unknown, and non-exceeding hours break a run. Equality does not exceed a threshold.</p>
+                {% for entry in summary.threshold_observations %}
+                <p>{{ entry.metric_name }} above {{ entry.threshold_percent }}%:
+                    {{ entry.above_hours }} observations, longest adjacent run {{ entry.longest_run }};
+                    {{ entry.valid_hours }} valid hourly observations of {{ summary.period.expected_hours }} expected hours.</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if summary.state_observations %}
+            <div data-testid="wan-live-state-observations">
+                <h4>Observed link-state summary</h4>
+                <p>{{ summary.state_observations.up_hours }} up and {{ summary.state_observations.down_hours }} down
+                    observations of {{ summary.state_observations.valid_hours }} known states across
+                    {{ summary.state_observations.expected_hours }} expected hours.
+                    Observed up percentage: {{ summary.state_observations.observed_up_percent }}%.
+                    Observed changes between adjacent hours: {{ summary.state_observations.observed_transitions }}.
+                    This is sampled state, not measured availability or a complete flap count.</p>
+            </div>
+            {% endif %}
+        {% else %}{% if not history_error %}<p>No persisted observations exist in the previous thirteen calendar months.</p>{% endif %}{% endfor %}
+    </details>
+    {% endif %}
+    <a data-testid="wan-live-back-link" href="{{ url_for('wan_performance.live.overview', window=window.key if window else none) }}">Return to the WAN overview</a>
+    <a data-testid="wan-offline-link" href="{{ url_for('wan_performance.overview') }}">Open the isolated synthetic preview</a>
+</section>
+{% if plots %}
+<script>
+(() => {
+    /** Operate only on already rendered hourly projections and their UTC view interval. */
+    class RetainedChart {
+        static initialize(figure) {
+            figure.addEventListener("click", event => RetainedChart.activate(figure, event));
+            const selection = figure.querySelector("select");
+            selection.disabled = false;
+            selection.addEventListener("change", () => RetainedPoints.inspect(figure, selection));
+            RetainedChart.adjust(figure, "reset");
+        }
+        static activate(figure, event) {
+            const point = event.target.closest("[data-testid=wan-retained-point]");
+            if (point) {
+                if (figure.querySelector("[data-rectangle-action=mode]").getAttribute("aria-pressed") === "true") return;
+                const selection = figure.querySelector("select");
+                selection.value = [...figure.querySelectorAll("circle")].indexOf(point);
+                RetainedPoints.inspect(figure, selection);
+                return;
+            }
+            const button = event.target.closest("[data-plot-action]");
+            if (!button || button.disabled) return;
+            if (button.dataset.plotAction === "png") {
+                RetainedImage.download(button, figure.querySelector("svg"), figure.querySelector("[data-testid=wan-retained-chart-status]"));
+            } else {
+                RetainedChart.adjust(figure, button.dataset.plotAction);
+            }
+        }
+        static range(svg, action) {
+            let scale = Number(svg.dataset.plotScale || 1);
+            let offset = Number(svg.dataset.plotOffset || 0);
+            if (action === "toggle-points") return [scale, offset];
+            if (action === "reset") return [1, 0];
+            if (action === "zoom-in" || action === "zoom-out") {
+                const center = offset + 0.5 / scale;
+                scale = Math.max(1, Math.min(8, scale * (action === "zoom-in" ? 2 : 0.5)));
+                offset = center - 0.5 / scale;
+            } else {
+                offset += (action === "earlier" ? -0.5 : 0.5) / scale;
+            }
+            return [scale, Math.max(0, Math.min(1 - 1 / scale, offset))];
+        }
+        static adjust(figure, action) {
+            console.info("Adjust a retained WAN projection view.");
+            RetainedRectangle.reset(figure);
+            const svg = figure.querySelector("svg");
+            svg.dataset.pointsVisible = String(action === "toggle-points" ? svg.dataset.pointsVisible === "false" : svg.dataset.pointsVisible !== "false");
+            const [scale, offset] = RetainedChart.range(svg, action);
+            svg.dataset.plotScale = scale;
+            svg.dataset.plotOffset = offset;
+            const points = RetainedPoints.adjust(svg, scale, offset);
+            RetainedPoints.controls(figure, svg, scale, offset);
+            const start = Date.parse(svg.dataset.windowStart), duration = Date.parse(svg.dataset.windowEnd) - start;
+            for (const [selector, fraction] of [["[data-window-start]", offset], ["[data-window-end]", offset + 1 / scale]]) {
+                svg.querySelector(selector).textContent = new Date(start + duration * fraction).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+            }
+            figure.querySelector("[data-testid=wan-retained-chart-status]").textContent =
+                svg.dataset.pointsVisible === "false" ? "Plotted points are hidden by the operator. Exact values remain in the table." :
+                    `${points.filter(point => !point.style.display).length} of ${points.length} retained points visible. Measurement completeness remains unknown.`;
+            console.debug("Adjusted the retained projection view.", scale, offset);
+        }
+    }
+    /** Keep point visibility and exact inspection separate from UTC window controls. */
+    class RetainedPoints {
+        static controls(figure, svg, scale, offset) {
+            for (const button of figure.querySelectorAll("[data-plot-action]")) {
+                if (button.dataset.plotAction === "toggle-points") button.setAttribute("aria-pressed", svg.dataset.pointsVisible);
+                button.disabled = button.dataset.rendering === "true" || {"zoom-in": scale === 8, "zoom-out": scale === 1,
+                    earlier: offset === 0, later: offset >= 1 - 1 / scale, reset: scale === 1}[button.dataset.plotAction] || false;
+            }
+            figure.querySelector("[data-plot-action=toggle-points]").classList.toggle("active", svg.dataset.pointsVisible !== "false");
+        }
+        static adjust(svg, scale, offset) {
+            const points = [...svg.querySelectorAll("circle")];
+            svg.closest("figure").querySelector("[data-testid=wan-retained-visibility-status]").textContent =
+                svg.dataset.pointsVisible === "false" ? "Plotted points are hidden by the operator. Exact values remain in the table." : "Point display is enabled.";
+            for (const point of points) {
+                const position = 32 + ((Number(point.dataset.plotX) - 32) / 588 - offset) * 588 * scale;
+                point.setAttribute("cx", position);
+                point.style.display = svg.dataset.pointsVisible === "false" || position < 32 || position > 620 ? "none" : "";
+            }
+            return points;
+        }
+        static inspect(figure, selection) {
+            figure.querySelector("[data-testid=wan-retained-point-details]").textContent = selection.value
+                ? selection.selectedOptions[0].textContent : "Select an observation. Exact values remain in the table.";
+            figure.querySelectorAll("circle").forEach((point, index) => {
+                point.setAttribute("r", selection.value !== "" && index === Number(selection.value) ? 6 : 4);
+            });
+        }
+    }
+    /** Capture a local plot rectangle without changing the retained record set. */
+    class RetainedRectangle {
+        static initialize(figure) {
+            const svg = figure.querySelector("svg");
+            svg.setAttribute("tabindex", "0");
+            figure.querySelectorAll("input,[data-rectangle-action]").forEach(control => control.disabled = false);
+            figure.addEventListener("click", event => {
+                const button = event.target.closest("[data-rectangle-action]");
+                if (button && !button.disabled) RetainedSelection.command(figure, button.dataset.rectangleAction);
+            });
+            for (const name of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) {
+                svg.addEventListener(name, event => RetainedRectangle.handle(figure, event));
+            }
+            figure.addEventListener("keydown", event => {
+                if (event.key === "Escape") RetainedRectangle.reset(figure);
+            });
+        }
+        static coordinates(svg, event) {
+            const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.getScreenCTM().inverse());
+            // Browser pointer precision must not exclude a point on the plot boundary.
+            return [(point.x - 32) / 5.88, (point.y - 35) / 1.3].map(value =>
+                Math.round(value * 1000) / 1000);
+        }
+        static handle(figure, event) {
+            const svg = figure.querySelector("svg"), start = svg.wanRectangleStart;
+            if (event.type === "pointerdown") {
+                if (event.button !== 0 || !event.isPrimary ||
+                    figure.querySelector("[data-rectangle-action=mode]").getAttribute("aria-pressed") !== "true") return;
+                const point = RetainedRectangle.coordinates(svg, event);
+                if (point.some(value => value < 0 || value > 100)) return;
+                svg.wanRectangleStart = {point, pointerId: event.pointerId};
+                svg.setPointerCapture(event.pointerId);
+                svg.focus();
+                event.preventDefault();
+                console.info("Start a local retained-point rectangle.");
+            } else if (!start || start.pointerId !== event.pointerId) return;
+            else if (event.type === "pointermove") {
+                const point = RetainedRectangle.coordinates(svg, event);
+                RetainedSelection.outline(svg, [start.point[0], point[0], start.point[1], point[1]]);
+            } else RetainedRectangle.finish(figure, event);
+        }
+        static finish(figure, event) {
+            const svg = figure.querySelector("svg"), start = svg.wanRectangleStart;
+            delete svg.wanRectangleStart;
+            if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+            if (event.type === "pointercancel") {
+                RetainedRectangle.reset(figure);
+                return;
+            }
+            const point = RetainedRectangle.coordinates(svg, event);
+            const bounds = RetainedSelection.outline(svg, [start.point[0], point[0], start.point[1], point[1]]);
+            ["left", "right", "top", "bottom"].forEach((edge, index) => {
+                figure.querySelector(`[data-testid=wan-retained-rectangle-${edge}]`).value = bounds[index];
+            });
+            RetainedSelection.command(figure, "apply");
+        }
+        static reset(figure) {
+            console.info("Clear the local retained-point rectangle.");
+            const svg = figure.querySelector("svg"), start = svg.wanRectangleStart;
+            delete svg.wanRectangleStart;
+            if (start && svg.hasPointerCapture(start.pointerId)) svg.releasePointerCapture(start.pointerId);
+            figure.querySelector("[data-testid=wan-retained-rectangle-results]").replaceChildren();
+            svg.querySelector("[data-testid=wan-retained-rectangle-outline]").style.display = "none";
+            for (const point of svg.querySelectorAll("circle")) {
+                delete point.dataset.rectangleSelected;
+                point.style.removeProperty("stroke");
+                point.style.removeProperty("stroke-width");
+            }
+            const status = figure.querySelector("[data-testid=wan-retained-rectangle-status]");
+            status.setAttribute("role", "status");
+            status.textContent = "No rectangle applied. Exact values and missing reasons remain in the table.";
+            console.debug("Cleared the local retained-point rectangle.");
+        }
+    }
+    /** Validate keyboard bounds and list exact existing points without aggregation. */
+    class RetainedSelection {
+        static command(figure, action) {
+            console.info("Apply a retained rectangle control.", action);
+            if (action === "clear") return RetainedRectangle.reset(figure);
+            if (action === "mode") {
+                const button = figure.querySelector("[data-rectangle-action=mode]");
+                const enabled = button.getAttribute("aria-pressed") !== "true";
+                button.setAttribute("aria-pressed", String(enabled));
+                button.classList.toggle("active", enabled);
+                figure.querySelector("svg").style.touchAction = enabled ? "none" : "auto";
+                console.debug("Changed the retained rectangle gesture mode.", enabled);
+                return;
+            }
+            const bounds = RetainedSelection.bounds(figure);
+            if (!bounds) {
+                console.error("Invalid retained rectangle percentage bounds.");
+                const status = figure.querySelector("[data-testid=wan-retained-rectangle-status]");
+                status.setAttribute("role", "alert");
+                status.textContent = "Invalid rectangle. Use ordered bounds from 0 through 100. The previous selection remains unchanged.";
+                return;
+            }
+            RetainedSelection.apply(figure, bounds);
+        }
+        static bounds(figure) {
+            const inputs = [...figure.querySelectorAll("[data-testid^=wan-retained-rectangle-]")].filter(element => element.tagName === "INPUT");
+            const values = inputs.map(input => input.valueAsNumber);
+            if (inputs.some(input => !input.validity.valid) || values.some(value => !Number.isFinite(value)) ||
+                values[0] > values[1] || values[2] > values[3]) return null;
+            return values;
+        }
+        static outline(svg, values) {
+            const bounded = values.map(value => Math.max(0, Math.min(100, value)));
+            const bounds = [Math.min(...bounded.slice(0, 2)), Math.max(...bounded.slice(0, 2)),
+                Math.min(...bounded.slice(2)), Math.max(...bounded.slice(2))];
+            const rectangle = svg.querySelector("[data-testid=wan-retained-rectangle-outline]");
+            for (const [name, value] of Object.entries({x: 32 + bounds[0] * 5.88, y: 35 + bounds[2] * 1.3,
+                width: (bounds[1] - bounds[0]) * 5.88, height: (bounds[3] - bounds[2]) * 1.3})) {
+                rectangle.setAttribute(name, value);
+            }
+            rectangle.style.display = "";
+            return bounds;
+        }
+        static apply(figure, bounds) {
+            console.info("Select existing visible retained points within a rectangle.");
+            RetainedRectangle.reset(figure);
+            const svg = figure.querySelector("svg");
+            RetainedSelection.outline(svg, bounds);
+            const selected = [...svg.querySelectorAll("circle")].filter(point => {
+                const horizontal = (Number(point.getAttribute("cx")) - 32) / 5.88;
+                const vertical = (Number(point.getAttribute("cy")) - 35) / 1.3;
+                return point.style.display !== "none" && horizontal >= bounds[0] && horizontal <= bounds[1] &&
+                    vertical >= bounds[2] && vertical <= bounds[3];
+            });
+            RetainedSelection.render(figure, selected);
+            console.debug("Selected existing visible retained points.", selected.length);
+        }
+        static render(figure, selected) {
+            const points = [...figure.querySelectorAll("circle")], options = figure.querySelector("select").options;
+            const results = figure.querySelector("[data-testid=wan-retained-rectangle-results]");
+            for (const point of selected) {
+                point.dataset.rectangleSelected = "true";
+                point.style.stroke = "currentColor";
+                point.style.strokeWidth = "3px";
+                const row = document.createElement("li");
+                row.textContent = options[points.indexOf(point) + 1].textContent;
+                results.append(row);
+            }
+            figure.querySelector("[data-testid=wan-retained-rectangle-status]").textContent =
+                `${selected.length} existing visible points selected. No aggregate or source polygon behavior is implied.`;
+        }
+    }
+    /** Export the destination's own rendered chart without requests or external assets. */
+    class RetainedImage {
+        static snapshot(svg) {
+            const clone = svg.cloneNode(true);
+            clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+            clone.setAttribute("width", "1280");
+            clone.setAttribute("height", "460");
+            const originals = [svg, ...svg.querySelectorAll("*")], copies = [clone, ...clone.querySelectorAll("*")];
+            originals.forEach((element, index) => {
+                const styles = getComputedStyle(element);
+                for (const property of ["fill", "stroke", "stroke-width", "font-family", "font-size", "text-anchor", "opacity", "display"]) {
+                    copies[index].style.setProperty(property, styles.getPropertyValue(property));
+                }
+            });
+            return new XMLSerializer().serializeToString(clone);
+        }
+        static async raster(svg) {
+            const image = new Image();
+            const pointsVisible = svg.dataset.pointsVisible !== "false";
+            await new Promise((resolve, reject) => {
+                image.onload = resolve;
+                image.onerror = () => reject(new Error("The retained chart image could not load."));
+                // The portal permits local data images, not blob image sources.
+                image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(RetainedImage.snapshot(svg));
+            });
+            return RetainedImage.paint(svg, image, pointsVisible);
+        }
+        static paint(svg, image, pointsVisible) {
+            const canvas = document.createElement("canvas");
+            canvas.width = 1280;
+            canvas.height = 600;
+            const context = canvas.getContext("2d");
+            if (!context) throw new Error("The browser cannot create an image canvas.");
+            context.fillStyle = "#ffffff";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = getComputedStyle(document.body).backgroundColor;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = getComputedStyle(svg).color;
+            context.font = "18px sans-serif";
+            context.fillText(svg.getAttribute("aria-label"), 20, 30, 1240);
+            context.drawImage(image, 0, 50, 1280, 460);
+            RetainedImage.labels(context, pointsVisible);
+            return canvas;
+        }
+        static labels(context, pointsVisible) {
+            context.fillText("Hourly projections are not source metric sample times. Completeness remains unknown.", 20, 550, 1240);
+            const visibility = pointsVisible
+                ? "Exact collection times and missing reasons remain in the retained table."
+                : "The operator hid plotted points. Exact values remain in the table.";
+            context.fillText(visibility, 20, 580, 1240);
+        }
+        static async download(button, svg, output) {
+            let address;
+            button.dataset.rendering = "true";
+            button.disabled = true;
+            console.info("Render a retained WAN projection PNG.");
+            try {
+                const canvas = await RetainedImage.raster(svg);
+                const image = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+                if (!image) throw new Error("The browser returned no encoded PNG.");
+                address = URL.createObjectURL(image);
+                const link = document.createElement("a");
+                link.href = address;
+                link.download = "wan-retained-projection.png";
+                link.click();
+                output.textContent = "PNG download requested. Exact collection times remain in the table.";
+                console.debug("Requested one locally rendered retained projection PNG.");
+            } catch (failure) {
+                console.error("Retained WAN PNG rendering failed.", failure);
+                output.textContent = "PNG could not be rendered. The retained table remains available.";
+            } finally {
+                delete button.dataset.rendering;
+                button.disabled = false;
+                if (address) setTimeout(() => URL.revokeObjectURL(address), 1000);
+            }
+        }
+    }
+    document.querySelectorAll("[data-testid=wan-retained-chart]").forEach(figure => {
+        RetainedChart.initialize(figure);
+        RetainedRectangle.initialize(figure);
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}
