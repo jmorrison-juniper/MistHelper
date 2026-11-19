@@ -34,34 +34,31 @@ Update this map when a symbol name changes.
 | - | - |
 | `MINIMUM_PYTHON_VERSION` | Defines the earliest Python version that the entry point accepts. |
 | `LogRotationSettings` | Holds the settings that size and rotate the runtime log. |
-| `_early_dependency_check` | Checks required packages before the normal import block runs. |
+| `early_dependency_check` | Checks required packages before the normal import block runs. |
 | `DEFAULT_API_PAGE_LIMIT` | Defines the default Mist page size for API list calls. |
 | `_fallback_load_dotenv` | Loads `.env` values when `python-dotenv` cannot run. |
 | `GlobalImportManager` | Installs, upgrades, and imports optional packages during startup. |
 | `IS_TEST_MODE` | Marks whether the current run uses a test mode. |
 | `OUTPUT_FORMAT` | Stores the selected output target for exports. |
-| `_snapshot_session_globals_to_state` | Copies session globals into a state object before a mode change. |
 | `_select_msp_and_org` | Starts the interactive choice of an MSP and an organization. |
 | `_preflight_verify_credentials` | Checks Mist credentials before the tool creates a session. |
 | `_build_session_attempts` | Builds the ordered list of session creation attempts. |
-| `_configure_session_timeout` | Applies the request timeout policy to the Mist session. |
+| `configure_session_timeout` | Applies the request timeout policy to the Mist session. |
 | `_dispatch_gateway_templates` | Connects a gateway template menu action to the gateway package. |
 | `_build_ssh_runner_deps` | Creates the dependency object for SSH command runs. |
 | `_build_firmware_manager` | Creates the firmware manager with its required helpers. |
 | `_systematic_test_build_safe_list` | Builds the menu list that the safe test mode can run. |
-| `_execute_systematic_test_loop` | Runs each selected operation during safe test mode. |
+| `execute_systematic_test_loop` | Runs each selected operation during safe test mode. |
 | `_run_web_portal_server` | Starts the web portal server. |
 | `_run_capture_portal_server` | Starts the upgrade capture portal server. |
 | `_launch_metrics_gateway` | Starts the metrics gateway mode. |
-| `_initialize_deferred_imports` | Completes import work that must wait until startup settings exist. |
-| `_build_argument_parser` | Defines command flags and direct menu execution flags. |
+| `build_argument_parser` | Defines command flags and direct menu execution flags. |
 | `_FAST_MODE_CAPABLE_FUNCTIONS` | Lists operations that can use fast mode. |
-| `_initialize_dependencies` | Selects the full or reduced dependency startup path. |
-| `_establish_mist_session` | Creates the Mist API session for normal execution. |
+| `initialize_dependencies` | Selects the full or reduced dependency startup path. |
+| `establish_mist_session` | Creates the Mist API session for normal execution. |
 | `_run_cli_mode` | Runs one menu action from command flags. |
 | `_run_interactive_mode` | Runs the text menu loop for a person. |
-| `_MAIN_MODE_TABLE` | Maps startup modes to the function that runs each mode. |
-| `_dispatch_main_mode` | Selects the active startup mode from parsed arguments. |
+| `dispatch_main_mode` | Selects the active startup mode from parsed arguments. |
 
 ## Where the real work lives
 
