@@ -57,11 +57,11 @@ Update this map when a symbol name changes.
 | `_build_argument_parser` | Defines command flags and direct menu execution flags. |
 | `_FAST_MODE_CAPABLE_FUNCTIONS` | Lists operations that can use fast mode. |
 | `_initialize_dependencies` | Selects the full or reduced dependency startup path. |
-| `_establish_mist_session` | Creates the Mist API session for normal execution. |
+| `establish_mist_session` | Creates the Mist API session for normal execution. |
 | `_run_cli_mode` | Runs one menu action from command flags. |
 | `_run_interactive_mode` | Runs the text menu loop for a person. |
 | `_MAIN_MODE_TABLE` | Maps startup modes to the function that runs each mode. |
-| `_dispatch_main_mode` | Selects the active startup mode from parsed arguments. |
+| `dispatch_main_mode` | Selects the active startup mode from parsed arguments. |
 
 ## Where the real work lives
 

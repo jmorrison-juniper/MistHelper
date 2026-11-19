@@ -545,7 +545,7 @@ class TestMenuText:
             (
                 "MistHelper.py",
                 307,
-                "fa33926eeab9f2923e840558e4d9507cb7789aeeea4b9ad7d341cd513aac9fb4",
+                "17d574510b553125cafc13499262cd61a7eb0dda24e59644dfdc4f990f48a59d",
             ),  # Preserve the command-line source identity across Python AST changes.
             (
                 "web_portal/menu_registry.py",
@@ -555,7 +555,7 @@ class TestMenuText:
         ),
     )
     def test_menu_263_complete_identity(self, path: str, count: int, expected: str) -> None:
-        """The one allowed title edit preserves all other menu metadata."""
+        """The complete checked menu source matches its reviewed identity."""
         logging.info("Checking the complete menu identity in %s", path)  # Report the guard input before reading it.
         body = (REPOSITORY_ROOT / path).read_text(encoding="utf-8")  # Read the source that defines the menu.
         normalized_body = body.replace(

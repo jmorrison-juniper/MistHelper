@@ -3,7 +3,7 @@
 Owns the token-based Mist API session initialization originally defined
 as the top-level `initialize_mist_session` function in MistHelper.py, and
 re-lands it as a class-body method per FR-005. The two MistHelper
-callsites (entrypoint `_establish_mist_session` token path and TUI
+callsites (entrypoint `establish_mist_session` token path and TUI
 guard `_ensure_tui_api_session`) are rewritten in the same PR to invoke
 the class method. No wrapper shim remains in MistHelper.py after this
 extraction.
