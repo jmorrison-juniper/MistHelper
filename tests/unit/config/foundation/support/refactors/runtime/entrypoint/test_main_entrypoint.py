@@ -151,6 +151,15 @@ def _menu_entry(menu_id: str, handler, title: str) -> MenuEntry:
 class TestMainEntrypointRun:
     """`MainEntrypoint.run` drives the eight-step pipeline in declared order."""
 
+    def test_empty_argument_list_reaches_normal_startup(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An empty parser input follows normal startup instead of the help exit path."""
+        startup = MagicMock(side_effect=RuntimeError("Normal startup was reached"))  # WHY: stop at context setup.
+        monkeypatch.setattr(MainEntrypoint, "activate_context", startup)  # WHY: distinguish startup from help.
+        bootstrap = ApplicationBootstrap(argv=[])  # WHY: pass the actual empty argument list to argparse.
+        with pytest.raises(RuntimeError, match="Normal startup was reached"):  # WHY: normal startup must proceed.
+            bootstrap.bootstrap_for_cli()  # WHY: use the real bootstrap and parser path.
+        startup.assert_called_once()  # WHY: context activation proves argparse did not exit for help.
+
     def test_run_invokes_pipeline_steps_in_order(self, wired_misthelper: dict[str, Any]) -> None:
         """Each of the eight pipeline steps is called exactly once in the documented order."""
         MainEntrypoint.run()  # WHY: exercise the full CLI entrypoint under mocked dependencies.
