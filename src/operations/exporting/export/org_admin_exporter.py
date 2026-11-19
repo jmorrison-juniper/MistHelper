@@ -66,16 +66,30 @@ class OrgAdminExporter:
     def _fetch_license_payload(current_org_id: str) -> list[Any]:
         """Fetch license rows via the wrapper, or fall back to a raw GET when the wrapper is absent."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
-        list_func = getattr(mistapi.api.v1.orgs.licenses, "listOrgLicenses", None)  # Locate the wrapper if shipped.
-        if list_func is None:  # Wrapper missing -> fall back to raw GET.
-            logger.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
-            raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Compose raw API path.
-            if mh.apisession is None:  # Direct GET requires an initialized session.
-                raise ValueError("API session not initialized")
-            response = mh.apisession.mist_get(raw_url)  # Raw GET fallback.
-            return getattr(response, "data", response) or []  # Unwrap .data or response, default empty.
-        response = list_func(mh.apisession, current_org_id, limit=1000)  # Use wrapper path.
-        return mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Page-all wrapper result.
+        license_api = mistapi.api.v1.orgs.licenses  # Locate the SDK namespace before selecting an endpoint.
+        logger.info("Requesting organization licenses for org %s", current_org_id)  # Identify the request target.
+        if hasattr(license_api, "listOrgLicenses"):  # Check the namespace before accessing its optional member.
+            if license_api.listOrgLicenses is not None:  # Preserve the direct request when the wrapper is null.
+                response = license_api.listOrgLicenses(mh.apisession, current_org_id, limit=1000)  # Use the wrapper.
+                OrgAdminExporter._validate_license_response(response, current_org_id)  # Validate before pagination.
+                return mistapi.get_all(response=response, mist_session=mh.apisession) or []  # Preserve SDK pagination.
+        logger.debug("listOrgLicenses wrapper not present in mistapi library; performing direct GET /licenses")
+        raw_url = f"/api/v1/orgs/{current_org_id}/licenses"  # Compose the existing SDK session path.
+        if mh.apisession is None:  # Direct GET requires an initialized session.
+            raise ValueError("API session not initialized")
+        response = mh.apisession.mist_get(raw_url)  # Preserve the SDK session request.
+        OrgAdminExporter._validate_license_response(response, current_org_id)  # Validate before body access.
+        return response.data or []  # Preserve empty successful responses.
+
+    @staticmethod
+    def _validate_license_response(response: Any, current_org_id: str) -> None:
+        """Require a successful initial response before consuming license data."""
+        status = getattr(response, "status_code", None)  # A missing status cannot prove request success.
+        if not isinstance(status, int) or isinstance(status, bool):  # Boolean values are not HTTP status codes.
+            raise RuntimeError(f"License request has no valid HTTP status for org {current_org_id}")
+        if not 200 <= status < 300:  # Reject redirects, request failures, and invalid integer statuses.
+            raise RuntimeError(f"License request returned HTTP {status} for org {current_org_id}")
+        logger.debug("License request returned HTTP %s for org %s", status, current_org_id)  # Confirm initial status.
 
     @staticmethod
     def _fetch_license_records(current_org_id: str) -> list[Any]:
@@ -91,29 +105,35 @@ class OrgAdminExporter:
         """Export organization licenses to OrgLicenses.csv."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Starting export of organization licenses (canonical endpoint)...")  # Log start.
-        filename = "OrgLicenses.csv"  # Build the CSV name.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
         try:
             raw_items = OrgAdminExporter._fetch_license_records(current_org_id)  # Fetch rows via wrapper/fallback.
             if not raw_items:  # No records.
-                logger.info("No license records returned from canonical endpoint; writing empty OrgLicenses.csv")
-                mh.DataExporter.write_with_format_selection([], filename, api_function_name="listOrgLicenses")
-                return  # Abort.
-            processed = DataProcessingUtils.flatten_nested_fields(raw_items)  # Flatten nested fields.
-            processed = DataProcessingUtils.escape_multiline(processed)  # CSV-safe.
-            mh.DataExporter.write_with_format_selection(processed, filename, api_function_name="listOrgLicenses")
-            logger.info("Exported %s license records to %s.", len(processed), filename)  # Log export count.
-        except Exception as e:  # Export failed.
-            logging.error("Failed to export licenses: %s", e)  # Log the error.
-            try:
-                mh.DataExporter.write_with_format_selection(
-                    [], filename, api_function_name="listOrgLicenses"
-                )  # Best-effort empty write.
-            except Exception as error:  # nosec B110
-                logging.warning(
-                    "Optional step failed: %s: %s", type(error).__name__, error
-                )  # WHY: name cleanup failures without masking the export error.
-            raise  # Re-raise to caller.
+                logger.info("No license records returned from canonical endpoint. No export was written.")
+                return  # The shared writer rejects empty input.
+            OrgAdminExporter._write_license_records(raw_items)  # Report the actual writer outcome.
+        except Exception as error:  # Preserve existing exception propagation without another write.
+            logger.error("Failed to export licenses for org %s: %s", current_org_id, error)  # Identify the failure.
+            raise  # Keep the original error for the caller.
+
+    @staticmethod
+    def _write_license_records(raw_items: list[Any]) -> None:
+        """Process valid license rows and report a rejected write without success."""
+        mh = SourceDependencyResolver  # Resolve the configured output writer.
+        filename = "OrgLicenses.csv"  # Preserve the existing output name.
+        logger.info("Processing %s license records", len(raw_items))  # Trace the data transform.
+        processed = DataProcessingUtils.flatten_nested_fields(raw_items)  # Preserve nested field processing.
+        processed = DataProcessingUtils.escape_multiline(processed)  # Preserve multiline escaping.
+        logger.debug("Processed %s license records", len(processed))  # Record the transform result.
+        logger.info("Writing %s license records to %s", len(processed), filename)  # Trace the output attempt.
+        written = mh.DataExporter.write_with_format_selection(  # Preserve endpoint metadata for every backend.
+            processed, filename, api_function_name="listOrgLicenses"
+        )
+        logger.debug("License writer result for %s: %s", filename, written)  # Record the actual writer result.
+        if written is False:  # An explicit rejection must not produce a completion message.
+            logger.error("Failed to export licenses to %s: the writer rejected the export.", filename)
+            return  # Preserve the public None return on writer rejection.
+        logger.info("Exported %s license records to %s.", len(processed), filename)  # Report only accepted output.
 
     @staticmethod
     def usage() -> None:
