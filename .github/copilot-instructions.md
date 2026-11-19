@@ -573,6 +573,12 @@ unchanged.
   the newer run waited 21 minutes. Use `!cancelled()` for a job that must run after a failed
   gate. `tests/guardrails/test_ci_gate_triggers.py` fails on an `always()` job in `ci.yml`.
 
+- Issue #4765: a pull request exits 2 when the Mist-API rule excludes all changed tests,
+  because the analyzer then inspects no modules. Do not add `--include-mist-api` to the gate.
+  On `main`, that flag adds 79 findings that the baseline lacks, and the guard rejects it.
+  Repair the cause in `misthelper-devtools` issue #84. Then update the pin in `pyproject.toml`,
+  `uv.lock`, and `requirements-dev.txt`.
+
 ## Key files
 
 | File | Purpose |
