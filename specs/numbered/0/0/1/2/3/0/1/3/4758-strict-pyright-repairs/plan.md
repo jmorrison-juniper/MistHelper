@@ -115,9 +115,7 @@ Policy menus reject an absent session before client construction.
 Authenticated sessions retain their identity.
 No confirmation, backup, or production request occurs in the absent-session tests.
 
-The cache and site-record contracts remain blocked.
-Their owners require restoration and a narrow handoff before any source edit.
+Candidate one retained the cache and site-record contracts. Candidate three applies the authorized annotations and preserves both method bodies.
 Nine historical or test-referenced declarations also retain unused-function diagnostics.
-Those diagnostics are not ownership blockers.
-Their removal requires a separate approved scope.
-The implementation must not claim zero strict errors while either group remains.
+Those diagnostics are not ownership blockers. Candidate two removes them on its separate branch.
+The implementation must not claim zero strict errors while any strict diagnostic remains.

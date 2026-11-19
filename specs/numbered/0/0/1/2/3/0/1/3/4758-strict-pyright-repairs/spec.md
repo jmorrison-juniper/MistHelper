@@ -69,7 +69,7 @@ An operator retains the existing commands, menu operations, session state, and o
 ## Assumptions
 
 - Scope covers the entry point and required supporting contracts, not repository-wide strict adoption.
-- Existing ownership and publication holds remain active.
+- Existing holds remain active except for the annotation-only changes that the user authorized.
 - The app-managed branch replaces the branch-creation hook.
 - The active feature path remains command-scoped. The shared selector remains unchanged.
 - Review requires public names for verified host helpers and direct typed mode dispatch. It does not permit dummy exports or compatibility aliases.

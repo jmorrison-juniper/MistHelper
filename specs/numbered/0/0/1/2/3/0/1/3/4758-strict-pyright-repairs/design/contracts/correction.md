@@ -1,11 +1,15 @@
 # Corrective review and remaining work
 
+This record describes candidate one.
+Its 19-error result and unchecked task list are historical.
+See `analysis.md` for the split candidate results.
+
 ## Result
 
 The corrected candidate has 19 strict errors, zero warnings, and one analyzed file.
 The baseline has 108 errors.
 This is not a strict-clean completion.
-T003, T007, T008, and T010 remain unchecked.
+Candidate one left T003, T007, T008, and T010 unchecked.
 
 The correction preserves commits `ed7f550066e16a21aabac1132ffbd7906ead8718` and `aa185b899cfd8b073e2277fe3ec4d57a258836ed`.
 The base remains `b7a18b7ead7b1de5882bcd288203c015b1eef792`.
@@ -82,11 +86,12 @@ Negative probes reject integer address and site identifiers with two `reportArgu
 Each probe analyzes one file.
 No probe executes a network operation.
 
-## Held-contract diagnostic map
+## Candidate-one held-contract diagnostic map
 
 All locations below refer to `MistHelper.py`.
-The API source and cache source remain byte-identical to the base.
-Their archived owners require restoration and a narrow handoff.
+Candidate one kept the API and cache sources byte-identical to its base.
+Candidate three applies only the annotations authorized by the user.
+Its AST comparison confirms that function bodies, defaults, and imports are unchanged.
 
 | Line | Rule | Required source contract |
 | - | - | - |
@@ -103,7 +108,7 @@ Their archived owners require restoration and a narrow handoff.
 
 The API contract is `all_sites_with_limit(org_id: str) -> list[dict[str, Any]]`.
 The cache methods require `generate_function: Callable[[], object]`.
-No cast, duplicate implementation, or consumer adapter replaces either held contract.
+Candidate three applies these contracts without a cast, duplicate implementation, or consumer adapter.
 
 ## Preserved declarations
 

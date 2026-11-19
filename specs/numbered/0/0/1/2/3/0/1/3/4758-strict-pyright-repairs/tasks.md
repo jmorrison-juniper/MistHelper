@@ -7,7 +7,7 @@
 
 ## Phase 2: Foundational contracts
 
-- [ ] T003 Confirm reserved dependency handoffs in `analysis.md` before affected edits.
+- [x] T003 Confirm the narrow annotation handoffs in `analysis.md` before affected edits.
 - [x] T004 Record the complete diagnostic groups and source contract choices in `analysis.md`. (delivered: analysis.md)
 
 ## Phase 3: User Story 1 - Trust diagnostics
@@ -19,7 +19,7 @@
 - [x] T005 [US1] Correct local inferred collections and exception scope in `MistHelper.py`. (delivered: MistHelper.py)
 - [x] T006 [US1] Correct optional import contracts and typed dynamic module methods in `MistHelper.py`. (delivered: MistHelper.py)
 - [ ] T007 [US1] Express actual dynamic dispatch contracts without dummy references in `MistHelper.py`.
-- [ ] T008 [US1] Correct required shared callback and record contracts under `src/`.
+- [x] T008 [US1] Correct required shared callback and record contracts under `src/`.
 - [x] T009 [US1] Resolve the reserved portal signature contract in `web_portal/app.py` after handoff. (delivered: web_portal/app.py)
 - [ ] T010 [US1] Record a verified zero-error strict report in `analysis.md`.
 
@@ -62,12 +62,12 @@ Measure strict diagnostics after each coherent group.
 Preserve unchecked tasks when an ownership blocker prevents completion.
 Optional commit hooks remain deferred to the verified local commit.
 
-## Blocked work
+## Remaining work
 
-T003 remains incomplete for the archived API and cache owners.
-T008 retains their two unchanged source contracts.
-T007 retains nine preserved declarations without verified production callers.
-These nine diagnostics are not ownership blockers.
-The corrected host interfaces and actual mode dispatcher resolve the other unused-function diagnostics.
-T010 cannot pass while the ten held-contract errors and nine preserved-declaration errors remain.
-The portal and ARP handoffs do not release either source hold.
+T007 remains incomplete because nine declarations have no verified production callers.
+These diagnostics are not ownership blockers.
+Candidate three resolves the API and cache annotation diagnostics under direct user authorization.
+The method bodies, defaults, and imports remain unchanged.
+Candidate two removes the nine unused declarations on its separate branch.
+T010 remains incomplete because candidate three reports nine strict errors.
+The portal and ARP handoffs do not change this diagnostic count.
