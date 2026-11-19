@@ -1,4 +1,4 @@
-"""Regression tests for command-line parsing through `MainEntrypoint.run`."""
+"""Test bootstrap parsing and import safety without running startup actions."""
 
 from __future__ import annotations  # WHY: Keep annotations lazy for the test module.
 
@@ -112,9 +112,7 @@ def test_application_bootstrap_parses_command_line_once(monkeypatch: pytest.Monk
     assert bootstrap.parsed_args is parsed_args  # WHY: Later startup must reuse the stored Namespace object.
 
 
-def test_hyphenated_test_flag_uses_standard_argparse_error(
-    capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_hyphenated_test_flag_uses_standard_argparse_error(capsys: pytest.CaptureFixture[str]) -> None:
     """A misspelled flag must fail through argparse with status code 2."""
     with pytest.raises(SystemExit) as excinfo:  # WHY: argparse exits on an unsupported option.
         ApplicationBootstrap(argv=["--test-interactive"])  # WHY: The removed raw variant guard no longer runs.
