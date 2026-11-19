@@ -116,13 +116,9 @@ Policy menus reject an absent session before client construction.
 Authenticated sessions retain their identity.
 No confirmation, backup, or production request occurs in the absent-session tests.
 
-The cache and site-record contracts remain blocked.
-Their owners require restoration and a narrow handoff before any source edit.
-The bounded cleanup removes nine private declarations after caller verification.
-It replaces obsolete test doubles with real parser, validation, and dependency initialization cases.
-Four dependent private helpers have no callers outside the removed code.
-The authentication-status helper remains live through the session configurator.
-Its public rename uses the additional name-only initializer-reference handoff.
-The remaining `_parse_api_tokens` reference has two surviving direct root callers.
-No additional private interface needs a rename after the cleanup.
-The implementation must not claim zero strict errors while held contracts remain.
+Candidate one retained the cache and site-record contracts. Candidate three applies the authorized annotations and preserves both method bodies.
+Nine historical or test-referenced declarations also retain unused-function diagnostics.
+Those diagnostics are not ownership blockers. Candidate two removes them on its separate branch.
+The implementation must not claim zero strict errors while any strict diagnostic remains.
+The refreshed-main replay includes the approved API and cache annotations.
+The final strict result must be recorded after the replay and its regressions pass.
