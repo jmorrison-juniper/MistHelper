@@ -10,8 +10,8 @@ extraction.
 
 MistHelper module-globals (`apisession`, `mistapi`, `msp_privileges`,
 `selected_msp`, `org_id`) are read and written via the shared
-`_snapshot_session_globals_to_state` / `_restore_session_globals_from_state`
-helpers, which stay in MistHelper.py. All dependencies are resolved
+`AppContext.as_selector_state` / `AppContext.apply_msp_selection`
+methods, owned by the active application context. All dependencies are resolved
 lazily through the `_MH` proxy so live re-bindings after interactive
 login and test monkeypatching are honoured.
 """
