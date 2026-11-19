@@ -70,4 +70,4 @@ Revokes a pending admin invitation for the organization.
 
 ## MistHelper Notes
 
-Used by MistHelper via `listOrgInvites` in Menu 58.
+MistHelper does not call this endpoint. The `OrgInvites.csv` export has no SDK list call, because mistapi does not provide `listOrgInvites` (issue #4825).

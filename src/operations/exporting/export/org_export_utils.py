@@ -709,9 +709,22 @@ class OrgExportUtils:
 
     @staticmethod
     def _invites():  # Export invites.
-        """Export organization invites to OrgInvites.csv."""
+        """Export organization invites to OrgInvites.csv, or log an error when mistapi has no list call.
+
+        Why:
+            The installed mistapi SDK has no list call for organization admin invites (issue #4825).
+            A missing call logs one error and writes no file, because an empty file would read as
+            zero invites. The other org exports still run.
+        """
+        list_invites = getattr(mistapi.api.v1.orgs.invites, "listOrgInvites", None)  # WHY: SDK may lack this call.
+        if list_invites is None:
+            logger.error(
+                "Skipped the organization invites export. The installed mistapi SDK has no listOrgInvites function. "
+                "No OrgInvites.csv was written."
+            )
+            return  # Skip this export only.
         OrgExportUtils.export_data(  # type: ignore[no-untyped-call]
-            api_call=mistapi.api.v1.orgs.invites.listOrgInvites, data_type="invites", sort_key="email"
+            api_call=list_invites, data_type="invites", sort_key="email"
         )
 
     @staticmethod
