@@ -13,6 +13,7 @@ import argparse  # WHY: MagicMock(spec=argparse.ArgumentParser) contract typing.
 import logging
 from collections.abc import Callable, Iterator  # WHY: tests type handler fixtures.
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any  # WHY: mocks dict holds both MagicMock and Namespace objects.
 from unittest.mock import MagicMock, call  # WHY: FR-008 mandates MagicMock(spec=...) + call-order verification.
 
@@ -48,7 +49,6 @@ def wired_misthelper(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     input_utils_mock = MagicMock()  # WHY: InputUtils.ensure_tqdm_available() only; no spec class available here.
     mocks: dict[str, Any] = {  # WHY: bundle every entrypoint dependency (MagicMock + Namespace + parser handle).
-        "_initialize_deferred_imports": MagicMock(name="_initialize_deferred_imports"),
         "InputUtils": input_utils_mock,
         "build_argument_parser": MagicMock(return_value=parser_mock, name="build_argument_parser"),
         "setup_runtime_flags": MagicMock(name="setup_runtime_flags"),
@@ -66,6 +66,53 @@ def wired_misthelper(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     mocks["_parsed_args"] = parsed_args  # WHY: expose the namespace instance for identity assertions.
     mocks["_run_common_startup"] = bootstrap_startup_mock  # WHY: expose the bootstrap boundary assertion.
     return mocks  # WHY: hand the wiring back to the test for call-order + arg assertions.
+
+
+class TestDeferredDependencyInitialization:
+    """Keep the live dependency path, publication, and once-only guard observable."""
+
+    @pytest.fixture
+    def manager(self, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+        """Replace only the import boundary while the real initializer controls its state."""
+        manager = SimpleNamespace(initialize_all_imports=MagicMock(return_value=(True, {})))
+        monkeypatch.setattr(MistHelper, "import_manager", manager)
+        monkeypatch.setattr(MistHelper, "_initialize_imports_now", False)
+        monkeypatch.setattr(MistHelper, "global_assignments", {})
+        monkeypatch.setattr(MistHelper, "success", False)
+        return manager
+
+    @pytest.mark.parametrize("skip_deps", [False, True])
+    def test_initialization_publishes_assignments_once(
+        self, monkeypatch: pytest.MonkeyPatch, manager: SimpleNamespace, skip_deps: bool
+    ) -> None:
+        """Full and minimal startup must publish the same objects without a second import."""
+        sentinel = object()
+        manager.initialize_all_imports.return_value = (True, {"cleanup_dependency_probe": sentinel})
+        monkeypatch.setattr(MistHelper, "cleanup_dependency_probe", None, raising=False)
+        arguments = argparse.Namespace(skip_deps=skip_deps, test=False)
+        MistHelper.initialize_dependencies(arguments)
+        MistHelper.initialize_dependencies(arguments)
+        manager.initialize_all_imports.assert_called_once_with(skip_deps=skip_deps)
+        assert MistHelper.cleanup_dependency_probe is sentinel
+        assert MistHelper.success is True
+        assert manager.deferred_init_done is True
+
+    def test_critical_import_failure_stops_startup(self, manager: SimpleNamespace) -> None:
+        """A missing critical dependency must retain the non-test failure exit."""
+        manager.initialize_all_imports.return_value = (False, {})
+        with pytest.raises(SystemExit) as error:
+            MistHelper.initialize_dependencies(argparse.Namespace(skip_deps=False, test=False))
+        assert error.value.code == 1
+        assert MistHelper.success is False
+        manager.initialize_all_imports.assert_called_once_with(skip_deps=False)
+
+    def test_test_mode_records_failed_imports_without_aborting(self, manager: SimpleNamespace) -> None:
+        """The systematic test path must retain its explicit partial-import state."""
+        manager.initialize_all_imports.return_value = (False, {})
+        MistHelper.initialize_dependencies(argparse.Namespace(skip_deps=False, test=True))
+        assert MistHelper.success is False
+        assert manager.deferred_init_done is True
+        manager.initialize_all_imports.assert_called_once_with(skip_deps=False)
 
 
 class TestMistHelperProxy:

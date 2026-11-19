@@ -7,8 +7,7 @@ at the bottom of the module) is rewritten in the same PR to invoke the
 class method. No wrapper shim remains in MistHelper.py after this
 extraction.
 
-All six pipeline dependencies (`_initialize_deferred_imports`,
-`InputUtils`, `build_argument_parser`, `setup_runtime_flags`,
+The pipeline dependencies (`InputUtils`, `build_argument_parser`, `setup_runtime_flags`,
 `initialize_dependencies`, `establish_mist_session`,
 `configure_runtime_options`, `dispatch_main_mode`) are resolved
 lazily through the source dependency resolver. The host module binds

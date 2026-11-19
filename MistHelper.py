@@ -2443,25 +2443,6 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
         # application root. The file is small and safe to persist across runs.
 
 
-def _get_tuning_data_file_path() -> str:  # Preserve the existing behavior during the compliance refactor.
-    """Return full path to tuning data JSON stored in data/ directory.
-
-    Ensures the directory exists. Separated for future extension (for example,
-    namespacing by org or mode) without scattering path logic.
-    """
-    data_dir = os.path.join(os.getcwd(), "data")  # Build the path to the data/ subdirectory under the CWD
-    try:
-        os.makedirs(data_dir, exist_ok=True)  # Create data/ if it does not already exist (idempotent)
-    except (KeyboardInterrupt, SystemExit):  # Operators must be able to stop before logging is ready
-        raise  # Do not hide an operator stop behind the tuning file fallback
-    except Exception as error:  # Broad by design because logging may not be ready during early startup
-        logging.exception("Failed to create data directory for tuning data: %s", error)  # Keep early failure trace
-        # If directory creation fails, fall back to current working directory.
-        # Logging deferred until logger configured.
-        return os.path.join(os.getcwd(), "tuning_data.json")  # Degrade gracefully to a CWD-level file
-    return os.path.join(data_dir, "tuning_data.json")  # Normal case: store tuning data inside data/
-
-
 tuning_data_file = os.path.join("data", "tuning_data.json")  # Bootstrap creates data before code writes tuning data.
 
 # API usage tracking cache
@@ -2486,25 +2467,6 @@ _early_console_handler = logging.NullHandler()  # Keep the old name without atta
 _early_rotation_settings = None  # Bootstrap reads rotation settings during explicit startup.
 _early_file_handler = logging.NullHandler()  # Keep the old name without opening script.log at import.
 _UNSUPPORTED_FLAG_VARIANTS: dict[str, str] = {}  # Argparse now owns unsupported flag errors.
-
-
-def _is_help_invocation(argv: list[str]) -> bool:  # Preserve the existing behavior during the compliance refactor.
-    """Return True when argv requests help output."""
-    return any(token in ("--help", "-h") for token in argv[1:])  # Preserve the private name for symbol stability.
-
-
-def _reject_unsupported_flag_variants(
-    argv: list[str],
-) -> None:  # Preserve the existing behavior during the compliance refactor.
-    """Let argparse own unsupported flag errors."""
-    _ = argv  # Keep the private name while removing the pre-parse variant guard.
-
-
-def _exit_on_unsupported_flag(
-    head: str, supported: str
-) -> NoReturn:  # Preserve the existing behavior during the compliance refactor.
-    """Raise the standard argparse usage exit for obsolete direct callers."""
-    raise SystemExit(2)  # Preserve the private name without adding a new compatibility path.
 
 
 try:  # Import the sanitizer class without configuring logging during module import.
@@ -2633,37 +2595,6 @@ class _MistHelperContextModule(types.ModuleType):
 
 
 sys.modules[__name__].__class__ = _MistHelperContextModule  # Install typed methods without changing the state owner.
-
-
-def _snapshot_session_globals_to_state() -> (
-    dict[str, Any]
-):  # Preserve the existing behavior during the compliance refactor.
-    """Snapshot the live module-level session globals into a mutable state bag."""
-    logger.debug("_snapshot_session_globals_to_state: capturing 5 module globals")  # Log before snapshot
-    return {  # Map of global name -> current value for the LoginOrchestrator to mutate
-        "apisession": MainEntrypoint.context.apisession,  # Current API session object (may be None)
-        "mistapi": MainEntrypoint.context.mistapi or mistapi,  # Use the context SDK module when startup replaced it.
-        "msp_privileges": MainEntrypoint.context.msp_privileges,  # Any previously detected MSP grants
-        "selected_msp": MainEntrypoint.context.selected_msp,  # Currently selected MSP, if any
-        "org_id": MainEntrypoint.context.org_id,  # Currently selected org ID, if any
-    }
-
-
-def _restore_session_globals_from_state(
-    state: dict[str, Any],
-) -> None:  # Preserve the existing behavior during the compliance refactor.
-    """Restore module-level session globals from a state bag mutated by the orchestrator."""
-    # The application context owns this state, so no global declaration is needed.
-    logger.debug("_restore_session_globals_from_state: restoring 5 module globals")  # Log before restore
-    MainEntrypoint.context.apisession = state.get("apisession")  # Copy the (possibly new) session back to the global
-    MainEntrypoint.context.mistapi = state.get("mistapi")  # Keep the SDK module with the session context.
-    MainEntrypoint.context.msp_privileges = state.get(
-        "msp_privileges", MainEntrypoint.context.msp_privileges
-    )  # Copy detected MSP grants back
-    MainEntrypoint.context.selected_msp = state.get(
-        "selected_msp", MainEntrypoint.context.selected_msp
-    )  # Copy the selected MSP back
-    MainEntrypoint.context.org_id = state.get("org_id", MainEntrypoint.context.org_id)  # Copy the selected org ID back
 
 
 def print_switch_login_header() -> None:  # Preserve the existing behavior during the compliance refactor.
@@ -3343,28 +3274,6 @@ def _try_session_fallback(
         return None, None  # Fallback also failed -- caller will report total failure
 
 
-def _ensure_mist_get_method(session: Any) -> bool:  # Preserve the existing behavior during the compliance refactor.
-    """Verify that the session exposes a supported GET method.
-
-    This check no longer adds a method to the third-party session object.
-    The explicit session configuration seam owns the session shape check.
-
-    Args:
-        session: The initialized APISession or Session object to check.
-
-    Returns:
-        True if mist_get or get is present, False if neither method exists.
-    """
-    if hasattr(session, "mist_get"):  # Preferred method already exists on supported mistapi versions.
-        return True  # Session is compatible as-is.
-    if hasattr(session, "get") and callable(session.get):  # Newer SDK builds can expose get instead.
-        return True  # Session is usable without a run-time attribute patch.
-    logger.error(
-        "Initialized session lacks 'mist_get' or 'get' methods required for API calls"
-    )  # Preserve the existing behavior during the compliance refactor.
-    return False  # Session is unusable -- hard failure
-
-
 def _detect_session_token(session: Any) -> bool:  # Preserve the existing behavior during the compliance refactor.
     """Return True when the session exposes a readable, non-empty token attribute."""
     logger.debug("Detecting readable token attribute on session")  # Trace token attribute probe
@@ -3403,7 +3312,7 @@ def _log_detected_auth(
         logger.debug("Session has readable token attribute - authentication appears configured")  # attribute path
 
 
-def _log_session_auth_status(
+def log_session_auth_status(
     session: Any, successful_method: Any
 ) -> None:  # Preserve the existing behavior during the compliance refactor.
     """Log the authentication status of an initialized session.
@@ -3417,28 +3326,6 @@ def _log_session_auth_status(
         _log_missing_auth_warning()  # Surface remediation guidance to operators
         return  # Nothing further to log -- mirrors original early-out behavior
     _log_detected_auth(used_env_file, used_direct_token, has_readable_token)  # Debug-log the detected path
-
-
-def _validate_initialized_session(
-    session: Any, successful_method: Any
-) -> bool:  # Preserve the existing behavior during the compliance refactor.
-    """Validate that an initialized session provides the required methods and detectable authentication.
-
-    Calls _ensure_mist_get_method to verify GET method compatibility, then
-    calls _log_session_auth_status to warn if authentication cannot be confirmed.
-    Returns False only for hard failures (missing mist_get). Auth warnings are non-fatal.
-
-    Args:
-        session: The initialized APISession or Session object.
-        successful_method: Dict describing which constructor kwargs were used.
-
-    Returns:
-        True if the session is usable, False if required mist_get method is absent.
-    """
-    if not _ensure_mist_get_method(session):  # Verify a supported GET method without patching the session.
-        return False  # Session is unusable without mist_get
-    _log_session_auth_status(session, successful_method)  # Warn if authentication method is unclear
-    return True  # Session passed all checks -- ready for API calls
 
 
 def attempt_all_session_strategies(  # Preserve the existing behavior during the compliance refactor.
@@ -3471,40 +3358,6 @@ def log_failed_session_variants(
     )  # Preserve the existing behavior during the compliance refactor.
     for variant in tried_variants:  # One log line per variant for clarity
         logger.error("  - %s", variant)  # Preserve the existing behavior during the compliance refactor.
-
-
-def _install_default_request_timeout(
-    inner_session: Any,
-) -> None:  # Preserve the existing behavior during the compliance refactor.
-    """Install API_REQUEST_TIMEOUT as the default timeout on the requests.Session."""
-    from requests.adapters import HTTPAdapter  # Lazy import. The requests package is large and only needed here
-
-    class TimeoutAdapter(HTTPAdapter):  # Nested so we do not expose a public adapter class
-        """HTTPAdapter that injects a default timeout."""
-
-        def __init__(self, default_timeout: int, **kwargs: Any) -> None:  # Capture the project-wide timeout default
-            self.default_timeout = default_timeout  # Reused when send() gets timeout=None
-            super().__init__(**kwargs)  # Real adapter setup (connection pool, retries)
-
-        def send(  # Preserve the existing behavior during the compliance refactor.
-            self,
-            request: Any,
-            stream: Any = False,
-            timeout: Any = None,
-            verify: Any = True,
-            cert: Any = None,
-            proxies: Any = None,
-        ) -> Any:
-            if timeout is None:  # Caller did not supply a per-call timeout -- substitute our default
-                timeout = self.default_timeout  # Preserve the existing behavior during the compliance refactor.
-                # Issue #431: forward args verbatim. The signature must match parent for adapter contract.
-            return super().send(
-                request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies
-            )  # Preserve the existing behavior during the compliance refactor.
-
-    adapter = TimeoutAdapter(default_timeout=API_REQUEST_TIMEOUT)  # Single instance shared by both schemes
-    inner_session.mount("https://", adapter)  # Apply to HTTPS calls (standard Mist transport)
-    inner_session.mount("http://", adapter)  # Apply to plain HTTP too for completeness
 
 
 def configure_session_timeout(
@@ -7394,55 +7247,6 @@ def _report_mib_result(
         text if dry else f"Wrote {len (text )} characters to {output }."
     )  # Preserve the existing behavior during the compliance refactor.
     return 0  # Preserve the existing behavior during the compliance refactor.
-
-
-def _report_tqdm_status() -> None:  # Preserve the existing behavior during the compliance refactor.
-    """Log whether the real tqdm landed in the global namespace after deferred imports."""
-    logger.debug("_report_tqdm_status: checking tqdm namespace availability")  # Trace tqdm status check
-    module_globals: dict[str, object] = globals()  # Treat arbitrary namespace entries as objects for logging.
-    if "tqdm" in global_assignments:  # tqdm injection succeeded -- confirm availability for progress bars
-        logger.info("tqdm is available in global namespace: %s", type(module_globals.get("tqdm")))  # Log availability.
-    else:  # tqdm missing from resolved assignments -- progress bars will be non-functional
-        logger.warning(
-            "tqdm was not found in global assignments - progress bars will not be functional"
-        )  # Warn if missing
-
-
-def _apply_deferred_assignments() -> None:  # Preserve the existing behavior during the compliance refactor.
-    """Inject deferred import symbols into the namespace and report tqdm availability."""
-    logger.debug("_apply_deferred_assignments: publishing deferred symbols")  # Trace publish
-    if not global_assignments:  # No symbols resolved -- nothing to publish to namespace
-        return  # Skip injection entirely when the import cycle produced no assignments
-    assignments: dict[str, object] = global_assignments  # Namespace publication needs no package-specific members.
-    for var_name, var_value in assignments.items():  # Publish each resolved symbol.
-        globals()[var_name] = var_value  # Inject the imported symbol into module scope for global reuse
-        if var_name == "tqdm" and var_value is not None:  # Real tqdm replacing the stub warrants an explicit note
-            logger.info("Successfully imported real tqdm in deferred mode: %s", type(var_value))  # Log tqdm override.
-    logger.debug("Applied %d global variable assignments", len(global_assignments))  # Log assignment count
-    _report_tqdm_status()  # Log whether tqdm is available in the global namespace
-
-
-def _run_deferred_import_cycle() -> None:  # Preserve the existing behavior during the compliance refactor.
-    """Run the deferred import cycle, publish symbols, and warn on partial failure."""
-    logger.info("Initializing deferred imports at application start...")  # Log before import process
-    init_success, assignments = import_manager.initialize_all_imports()  # Run full deferred import cycle
-    globals()["success"] = init_success  # Preserve the legacy module name without a global statement.
-    globals()["global_assignments"] = assignments  # Preserve downstream reads without a global statement.
-    import_manager.deferred_init_done = True  # Mark complete to prevent duplicate initialization.
-    _apply_deferred_assignments()  # Inject resolved symbols and report tqdm availability
-    if not init_success:  # Non-fatal warning: caller decides whether to abort on partial import failure
-        logger.warning("Some required imports failed - functionality may be limited")  # Warn limited functionality
-
-
-def _initialize_deferred_imports() -> None:  # Preserve the existing behavior during the compliance refactor.
-    """Initialize deferred module imports if not already completed at startup."""
-    logger.debug("_initialize_deferred_imports: checking deferred import status")  # Log entry
-    already_done = hasattr(import_manager, "deferred_init_done")  # Preserve the existing attribute-presence check.
-    if not success and not global_assignments and not already_done:  # First-time deferred init required
-        _run_deferred_import_cycle()  # Run the import cycle and publish resolved symbols
-    elif already_done:  # Already initialized -- skip to avoid duplicate work
-        logger.debug("Deferred imports already initialized, skipping duplicate initialization")  # Note the skip
-    logger.debug("_initialize_deferred_imports: complete")  # Log exit
 
 
 def _add_target_selection_arguments(

@@ -4,18 +4,18 @@
 
 This is a partial repair, not a strict-clean completion.
 The strict baseline has 108 errors.
-The corrected candidate has 19 errors.
+The final interface candidate has ten errors.
 Both reports analyze exactly one file and report zero warnings.
 Ten errors require two reserved source contracts.
-Nine errors name preserved declarations without verified production callers.
-Those nine errors are not ownership blockers.
+The additional name-only handoff resolves the live authentication-status interface.
+The cleanup removes all nine audited private declarations and four dependent helpers.
 The original ten-error candidate used rejected export and import approaches.
 The historical sections below retain that evidence, not an accepted completion claim.
-The [correction record](design/contracts/correction.md) gives the current commands, call paths, and residual map.
+The [cleanup record](design/contracts/cleanup.md) gives the current commands, caller evidence, and residual map.
+The [correction record](design/contracts/correction.md) preserves the previous nineteen-error result.
 The corrective artifact review maps all twelve requirements and success criteria to the sixteen tasks.
-Four tasks remain incomplete.
-SC-003 now records the requested public helper renames and unchanged explicit exports.
-Its previous literal name-preservation rule conflicted with that approved revision.
+Three tasks remain incomplete.
+SC-003 preserves live implementations and explicit exports while allowing verified private-code removal and genuine host-interface renames.
 
 The initial and refreshed `origin/main` revision is `b7a18b7ead7b1de5882bcd288203c015b1eef792`.
 The worktree HEAD matched that revision before edits.
@@ -28,17 +28,17 @@ No push, pull request, merge, or automatic merge is authorized.
 | Requirement | Evidence | Result |
 | - | - | - |
 | FR-001 | Live main comparison, locked bootstrap, baseline JSON | Complete |
-| FR-002 | Corrected strict report | Incomplete: nineteen errors |
+| FR-002 | Final interface strict report | Incomplete: ten errors |
 | FR-003 | Focused state, import, selector, admission, and dry-run regressions | Complete for owned changes |
 | FR-004 | Source review, preserved declarations, unchanged rules | Complete |
 | FR-005 | Narrow portal handoff, ARP ancestry, held-file comparison | Partial: API and cache handoffs unavailable |
 | FR-006 | Mocked regression suite and absent-session admission cases | Complete |
-| FR-007 | Separate issues #4825 and #4826 | Complete |
+| FR-007 | Separate issues #4825 through #4828 | Complete |
 | FR-008 | Local implementation commit and verification records | Complete |
 
 T003 and T008 remain unchecked because ownership blocks their completion.
-T007 remains unchecked for preserved declarations.
-T010 remains unchecked for both diagnostic groups.
+T007 is complete after the approved authentication-status interface rename.
+T010 remains unchecked for the held contracts.
 Do not treat their dependency status as a released hold.
 
 ## Historical baseline and rejected candidate reports
@@ -176,7 +176,7 @@ The policy menus reject absent sessions before client construction.
 They retain the exact authenticated session object.
 Selectors remain lazy, so the repair adds no earlier organization prompt.
 
-## Completed standard gates
+## Historical completed standard gates
 
 `gates-final.txt` records every expanded command and its complete output.
 The source selection contains `MistHelper.py` and the five changed supporting Python modules.
@@ -273,7 +273,7 @@ Full-suite coverage, production safe sweeps, browser runs, and dependency audits
 This change alters no dependency manifest, browser element, or production configuration.
 All selected API and destructive-operation regression dependencies remain mocked.
 
-## Rejected intermediate changes
+## Historical rejected intermediate changes
 
 The direct RRM method reference failed the existing absent-default-shape test.
 The final implementation restores the original lambda shape and passes that regression.
@@ -296,7 +296,7 @@ Issue #4826 records the Dash plugin's deprecated `pytest_addhooks` marker config
 Current tests pass, but the warning identifies future pytest compatibility work.
 Dependency manifests remain unchanged.
 
-## Bounded completion procedure
+## Historical bounded completion procedure
 
 1. Restore both archived owner sessions through the application.
 2. Obtain annotation-only handoffs for the two named source contracts.
@@ -308,7 +308,7 @@ Dependency manifests remain unchanged.
 
 Do not close issue #4758 or publish this branch while the ownership or publication holds remain active.
 
-## Local delivery
+## Historical local delivery
 
 The implementation commit contains 23 files.
 It includes the specification, plan, tasks, analysis, supporting records, tests, and generated references.
@@ -319,3 +319,70 @@ The explicit local commits preserve that setting and include the required coauth
 
 The worktree has no uncommitted source repair.
 No remote branch, existing ref, dependency hold, or publication hold was removed.
+
+## Historical bounded cleanup verification
+
+The cleanup removes thirteen verified unused private functions, including four dependent helpers.
+All remaining root definitions and all 196 explicit exports match commit `e5f796d9689e17b5a8ad7b5a43b0c349eb3dee90`.
+The session preserves the exact caller audit and AST comparison in `cleanup-reference-audit.json` and `cleanup-preservation.json`.
+No held API/cache source, dependency manifest, or held test changes.
+
+The complete established regression selection reports 1145 passed tests and two documented skips.
+The existing Dash warning remains tracked separately.
+The route and process-folder guards report 56 passed tests.
+The twelve feature and release-note documents pass the unchanged STE threshold.
+The standard gates pass, with 887 mypy files, 99.0 percent docstring coverage, and Pylint 9.70.
+The changed-source complexity check passes the unchanged threshold of 10.
+Exact commands and complete outputs remain in the new `cleanup-*.txt` session reports.
+
+The real help tests replace the obsolete helper detector.
+Session tests observe the current configuration seam and real method validation.
+Dependency tests verify both import modes, assignment publication, once-only execution, and critical failure behavior.
+No parser setting, transport policy, production call, or confirmation changes.
+The final local commit and post-commit quality result belong in the issue handoff.
+The first cleanup commit is `838046104f606c008b034e0176ccd34ddf44a5f9`.
+Its quality gate found two new HTTP-coverage requirements caused by the broad bootstrap-class import.
+Issue #4828 records that shared-tool inference defect.
+The revised help cases test the real public CLI entry point and parser.
+No analyzer setting, baseline, import visibility, or HTTP case conceals that defect.
+
+## Final approved interface verification
+
+The additional PR #4208 handoff permits one authentication-status reference and its directly related module documentation.
+The root definition now uses `log_session_auth_status`.
+The configurator calls that public name with the original session and method.
+AST comparison against `23053c8d4d2c05ed12571e7a8521aa86631d5337` proves the complete root change is the definition name.
+The initializer comparison permits only its module documentation and that one attribute name.
+All function bodies, arguments, control flow, authentication logs, transport settings, and explicit exports remain unchanged.
+
+The audit checks every initializer `_MH` private attribute and exact private string value.
+Before the rename, its private root references were `_log_session_auth_status` and `_parse_api_tokens`.
+The latter retains root callers in `_collect_credential_problems` and `_systematic_test_has_api_token`.
+The string `_session` names the SDK transport, not a root helper.
+No additional private interface requires a rename.
+`final-interface-audit-before.json` and `final-interface-preservation.json` preserve the exact locations and comparisons.
+
+The refreshed strict JSON and text report ten errors, zero warnings, and one analyzed file.
+Seven errors require the held API site-record return contract.
+Three errors require the held cache callback contract.
+The current line and rule map remains in the cleanup record.
+The committed configuration and bounded stubs remain unchanged.
+`pyright-interface.json` and `pyright-interface.txt` preserve the actual analyzer output.
+The final immutable handoff identifies matching commit-specific copies and their hashes.
+
+The established regression selection passes 1145 tests, with two documented skips and the existing Dash warning.
+After formatting, the initializer tests and managed route guards pass 67 tests.
+The real validation tests observe the public authentication report while executing its original body.
+Compile, repository Ruff, Black, mypy, Bandit, pydocstyle, interrogate, Pylint, and Vulture pass again.
+Mypy checks 887 source files.
+Docstring coverage remains 99.0 percent.
+Pylint remains 9.70 against the unchanged 9.5 threshold.
+`interface-gates-final.txt` and `interface-regressions.txt` preserve the expanded commands and outputs.
+The initial Black check requested only test-signature formatting.
+The formatter corrected it before the complete successful gate run.
+
+T007 is complete.
+T003, T008, and T010 remain unchecked for the archived API/cache owners and the absent zero-error result.
+Neither held source file, dependency manifests, held tests, nor publication permission changed.
+The final issue handoff records the post-commit quality preflight and comparison result.
+No push, pull request, merge, or production request occurs.
