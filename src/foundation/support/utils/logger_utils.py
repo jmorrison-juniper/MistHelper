@@ -118,8 +118,10 @@ class SensitiveFilter(logging.Filter):
     It sanitizes the formatted message and the exception text cache before a
     standard handler formats the record. This includes exception chains and
     cached text from earlier handlers. Safe traceback context stays visible.
-    Credential separators do not cross line boundaries. Authorization headers
-    protect the complete remaining line, including structured parameters.
+    Credential separators do not cross line boundaries. Ordinary credential
+    labels also recognize spaces and tabs without assignment punctuation.
+    This conservative rule can change credential words in ordinary prose.
+    Authorization headers protect the complete remaining line, including structured parameters.
     Any same-line diagnostic after that header is also removed.
     The exact email verification URL route protects its nonempty suffix,
     including punctuation, query, and fragment text, until whitespace.
