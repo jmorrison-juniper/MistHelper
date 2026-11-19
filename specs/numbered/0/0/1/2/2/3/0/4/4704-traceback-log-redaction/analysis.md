@@ -439,6 +439,7 @@ The test now intercepts the writer, and the final run passed.
 |---|---|
 | `.venv/bin/python -m pytest -q tests/unit/utils/test_logger_verification_urls.py tests/unit/utils/test_console.py tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_main_entrypoint.py tests/unit/upgrade_portal/test_logging_contract.py tests/unit/config/standalone/foundation/support/utilities/system/test_logger_utils.py` | 438 passed, 1 warning |
 | `.venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | 1 passed, 1 warning. The guard validated four inputs. |
+| `.venv/bin/test-quality-analyzer --gate --config .github/test-quality-config.toml --baseline .github/test-quality-baseline.json --changed-from origin/main --full-gate-path .github/workflows/ci.yml --full-gate-path requirements-dev.txt` | Exit 0. Six changed test files checked, five analyzed, two baseline findings, three skips, zero parse errors, zero new findings, and 201 stale baseline entries. |
 | `.venv/bin/python -m ruff check` on all nine changed Python files | `All checks passed!` |
 | `.venv/bin/python -m black --check` on all nine changed Python files | `9 files would be left unchanged.` |
 | `.venv/bin/python -m py_compile` on all nine changed Python files | Exit 0. No output. |
@@ -447,9 +448,12 @@ The test now intercepts the writer, and the final run passed.
 | `.venv/bin/python -m pydocstyle src/foundation/support/utils/console.py src/foundation/support/utils/logger_utils.py` | Exit 0. No output. |
 | `.venv/bin/interrogate src/foundation/support/utils/console.py src/foundation/support/utils/logger_utils.py --fail-under 90` | 100% docstring coverage. All 15 statements passed. |
 | `.venv/bin/radon cc src/foundation/support/utils/console.py src/foundation/support/utils/logger_utils.py -j \| .venv/bin/complexity-gate --max 10` | All functions are within the complexity threshold. |
-| `.venv/bin/ste-linter --config .ste-linter.toml --min-score 80` on seven changed documents | All passed. Scores: 97, 95, 99, 96, 94, 98, and 94. |
+| `.venv/bin/ste-linter --config .ste-linter.toml --min-score 80` on seven changed documents | All passed. Scores: 97, 95, 99, 96, 94, 98, and 93. |
 | `git diff --check` | Exit 0. No whitespace errors. |
 
 No strict `xfail` marker remains in the four focused redaction test files.
 The paired regression cases cover all 22 earlier safe-title examples and their untrusted equivalents.
+The analyzer found two baseline missing-failure-mode findings in `test_main_entrypoint.py`.
+It skipped the two omitted repository roots and the SDK integration file excluded by `mist_api_excluded`.
+It found no new test-quality issue and changed no baseline.
 The commit remains local. Do not push until the coordinator opens the publication slot.

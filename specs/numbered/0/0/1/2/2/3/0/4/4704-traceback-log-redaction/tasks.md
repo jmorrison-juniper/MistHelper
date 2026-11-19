@@ -27,7 +27,7 @@
 
 - [x] T010 Run focused tests and file gates. Record commands, results, and limitations in `analysis.md`. (delivered: analysis.md)
 - [x] T011 Add `changelog.d/issue-4704-traceback-log-redaction.md` and analyze requirement coverage in `analysis.md`. (delivered: changelog.d/issue-4704-traceback-log-redaction.md, analysis.md)
-- [ ] T012 Commit the explicit file manifest with `Refs #4704`. Run the committed test-quality gate. Record evidence in `analysis.md`.
+- [x] T012 Commit the explicit file manifest with `Refs #4704`. Run the committed test-quality gate. Record evidence in `analysis.md`.
 
 ## Dependencies
 
@@ -58,7 +58,7 @@ Publication remains held.
 - [x] T014 [US1] Prove authorization value leakage and ordinary credential behavior in `tests/unit/test_logger_utils.py` and `tests/unit/upgrade_portal/test_logging_contract.py`. (delivered: tests/unit/test_logger_utils.py)
 - [x] T015 [US1] Repair line-bounded credential matching and complete authorization values in `src/foundation/support/utils/logger_utils.py`. (delivered: src/foundation/support/utils/logger_utils.py)
 - [x] T016 Add `changelog.d/issue-4705-authorization-log-redaction.md`, validate the repair, and record exact results in `analysis.md`. (delivered: changelog.d/issue-4705-authorization-log-redaction.md, analysis.md)
-- [ ] T017 Commit the follow-up locally with references to both issues and run the committed-difference test-quality gate.
+- [x] T017 Commit the follow-up locally with references to both issues and run the committed-difference test-quality gate.
 
 T013 and T014 precede T015. T016 requires T015. T017 requires T016.
 
@@ -66,7 +66,7 @@ T013 and T014 precede T015. T016 requires T015. T017 requires T016.
 
 - [x] T018 [US1] Reproduce Digest and AWS4 leaks in both existing test files. (delivered: tests/unit/test_logger_utils.py, tests/unit/upgrade_portal/test_logging_contract.py)
 - [x] T019 [US1] Redact the complete header line in `src/foundation/support/utils/logger_utils.py`, without crossing CR or LF. (delivered: src/foundation/support/utils/logger_utils.py)
-- [ ] T020 Validate, update the unique #4705 changelog and `analysis.md`, and commit locally with both issue references.
+- [x] T020 Validate, update the unique #4705 changelog and `analysis.md`, and commit locally with both issue references.
 
 T018 precedes T019. T020 requires T019.
 
@@ -91,7 +91,7 @@ T024 precedes T025. T026 requires T025. These tasks refine FR-015 and FR-016.
 ## Phase 10: Analyzer Scope
 
 - [x] T027 Separate the three SDK integration cases from the 131 pure filter cases without changing analyzer policy. (delivered: tests/unit/utils/test_logger_verification_url_sdk_integration.py)
-- [ ] T028 Run focused tests and committed quality gates. Record every checked and skipped file.
+- [x] T028 Run focused tests and committed quality gates. Record every checked and skipped file.
 
 T028 requires T027. Both tasks refine the validation of FR-015 through FR-018.
 
@@ -102,6 +102,6 @@ T028 requires T027. Both tasks refine the validation of FR-015 through FR-018.
 - [x] T031 Preserve only exact typed menu messages while continuing to redact exception text.
 - [x] T032 Verify terminal and file output with the real menu and protected handlers.
 - [x] T033 Update the specification, plan, security documentation, README, and issue fragment.
-- [ ] T034 Run the final focused suite, file gates, and committed test-quality gate.
+- [x] T034 Run the final focused suite, file gates, and committed test-quality gate.
 
 T029 precedes T030 and T031. T032 requires T029 through T031. T033 and T034 require T032.
