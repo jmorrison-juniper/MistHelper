@@ -120,7 +120,8 @@ class SensitiveFilter(logging.Filter):
     cached text from earlier handlers. Safe traceback context stays visible.
     Credential separators do not cross line boundaries. Ordinary credential
     labels also recognize spaces and tabs without assignment punctuation.
-    This conservative rule can change credential words in ordinary prose.
+    Only an exact menu entry from the console writer keeps its static title.
+    Untrusted text and all exception text use the conservative redaction rule.
     Authorization headers protect the complete remaining line, including structured parameters.
     Any same-line diagnostic after that header is also removed.
     The exact email verification URL route protects its nonempty suffix,
@@ -153,7 +154,12 @@ class SensitiveFilter(logging.Filter):
         """Sanitize a record in place without suppressing safe diagnostics."""
         try:
             message = record.getMessage()
-            sanitized = self._redact_text(message)
+            trusted_menu_message = self._is_trusted_menu_record(
+                record, message
+            )  # WHY: mark static rows, not caller text.
+            sanitized = (
+                message if trusted_menu_message else self._redact_text(message)
+            )  # WHY: redact each other message.
             if sanitized != message:
                 record.msg = sanitized
                 record.args = ()
@@ -165,6 +171,23 @@ class SensitiveFilter(logging.Filter):
             record.exc_text = None
             record.stack_info = None
         return True
+
+    def _is_trusted_menu_record(self, record: logging.LogRecord, message: str) -> bool:
+        """Trust only the exact static menu entry emitted by the console writer."""
+        from src.foundation.support.utils.menu_entry import (
+            MenuEntry,  # WHY: immutable rows define the trusted message source.
+        )
+
+        entry = getattr(record, "_misthelper_menu_entry", None)  # WHY: only the writer attaches this provenance field.
+        expected = (
+            f"{entry.menu_id}: {entry.title}" if isinstance(entry, MenuEntry) else ""
+        )  # WHY: match the registered key and title.
+        return (
+            record.name == "src.foundation.support.utils.console"  # WHY: trust only the writer logger.
+            and isinstance(entry, MenuEntry)  # WHY: a plain string cannot claim trusted provenance.
+            and not record.args  # WHY: formatting arguments cannot alter the registered title.
+            and message == expected  # WHY: trust applies only to the exact writer output.
+        )
 
     def _redact_text(self, text: str) -> str:
         """Apply the same credential rule to message and exception text."""

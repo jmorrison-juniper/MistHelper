@@ -7,6 +7,8 @@ It sanitizes the exception cache even when a previous handler created it.
 Exception objects remain unchanged.
 Safe traceback frames, exception types, chain separators, and portal context remain visible.
 If rendering fails, the replacement diagnostic excludes both exception values.
+The filter preserves an exact registered menu title only when its typed `MenuEntry` provenance matches.
+Identical untrusted text remains subject to conservative credential redaction.
 
 ## Ownership and Scope
 
@@ -15,7 +17,7 @@ The local commit and live main both resolved to `3964d21d03f9f5717cb8eafb7272ecf
 The ownership check examined all 27 open PRs.
 PR #4358 had 470 files, so the check read all file pages separately.
 Neither the initial check nor the later check found an owner for the three paths.
-No logging caller, shared instruction file, or tracked feature selector changed.
+No unrelated logging caller, shared instruction file, or tracked feature selector changed.
 
 ## Reproduction
 
@@ -192,7 +194,7 @@ The first Black check required source formatting. Black applied that formatting,
 A temporary implicit-string-concatenation warning was removed before the final Pylint run.
 The process guard command again reported `28 passed, 1 skipped, 1 warning`.
 The skipped guard still requires a pull request event.
-No module-level production name changed.
+No module-level production name changed in this follow-up.
 New methods remain within the 25-line limit.
 
 The follow-up writing command was:
@@ -406,3 +408,48 @@ The focused command adds the integration file to the earlier expanded selection:
 Result: `296 passed, 1 warning`, with `100%` coverage of all 49 source statements.
 Ruff and pydocstyle passed. Black left both files unchanged. Whitespace checks passed.
 All publication and ownership holds remain active.
+
+## Trusted Menu Boundary Integration
+
+The conservative credential rule matched harmless menu titles such as `API Token Hygiene Report`.
+The implementation does not add phrase exceptions or weaken whitespace-delimited value detection.
+`MenuEntryConsoleWriter` prints and logs immutable registered menu entries.
+The filter preserves only the exact console message whose record carries that same `MenuEntry`.
+The filter still sanitizes exception text on the record.
+Tests send the same title through the writer and an untrusted record.
+The trusted title stays visible, and the untrusted message and exception text stay redacted.
+The real menu-routing test installs the protected filter on both production handlers.
+This integration adds only `MenuEntryConsoleWriter` as a production name.
+
+The candidate worktree lacked `.venv`.
+`uv sync --locked --extra dev` exited 0 and installed 171 packages.
+The command did not change Git credentials.
+The Spec Kit checklist has 18 checked items and no unchecked items.
+`.specify/extensions.yml` does not exist, so no extension hooks apply.
+PowerShell is unavailable, so `check-prerequisites.ps1` and `Resolve-SpecFeaturePath` did not run.
+This change reuses the existing managed feature route and creates no new Spec Kit directory.
+The constitution requires a README change for behavior changes.
+The README security link now names log redaction, and `documentation/security.md` defines its scope.
+
+The first expanded test run reported 437 passed and one failed cache-test assertion.
+The menu-cache unit test still intercepted `echo()` instead of the new typed writer.
+The test now intercepts the writer, and the final run passed.
+
+| Validation | Result |
+|---|---|
+| `.venv/bin/python -m pytest -q tests/unit/utils/test_logger_verification_urls.py tests/unit/utils/test_console.py tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_main_entrypoint.py tests/unit/upgrade_portal/test_logging_contract.py tests/unit/config/standalone/foundation/support/utilities/system/test_logger_utils.py` | 438 passed, 1 warning |
+| `.venv/bin/python -B -m pytest -p no:cacheprovider -s -q tests/guardrails/local_test_quality_loop/test_guidance.py::TestLiveGuides` | 1 passed, 1 warning. The guard validated four inputs. |
+| `.venv/bin/python -m ruff check` on all nine changed Python files | `All checks passed!` |
+| `.venv/bin/python -m black --check` on all nine changed Python files | `9 files would be left unchanged.` |
+| `.venv/bin/python -m py_compile` on all nine changed Python files | Exit 0. No output. |
+| `.venv/bin/python -m mypy src/foundation/support/utils/console.py src/foundation/support/utils/logger_utils.py --config-file pyproject.toml` | `Success: no issues found in 2 source files`. Mypy noted existing unused configuration sections. |
+| `.venv/bin/python -m bandit -c pyproject.toml -r src/foundation/support/utils/console.py src/foundation/support/utils/logger_utils.py -q` | Exit 0. No finding. |
+| `.venv/bin/python -m pydocstyle src/foundation/support/utils/console.py src/foundation/support/utils/logger_utils.py` | Exit 0. No output. |
+| `.venv/bin/interrogate src/foundation/support/utils/console.py src/foundation/support/utils/logger_utils.py --fail-under 90` | 100% docstring coverage. All 15 statements passed. |
+| `.venv/bin/radon cc src/foundation/support/utils/console.py src/foundation/support/utils/logger_utils.py -j \| .venv/bin/complexity-gate --max 10` | All functions are within the complexity threshold. |
+| `.venv/bin/ste-linter --config .ste-linter.toml --min-score 80` on seven changed documents | All passed. Scores: 97, 95, 99, 96, 94, 98, and 94. |
+| `git diff --check` | Exit 0. No whitespace errors. |
+
+No strict `xfail` marker remains in the four focused redaction test files.
+The paired regression cases cover all 22 earlier safe-title examples and their untrusted equivalents.
+The commit remains local. Do not push until the coordinator opens the publication slot.

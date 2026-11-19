@@ -6,8 +6,10 @@ from io import StringIO
 
 import pytest
 
-from src.foundation.support.utils.logger_utils import SensitiveFilter
-from src.interfaces.portals.upgrade_portal.app import factory
+from src.foundation.support.utils.console import MenuEntryConsoleWriter  # WHY: emit typed trusted menu messages.
+from src.foundation.support.utils.logger_utils import SensitiveFilter  # WHY: exercise the protected handler boundary.
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: menu provenance requires the immutable row.
+from src.interfaces.portals.upgrade_portal.app import factory  # WHY: configure the real portal handler.
 
 
 class TestVerificationUrlProbe:
@@ -125,19 +127,46 @@ class TestCredentialLabelBoundaries:
         ],
     )
     @pytest.mark.parametrize("cached", [False, True])
-    @pytest.mark.xfail(
-        strict=True,
-        reason="Unresolved menu integration: conservative whitespace matching also redacts prose.",
-    )
-    def test_safe_words(self, message: str, cached: bool) -> None:
-        """Retain the menu integration assertion as an explicit known conflict."""
-        record = TestVerificationUrlProbe.record(message, "cause")
-        record.run_id = "synthetic-run"
-        record.site_id = "synthetic-site"
-        expected = logging.Formatter(factory.LOG_FORMAT).format(record)
-        if not cached:
-            record.exc_text = None
-        assert TestVerificationUrlProbe.render(record, True, cached) == expected + "\n"
+    @pytest.mark.parametrize("trusted", [False, True])
+    def test_safe_words(self, message: str, cached: bool, trusted: bool, caplog) -> None:
+        """Preserve exact static menu entries and redact identical untrusted text."""
+        if trusted:
+            caplog.set_level(
+                logging.INFO, logger="src.foundation.support.utils.console"
+            )  # WHY: capture the writer's record.
+            caplog.clear()  # WHY: isolate this parametrized menu case.
+            entry = MenuEntry(
+                menu_id="synthetic",  # WHY: identify the registered row in its exact output.
+                handler=lambda: None,  # WHY: provide a callable without invoking a menu operation.
+                title=message,  # WHY: this title contains text that untrusted records redact.
+                category="safe",  # WHY: model a non-destructive registered menu row.
+            )
+            MenuEntryConsoleWriter.display(entry)  # WHY: attach trusted provenance at the source.
+            record = next(
+                record for record in reversed(caplog.records) if record.name == "src.foundation.support.utils.console"
+            )
+            try:
+                raise ValueError(
+                    "Safe menu traceback context"
+                )  # WHY: trusted message handling must not bypass traceback filtering.
+            except ValueError:
+                record.exc_info = sys.exc_info()  # WHY: attach the synthetic safe exception to the same log record.
+        else:
+            record = TestVerificationUrlProbe.record(
+                message, "cause"
+            )  # WHY: compare identical text without provenance.
+        record.run_id = "synthetic-run"  # WHY: retain portal context through the protected formatter.
+        record.site_id = "synthetic-site"  # WHY: retain portal context through the protected formatter.
+        if cached:
+            logging.Formatter().format(record)  # WHY: simulate an earlier handler caching exception text.
+        rendered = TestVerificationUrlProbe.render(record, True, cached)  # WHY: inspect the complete protected output.
+        if trusted:
+            assert f"synthetic: {message}" in rendered  # WHY: keep every registered title visible.
+            assert "REDACTED" not in rendered  # WHY: no recognized secret exists in the exact static row.
+            assert "Safe menu traceback context" in rendered  # WHY: retain safe exception diagnostics.
+        else:
+            assert "REDACTED" in rendered  # WHY: untrusted text keeps the conservative filter.
+            assert message not in rendered  # WHY: the exact safe phrase is not a text-based exemption.
 
     @pytest.mark.parametrize("key", ["password", "passwd", "secret", "token", "api_key", "psk", "credential", "auth"])
     @pytest.mark.parametrize("separator", ["=", ": ", '": "', "' = '", "\t:\t"])

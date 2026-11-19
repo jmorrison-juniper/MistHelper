@@ -24,7 +24,20 @@ from __future__ import annotations  # WHY: consistent PEP 604 style across src/f
 
 import logging  # WHY: emit the INFO-level record that keeps script.log capture intact.
 
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: typed rows identify static menu text.
+
 _LOGGER = logging.getLogger(__name__)  # Module-level logger; propagates to root handlers.
+
+
+class MenuEntryConsoleWriter:
+    """Write one immutable menu entry through the trusted static-text boundary."""
+
+    @staticmethod
+    def display(entry: MenuEntry) -> None:
+        """Print and log a menu entry without weakening redaction for other records."""
+        message = f"{entry.menu_id}: {entry.title}"  # WHY: one exact format links the record to its menu row.
+        print(message)  # WHY: operators must see the menu row in the terminal.
+        _LOGGER.info(message, extra={"_misthelper_menu_entry": entry})  # WHY: the filter verifies typed provenance.
 
 
 class ConsoleEchoFilter(logging.Filter):

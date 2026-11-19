@@ -8011,9 +8011,10 @@ def _print_interactive_menu() -> None:  # Preserve the existing behavior during 
         )  # Sort numerically once for this exact key set so 10 sorts after 9.
         globals()["_SORTED_MENU_KEYS_CACHE"] = cache  # Store the cache without a global statement.
     sorted_menu_keys = cache[1]  # Read the valid cached order for this redraw.
+    from src.foundation.support.utils.console import MenuEntryConsoleWriter  # Keep menu text on its typed path.
+
     for key in sorted_menu_keys:  # Iterate every menu key in numeric order.
-        description = menu_actions[key].title  # Read the display text from the named menu row.
-        echo("%s: %s", key, description)  # Preserve the existing behavior during the compliance refactor.
+        MenuEntryConsoleWriter.display(menu_actions[key])  # Preserve the registered title without text heuristics.
 
 
 def _prompt_interactive_selection() -> str:  # Preserve the existing behavior during the compliance refactor.

@@ -74,7 +74,7 @@ T018 precedes T019. T020 requires T019.
 
 - [x] T021 Add dedicated synthetic URL regressions, including real portal output and earlier exception formatting. (delivered: tests/unit/utils/test_logger_verification_urls.py)
 - [x] T022 Prove the URL cases fail, then extend only the owned logging source. (delivered: src/foundation/support/utils/logger_utils.py, analysis.md)
-- [ ] T023 Run focused gates, record limitations, and preserve the local integration handoff.
+- [x] T023 Run focused gates, record limitations, and preserve the local integration handoff.
 
 T021 precedes T022. T023 requires T022.
 FR-015 maps to T021 and T022. FR-016 maps to T021 and T023.
@@ -84,7 +84,7 @@ FR-017 and FR-018 map to T021 and T023.
 
 - [x] T024 Prove leading and embedded punctuation leaks with synthetic values and the real SDK URI builder. (delivered: tests/unit/utils/test_logger_verification_urls.py)
 - [x] T025 Use whitespace-only suffix boundaries in the owned filter. (delivered: src/foundation/support/utils/logger_utils.py)
-- [ ] T026 Validate punctuation protection and record the restricted integration handoff.
+- [x] T026 Validate punctuation protection and record the restricted integration handoff.
 
 T024 precedes T025. T026 requires T025. These tasks refine FR-015 and FR-016.
 
@@ -94,3 +94,14 @@ T024 precedes T025. T026 requires T025. These tasks refine FR-015 and FR-016.
 - [ ] T028 Run focused tests and committed quality gates. Record every checked and skipped file.
 
 T028 requires T027. Both tasks refine the validation of FR-015 through FR-018.
+
+## Phase 11: Trusted Menu Boundary
+
+- [x] T029 Add paired tests for trusted static menu titles and identical untrusted text.
+- [x] T030 Route registered menu entries through the typed console writer.
+- [x] T031 Preserve only exact typed menu messages while continuing to redact exception text.
+- [x] T032 Verify terminal and file output with the real menu and protected handlers.
+- [x] T033 Update the specification, plan, security documentation, README, and issue fragment.
+- [ ] T034 Run the final focused suite, file gates, and committed test-quality gate.
+
+T029 precedes T030 and T031. T032 requires T029 through T031. T033 and T034 require T032.

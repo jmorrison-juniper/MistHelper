@@ -14,6 +14,8 @@ Redact an authorization scheme and its value together.
 Sanitize cached exception text from earlier handlers.
 Retain exception types, frames, chain separators, and safe messages.
 If formatting fails, replace the unsafe record with a diagnostic that excludes the error value.
+Preserve static menu titles through an exact typed record from the menu writer.
+Keep identical untrusted text subject to the conservative credential rules.
 
 ## Technical Context
 
@@ -31,9 +33,9 @@ If formatting fails, replace the unsafe record with a diagnostic that excludes t
 
 **Performance Goals**: Do not render a traceback when the record has no exception.
 
-**Constraints**: No caller changes, new credentials, live services, containers, or firmware operations.
+**Constraints**: One menu call site uses the typed writer. Do not change other callers, credentials, or live services.
 
-**Scale/Scope**: One source file, two existing test files, and unique process records.
+**Scale/Scope**: Three source files, six focused test files, and unique process records.
 
 ## Constitution Check
 
@@ -44,7 +46,7 @@ If formatting fails, replace the unsafe record with a diagnostic that excludes t
 - New process records use bounded directories, except the required unique changelog fragment.
 - Existing module and test classes exceed structural limits. This repair does not restructure unrelated code.
 - The separate remediation action is to divide existing logging tests and process records in a future ownership window.
-- Do not add a new module-level production name or remove an existing name.
+- Add only `MenuEntryConsoleWriter` as a new production name. Keep every existing name.
 - Keep each new production method within 25 lines and five parameters.
 - Do not log inside a logging filter. Recursive logging can re-enter the failed filter.
 - Standard traceback text must remain readable after credential replacement.
@@ -61,17 +63,27 @@ No new external interface needs a contract directory.
 
 ### Source Code (repository root)
 
+- `MistHelper.py`
+- `src/foundation/support/utils/console.py`
 - `src/foundation/support/utils/logger_utils.py`
-- `tests/unit/test_logger_utils.py`
+- `tests/unit/config/standalone/foundation/support/utilities/system/test_logger_utils.py`
+- `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_main_entrypoint.py`
+- `tests/unit/utils/test_console.py`
+- `tests/unit/utils/test_logger_verification_urls.py`
+- `tests/unit/utils/test_logger_verification_url_sdk_integration.py`
 - `tests/unit/upgrade_portal/test_logging_contract.py`
+- `README.md`
+- `documentation/security.md`
+- `changelog.d/issue-4705-authorization-log-redaction.md`
+- `changelog.d/issue-4705-verification-url-log-redaction.md`
 - `changelog.d/issue-4704-traceback-log-redaction.md`
 
-**Structure Decision**: Extend existing files only. Keep the existing portal handler installation.
+**Structure Decision**: Add one typed menu writer and change one menu call site. Keep the existing portal handler installation.
 
 ## Complexity Tracking
 
 The existing logging module and test modules exceed five top-level names.
-Keep the production symbol set unchanged and add only the regression tests needed for this defect.
+Add one typed menu writer and only the regression tests needed for this defect.
 The existing process-folder debt remains outside this repair.
 Optional commit hooks are deferred to the final local commit.
 
@@ -109,11 +121,21 @@ Stop at whitespace only. Punctuation cannot prove that a private value ended. Do
 Do not match a route embedded in a different path.
 Apply the rule through `_redact_text` to messages and fresh or cached exception text.
 Use `tests/unit/utils/test_logger_verification_urls.py` for isolated stream and real portal tests.
-The dedicated test file follows the explicit ownership handoff instead of editing the renamed test.
+The coordinator released the renamed logger test at its current path for this candidate.
 The existing test directory exceeds the structural limit. Its separate directory migration remains assigned to the test owner.
 The approved analyzer-scope handoff separates three SDK cases into `tests/unit/utils/test_logger_verification_url_sdk_integration.py`.
-The original dedicated file retains 131 pure filter cases and no SDK import.
+The dedicated file holds pure filter cases and no SDK import.
 The integration file keeps its explicit SDK import. Analyzer policy remains unchanged.
 Do not change bootstrap handlers or exporter callers in this handoff.
 Unlabeled response details remain outside this rule. Handler installation and safe exporter diagnostics require separate owners.
-Publication and test-rename holds remain active.
+Publication remains held until the coordinator opens the serial slot.
+
+## Trusted Menu Boundary Integration
+
+The conservative credential rule also matches some harmless static menu titles.
+Do not add phrase exceptions or weaken whitespace-delimited value detection.
+`MenuEntryConsoleWriter` prints and logs one immutable registered menu entry.
+The filter preserves only the exact logger message with that entry as typed provenance.
+The filter still sanitizes exception text on the same record.
+Identical text without the typed marker remains subject to redaction.
+Change only the interactive menu call site and test this path with the real protected handlers.
