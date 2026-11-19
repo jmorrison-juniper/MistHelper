@@ -99,3 +99,78 @@ def test_client_raises_clear_error_for_jsi_500(monkeypatch: pytest.MonkeyPatch) 
     client = SubscriptionExpiryClient(object())  # Build the client with a fake session.
     with pytest.raises(SubscriptionExpiryClientError, match="HTTP 500"):  # The caller receives the HTTP failure.
         client.search_jsi_assets_and_contracts("org-1")  # Trigger the fake 500 path.
+
+
+def test_client_discovers_direct_and_msp_organizations(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The client discovers only profile-granted direct and MSP organizations."""
+    monkeypatch.setattr(
+        client_module.mistapi.api.v1.self.self,
+        "getSelf",
+        lambda _session: SimpleNamespace(
+            status_code=200,
+            data={
+                "privileges": [
+                    {"org_id": "org-1", "org_name": "Primary", "scope": "org", "role": "read"},
+                    {"msp_id": "msp-1", "scope": "msp", "role": "read"},
+                ]
+            },
+        ),
+    )  # Return one direct grant and one MSP grant.
+    monkeypatch.setattr(
+        client_module.mistapi.api.v1.msps.orgs,
+        "listMspOrgs",
+        lambda _session, _msp_id: SimpleNamespace(
+            status_code=200,
+            data=[
+                {"id": "org-2", "name": "Branch"},
+                {"id": "org-1", "name": "Duplicate Name"},
+            ],
+        ),
+    )  # Return one branch org and one duplicate direct org.
+    client = SubscriptionExpiryClient(object())  # Build a synthetic client session.
+    organizations, failures = client.discover_organizations("org-1", "Primary")  # Discover authorized scopes.
+    assert [organization.org_id for organization in organizations] == ["org-1", "org-2"]  # Deduplicate by org ID.
+    assert organizations[1].source == "msp"  # The branch org comes from the MSP grant.
+    assert failures == []  # Both discovery calls succeed.
+
+
+def test_client_inventory_pagination_uses_explicit_page_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The client reads every inventory page with limit and page arguments."""
+    calls: list[tuple[int, int]] = []  # Record explicit pagination arguments.
+
+    class FakeInventoryApi:
+        """Fake inventory endpoint for two-page pagination."""
+
+        @staticmethod
+        def getOrgInventory(
+            _session: object,
+            _org_id: str,
+            limit: int,
+            page: int,
+        ) -> SimpleNamespace:
+            calls.append((limit, page))  # Capture every page request.
+            if page == 1:
+                return SimpleNamespace(status_code=200, data=[{"serial": "one"}], next="/page-2")
+            return SimpleNamespace(status_code=200, data=[{"serial": "two"}], next=None)
+
+    fake_sdk = SimpleNamespace(
+        api=SimpleNamespace(v1=SimpleNamespace(orgs=SimpleNamespace(inventory=FakeInventoryApi())))
+    )  # Build a synthetic SDK tree.
+    monkeypatch.setattr(client_module, "mistapi", fake_sdk)  # Replace SDK access for this test.
+    client = SubscriptionExpiryClient(object())  # Build a synthetic client.
+    inventory = client.fetch_inventory("org-1")  # Read both pages.
+    assert [row["serial"] for row in inventory] == ["one", "two"]  # Preserve page order.
+    assert calls == [(1000, 1), (1000, 2)]  # Use the shared page size and page numbers.
+
+
+def test_client_transport_failure_sentinel_remains_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A transport status sentinel must not pass as an HTTP 200 response."""
+    fake_sdk = FakeMistApi()  # Build a fake SDK tree.
+    fake_sdk.api.v1.orgs.licenses.getOrgLicensesSummary = lambda _session, _org_id: SimpleNamespace(
+        status_code=0,
+        data=None,
+    )  # Model a bounded transport failure.
+    monkeypatch.setattr(client_module, "mistapi", fake_sdk)  # Replace SDK access for this test.
+    client = SubscriptionExpiryClient(object())  # Build a synthetic client.
+    with pytest.raises(SubscriptionExpiryClientError, match="HTTP 0"):  # Require visible transport failure.
+        client.fetch_license_summary("org-1")  # Trigger the sentinel status.

@@ -828,8 +828,9 @@ from src.mist.intelligence.reports.ssid_broadcast_gap_report import (
     SSIDBroadcastGapReport,
 )  # Menu 242 SSID coverage report.
 from src.mist.intelligence.reports.subscription_expiry.operation import (
+    CrossOrgSubscriptionInventoryReport,
     SubscriptionExpiryReport,
-)  # Menu 271 (issue #3552) -- expiry.
+)  # Menus 271 and 308 -- subscription and cross-org inventory reports.
 from src.mist.intelligence.reports.switch_scorecard.operation import (
     SwitchScorecard,  # Menu 277 (issue #3558) -- organization switch scorecard report.
 )
@@ -4671,6 +4672,14 @@ menu_actions: dict[str, Any] = {
         category=OperationRegistry.skip_category("271"),  # Read the safety class.
         destructive=False,  # The report reads Mist data and writes local files only.
         supports_fast=False,  # Keep report pacing under the handler.
+    ),
+    "308": GlobalImportManager.MenuEntry(  # Use named fields for menu 308.
+        menu_id="308",  # Store key for drift checks.
+        handler=CrossOrgSubscriptionInventoryReport.run,
+        title="Export cross-org subscription, entitlement, and stock inventory report",
+        category=OperationRegistry.skip_category("308"),  # Read the safety class.
+        destructive=False,  # The report reads Mist data and writes local CSV files only.
+        supports_fast=False,  # The report paces one organization request at a time.
     ),
     "272": GlobalImportManager.MenuEntry(  # Use named fields for menu 272.
         menu_id="272",  # Store key for drift checks.

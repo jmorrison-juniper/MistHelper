@@ -207,6 +207,7 @@ MENU_DESCRIPTIONS = {
     "303": "Look up one Juniper service request or RMA (read-only)",
     "304": "Look up Juniper warranty, contract, and status data for serial numbers (read-only)",
     "307": "Export AP warning and error codes across all sites",
+    "308": "Export cross-org subscription, entitlement, and stock inventory report",
 }
 
 

@@ -84,6 +84,7 @@ def test_the_three_misleading_categories_are_gone(categories):
         ("63", "Site Config & Monitoring", "switch"),
         ("64", "Site Config & Monitoring", "wifi clients"),
         ("65", "Site Config & Monitoring", "statistics"),
+        ("308", "Hygiene Reports", "subscription"),
     ],
 )
 def test_each_misfiled_row_now_sits_with_its_own_kind(categories, menu_number, expected_category, expected_word):

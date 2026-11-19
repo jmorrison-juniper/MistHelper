@@ -3,15 +3,19 @@
 from __future__ import annotations  # Keep annotations import-safe during tests.
 
 import logging  # Record client actions for operator traceability.
+import time  # Bound the one HTTP 429 retry.
+from types import SimpleNamespace  # Build safe SDK-shaped responses for transport failures.
 from typing import Any  # Type SDK responses without importing Mist response classes.
 
 import mistapi  # Use the project-approved Mist SDK for API calls.
 
 from src.foundation.runtime.config import runtime_settings  # Reuse the project page-limit setting.
 from src.mist.intelligence.reports.subscription_expiry.model import (
+    MISSING_VALUE,
     JsiContractSource,
     LicenseSummarySource,
     LicenseUsageSource,
+    OrganizationScope,
 )
 
 logger = logging.getLogger(__name__)  # Give this module a stable logger name.
@@ -33,10 +37,247 @@ class SubscriptionExpiryClient:
         """Store the active Mist API session."""
         self.apisession = apisession  # Keep the session explicit for tests and operation wiring.
 
+    def _request_with_retry(
+        self,
+        operation: str,
+        target: str,
+        request_call: Any,
+    ) -> Any:
+        """Retry one HTTP 429 response and return the SDK response."""
+        for attempt in range(2):  # Permit no more than one retry.
+            try:
+                response = request_call()  # Send one SDK read request.
+            except Exception as error:  # Transport and SDK failures need a safe response.
+                logger.error(
+                    "Mist request %s failed for %s with %s",
+                    operation,
+                    target,
+                    type(error).__name__,
+                )  # Keep the secret and exception text out of logs.
+                return SimpleNamespace(status_code=0, data=None, next=None)  # Return a transport-failure shape.
+            status_code = getattr(response, "status_code", None)  # Read the SDK status.
+            if status_code == 429 and attempt == 0:  # Rate limit is the one retryable status.
+                logger.warning("Mist limited %s for %s. Waiting 60 seconds.", operation, target)  # Explain wait.
+                time.sleep(60)  # Honor the source retry window.
+                continue  # Retry exactly once.
+            return response  # Return success or a non-retryable status.
+        return response  # Return the final response as a fail-safe.
+
+    def fetch_profile(self) -> tuple[int | None, dict[str, Any]]:
+        """Fetch the active profile and return status plus normalized data."""
+        logger.info("Fetching active Mist profile")  # Log before profile read.
+        response = self._request_with_retry(
+            "getSelf",
+            "active session",
+            lambda: mistapi.api.v1.self.self.getSelf(self.apisession),
+        )  # Call the SDK profile method.
+        status_code = getattr(response, "status_code", None)  # Read safe status.
+        payload = self._response_payload(response)  # Normalize the response body.
+        logger.debug("Profile read status=%s", status_code)  # Log status only.
+        return status_code, payload if isinstance(payload, dict) else {}  # Return normalized profile.
+
+    def discover_organizations(
+        self,
+        active_org_id: str,
+        active_org_name: str,
+    ) -> tuple[list[OrganizationScope], list[OrganizationScope]]:
+        """Discover direct and MSP organizations granted to the active profile."""
+        logger.info("Discovering cross-org organization scope")  # Log before discovery.
+        organizations = self._direct_organizations(active_org_id, active_org_name)  # Seed direct scope.
+        status_code, profile = self.fetch_profile()  # Read profile grants.
+        failures = self._profile_failure(active_org_id, active_org_name, status_code)  # Preserve profile failure.
+        privileges = profile.get("privileges") if isinstance(profile, dict) else None  # Read grants.
+        if not isinstance(privileges, list):  # Invalid profile grants need a visible failure.
+            privileges = []  # Keep direct organization scope and stop MSP parsing.
+            if status_code == 200:  # Only successful profile reads get this shape.
+                logger.warning("Profile returned no organization grant list")  # Name missing grant data.
+        for privilege in privileges:  # Walk each profile grant.
+            if not isinstance(privilege, dict):  # Skip malformed grants.
+                continue  # Keep only mapping grants.
+            self._add_direct_privilege(organizations, privilege)  # Add direct grant.
+            msp_id = privilege.get("msp_id")  # Read MSP grant.
+            if isinstance(msp_id, str) and msp_id:  # Valid MSP grant.
+                self._discover_msp(msp_id, organizations, failures)  # Add MSP organizations.
+        logger.debug(
+            "Discovered %d organizations and %d discovery failures",
+            len(organizations),
+            len(failures),
+        )  # Log discovery counts.
+        return self._order_organizations(organizations, active_org_id), failures  # Return stable scope.
+
+    @staticmethod
+    def _direct_organizations(active_org_id: str, active_org_name: str) -> dict[str, OrganizationScope]:
+        """Seed direct organization scope from the active context."""
+        if not active_org_id:  # No configured organization exists.
+            return {}  # Keep an empty direct scope.
+        return {
+            active_org_id: OrganizationScope(
+                org_id=active_org_id,
+                org_name=active_org_name or active_org_id,
+                source="direct",
+                request_status="success",
+            )
+        }  # Seed one direct organization.
+
+    @staticmethod
+    def _profile_failure(
+        active_org_id: str,
+        active_org_name: str,
+        status_code: int | None,
+    ) -> list[OrganizationScope]:
+        """Build visible profile failure scope."""
+        if status_code == 200:  # A successful profile has no discovery failure.
+            return []  # Return no failure.
+        return [
+            OrganizationScope(
+                org_id=active_org_id or MISSING_VALUE,
+                org_name=active_org_name or MISSING_VALUE,
+                source="profile",
+                request_status="failed",
+                error=f"HTTP {status_code}",
+            )
+        ]  # Preserve profile failure.
+
+    @staticmethod
+    def _add_direct_privilege(
+        organizations: dict[str, OrganizationScope],
+        privilege: dict[str, Any],
+    ) -> None:
+        """Add one direct organization privilege."""
+        direct_org_id = privilege.get("org_id")  # Read direct organization.
+        if not isinstance(direct_org_id, str) or not direct_org_id:  # Skip malformed direct grants.
+            return  # Keep only valid IDs.
+        organizations.setdefault(
+            direct_org_id,
+            OrganizationScope(
+                org_id=direct_org_id,
+                org_name=privilege.get("org_name") or privilege.get("name") or direct_org_id,
+                source="direct",
+                request_status="success",
+            ),
+        )  # Add direct organization scope.
+
+    def _discover_msp(
+        self,
+        msp_id: str,
+        organizations: dict[str, OrganizationScope],
+        failures: list[OrganizationScope],
+    ) -> None:
+        """Discover organizations under one MSP grant."""
+        response = self._request_with_retry(
+            "listMspOrgs",
+            msp_id,
+            lambda: mistapi.api.v1.msps.orgs.listMspOrgs(self.apisession, msp_id),
+        )  # Call MSP organization discovery.
+        status_code = getattr(response, "status_code", None)  # Read MSP status.
+        payload = self._response_payload(response)  # Normalize MSP payload.
+        if status_code != 200 or not isinstance(payload, list):  # MSP discovery failed.
+            failures.append(
+                OrganizationScope(
+                    org_id=MISSING_VALUE,
+                    org_name=f"MSP {msp_id}",
+                    msp_id=msp_id,
+                    source="msp",
+                    request_status="failed",
+                    error=f"HTTP {status_code}" if status_code is not None else "Invalid MSP organization list",
+                )
+            )  # Preserve visible failure.
+            return  # Keep direct organizations.
+        for org in payload:  # Walk each MSP organization.
+            if not isinstance(org, dict):  # Skip malformed org rows.
+                continue  # Keep only mapping rows.
+            org_id = org.get("id")  # Read organization ID.
+            if not isinstance(org_id, str) or not org_id:  # Skip missing IDs.
+                continue  # An organization call needs an ID.
+            organizations.setdefault(
+                org_id,
+                OrganizationScope(
+                    org_id=org_id,
+                    org_name=org.get("name") or org_id,
+                    msp_id=msp_id,
+                    source="msp",
+                    request_status="success",
+                ),
+            )  # Add MSP organization once.
+
+    @staticmethod
+    def _order_organizations(
+        organizations: dict[str, OrganizationScope],
+        active_org_id: str,
+    ) -> list[OrganizationScope]:
+        """Place the active organization first and then MSP organizations."""
+        ordered_organizations = list(organizations.values())  # Preserve direct organizations before MSP additions.
+        if active_org_id in organizations:  # Keep the active/direct organization first.
+            active_organization = organizations.pop(active_org_id)  # Remove direct for stable placement.
+            ordered_organizations = [
+                active_organization,
+                *organizations.values(),
+            ]  # Place direct before MSP organizations.
+        return ordered_organizations  # Return the stable organization order.
+
+    def fetch_inventory(self, org_id: str) -> list[dict[str, Any]]:
+        """Fetch all inventory pages for one organization."""
+        logger.info("Fetching inventory for organization %s", org_id)  # Log before inventory read.
+        inventory: list[dict[str, Any]] = []  # Accumulate paginated inventory.
+        page = 1  # Start with the first page.
+        page_size = runtime_settings.DEFAULT_API_PAGE_LIMIT  # Reuse the project page limit.
+        while True:  # Stop after the final page.
+            response = self._request_with_retry(
+                "getOrgInventory",
+                org_id,
+                lambda page=page: mistapi.api.v1.orgs.inventory.getOrgInventory(
+                    self.apisession,
+                    org_id,
+                    limit=page_size,
+                    page=page,
+                ),
+            )  # Call one explicit inventory page.
+            status_code = getattr(response, "status_code", None)  # Read page status.
+            if status_code != 200:  # Inventory page failed.
+                raise SubscriptionExpiryClientError(f"Inventory returned HTTP {status_code}")  # Surface status.
+            payload = self._response_payload(response)  # Normalize response payload.
+            if isinstance(payload, list):  # A list payload is already paginated inventory.
+                page_rows = payload  # Use the list without another transformation.
+            elif isinstance(payload, dict):  # A dict payload can hold nested results.
+                page_rows = payload.get("results", [])  # Read nested inventory rows.
+            else:  # Unsupported payload shapes need a visible result.
+                page_rows = []  # Return no rows for an unsupported shape.
+            if not isinstance(page_rows, list):  # Invalid inventory shape.
+                raise SubscriptionExpiryClientError("Inventory returned an invalid result list")  # Surface shape.
+            inventory.extend(row for row in page_rows if isinstance(row, dict))  # Keep mapping rows.
+            next_link = getattr(response, "next", None)  # Read SDK continuation.
+            if not next_link and len(page_rows) < page_size:  # Last short page reached.
+                break  # Stop pagination.
+            page += 1  # Request the next page.
+        logger.debug("Fetched %d inventory rows", len(inventory))  # Log inventory count.
+        return inventory  # Return every inventory mapping.
+
+    def fetch_msp_licenses(self, msp_id: str) -> dict[str, Any] | None:
+        """Fetch optional MSP purchase evidence or return None for an HTTP failure."""
+        logger.info("Fetching MSP license evidence for %s", msp_id)  # Log before MSP read.
+        response = self._request_with_retry(
+            "listMspLicenses",
+            msp_id,
+            lambda: mistapi.api.v1.msps.licenses.listMspLicenses(self.apisession, msp_id),
+        )  # Call the SDK MSP license endpoint.
+        status_code = getattr(response, "status_code", None)  # Read MSP license status.
+        if status_code != 200:  # MSP license read failed.
+            logger.warning("MSP license read returned HTTP %s", status_code)  # Surface status only.
+            return None  # Degrade to organization license evidence.
+        payload = self._response_payload(response)  # Normalize payload.
+        return payload if isinstance(payload, dict) else None  # Return mapping or no evidence.
+
     def fetch_license_summary(self, org_id: str) -> LicenseSummarySource:
         """Fetch and normalize the organization license summary."""
         logger.info("Fetching license summary for organization %s", org_id)  # Log before the SDK call.
-        response = mistapi.api.v1.orgs.licenses.getOrgLicensesSummary(self.apisession, org_id)  # Call Mist SDK.
+        response = self._request_with_retry(
+            "getOrgLicensesSummary",
+            org_id,
+            lambda: mistapi.api.v1.orgs.licenses.getOrgLicensesSummary(self.apisession, org_id),
+        )  # Call the SDK license summary method.
+        status_code = getattr(response, "status_code", None)  # Read license summary status.
+        if status_code is not None and status_code != 200:  # Reject explicit HTTP and transport failures.
+            raise SubscriptionExpiryClientError(f"License summary returned HTTP {status_code}")  # Surface status.
         payload = self._response_payload(response)  # Convert the SDK response wrapper to a plain container.
         logger.debug("Fetched license summary payload type %s", type(payload).__name__)  # Log safe result shape.
         return self._license_summary_from_payload(payload)  # Normalize the source payload.
@@ -44,7 +285,14 @@ class SubscriptionExpiryClient:
     def fetch_license_usage_by_site(self, org_id: str) -> list[LicenseUsageSource]:
         """Fetch and normalize license usage by site."""
         logger.info("Fetching license usage by site for organization %s", org_id)  # Log before the SDK call.
-        response = mistapi.api.v1.orgs.licenses.getOrgLicensesBySite(self.apisession, org_id)  # Call Mist SDK.
+        response = self._request_with_retry(
+            "getOrgLicensesBySite",
+            org_id,
+            lambda: mistapi.api.v1.orgs.licenses.getOrgLicensesBySite(self.apisession, org_id),
+        )  # Call the SDK license usage method.
+        status_code = getattr(response, "status_code", None)  # Read license usage status.
+        if status_code is not None and status_code != 200:  # Reject explicit HTTP and transport failures.
+            raise SubscriptionExpiryClientError(f"License usage returned HTTP {status_code}")  # Surface status.
         payload = self._response_payload(response)  # Convert the SDK response wrapper to a plain container.
         rows = self._list_payload(payload)  # Normalize singleton or list payloads into a list.
         logger.debug("Fetched %d license usage rows", len(rows))  # Log normalized row count.
@@ -53,10 +301,14 @@ class SubscriptionExpiryClient:
     def search_jsi_assets_and_contracts(self, org_id: str) -> list[JsiContractSource]:
         """Fetch and normalize paginated JSI asset and contract rows."""
         logger.info("Searching JSI assets and contracts for organization %s", org_id)  # Log before the SDK call.
-        response = mistapi.api.v1.orgs.jsi.searchOrgJsiAssetsAndContracts(
-            self.apisession,
+        response = self._request_with_retry(
+            "searchOrgJsiAssetsAndContracts",
             org_id,
-            limit=runtime_settings.DEFAULT_API_PAGE_LIMIT,
+            lambda: mistapi.api.v1.orgs.jsi.searchOrgJsiAssetsAndContracts(
+                self.apisession,
+                org_id,
+                limit=runtime_settings.DEFAULT_API_PAGE_LIMIT,
+            ),
         )  # Call Mist SDK with the shared page size.
         self._raise_for_jsi_error(response)  # Convert expected 400 response into a clear operation signal.
         rows = mistapi.get_all(response=response, mist_session=self.apisession)  # Let mistapi handle pagination.
@@ -110,13 +362,30 @@ class SubscriptionExpiryClient:
             warranty_type=row.get("warranty_type"),  # Preserve Mist contract status.
             eol_time=row.get("eol_time"),  # Preserve end-of-life date source.
             eos_time=row.get("eos_time"),  # Preserve end-of-support date source.
+            has_support=row.get("has_support"),  # Preserve live JSI support evidence.
+            claimed=row.get("claimed"),  # Preserve live JSI claim evidence.
+            device_name=row.get("device_name"),  # Preserve live JSI device name.
+            org_id=row.get("org_id"),  # Preserve live JSI organization.
+            master=row.get("master"),  # Preserve live JSI master evidence.
         )
 
     @staticmethod
     def _raise_for_jsi_error(response: Any) -> None:
         """Raise a clear exception for the expected no-linked-account response."""
         status_code = getattr(response, "status_code", None)  # Read SDK status without requiring SDK class types.
-        if status_code is None or status_code < HTTP_BAD_REQUEST:  # Successful SDK responses need no conversion.
+        if status_code == 0:  # Transport failures use the bounded sentinel.
+            logger.error("The JSI contract search returned no transport status")  # Name the transport failure.
+            raise SubscriptionExpiryClientError(
+                "The JSI contract search returned no transport status."
+            )  # Surface status.
+        if status_code is None:  # Plain SDK test doubles omit status.
+            if isinstance(response, dict):  # Plain test payloads have no status wrapper.
+                return  # Accept the plain payload in test and direct-container use.
+            if hasattr(response, "data"):  # SDK-like test doubles can omit status but hold data.
+                return  # Accept a plain SDK wrapper that omits status.
+            logger.error("The JSI contract search returned no HTTP status")  # Name the failure.
+            raise SubscriptionExpiryClientError("The JSI contract search returned no HTTP status.")  # Surface status.
+        if status_code < HTTP_BAD_REQUEST:  # Successful SDK responses need no conversion.
             return  # Leave successful and plain test responses alone.
         if status_code == HTTP_BAD_REQUEST:  # Mist returns 400 when no Juniper account is linked.
             logger.warning("The JSI account is not linked for the selected organization")  # Explain the condition.

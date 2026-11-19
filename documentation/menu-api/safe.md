@@ -2,7 +2,7 @@
 
 # Menu API endpoints: safe
 
-This page lists the Mist API endpoints of the 85 menu options in the `safe` category.
+This page lists the Mist API endpoints of the 86 menu options in the `safe` category.
 A menu option in this category reads data and exports it. The --test run executes this category.
 
 The index page explains how to read the map: [Menu API endpoint map](README.md).
@@ -16,20 +16,20 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["safe: 85 menu<br/>options"]
+    root["safe: 86 menu<br/>options"]
     root --> f_orgs_sites["orgs/sites<br/>25 menu options"]
-    root --> f_orgs_inventory["orgs/inventory<br/>13 menu options"]
+    root --> f_orgs_inventory["orgs/inventory<br/>14 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>8 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>6 menu options"]
     root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>5 menu options"]
+    root --> f_orgs_jsi["orgs/jsi<br/>5 menu options"]
     root --> f_sites_devices["sites/devices<br/>5 menu options"]
-    root --> f_orgs_jsi["orgs/jsi<br/>4 menu options"]
     root --> f_orgs_networktemplates["orgs/networktemplates<br/>4 menu options"]
     root --> f_sites_insights["sites/insights<br/>4 menu options"]
     root --> f_sites_stats["sites/stats<br/>4 menu options"]
     root --> f_orgs_admins["orgs/admins<br/>3 menu options"]
     root --> f_orgs_alarms["orgs/alarms<br/>3 menu options"]
-    root --> more["70 more families"]
+    root --> more["72 more families"]
 ```
 
 ## Menu 1
@@ -1351,3 +1351,33 @@ flowchart LR
 | GET | `/api/v1/orgs/{org_id}/sites` | [`orgs.sites.listOrgSites`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/sites/list-org-sites) | [`ApWarningClient._fetch`](../../src/operations/exporting/ap_warning_report/client.py) | Call |
 | GET | `/api/v1/sites/{site_id}/stats/devices` | [`sites.stats.listSiteDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/list-site-devices-stats) | [`ApWarningClient._statistics`](../../src/operations/exporting/ap_warning_report/client.py) | Call |
 | GET | `/api/v1/sites/{site_id}/stats/devices/{device_id}` | [`sites.stats.getSiteDeviceStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/devices/get-site-device-stats) | [`RecoveryEvidenceReader._statistics`](../../src/operations/exporting/ap_warning_report/client.py) | Call |
+
+## Menu 308
+
+- Title: Export cross-org subscription, entitlement, and stock inventory report
+- Handler: `CrossOrgSubscriptionInventoryReport.run`
+- Shared helpers: [`DataExporter`](README.md#dataexporter), [`SourceDependencyResolver`](README.md#sourcedependencyresolver)
+- Endpoints: 7
+
+```mermaid
+flowchart LR
+    menu["Menu 308: Export<br/>cross-org<br/>subscription,<br/>entitl..."]
+    menu --> c1["SubscriptionExpiry<br/>Client"]
+    c1 --> e1["GET<br/>/api/v1/msps<br/>/{msp_id}/licenses"]
+    c1 --> e2["GET<br/>/api/v1/msps<br/>/{msp_id}/orgs"]
+    c1 --> e3["GET<br/>/api/v1/orgs<br/>/{org_id}/inventory"]
+    c1 --> e4["GET<br/>/api/v1/orgs<br/>/{org_id}/jsi<br/>/inventory/search"]
+    c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/licenses"]
+    c1 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/licenses<br/>/usages"]
+    c1 --> e7["GET<br/>/api/v1/self"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/msps/{msp_id}/licenses` | [`msps.licenses.listMspLicenses`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/licenses/list-msp-licenses) | [`SubscriptionExpiryClient.fetch_msp_licenses`](../../src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) | [`SubscriptionExpiryClient._discover_msp`](../../src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/inventory` | [`orgs.inventory.getOrgInventory`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/inventory/get-org-inventory) | [`SubscriptionExpiryClient.fetch_inventory`](../../src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/jsi/inventory/search` | [`orgs.jsi.searchOrgJsiAssetsAndContracts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/jsi/search-org-jsi-assets-and-contracts) | [`SubscriptionExpiryClient.search_jsi_assets_and_contracts`](../../src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/licenses` | [`orgs.licenses.getOrgLicensesSummary`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-summary) | [`SubscriptionExpiryClient.fetch_license_summary`](../../src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/orgs/{org_id}/licenses/usages` | [`orgs.licenses.getOrgLicensesBySite`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-by-site) | [`SubscriptionExpiryClient.fetch_license_usage_by_site`](../../src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/self` | [`self.self.getSelf`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/account/get-self) | [`SubscriptionExpiryClient.fetch_profile`](../../src/mist/intelligence/reports/subscription_expiry/client.py) | Call |

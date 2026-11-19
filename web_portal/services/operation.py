@@ -50,6 +50,7 @@ CATEGORY_RANGES = [
     (283, 290, "Diagnostic Utilities"),  # Issue #3618 groups Tier 3 diagnostics and safe reports.
     (294, 304, "Juniper RMA"),  # Juniper access, correlation, lookups, request reads, and asset reads (read-only).
     (307, 307, "AP Warning Reports"),
+    (308, 308, "Hygiene Reports"),
 ]
 
 # Menu numbers whose range gives the wrong category name. Issue #3153.

@@ -16,7 +16,7 @@ organizations, your sites, your devices, and your clients, and it writes what it
 finds to a file or to a database. It also runs a small set of change operations,
 such as a firmware upgrade.
 
-The tool holds **306 operations**, numbered 1 to 307 with one gap at 152.
+The tool holds **307 operations**, numbered 1 to 308 with one gap at 152.
 It also serves a web portal, an upgrade capture portal, and a metrics gateway.
 The web portal includes a read-only WAN Dashboard for gateway status, port
 details, traffic, WAN Insights, and CSV exports. See the
@@ -129,6 +129,7 @@ Use MistHelper when you need one of these.
 | Set organization firmware standards with verified backups and progress (menu 305) | [Organization auto-upgrade policy](documentation/org-auto-upgrade-policy.md) |
 | Restore firmware policies with complete verified recovery backups and progress (menu 306) | [Backup restoration](documentation/backup-restoration.md) |
 | Export connected or disconnected APs with reported warning or error codes (menu 307) | [AP warning report](documentation/ap-warning-report.md) |
+| Review subscriptions and stock equipment across every authorized organization (menu 308) | [Cross-org subscription and stock report](documentation/cross-org-subscription-stock.md) |
 
 Repeated site SLE histogram exports replace the keyed record for matching
 request dimensions and returned `start` and `end` values. Impact-summary exports
