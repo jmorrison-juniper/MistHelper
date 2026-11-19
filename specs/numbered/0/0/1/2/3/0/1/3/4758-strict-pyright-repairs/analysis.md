@@ -4,23 +4,61 @@
 
 This is a partial repair, not a strict-clean completion.
 The strict baseline has 108 errors.
-The final interface candidate has ten errors.
-Both reports analyze exactly one file and report zero warnings.
-Ten errors require two reserved source contracts.
-The additional name-only handoff resolves the live authentication-status interface.
-The cleanup removes all nine audited private declarations and four dependent helpers.
+Candidate one has 19 errors.
+Candidate two has 10 errors after its separate dead-code cleanup.
+Candidate three has 9 errors after its annotation-only changes.
+Each report analyzes exactly one file and reports zero warnings.
+Candidate three resolves the ten API and cache contract errors.
+Its remaining nine errors name declarations without verified production callers.
+Those nine errors are not ownership blockers.
 The original ten-error candidate used rejected export and import approaches.
 The historical sections below retain that evidence, not an accepted completion claim.
-The [cleanup record](design/contracts/cleanup.md) gives the current commands, caller evidence, and residual map.
-The [correction record](design/contracts/correction.md) preserves the previous nineteen-error result.
-The corrective artifact review maps all twelve requirements and success criteria to the sixteen tasks.
-Three tasks remain incomplete.
-SC-003 preserves live implementations and explicit exports while allowing verified private-code removal and genuine host-interface renames.
+The [correction record](design/contracts/correction.md) gives the current commands, call paths, and residual map.
+The corrective artifact review maps all eleven requirements and success criteria to the sixteen tasks.
+Candidate three leaves two tasks incomplete.
+SC-003 now records the requested public helper renames and unchanged explicit exports.
+Its previous literal name-preservation rule conflicted with that approved revision.
 
-The initial and refreshed `origin/main` revision is `b7a18b7ead7b1de5882bcd288203c015b1eef792`.
-The worktree HEAD matched that revision before edits.
-The implementation commit is `ed7f550066e16a21aabac1132ffbd7906ead8718`.
-The final verification-document commit identifier is recorded on issue #4758.
+The split-candidate evidence is historical.
+The current replay starts from `origin/main` at `a00e99c73d42654bf302999214a63735f0dc980c`.
+The final combined report and gate results are not recorded yet.
+
+### Candidate three verification
+
+Candidate three uses `fix/4758-strict-annotations` at commit `e47dce4232b6c5ee6731ec48d4e6a33ffd4d578d`.
+Its base is `origin/main` at `19bec34ea1edfae30782fc0f23dde44b3516e369`.
+Candidate one is `fix/4758-strict-contracts` at `bc6ae8bb41fc2bd43b8b1ca1b596e3d215e6f70f`.
+Candidate two is `fix/4758-strict-dead-code` at `65c09bb5fb6c36745a1ee0ebd95593b11cc8380e`.
+The preservation ref remains `preserve/strict-a5b1b2c` at `a5b1b2c952b7f63cac0a78a36be8443cc9bb9662`.
+
+The candidate-three JSON report records 9 errors, 0 warnings, and one analyzed file.
+The text report records `9 errors, 0 warnings, 0 informations`.
+All nine diagnostics use `reportUnusedFunction` in `MistHelper.py`.
+The exact reports are `candidate3-pyright.json` and `candidate3-pyright.txt` in the session evidence directory.
+The AST report compares 16 functions against `origin/main`.
+It confirms unchanged bodies, defaults, and imports, with only the three approved annotations changed.
+
+The focused command for the API and cache tests passed 38 tests with one existing warning.
+The following standard checks passed with exit code 0:
+
+| Check | Result |
+| - | - |
+| `python -m ruff check .` | Exit 0 |
+| `python -m black --check src/mist/access/api/api_core_fetch_utils.py src/foundation/persistence/cache/cache_utils.py` | Exit 0 |
+| CI-path `python -m mypy` selection | Exit 0, 887 source files |
+| Bandit on both changed source files | Exit 0 |
+| `git diff --check origin/main...HEAD` | Exit 0 |
+| Test-quality input preflight | Exit 0, one test passed |
+| Test-quality committed-change gate | Exit 0, 17 files and 10 findings checked, 2 skipped, zero new findings |
+
+The candidate-local test-quality executable was absent.
+The gate passed through the repository-pinned executable in the candidate-one environment.
+No push, pull request, merge, or issue closure occurred.
+
+The original single-branch attempt used `b7a18b7ead7b1de5882bcd288203c015b1eef792`.
+The split candidates use the later `origin/main` revision recorded above.
+The original implementation commit is `ed7f550066e16a21aabac1132ffbd7906ead8718`.
+The earlier verification-document commit identifier is recorded on issue #4758.
 No push, pull request, merge, or automatic merge is authorized.
 
 ## Requirement coverage
@@ -28,18 +66,17 @@ No push, pull request, merge, or automatic merge is authorized.
 | Requirement | Evidence | Result |
 | - | - | - |
 | FR-001 | Live main comparison, locked bootstrap, baseline JSON | Complete |
-| FR-002 | Final interface strict report | Incomplete: ten errors |
+| FR-002 | Candidate-three strict report | Incomplete: nine errors |
 | FR-003 | Focused state, import, selector, admission, and dry-run regressions | Complete for owned changes |
 | FR-004 | Source review, preserved declarations, unchanged rules | Complete |
-| FR-005 | Narrow portal handoff, ARP ancestry, held-file comparison | Partial: API and cache handoffs unavailable |
+| FR-005 | Narrow portal and annotation authorization, ARP ancestry, source comparison | Complete for the authorized changes |
 | FR-006 | Mocked regression suite and absent-session admission cases | Complete |
 | FR-007 | Separate issues #4825 through #4828 | Complete |
 | FR-008 | Local implementation commit and verification records | Complete |
 
-T003 and T008 remain unchecked because ownership blocks their completion.
-T007 is complete after the approved authentication-status interface rename.
-T010 remains unchecked for the held contracts.
-Do not treat their dependency status as a released hold.
+Candidate three completes T003 and T008 under the direct user authorization.
+T007 is complete after the approved cleanup and public-interface corrections.
+T010 remains unchecked until the refreshed-main combined report passes.
 
 ## Historical baseline and rejected candidate reports
 
@@ -70,7 +107,9 @@ rtk uvx --from pyright==1.1.414 pyright --project /Users/jmorrison/.copilot/sess
 rtk uvx --from pyright==1.1.414 pyright --project /Users/jmorrison/.copilot/session-state/90c72d95-6afd-4b40-9e22-d8f6408487da/files/pyright-strict.json MistHelper.py
 ```
 
-The candidate commands exit 1 with `10 errors, 0 warnings, 0 informations`.
+Candidate one's commands exit 1 with `19 errors, 0 warnings, 0 informations`.
+Candidate two's commands exit 1 with `10 errors, 0 warnings, 0 informations`.
+Candidate three's commands exit 1 with `9 errors, 0 warnings, 0 informations`.
 The baseline JSON records `filesAnalyzed: 1`, `errorCount: 108`, and `warningCount: 0`.
 An earlier zero-file configuration is invalid and is not completion evidence.
 
@@ -122,31 +161,33 @@ Locations below refer to the final candidate `MistHelper.py`.
 
 ### Cache callback hold
 
+This section records candidate one's decision to preserve the source contract.
+Candidate three applies the annotation-only correction.
+
 File: `src/foundation/persistence/cache/cache_utils.py`.
-Issue #1794 comments `6737356357` and `6739412390` reserve the source and its cache tests.
-Owner session: `ffe5c6ac-bbd0-4e91-95cf-fc4c003a8d8f`.
-The owner is archived, and the coordinator cannot obtain a handoff without restoration.
+Issue #1794 comments `6737356357` and `6739412390` record the source and cache test history.
 
 Required annotation: `generate_function: Callable[[], object]`.
-Apply it to `check_and_generate_csv` and `_run_csv_generator` only after a handoff.
-Keep both bodies and the held cache test file unchanged.
+Candidate three applies it to `check_and_generate_csv` and `_run_csv_generator`.
+The method bodies and cache tests remain unchanged.
 This contract accounts for three residual diagnostics.
 
 ### Site-record hold
 
+This section records candidate one's decision to preserve the source contract.
+Candidate three applies the annotation-only correction.
+
 File: `src/mist/access/api/api_core_fetch_utils.py`.
-Issue #4762 owns an unpublished pagination and error-handling repair.
-Owner session: `37b17b82-441d-48ef-b9f9-44b62de4faaa`.
-The owner is archived, and the coordinator cannot obtain a handoff without restoration.
+Issue #4762 records the API pagination and error-handling work.
 
 Required annotation: `all_sites_with_limit(org_id: str) -> list[dict[str, Any]]`.
 The dictionary values are heterogeneous API data.
 The keys are field names.
-Keep the unpublished repair, method body, and publication holds intact.
+Candidate three applies the annotation and preserves the method body.
 This contract accounts for seven residual diagnostics.
 
-Neither file changed.
-No caller cast, duplicate implementation, ignored rule, or replacement stub conceals these errors.
+Candidate three changes no imports or method bodies.
+No caller cast, duplicate implementation, ignored rule, or replacement stub conceals a diagnostic.
 
 ## Ownership and behavior
 
@@ -313,7 +354,7 @@ Do not close issue #4758 or publish this branch while the ownership or publicati
 The implementation commit contains 23 files.
 It includes the specification, plan, tasks, analysis, supporting records, tests, and generated references.
 The verification-document commit checks T012 and T016 after their evidence exists.
-Thirteen tasks are complete, and three ownership-dependent tasks remain unchecked.
+Fourteen tasks are complete, and two diagnostic tasks remain unchecked.
 The repository auto-commit configuration disables the optional implementation hook.
 The explicit local commits preserve that setting and include the required coauthor trailer.
 
