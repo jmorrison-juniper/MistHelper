@@ -51,8 +51,8 @@ The following standard checks passed with exit code 0:
 | Test-quality input preflight | Exit 0, one test passed |
 | Test-quality committed-change gate | Exit 0, 17 files and 10 findings checked, 2 skipped, zero new findings |
 
-The candidate-local test-quality executable was absent.
-The gate passed through the repository-pinned executable in the candidate-one environment.
+The first test-quality command ran without the candidate environment on `PATH` and exited 1.
+The candidate-local executable passed when called by its explicit path with exit code 0.
 No push, pull request, merge, or issue closure occurred.
 
 The original single-branch attempt used `b7a18b7ead7b1de5882bcd288203c015b1eef792`.
