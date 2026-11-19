@@ -272,7 +272,7 @@ class TestMistHelperMenuAndModeCaches:
         ]  # WHY: the cache must not serve stale keys or alter menu text.
 
     def test_dispatch_main_mode_keeps_handler_order_and_late_binding(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """The cached mode table preserves first-match dispatch and handler rebinding."""
+        """The ordered mode declarations preserve first-match dispatch and handler rebinding."""
         calls: list[str] = []  # WHY: record the selected handler for each synthetic mode.
 
         def make_handler(name: str) -> Callable[[argparse.Namespace], None]:
@@ -327,7 +327,11 @@ class TestMistHelperMenuAndModeCaches:
         for mode_name in mode_names:
             values = dict(base)  # WHY: isolate one flag per dispatch case.
             values[mode_name] = True  # WHY: select the mode under test.
-            MistHelper.dispatch_main_mode(argparse.Namespace(**values))  # WHY: exercise the cached table.
+            MistHelper.dispatch_main_mode(argparse.Namespace(**values))  # WHY: exercise the ordered dispatch.
+        priority_values = dict(base)  # WHY: verify that overlapping modes keep first-match precedence.
+        priority_values["test"] = True  # WHY: select the first registered mode.
+        priority_values["testinteractive"] = True  # WHY: also select a later mode.
+        MistHelper.dispatch_main_mode(argparse.Namespace(**priority_values))  # WHY: the first mode must win.
         cli_values = dict(base)  # WHY: build the explicit CLI dispatch case.
         cli_values["menu"] = "1"  # WHY: a menu value is a meaningful CLI argument.
         MistHelper.dispatch_main_mode(argparse.Namespace(**cli_values))  # WHY: exercise CLI branch.
@@ -342,6 +346,7 @@ class TestMistHelperMenuAndModeCaches:
             "metrics_snmp",
             "mib_generate",
             "metrics_gateway",
+            "test",
             "cli",
             "interactive",
         ]  # WHY: cached predicates and late-bound handlers must match the original behavior.
