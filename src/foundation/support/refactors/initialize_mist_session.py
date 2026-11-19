@@ -9,10 +9,9 @@ the class method. No wrapper shim remains in MistHelper.py after this
 extraction.
 
 MistHelper module-globals (`apisession`, `mistapi`) and helper functions
-(`_load_mistapi_module`, `_parse_api_tokens`,
-`_introspect_apisession_class`, `_attempt_all_session_strategies`,
-`_log_failed_session_variants`, `_configure_session_timeout`,
-`_validate_initialized_session`) are resolved lazily through the `_MH`
+(`load_mistapi_module`, `_parse_api_tokens`,
+`introspect_apisession_class`, `attempt_all_session_strategies`,
+`log_failed_session_variants`, `log_session_auth_status`) are resolved lazily through the `_MH`
 proxy so live re-bindings after interactive login and test
 monkeypatching are honoured. Assignments back to `apisession` /
 `mistapi` are mirrored via `setattr` on the MistHelper module so token
@@ -141,7 +140,7 @@ class MistSessionConfigurator:
         if not (hasattr(session, "mist_get") or hasattr(session, "get")):  # Need one supported GET method.
             _MH.logging.error("The Mist API session has no supported GET method")  # Tell the operator the cause.
             return False  # A session that cannot read Mist Cloud is unusable.
-        _MH._log_session_auth_status(session, method)  # Reuse the existing auth-status report.
+        _MH.log_session_auth_status(session, method)  # Reuse the existing auth-status report.
         return True  # The session shape is usable.
 
 
