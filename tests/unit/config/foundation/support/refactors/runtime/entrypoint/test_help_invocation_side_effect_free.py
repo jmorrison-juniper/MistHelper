@@ -50,7 +50,12 @@ class TestHelpArgumentParsing:
 
     @pytest.mark.parametrize(
         "process_arguments",
-        [["MistHelper.py"], ["--help"], ["MistHelper.py", "--menu", "1"]],
+        [
+            ["MistHelper.py"],
+            ["--help"],
+            ["MistHelper.py", "--menu", "1"],
+            ["MistHelper.py", "--menu", "1", "--org", "abc"],
+        ],
     )
     def test_program_name_is_not_a_help_argument(
         self, monkeypatch: pytest.MonkeyPatch, process_arguments: list[str]
