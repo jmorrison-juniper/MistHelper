@@ -18,6 +18,7 @@ from typing import Any  # WHY: mocks dict holds both MagicMock and Namespace obj
 from unittest.mock import MagicMock, call  # WHY: FR-008 mandates MagicMock(spec=...) + call-order verification.
 
 import pytest  # WHY: monkeypatch fixture for MistHelper attribute overrides.
+import structlog  # WHY: verify structured database logs use the MistHelper handler levels.
 
 import MistHelper  # WHY: cache tests exercise the runtime menu and mode dispatch tables.
 from src.foundation.runtime.config.source_dependency_resolver import (
@@ -373,6 +374,29 @@ class TestMistHelperMenuAndModeCaches:
 
 class TestConsoleOutputRouting:
     """Exercise real bootstrap handlers without credentials or shared log files."""
+
+    def test_structlog_uses_configured_console_and_file_levels(
+        self,
+        isolated_logging: ApplicationBootstrap,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """INFO and DEBUG structlog records stay below a level-30 threshold."""
+        monkeypatch.setenv("CONSOLE_LOG_LEVEL", str(logging.WARNING))
+        monkeypatch.setenv("LOGGING_LOG_LEVEL", str(logging.WARNING))
+        isolated_logging._configure_logging()
+        structured_logger = structlog.get_logger("db.logging_test")
+        structured_logger.info("structured-info-line")
+        structured_logger.debug("structured-debug-line")
+        structured_logger.warning("structured-warning-line")
+        output = capsys.readouterr()
+        log_text = Path("data", "script.log").read_text(encoding="utf-8")
+        assert "structured-info-line" not in output.out
+        assert "structured-debug-line" not in output.err
+        assert "structured-info-line" not in log_text
+        assert "structured-debug-line" not in log_text
+        assert "structured-warning-line" in output.err
+        assert "structured-warning-line" in log_text
 
     def test_env_load_precedes_logging_setup(
         self,

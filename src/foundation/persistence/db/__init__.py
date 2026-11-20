@@ -30,7 +30,7 @@ WEBHOOK_SECRET_FIELD = "WEBHOOK_SECRET"  # nosec B105  # Name the Mist webhook s
 
 
 def configure_db_logging() -> None:
-    """Configure structlog for the db package: JSON, ASCII-only, stdlib."""
+    """Configure structlog to use the MistHelper stdlib handlers."""
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
@@ -40,12 +40,13 @@ def configure_db_logging() -> None:
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.StackInfoRenderer(),
             structlog.processors.UnicodeDecoder(),
-            structlog.processors.JSONRenderer(ensure_ascii=True),
+            structlog.processors.format_exc_info,
+            structlog.stdlib.render_to_log_kwargs,
         ],
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
+        cache_logger_on_first_use=False,
     )
 
 

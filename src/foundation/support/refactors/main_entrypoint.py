@@ -27,6 +27,8 @@ from dataclasses import dataclass, field  # Build the explicit application conte
 from pathlib import Path  # Build repository paths without hardcoded separators
 from typing import Any, cast  # Loose typing for late-bound MistHelper attributes
 
+import structlog  # Route structured database logs through the MistHelper stdlib handlers.
+
 from src.foundation.runtime.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
@@ -204,6 +206,22 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
             handlers=[file_handler, console_handler],  # Send startup and runtime records to file and console.
             force=True,  # Replace any host default handler with the MistHelper startup policy.
         )
+        structlog.configure(  # Route structlog records through the root stdlib handlers.
+            processors=[
+                structlog.contextvars.merge_contextvars,
+                structlog.stdlib.filter_by_level,
+                structlog.stdlib.add_logger_name,
+                structlog.stdlib.add_log_level,
+                structlog.processors.StackInfoRenderer(),
+                structlog.processors.format_exc_info,
+                structlog.processors.UnicodeDecoder(),
+                structlog.stdlib.render_to_log_kwargs,
+            ],
+            context_class=dict,
+            logger_factory=structlog.stdlib.LoggerFactory(),
+            wrapper_class=structlog.stdlib.BoundLogger,
+            cache_logger_on_first_use=False,
+        )  # The same handlers filter structlog INFO and DEBUG records.
         self._install_log_sanitizer()  # Redact sensitive fields after the root logger exists.
 
     def _install_log_sanitizer(self) -> None:
