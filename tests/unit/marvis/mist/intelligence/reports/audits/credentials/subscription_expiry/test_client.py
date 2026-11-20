@@ -134,6 +134,42 @@ def test_client_discovers_direct_and_msp_organizations(monkeypatch: pytest.Monke
     assert failures == []  # Both discovery calls succeed.
 
 
+def test_client_discovers_msp_organizations_across_continuation_pages(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MSP organization discovery follows every SDK continuation page."""
+    first_response = SimpleNamespace(
+        status_code=200,
+        data=[{"id": "org-2", "name": "Branch"}],
+        next="/msp-org-page-2",
+    )  # Supply the first MSP organization page.
+    final_response = SimpleNamespace(
+        status_code=200,
+        data=[{"id": "org-3", "name": "Retail Partner"}],
+        next=None,
+    )  # Supply the final MSP organization page.
+    monkeypatch.setattr(
+        client_module.mistapi.api.v1.self.self,
+        "getSelf",
+        lambda _session: SimpleNamespace(
+            status_code=200,
+            data={"privileges": [{"msp_id": "msp-1", "scope": "msp", "role": "read"}]},
+        ),
+    )  # Grant one MSP scope.
+    monkeypatch.setattr(
+        client_module.mistapi.api.v1.msps.orgs,
+        "listMspOrgs",
+        lambda _session, _msp_id: first_response,
+    )  # Return the first organization page.
+    monkeypatch.setattr(
+        client_module.mistapi,
+        "get_next",
+        lambda mist_session, response: final_response,
+    )  # Return the final organization page.
+    client = SubscriptionExpiryClient(object())  # Build a synthetic client.
+    organizations, failures = client.discover_organizations("org-1", "Primary")  # Discover all MSP pages.
+    assert [organization.org_id for organization in organizations] == ["org-1", "org-2", "org-3"]
+    assert failures == []  # Both organization pages complete successfully.
+
+
 def test_client_inventory_pagination_uses_sdk_continuation(monkeypatch: pytest.MonkeyPatch) -> None:
     """The client reads every inventory page with SDK continuation and Virtual Chassis."""
     calls: list[tuple[int, bool, int]] = []  # Record inventory limit, VC, and page arguments.
@@ -152,18 +188,58 @@ def test_client_inventory_pagination_uses_sdk_continuation(monkeypatch: pytest.M
             calls.append((limit, vc, page))  # Capture pagination and Virtual Chassis arguments.
             return SimpleNamespace(status_code=200, data=[{"serial": "one"}], next="/page-2")
 
+    next_calls: list[object] = []  # Record continuation requests.
+    second_response = SimpleNamespace(
+        status_code=200,
+        data=[{"serial": "two", "site_id": "site-2", "vc_mac": "vc-1"}],
+        next=None,
+    )  # Supply the final inventory page.
+
+    def get_next(mist_session: object, response: object) -> SimpleNamespace:
+        next_calls.append((mist_session, response))  # Capture the SDK continuation call.
+        return second_response  # Return the final page once.
+
     fake_sdk = SimpleNamespace(
         api=SimpleNamespace(v1=SimpleNamespace(orgs=SimpleNamespace(inventory=FakeInventoryApi()))),
-        get_all=lambda response, mist_session: [
-            {"serial": "one", "site_id": "site-1"},
-            {"serial": "two", "site_id": "site-2", "vc_mac": "vc-1"},
-        ],
+        get_next=get_next,
     )  # Build a synthetic SDK tree with SDK continuation.
     monkeypatch.setattr(client_module, "mistapi", fake_sdk)  # Replace SDK access for this test.
     client = SubscriptionExpiryClient(object())  # Build a synthetic client.
     inventory = client.fetch_inventory("org-1")  # Read both pages.
     assert [row["serial"] for row in inventory] == ["one", "two"]  # Preserve continuation order.
     assert calls == [(1000, True, 1)]  # Use the shared page size and VC expansion.
+    assert len(next_calls) == 1  # Follow exactly one later page.
+
+
+def test_client_inventory_later_page_http_failure_remains_visible(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A denied later inventory page rejects a partial count."""
+    calls: list[tuple[int, bool, int]] = []  # Record the first inventory page.
+
+    class FakeInventoryApi:
+        """Fake inventory endpoint for a first page with a continuation."""
+
+        @staticmethod
+        def getOrgInventory(
+            _session: object,
+            _org_id: str,
+            limit: int,
+            page: int,
+            vc: bool,
+        ) -> SimpleNamespace:
+            calls.append((limit, vc, page))  # Capture the first page call.
+            return SimpleNamespace(status_code=200, data=[{"serial": "one"}], next="/page-2")  # Return a continuation.
+
+    def get_next(mist_session: object, response: object) -> SimpleNamespace:
+        return SimpleNamespace(status_code=500, data={"error": "failure"}, next=None)  # Deny the later page.
+
+    fake_sdk = SimpleNamespace(
+        api=SimpleNamespace(v1=SimpleNamespace(orgs=SimpleNamespace(inventory=FakeInventoryApi()))),
+        get_next=get_next,
+    )  # Build a synthetic SDK tree with a denied continuation.
+    monkeypatch.setattr(client_module, "mistapi", fake_sdk)  # Replace the SDK so no network call occurs.
+    client = SubscriptionExpiryClient(object())  # Build the synthetic client.
+    with pytest.raises(SubscriptionExpiryClientError, match="HTTP 500"):  # Require the later denial.
+        client.fetch_inventory("org-1")  # Trigger the inventory continuation failure.
 
 
 def test_client_transport_failure_sentinel_remains_an_error(monkeypatch: pytest.MonkeyPatch) -> None:

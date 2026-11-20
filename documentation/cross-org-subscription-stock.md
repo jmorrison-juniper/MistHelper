@@ -32,6 +32,7 @@ The operation writes these files under `data/`:
 | `CrossOrgSubscriptionBalance.csv` | Purchased, entitled, in-use, unused, and over-entitlement quantities |
 | `CrossOrgDeployedInventory.csv` | One deployed device row for each inventory identity with a site |
 | `CrossOrgDeployedInventorySummary.csv` | One deployed quantity row for each organization and device type |
+| `CrossOrgInventorySummary.csv` | Deployed, stock, and combined quantity rows for each organization and device type |
 | `CrossOrgStockInventory.csv` | Unassigned inventory that may require a subscription or support review |
 | `CrossOrgContractEvidence.csv` | JSI contract evidence matched to inventory serial numbers |
 
@@ -47,6 +48,8 @@ A deployed inventory row has a `site_id`.
 The report keeps the site, serial, MAC, model, name, device type, and connection status when the source provides them.
 The deployed summary groups these rows by organization and device type.
 The summary does not combine deployed devices with unassigned stock.
+`CrossOrgInventorySummary.csv` combines the deployed and stock quantities.
+Use the `inventory_quantity` column to review all organization-assigned inventory identities.
 
 The report reconciles every paginated inventory page.
 One inventory set can contain 27,000 or more deployed devices.

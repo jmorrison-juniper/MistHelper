@@ -32,6 +32,7 @@ Complete the cloud, email, password, and 2FA prompts in the terminal.
 Verify these outputs:
 - `CrossOrgDeployedInventory.csv`
 - `CrossOrgDeployedInventorySummary.csv`
+- `CrossOrgInventorySummary.csv`
 - `CrossOrgStockInventory.csv`
 - `CrossOrgSubscriptionPurchase.csv`
 - `CrossOrgSubscriptionBalance.csv`

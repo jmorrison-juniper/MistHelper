@@ -211,6 +211,7 @@ class OrganizationDataReader:
             org_id,
             limit=page_size,
             page=page_number,
+            vc=True,
         )
         return self.requester.request("getOrgInventory", org_id, request_call)
 

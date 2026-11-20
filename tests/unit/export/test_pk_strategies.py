@@ -13,6 +13,7 @@ def test_cross_org_report_primary_keys_are_registered() -> None:
         "CrossOrgSubscriptionBalance",
         "CrossOrgDeployedInventory",
         "CrossOrgDeployedInventorySummary",
+        "CrossOrgInventorySummary",
         "CrossOrgStockInventory",
         "CrossOrgContractEvidence",
     ):

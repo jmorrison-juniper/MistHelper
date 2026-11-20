@@ -174,6 +174,7 @@ def test_reads_all_inventory_pages_using_installed_page_arguments(
     assert len(result.data) == 1001  # Preserve every inventory record across the two pages.
     assert [call[2]["page"] for call in page_calls] == [1, 2]  # Request pages in ascending order.
     assert all(call[2]["limit"] == 1000 for call in page_calls)  # Use the shared Mist page size.
+    assert all(call[2]["vc"] is True for call in page_calls)  # Include each Virtual Chassis member.
 
 
 def test_calculates_catalog_bundle_component_balances(monkeypatch: pytest.MonkeyPatch) -> None:

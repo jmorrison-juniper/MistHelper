@@ -82,6 +82,7 @@ class CrossOrgReportPayload:
     balance_rows: list[dict[str, Any]]
     deployed_inventory_rows: list[dict[str, Any]]
     deployed_inventory_summary_rows: list[dict[str, Any]]
+    inventory_summary_rows: list[dict[str, Any]]
     stock_rows: list[dict[str, Any]]
     contract_rows: list[dict[str, Any]]
 
@@ -405,6 +406,22 @@ class CrossOrgSubscriptionInventoryReport:
                 ],
             ),
             (
+                payload.inventory_summary_rows,
+                "CrossOrgInventorySummary.csv",
+                "CrossOrgInventorySummary",
+                [
+                    "msp_id",
+                    "org_id",
+                    "org_name",
+                    "device_type",
+                    "deployed_quantity",
+                    "stock_quantity",
+                    "inventory_quantity",
+                    "request_status",
+                    "source_attribution",
+                ],
+            ),
+            (
                 payload.stock_rows,
                 CROSS_ORG_STOCK_INVENTORY_FILENAME,
                 "CrossOrgStockInventory",
@@ -486,6 +503,10 @@ class CrossOrgSubscriptionInventoryReport:
         print(
             f"  Deployed inventory summary rows: {len(payload.deployed_inventory_summary_rows)}"
         )  # Print deployed summary count.
+        print(
+            f"  Organization inventory rows: " f"{len(payload.deployed_inventory_rows) + len(payload.stock_rows)}"
+        )  # Print the combined assigned and stock inventory count.
+        print(f"  Inventory summary rows: {len(payload.inventory_summary_rows)}")  # Print combined summary count.
         print(f"  Stock inventory rows: {len(payload.stock_rows)}")  # Print stock count.
         print(f"  Contract evidence rows: {len(payload.contract_rows)}")  # Print contract count.
 
@@ -507,6 +528,7 @@ class CrossOrgSubscriptionInventoryReport:
             balance_rows=[],
             deployed_inventory_rows=[],
             deployed_inventory_summary_rows=[],
+            inventory_summary_rows=[],
             stock_rows=[],
             contract_rows=[],
         )  # Initialize one linked report payload.
@@ -741,14 +763,21 @@ class CrossOrgSubscriptionInventoryReport:
                 inventory_status,
             )
         )  # Add deployed summary.
-        payload.stock_rows.extend(
+        stock_rows = CrossOrgSubscriptionInventoryModel.build_stock_rows(
+            organization,
+            inventory,
+            jsi,
+        )  # Build stock rows once for the detail and combined summary.
+        payload.stock_rows.extend(row.to_dict() for row in stock_rows)  # Add stock detail.
+        payload.inventory_summary_rows.extend(
             row.to_dict()
-            for row in CrossOrgSubscriptionInventoryModel.build_stock_rows(
+            for row in CrossOrgSubscriptionInventoryModel.build_inventory_summary(
                 organization,
-                inventory,
-                jsi,
+                deployed_rows,
+                stock_rows,
+                inventory_status,
             )
-        )  # Add stock detail.
+        )  # Add deployed, stock, and combined inventory counts.
         logger.debug(
             "Added %d deployed rows and %d stock rows",
             len(deployed_rows),

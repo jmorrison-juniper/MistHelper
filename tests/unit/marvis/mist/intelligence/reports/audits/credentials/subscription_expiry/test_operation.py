@@ -166,15 +166,17 @@ def test_cross_org_report_exports_linked_reports(capsys: object) -> None:
     )  # Run the synthetic cross-org operation.
     filenames = [call[1] for call in exporter.calls]  # Read export names.
     captured = capsys.readouterr().out  # Capture the console summary.
-    assert len(filenames) == 6  # Header-only contract evidence writes no exporter call.
+    assert len(filenames) == 7  # Header-only contract evidence writes no exporter call.
     assert "CrossOrgOrganizationStatus.csv" in filenames  # Organization status is present.
     assert "CrossOrgSubscriptionPurchase.csv" in filenames  # Purchase records are present.
     assert "CrossOrgSubscriptionBalance.csv" in filenames  # Balance records are present.
     assert "CrossOrgDeployedInventory.csv" in filenames  # Deployed inventory detail is present.
     assert "CrossOrgDeployedInventorySummary.csv" in filenames  # Deployed inventory summary is present.
+    assert "CrossOrgInventorySummary.csv" in filenames  # Combined deployed and stock summary is present.
     assert "CrossOrgStockInventory.csv" in filenames  # Stock inventory is present.
     assert "CrossOrgContractEvidence.csv" not in filenames  # Header-only contract evidence uses a direct file write.
     assert "Cross-org subscription inventory summary:" in captured  # The console summary is printed.
+    assert "Organization inventory rows: 2" in captured  # The deployed and stock counts combine once.
 
 
 def test_cross_org_empty_export_writes_header_only(tmp_path: object, monkeypatch: object) -> None:

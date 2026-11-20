@@ -37,6 +37,24 @@ Required fields:
 A successful inventory read with no deployed rows uses quantity zero.
 A failed inventory read uses `Missing`.
 
+## CrossOrgInventorySummary.csv
+
+One row per organization and device type.
+
+Required fields:
+- msp_id
+- org_id
+- org_name
+- device_type
+- deployed_quantity
+- stock_quantity
+- inventory_quantity
+- request_status
+- source_attribution
+
+`inventory_quantity` is the sum of the deployed and stock quantities.
+A failed inventory read uses `Missing` for all three quantities.
+
 ## CrossOrgStockInventory.csv
 
 One row per unassigned inventory identity.
