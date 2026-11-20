@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 import pytest
+import redis
 from requests import Request
 from requests.adapters import HTTPAdapter
 
@@ -35,6 +36,32 @@ class TestRequestAdmission:
         monkeypatch.setenv("MISTHELPER_STANDALONE", "true")  # Force CSV-only mode.
         monkeypatch.setenv("WAN_SHARED_ADMISSION", "true")  # Create a conflicting explicit value.
         assert RequestLedger.enabled() is False  # Standalone precedence disables Redis.
+
+    def test_redis_timeout_disables_admission_and_continues(self) -> None:
+        """An unavailable local Redis must not block a read-only Mist request."""
+        request = Request(
+            "GET",
+            "https://mist.example/api/v1/orgs/org-one/devices",
+            headers={"Authorization": "Bearer token"},
+        ).prepare()  # Prepare one authenticated read.
+
+        class OfflineRedis:
+            """Return a Redis timeout for the first admission call."""
+
+            def __init__(self) -> None:
+                """Record the first Redis attempt."""
+                self.calls = 0  # Track Redis calls for the disabled ledger.
+
+            def eval(self, *_arguments: object) -> int:
+                """Raise a Redis timeout instead of reserving a request."""
+                self.calls += 1  # Record the failed admission attempt.
+                raise redis.exceptions.TimeoutError("offline")  # Simulate the workstation Redis outage.
+
+        offline_redis = OfflineRedis()  # Use one deterministic offline store.
+        ledger = RequestLedger(offline_redis)  # Build a ledger around the failing store.
+        ledger.admit(request)  # The Redis failure must continue as a plain read.
+        ledger.admit(request)  # The disabled ledger must not call Redis again.
+        assert offline_redis.calls == 1  # One failure permanently disables this process ledger.
 
     def test_ledger_hashes_auth_and_counts_org(self) -> None:
         """Store only a credential hash and include the organization bucket."""

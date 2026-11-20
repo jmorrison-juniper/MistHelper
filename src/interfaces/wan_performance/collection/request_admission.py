@@ -38,6 +38,7 @@ return 1"""  # Reserve all matching quotas in one atomic operation.
         """Use one shared Redis client for all configured workers."""
         self.client = client  # Keep the injected store for deterministic tests.
         self.org_id = org_id  # Preserve explicit organization context when available.
+        self.available = True  # Stop shared accounting after one unreachable Redis response.
 
     @staticmethod
     def enabled() -> bool:
@@ -71,6 +72,9 @@ return 1"""  # Reserve all matching quotas in one atomic operation.
 
     def admit(self, request: PreparedRequest) -> None:
         """Reserve one actual request attempt without storing credentials."""
+        if not self.available:  # Redis already failed, so continue the read without it.
+            logger.debug("Shared Redis admission is unavailable; the request will continue.")  # Explain the fallback.
+            return  # Keep read-only Mist requests alive on a workstation without Redis.
         authentication = request.headers.get("Authorization") or request.headers.get("Cookie")  # Read auth locally.
         if not authentication:  # Anonymous requests cannot share a safe identity key.
             raise ConnectionError("Shared API admission requires configured authentication.")  # Fail closed.
@@ -80,9 +84,17 @@ return 1"""  # Reserve all matching quotas in one atomic operation.
         if org_id:  # Include cross-credential organization control when known.
             keys.append(f"misthelper:api:v1:org:{org_id}")  # Share the organization ceiling.
         logger.info("Reserve one shared Mist API request attempt.")  # Record the operation without auth data.
-        result = self.client.eval(
-            self.SCRIPT, len(keys), *keys, self.LIMIT, secrets.token_hex(16)
-        )  # Reserve atomically.
+        try:  # Redis is optional for a read-only workstation run.
+            result = self.client.eval(
+                self.SCRIPT, len(keys), *keys, self.LIMIT, secrets.token_hex(16)
+            )  # Reserve atomically.
+        except redis.exceptions.RedisError as error:  # A local Redis outage must not block a Mist read.
+            self.available = False  # Disable Redis admission for the rest of this process.
+            logger.warning(
+                "Shared Redis admission is unavailable (%s); continuing the Mist request.",
+                type(error).__name__,
+            )  # Explain the safe fallback without credentials or URL data.
+            return  # Continue the HTTP request when Redis is offline.
         if result != 1:  # Reject a full quota or a malformed result.
             raise ConnectionError("The shared Mist API hourly quota is exhausted.")  # Stop before network access.
         logger.debug("Reserved one shared Mist API request attempt.")  # Record successful reservation.

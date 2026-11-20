@@ -267,6 +267,45 @@ class CrossOrgSubscriptionInventoryReport:
             return fallback_path  # Return the visible fallback path.
 
     @staticmethod
+    def _write_payload_csv(
+        payload: list[dict[str, Any]],
+        filename: str,
+        fieldnames: list[str],
+    ) -> Path:
+        """Write a populated CSV or an UTC timestamped fallback for a locked stable name."""
+        path = Path("data") / filename  # Build the platform-safe stable report path.
+        path.parent.mkdir(parents=True, exist_ok=True)  # Create data for a new worktree.
+        logger.info("Writing populated cross-org report %s", path)  # Log before file output.
+        try:  # A stable report name can be locked by Excel or OneDrive.
+            with path.open("w", newline="", encoding="utf-8") as csv_file:  # Open the stable report.
+                writer = csv.DictWriter(csv_file, fieldnames=fieldnames)  # Use the exact report columns.
+                writer.writeheader()  # Write the report header.
+                writer.writerows(payload)  # Write every current source row.
+            logger.debug("Wrote populated cross-org report %s", path)  # Log after successful output.
+            return path  # Return the stable output path.
+        except OSError as error:  # A file lock or write denial needs a visible fallback.
+            logger.error("Cannot write stable cross-org CSV %s: %s", path, error)  # Preserve the local failure.
+            timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")  # Make a UTC fallback name.
+            fallback_path = path.with_name(f"{path.stem}_{timestamp}{path.suffix}")  # Keep a visible copy.
+            try:  # The fallback must use a name that is not locked.
+                with fallback_path.open("w", newline="", encoding="utf-8") as csv_file:  # Open the fallback.
+                    writer = csv.DictWriter(csv_file, fieldnames=fieldnames)  # Use the exact report columns.
+                    writer.writeheader()  # Write the report header.
+                    writer.writerows(payload)  # Write every current source row.
+            except OSError as fallback_error:  # Both stable and fallback writes can fail.
+                logger.error(
+                    "Cannot write fallback cross-org CSV %s: %s",
+                    fallback_path,
+                    fallback_error,
+                )  # Preserve the fallback failure.
+                raise RuntimeError(
+                    f"Cannot write cross-org CSV {filename} or its fallback"
+                ) from fallback_error  # Stop with an explicit output failure.
+            print(f"Warning: {filename} is locked. Wrote {fallback_path} instead.")  # Tell the operator.
+            logger.warning("Used fallback cross-org CSV %s for locked %s", fallback_path, path)  # Log fallback.
+            return fallback_path  # Return the visible fallback path.
+
+    @staticmethod
     def _export_reports(
         payload: CrossOrgReportPayload,
         dependencies: Any,
@@ -411,13 +450,19 @@ class CrossOrgSubscriptionInventoryReport:
                 continue  # Do not call the shared exporter with fake rows.
             payload = CrossOrgSubscriptionInventoryReport._safe_payload(rows)  # Neutralize formula text.
             logger.info("Exporting cross-org report %s", filename)  # Log before export.
-            dependencies.DataExporter.write_with_format_selection(
+            written = dependencies.DataExporter.write_with_format_selection(
                 payload,
                 filename,
                 api_function_name=api_name,
                 fieldnames=fieldnames,
                 backend_options=ExportBackendOptions(format_override="csv"),
             )  # Write CSV through the shared exporter.
+            if written is False:  # The exporter rejected the stable file name.
+                CrossOrgSubscriptionInventoryReport._write_payload_csv(
+                    payload,
+                    filename,
+                    fieldnames,
+                )  # Write one UTC timestamped fallback.
             logger.debug("Exported %d rows to %s", len(payload), filename)  # Log export count.
 
     @staticmethod

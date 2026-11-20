@@ -227,6 +227,48 @@ def test_cross_org_empty_export_uses_fallback_when_stable_name_is_locked(
     assert rows == []  # The fallback remains header-only.
 
 
+def test_cross_org_populated_export_uses_fallback_when_stable_name_is_locked(
+    tmp_path: object,
+    monkeypatch: object,
+) -> None:
+    """A populated report writes every row to a UTC fallback when the stable file is locked."""
+    import csv
+
+    data_path = tmp_path / "data"  # Isolate locked output under pytest temp storage.
+    data_path.mkdir()  # Create the report directory for the negative write test.
+    stable_path = data_path / "LockedCrossOrgPurchase.csv"  # Select the stable purchase name.
+    fieldnames = ["org_id", "subscription_type", "quantity"]  # Use a small report contract.
+    payload = [
+        {"org_id": "org-1", "subscription_type": "SUB-AP", "quantity": 30},
+        {"org_id": "org-2", "subscription_type": "SUB-SSR", "quantity": 12},
+    ]  # Provide one row for each synthetic organization.
+    real_open = type(stable_path).open  # Preserve the real pathlib open method.
+
+    def deny_stable_open(candidate: object, *args: object, **kwargs: object) -> object:
+        if str(candidate).replace("/", "\\").endswith("LockedCrossOrgPurchase.csv"):  # Match stable names.
+            raise PermissionError(13, "locked by another process", str(candidate))
+        return real_open(candidate, *args, **kwargs)  # Allow the timestamped fallback write.
+
+    monkeypatch.chdir(tmp_path)  # Resolve data relative to the isolated workspace.
+    monkeypatch.setattr(type(stable_path), "open", deny_stable_open)  # Simulate a Windows file lock.
+    fallback_path = CrossOrgSubscriptionInventoryReport._write_payload_csv(
+        payload,
+        "LockedCrossOrgPurchase.csv",
+        fieldnames,
+    )  # Write the populated fallback.
+    assert fallback_path != stable_path  # The stable locked name is not reused.
+    assert fallback_path.exists()  # The fallback file must be visible.
+    assert fallback_path.stem.startswith("LockedCrossOrgPurchase_")  # The fallback name carries a timestamp.
+    with fallback_path.open(newline="", encoding="utf-8") as csv_file:  # Read the fallback CSV.
+        reader = csv.DictReader(csv_file)  # Parse the populated report.
+        rows = list(reader)  # Materialize every source row.
+    assert reader.fieldnames == fieldnames  # Preserve the exact header contract.
+    assert rows == [
+        {"org_id": "org-1", "subscription_type": "SUB-AP", "quantity": "30"},
+        {"org_id": "org-2", "subscription_type": "SUB-SSR", "quantity": "12"},
+    ]  # Preserve every source row in the fallback.
+
+
 def test_cross_org_msp_purchase_read_runs_once_for_duplicate_grants() -> None:
     """One MSP grant produces one MSP license request for all matched organizations."""
     exporter = FakeExporter()  # Capture export calls without file I/O.
