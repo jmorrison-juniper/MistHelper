@@ -6,7 +6,7 @@ import csv  # Write explicit header-only CSV files for empty reports.
 import logging  # Record operation actions for operator traceability.
 import os  # Read direct organization and customer name settings without prompts.
 from dataclasses import dataclass, replace  # Preserve report payload and organization status.
-from datetime import date  # Type report date for source scoring.
+from datetime import UTC, date, datetime  # Stamp fallback CSV names and type report dates.
 from pathlib import Path  # Build data paths with the platform path library.
 from typing import Any  # Type injectable test seams without importing root modules.
 
@@ -234,15 +234,37 @@ class CrossOrgSubscriptionInventoryReport:
         return payload  # Return portable CSV payload.
 
     @staticmethod
-    def _write_empty_csv(filename: str, fieldnames: list[str]) -> None:
+    def _write_empty_csv(filename: str, fieldnames: list[str]) -> Path:
         """Write one header-only CSV with no fake data row."""
         path = Path("data") / filename  # Build the platform-safe data path.
         path.parent.mkdir(parents=True, exist_ok=True)  # Create data for a new worktree.
         logger.info("Writing empty cross-org report header to %s", path)  # Log before file output.
-        with path.open("w", newline="", encoding="utf-8") as csv_file:  # Open the report for writing.
-            writer = csv.DictWriter(csv_file, fieldnames=fieldnames)  # Use explicit header order.
-            writer.writeheader()  # Write headers without a fake Missing row.
-        logger.debug("Wrote header-only cross-org report %s", path)  # Log after file output.
+        try:  # The stable report name can be locked by Excel or OneDrive.
+            with path.open("w", newline="", encoding="utf-8") as csv_file:  # Open the report for writing.
+                writer = csv.DictWriter(csv_file, fieldnames=fieldnames)  # Use explicit header order.
+                writer.writeheader()  # Write headers without a fake Missing row.
+            logger.debug("Wrote header-only cross-org report %s", path)  # Log after file output.
+            return path  # Return the stable output path.
+        except OSError as error:  # File lock or write denial needs a visible fallback.
+            logger.error("Cannot write stable cross-org CSV %s: %s", path, error)  # Preserve the local failure.
+            timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")  # Make a collision-resistant UTC name.
+            fallback_path = path.with_name(f"{path.stem}_{timestamp}{path.suffix}")  # Keep a visible report copy.
+            try:  # A fallback file must remain outside the locked stable name.
+                with fallback_path.open("w", newline="", encoding="utf-8") as csv_file:  # Open the fallback.
+                    writer = csv.DictWriter(csv_file, fieldnames=fieldnames)  # Use the required headers.
+                    writer.writeheader()  # Write one header-only fallback.
+            except OSError as fallback_error:  # Neither stable nor fallback write can proceed.
+                logger.error(
+                    "Cannot write fallback cross-org CSV %s: %s",
+                    fallback_path,
+                    fallback_error,
+                )  # Preserve the fallback failure.
+                raise RuntimeError(
+                    f"Cannot write cross-org CSV {filename} or its fallback"
+                ) from fallback_error  # Stop with an explicit output failure.
+            print(f"Warning: {filename} is locked. Wrote {fallback_path} instead.")  # Tell the operator.
+            logger.warning("Used fallback cross-org CSV %s for locked %s", fallback_path, path)  # Log fallback.
+            return fallback_path  # Return the visible fallback path.
 
     @staticmethod
     def _export_reports(

@@ -42,6 +42,8 @@ return 1"""  # Reserve all matching quotas in one atomic operation.
     @staticmethod
     def enabled() -> bool:
         """Enable shared accounting when application storage uses Redis."""
+        if os.getenv("MISTHELPER_STANDALONE", "").lower() == "true":  # Standalone never opens Redis admission.
+            return False  # Prevent a Redis timeout from blocking read-only Mist requests.
         mode = os.getenv("WAN_SHARED_ADMISSION", "auto").lower()  # Read the explicit opt-in once.
         if mode not in {"auto", "true", "false"}:  # Reject ambiguous configuration.
             raise ValueError("WAN_SHARED_ADMISSION must be auto, true, or false.")  # Fail on invalid settings.

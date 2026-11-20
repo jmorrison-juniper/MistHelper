@@ -193,6 +193,40 @@ def test_cross_org_empty_export_writes_header_only(tmp_path: object, monkeypatch
     assert rows == []  # No fake Missing row exists.
 
 
+def test_cross_org_empty_export_uses_fallback_when_stable_name_is_locked(
+    tmp_path: object,
+    monkeypatch: object,
+) -> None:
+    """A locked stable report name produces a visible timestamped fallback file."""
+    import csv
+
+    data_path = tmp_path / "data"  # Isolate locked output under pytest temp storage.
+    data_path.mkdir()  # Create the report directory for the negative write test.
+    stable_path = data_path / "LockedCrossOrg.csv"  # Select the stable target name.
+    fieldnames = ["org_id", "org_name", "source", "request_status"]  # Use a stable header contract.
+    real_open = type(stable_path).open  # Preserve the real pathlib open method.
+
+    def deny_stable_open(candidate: object, *args: object, **kwargs: object) -> object:
+        if str(candidate).replace("/", "\\").endswith("LockedCrossOrg.csv"):  # Match stable relative or absolute path.
+            raise PermissionError(13, "locked by another process", str(candidate))
+        return real_open(candidate, *args, **kwargs)  # Allow the timestamped fallback write.
+
+    monkeypatch.chdir(tmp_path)  # Resolve data relative to the isolated workspace.
+    monkeypatch.setattr(type(stable_path), "open", deny_stable_open)  # Simulate a Windows file lock.
+    fallback_path = CrossOrgSubscriptionInventoryReport._write_empty_csv(
+        "LockedCrossOrg.csv",
+        fieldnames,
+    )  # Write the fallback header.
+    assert fallback_path != stable_path  # The stable locked name is not reused.
+    assert fallback_path.exists()  # The fallback file must be visible.
+    assert fallback_path.stem.startswith("LockedCrossOrg_")  # The fallback name carries a timestamp.
+    with fallback_path.open(newline="", encoding="utf-8") as csv_file:  # Read the fallback CSV.
+        reader = csv.DictReader(csv_file)  # Parse header-only output.
+        rows = list(reader)  # Materialize the zero data rows.
+    assert reader.fieldnames == fieldnames  # Preserve the exact header contract.
+    assert rows == []  # The fallback remains header-only.
+
+
 def test_cross_org_msp_purchase_read_runs_once_for_duplicate_grants() -> None:
     """One MSP grant produces one MSP license request for all matched organizations."""
     exporter = FakeExporter()  # Capture export calls without file I/O.

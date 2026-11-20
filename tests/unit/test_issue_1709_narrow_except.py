@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import os
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -433,6 +434,23 @@ def test_setup_runtime_flags_catches_fast_attr_error() -> None:
     args = Args()  # Use a local class so the property affects only this test.
     MistHelper.setup_runtime_flags(args)  # Runtime setup must keep startup controlled.
     assert MistHelper.MainEntrypoint.context.fast_mode_enabled is False  # Preserve the safe default.
+
+
+def test_setup_runtime_flags_standalone_disables_shared_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A standalone CLI run disables both database and Redis admission settings."""
+    monkeypatch.setenv("WAN_SHARED_ADMISSION", "true")  # Create a conflicting Redis-admission value.
+
+    class Args:
+        standalone = True  # Request standalone mode.
+        test = False  # Keep test-mode logic quiet.
+        testinteractive = False  # Keep interactive-test logic quiet.
+        fast = False  # Disable fast mode for this unit run.
+
+    MistHelper.setup_runtime_flags(Args())  # Apply CLI runtime flags.
+    assert os.getenv("MISTHELPER_STANDALONE") == "true"  # Standalone mode is visible to exporters.
+    assert os.getenv("WAN_SHARED_ADMISSION") == "false"  # Redis request accounting is disabled.
 
 
 def test_setup_runtime_flags_rejects_unexpected_error() -> None:

@@ -70,6 +70,9 @@ An HTTP 429 response waits 60 seconds and retries once.
 Other HTTP failures stop retry and remain visible.
 The operation continues to other organizations after a partial failure.
 An absent JSI account makes contract evidence unavailable.
+The `--standalone` flag disables ArangoDB, Redis, and shared API request admission.
+Close a CSV report in Excel or another program before you rerun the operation.
+If a stable CSV name remains locked, the report writes a UTC timestamped fallback file.
 
 ## Source attribution
 

@@ -27,6 +27,15 @@ class FakeRedis:
 class TestRequestAdmission:
     """Verify credentials, tenant keys, and adapter behavior."""
 
+    def test_standalone_disables_shared_admission_even_if_explicit(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Standalone mode always disables Redis request accounting."""
+        monkeypatch.setenv("MISTHELPER_STANDALONE", "true")  # Force CSV-only mode.
+        monkeypatch.setenv("WAN_SHARED_ADMISSION", "true")  # Create a conflicting explicit value.
+        assert RequestLedger.enabled() is False  # Standalone precedence disables Redis.
+
     def test_ledger_hashes_auth_and_counts_org(self) -> None:
         """Store only a credential hash and include the organization bucket."""
         request = Request(

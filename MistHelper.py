@@ -7512,7 +7512,10 @@ def setup_runtime_flags(
     logger.debug("setup_runtime_flags: applying standalone and fast mode flags")  # Log entry
     if args.standalone:  # --standalone flag disables ArangoDB/Redis connections org-wide
         os.environ["MISTHELPER_STANDALONE"] = "true"  # Write env var so all components detect standalone mode
+        os.environ["WAN_SHARED_ADMISSION"] = "false"  # Disable Redis request admission for standalone reads
         logger.info("Standalone mode enabled via --standalone flag: ArangoDB/Redis disabled")  # Log env write
+    elif os.environ.get("MISTHELPER_STANDALONE", "").lower() == "true":  # Environment-only standalone mode.
+        os.environ["WAN_SHARED_ADMISSION"] = "false"  # Apply standalone precedence to existing environment runs
     globals()["args"] = args  # Register parsed args globally so menu functions can read CLI flags
     logger.debug("CLI args registered in globals()['args'] for menu function access")  # Log global assignment
     test_mode_enabled = bool(  # Keep the old global behavior from stored CLI arguments.
