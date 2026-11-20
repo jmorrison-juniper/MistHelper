@@ -27,12 +27,19 @@ Fields:
 - Device type
 - Deployment status
 - Connection status
+- VC MAC
+- Chassis serial
+- Chassis MAC
+- Chassis model
 - Source attribution
 
 Rules:
 - A record with a site ID is deployed.
 - A record with no site ID is stock.
 - Missing identity fields remain `Missing`.
+- A synthetic 020003 or 020004 top serial uses the physical chassis serial.
+- A real member serial remains the canonical serial.
+- Nested VC member records become separate identities.
 - The row grain is one source inventory identity.
 - Formula text is neutralized before export.
 
@@ -84,6 +91,10 @@ Fields:
 - JSI match status
 - Contract status
 - Contract end date
+- VC MAC
+- Chassis serial
+- Chassis MAC
+- Chassis model
 
 Rules:
 - A record with no site ID is stock.

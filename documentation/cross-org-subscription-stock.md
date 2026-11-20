@@ -50,6 +50,8 @@ The deployed summary groups these rows by organization and device type.
 The summary does not combine deployed devices with unassigned stock.
 `CrossOrgInventorySummary.csv` combines the deployed and stock quantities.
 Use the `inventory_quantity` column to review all organization-assigned inventory identities.
+The `serial` column uses the physical chassis serial when a source row has a synthetic 020003 or 020004 virtual identity.
+The `vc_mac`, `chassis_serial`, `chassis_mac`, and `chassis_model` columns preserve the source VC evidence.
 
 The report reconciles every paginated inventory page.
 One inventory set can contain 27,000 or more deployed devices.
@@ -59,6 +61,7 @@ The 2026-11-11 MSP inventory snapshot is a comparison baseline, not a live sourc
 ## Read stock evidence
 
 A stock row is an inventory record with no `site_id`.
+A stock switch with a synthetic VC identity uses the physical chassis serial and MAC when the source provides them.
 The report does not limit stock to AP and switch records.
 It includes gateway, SSR, Mist Edge, router, and other inventory types.
 The JSI match uses serial number.

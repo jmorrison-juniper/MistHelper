@@ -40,6 +40,7 @@ Verify these outputs:
 - `CrossOrgContractEvidence.csv`
 
 T-Mobile USA Retail must show separate deployed detail and summary evidence. The 2026-11-11 snapshot is a comparison baseline of 27,030 deployed devices. The live count may differ but must come from the live inventory source.
+Each 020003 or 020004 virtual switch identity must include the physical chassis serial in `serial` and `chassis_serial`.
 
 ## Logging Validation
 

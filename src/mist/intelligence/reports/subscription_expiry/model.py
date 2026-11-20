@@ -171,6 +171,10 @@ class StockInventoryRow:
     jsi_match_status: str  # Mark matched, no-match, unavailable, or missing.
     contract_status: str  # Preserve JSI status or Missing.
     contract_end_date: str  # Preserve available JSI date or Missing.
+    vc_mac: str = MISSING_VALUE  # Preserve the Virtual Chassis parent MAC.
+    chassis_serial: str = MISSING_VALUE  # Preserve the physical chassis serial.
+    chassis_mac: str = MISSING_VALUE  # Preserve the physical chassis MAC.
+    chassis_model: str = MISSING_VALUE  # Preserve the physical chassis model.
 
     def to_dict(self) -> dict[str, Any]:
         """Return a CSV-ready stock mapping."""
@@ -193,6 +197,10 @@ class DeployedInventoryRow:
     device_type: str  # Name ap, switch, gateway, mxedge, router, or other.
     deployment_status: str  # Mark deployed rather than stock.
     connected: str  # Preserve live connection status or Missing.
+    vc_mac: str = MISSING_VALUE  # Preserve the Virtual Chassis parent MAC.
+    chassis_serial: str = MISSING_VALUE  # Preserve the physical chassis serial.
+    chassis_mac: str = MISSING_VALUE  # Preserve the physical chassis MAC.
+    chassis_model: str = MISSING_VALUE  # Preserve the physical chassis model.
 
     def to_dict(self) -> dict[str, Any]:
         """Return a CSV-ready deployed inventory mapping."""
@@ -796,6 +804,119 @@ class CrossOrgSubscriptionInventoryModel:
         return rows  # Return stable subscription balances.
 
     @staticmethod
+    def _expand_inventory_members(
+        inventory: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Expand nested VC member rows and preserve parent identity fields."""
+        expanded: list[dict[str, Any]] = []  # Accumulate physical and top-level identities.
+        for record in inventory:  # Walk every inventory record.
+            if not isinstance(record, dict):  # Skip malformed source rows.
+                continue  # Keep only mapping records.
+            members = record.get("members")  # Read nested physical member records.
+            if not isinstance(members, list) or not members:  # No nested member records.
+                expanded.append(record)  # Keep the top-level inventory record.
+                continue  # Continue with the next identity.
+            for member in members:  # Walk each nested physical member.
+                if not isinstance(member, dict):  # Skip malformed member records.
+                    continue  # Keep only mapping member records.
+                row = dict(record)  # Copy parent fields for VC context.
+                row.update(member)  # Override parent fields with member identity fields.
+                row.setdefault("site_id", record.get("site_id"))  # Preserve parent site evidence.
+                row.setdefault("site_name", record.get("site_name"))  # Preserve parent site name.
+                row.setdefault("vc_mac", record.get("vc_mac") or record.get("mac"))  # Preserve the VC parent.
+                expanded.append(row)  # Add one physical member record.
+        return expanded  # Return top-level and nested inventory identities.
+
+    @staticmethod
+    def _is_synthetic_virtual_identity(value: str) -> bool:
+        """Return True for Mist synthetic 020003 or 020004 virtual MAC identities."""
+        return value != MISSING_VALUE and value.lower().startswith("02000")  # Recognize synthetic virtual MAC prefixes.
+
+    @staticmethod
+    def _canonical_serial(
+        top_serial: str,
+        chassis_serial: str,
+    ) -> str:
+        """Return the physical serial for a synthetic identity."""
+        if top_serial == MISSING_VALUE:  # No source serial exists.
+            return chassis_serial  # Use the explicit chassis serial.
+        if (
+            CrossOrgSubscriptionInventoryModel._is_synthetic_virtual_identity(top_serial)
+            and chassis_serial != MISSING_VALUE
+        ):  # A synthetic identity has a physical serial.
+            return chassis_serial  # Replace the synthetic serial.
+        return top_serial  # Keep a real member or device serial.
+
+    @staticmethod
+    def _canonical_mac(
+        top_mac: str,
+        chassis_mac: str,
+        vc_mac: str,
+    ) -> str:
+        """Return the physical MAC or the visible VC parent MAC."""
+        if top_mac == MISSING_VALUE:  # No source MAC exists.
+            mac = chassis_mac  # Use the explicit chassis MAC.
+        elif (
+            CrossOrgSubscriptionInventoryModel._is_synthetic_virtual_identity(top_mac) and chassis_mac != MISSING_VALUE
+        ):  # A synthetic MAC has a physical chassis MAC.
+            mac = chassis_mac  # Replace the synthetic MAC.
+        else:  # The source has a real member MAC.
+            mac = top_mac  # Keep the real MAC.
+        if mac == MISSING_VALUE and vc_mac != MISSING_VALUE:  # Only the VC parent MAC is visible.
+            return vc_mac  # Use the parent MAC.
+        return mac  # Return the canonical MAC.
+
+    @staticmethod
+    def _canonical_model(
+        top_model: str,
+        chassis_model: str,
+    ) -> str:
+        """Return the source model or the explicit chassis model."""
+        if top_model == MISSING_VALUE:  # No source model exists.
+            return chassis_model  # Use the chassis model.
+        return top_model  # Preserve the real inventory model.
+
+    @staticmethod
+    def _canonical_vc_mac(
+        top_mac: str,
+        vc_mac: str,
+    ) -> str:
+        """Return the VC parent MAC for a synthetic top identity."""
+        if vc_mac == MISSING_VALUE and CrossOrgSubscriptionInventoryModel._is_synthetic_virtual_identity(
+            top_mac
+        ):  # The top MAC is a VC virtual identity.
+            return top_mac  # Use the synthetic top MAC as the VC MAC.
+        return vc_mac  # Preserve an explicit VC MAC.
+
+    @staticmethod
+    def _canonical_inventory_identity(
+        record: dict[str, Any],
+    ) -> tuple[str, str, str, str, str, str, str]:
+        """Resolve canonical serial, MAC, model, and explicit VC chassis fields."""
+        top_serial = CrossOrgSubscriptionInventoryModel._text(record.get("serial"))  # Read the source serial.
+        top_mac = CrossOrgSubscriptionInventoryModel._text(record.get("mac"))  # Read the source MAC.
+        top_model = CrossOrgSubscriptionInventoryModel._text(record.get("model"))  # Read the source model.
+        vc_mac = CrossOrgSubscriptionInventoryModel._text(record.get("vc_mac"))  # Read the VC parent MAC.
+        chassis_serial = CrossOrgSubscriptionInventoryModel._text(record.get("chassis_serial"))  # Read physical serial.
+        chassis_mac = CrossOrgSubscriptionInventoryModel._text(record.get("chassis_mac"))  # Read physical MAC.
+        chassis_model = CrossOrgSubscriptionInventoryModel._text(record.get("chassis_model"))  # Read physical model.
+        serial = CrossOrgSubscriptionInventoryModel._canonical_serial(top_serial, chassis_serial)  # Resolve serial.
+        mac = CrossOrgSubscriptionInventoryModel._canonical_mac(top_mac, chassis_mac, vc_mac)  # Resolve MAC.
+        model = CrossOrgSubscriptionInventoryModel._canonical_model(top_model, chassis_model)  # Resolve model.
+        vc_mac = CrossOrgSubscriptionInventoryModel._canonical_vc_mac(top_mac, vc_mac)  # Resolve VC MAC.
+        if chassis_serial == MISSING_VALUE and not CrossOrgSubscriptionInventoryModel._is_synthetic_virtual_identity(
+            top_serial
+        ):  # The row has a real serial.
+            chassis_serial = top_serial  # Use the real serial for explicit chassis evidence.
+        if chassis_mac == MISSING_VALUE and not CrossOrgSubscriptionInventoryModel._is_synthetic_virtual_identity(
+            top_mac
+        ):  # The row has a real MAC.
+            chassis_mac = top_mac  # Use the real MAC for explicit chassis evidence.
+        if chassis_model == MISSING_VALUE:  # The row has no separate chassis model.
+            chassis_model = top_model  # Use the source model for explicit chassis evidence.
+        return serial, mac, model, vc_mac, chassis_serial, chassis_mac, chassis_model  # Return all identity fields.
+
+    @staticmethod
     def build_deployed_inventory_rows(
         organization: OrganizationScope,
         inventory: list[dict[str, Any]],
@@ -804,7 +925,9 @@ class CrossOrgSubscriptionInventoryModel:
         logger.info("Building deployed inventory rows for %s", organization.org_id)  # Log before classification.
         rows: list[DeployedInventoryRow] = []  # Accumulate deployed evidence.
         seen: set[tuple[str, str, str, str]] = set()  # Deduplicate one live inventory identity.
-        for record in inventory:  # Walk every live inventory record.
+        for record in CrossOrgSubscriptionInventoryModel._expand_inventory_members(
+            inventory
+        ):  # Expand nested VC members.
             row = CrossOrgSubscriptionInventoryModel._deployed_row(organization, record)  # Classify one record.
             if row is None:  # Unassigned or malformed inventory is not deployed.
                 continue  # Keep stock records outside deployed output.
@@ -824,9 +947,9 @@ class CrossOrgSubscriptionInventoryModel:
         """Classify one inventory record as deployed or return None for stock."""
         if not isinstance(record, dict) or not record.get("site_id"):  # A site assignment proves deployment.
             return None  # Keep unassigned devices in stock output.
-        serial = CrossOrgSubscriptionInventoryModel._text(record.get("serial") or record.get("chassis_serial"))
-        mac = CrossOrgSubscriptionInventoryModel._text(record.get("mac") or record.get("vc_mac"))
-        model = CrossOrgSubscriptionInventoryModel._text(record.get("model") or record.get("chassis_model"))
+        serial, mac, model, vc_mac, chassis_serial, chassis_mac, chassis_model = (
+            CrossOrgSubscriptionInventoryModel._canonical_inventory_identity(record)
+        )  # Resolve the physical and VC identities once.
         connected = record.get("connected")
         connected_text = (
             "True" if connected is True else "False" if connected is False else MISSING_VALUE
@@ -844,6 +967,10 @@ class CrossOrgSubscriptionInventoryModel:
             device_type=CrossOrgSubscriptionInventoryModel._inventory_type(record),
             deployment_status="deployed",
             connected=connected_text,
+            vc_mac=vc_mac,
+            chassis_serial=chassis_serial,
+            chassis_mac=chassis_mac,
+            chassis_model=chassis_model,
         )  # Build one deployed inventory row.
 
     @staticmethod
@@ -948,7 +1075,9 @@ class CrossOrgSubscriptionInventoryModel:
         jsi_by_serial = CrossOrgSubscriptionInventoryModel._jsi_by_serial(jsi)  # Index JSI evidence.
         rows: list[StockInventoryRow] = []  # Accumulate stock evidence.
         seen: set[tuple[str, str, str]] = set()  # Deduplicate inventory records.
-        for record in inventory:  # Walk every live inventory record.
+        for record in CrossOrgSubscriptionInventoryModel._expand_inventory_members(
+            inventory
+        ):  # Expand nested VC members.
             row = CrossOrgSubscriptionInventoryModel._stock_row(
                 organization,
                 record,
@@ -984,13 +1113,9 @@ class CrossOrgSubscriptionInventoryModel:
         """Build one stock row or return None for assigned inventory."""
         if not isinstance(record, dict) or record.get("site_id"):  # Assigned devices stay out of stock.
             return None  # Skip assigned inventory.
-        serial = CrossOrgSubscriptionInventoryModel._text(
-            record.get("serial") or record.get("chassis_serial")
-        )  # Normalize serial.
-        mac = CrossOrgSubscriptionInventoryModel._text(record.get("mac") or record.get("vc_mac"))  # Normalize MAC.
-        model = CrossOrgSubscriptionInventoryModel._text(
-            record.get("model") or record.get("chassis_model")
-        )  # Normalize model.
+        serial, mac, model, vc_mac, chassis_serial, chassis_mac, chassis_model = (
+            CrossOrgSubscriptionInventoryModel._canonical_inventory_identity(record)
+        )  # Resolve the physical and VC identities once.
         jsi_match = jsi_by_serial.get(serial if serial != MISSING_VALUE else "")  # Find serial evidence.
         match_status = CrossOrgSubscriptionInventoryModel._jsi_match_status(jsi, jsi_match)  # Score match.
         contract_status = CrossOrgSubscriptionInventoryModel._stock_contract_status(jsi_match)  # Preserve status.
@@ -1009,6 +1134,10 @@ class CrossOrgSubscriptionInventoryModel:
             jsi_match_status=match_status,
             contract_status=contract_status,
             contract_end_date=contract_end_date,
+            vc_mac=vc_mac,
+            chassis_serial=chassis_serial,
+            chassis_mac=chassis_mac,
+            chassis_model=chassis_model,
         )  # Build one stock row.
 
     @staticmethod

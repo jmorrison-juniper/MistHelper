@@ -76,6 +76,8 @@ A NOC operator starts MistHelper with warning or higher log thresholds. The term
 - Inventory pagination crosses more than one page.
 - A response contains Virtual Chassis members that share or use different serial identities.
 - A device has no site ID, serial, model, or device type.
+- A switch has a synthetic 020003 or 020004 virtual identity and a physical chassis identity.
+- A VC record contains nested physical member records.
 - A list response is split across source payload shapes.
 - Inventory is 27,000 rows or more for one organization.
 - A license usage count and deployed inventory count differ.
@@ -106,6 +108,8 @@ A NOC operator starts MistHelper with warning or higher log thresholds. The term
 - **FR-015**: The file backend MUST keep timestamped plain-text records that remain readable and searchable.
 - **FR-016**: The console frontend MUST preserve the ASCII-only output rule and avoid a required ANSI color mode.
 - **FR-017**: Credentials and secrets MUST remain redacted in both structured and standard log records.
+- **FR-018**: Menu 308 MUST prefer a physical chassis serial over a synthetic 020003 or 020004 virtual identity.
+- **FR-019**: Deployed and stock inventory reports MUST expose the VC MAC, chassis serial, chassis MAC, and chassis model when the source provides them.
 
 ### Mist Cloud Transport Requirements *(include if feature uses Mist Cloud)*
 

@@ -113,7 +113,10 @@
 - [X] T034 Run menu reference generation and verify no menu documentation drift. (delivered: 16 menu maps unchanged)
 - [X] T045 [US1] Add a combined deployed, stock, and organization inventory summary export in `src/mist/intelligence/reports/subscription_expiry/`. (delivered: `CrossOrgInventorySummary.csv`, combined summary dataclass, and stock VC fallbacks)
 - [X] T046 [US3] Validate later inventory pages, MSP organization continuation pages, and later-page HTTP failures in `tests/unit/marvis/mist/intelligence/reports/audits/credentials/subscription_expiry/test_client.py`. (delivered: SDK continuation and later-page failure tests)
-- [ ] T035 Run an interactive MSP menu 308 report and compare T-Mobile USA Retail deployed inventory with the 2026-11-11 snapshot. (pending: interactive 2FA sign-in; existing snapshot shows 27,030 T-Mobile USA Retail devices)
+- [X] T047 [US2] Add synthetic VC, real-member, and nested-member inventory tests in `tests/unit/marvis/mist/intelligence/reports/audits/credentials/subscription_expiry/test_model.py`. (delivered: physical chassis serial and nested member tests)
+- [X] T048 [US2] Add canonical chassis identity fields and nested VC expansion in `src/mist/intelligence/reports/subscription_expiry/model.py`. (delivered: chassis serial, MAC, model, and VC MAC fields)
+- [X] T049 [US2] Export chassis and VC identity fields in `src/mist/intelligence/reports/subscription_expiry/operation.py`. (delivered: deployed and stock CSV field contracts)
+- [ ] T035 Run an interactive MSP menu 308 report and compare T-Mobile USA Retail deployed inventory with the 2026-11-11 snapshot. Verify physical chassis serials replace synthetic 020003 or 020004 identities. (pending: interactive 2FA sign-in; existing snapshot shows 27,030 T-Mobile USA Retail devices)
 - [X] T036 Open the pull request for issue 4858 after all required CI checks pass. (delivered: PR #4859)
 
 ---
