@@ -169,9 +169,9 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
     def _run_common_startup(self) -> None:
         """Run the import-time side effects in a fixed explicit order."""
         self._configure_standard_streams()  # Prevent console encoding failures before user output begins.
-        self._configure_logging()  # Configure logging one time inside bootstrap.
-        self._check_data_directory()  # Fail early when the runtime data directory is not writable.
         self._load_environment_file()  # Load .env only after the caller asks for startup.
+        self._configure_logging()  # Configure logging after .env supplies the requested levels.
+        self._check_data_directory()  # Fail early when the runtime data directory is not writable.
         self._run_dependency_check_if_needed()  # Check packages only after help can exit cleanly.
         self._build_import_manager()  # Create the deferred import manager after logging exists.
         self._publish_runtime_configuration()  # Publish env-driven globals only after explicit startup begins.

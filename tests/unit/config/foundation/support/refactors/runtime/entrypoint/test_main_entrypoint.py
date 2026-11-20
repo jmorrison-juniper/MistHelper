@@ -374,6 +374,61 @@ class TestMistHelperMenuAndModeCaches:
 class TestConsoleOutputRouting:
     """Exercise real bootstrap handlers without credentials or shared log files."""
 
+    def test_env_load_precedes_logging_setup(
+        self,
+        isolated_logging: ApplicationBootstrap,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Startup must load .env before it reads LOGGING_LOG_LEVEL."""
+        events: list[str] = []  # Record startup order without real file or dependency work.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_configure_standard_streams",
+            MagicMock(side_effect=lambda: events.append("streams")),
+        )  # Keep stream setup out of this call-order test.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_load_environment_file",
+            MagicMock(side_effect=lambda: events.append("env")),
+        )  # Record the environment load boundary.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_configure_logging",
+            MagicMock(side_effect=lambda: events.append("logging")),
+        )  # Record the logging configuration boundary.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_check_data_directory",
+            MagicMock(side_effect=lambda: events.append("data")),
+        )  # Keep the data check out of this call-order test.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_run_dependency_check_if_needed",
+            MagicMock(side_effect=lambda: events.append("dependencies")),
+        )  # Keep package work out of this call-order test.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_build_import_manager",
+            MagicMock(side_effect=lambda: events.append("imports")),
+        )  # Keep import work out of this call-order test.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_publish_runtime_configuration",
+            MagicMock(side_effect=lambda: events.append("publish")),
+        )  # Keep runtime publication out of this call-order test.
+
+        isolated_logging._run_common_startup()  # Run the real startup order with injected boundaries.
+
+        assert events == [
+            "streams",
+            "env",
+            "logging",
+            "data",
+            "dependencies",
+            "imports",
+            "publish",
+        ]  # The .env load must happen before the logging level read.
+
     @pytest.fixture
     def isolated_logging(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[ApplicationBootstrap]:
         """Restore host handlers after each isolated logging configuration."""
