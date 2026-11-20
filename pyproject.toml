@@ -100,7 +100,7 @@ dev = [
     # tests/guardrails/test_dependency_declaration_parity.py compares the two.
     "uv==0.13.7",  # Provide the export command to CI jobs that install with pip.
     "podman-compose==1.6.0",
-    "ruff==0.17.3",
+    "ruff==0.17.5",
     "black==26.10.1",
     "mypy==2.4.1",
     "types-requests==2.33.0.20261030",
