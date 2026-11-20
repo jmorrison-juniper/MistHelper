@@ -17,6 +17,10 @@ Required fields:
 - device_type
 - deployment_status
 - connected
+- vc_mac
+- chassis_serial
+- chassis_mac
+- chassis_model
 - source_attribution
 
 Deployment status is `deployed`.
@@ -59,7 +63,25 @@ A failed inventory read uses `Missing` for all three quantities.
 
 One row per unassigned inventory identity.
 
-The existing stock contract remains unchanged.
+Required fields:
+- msp_id
+- org_id
+- org_name
+- serial
+- mac
+- model
+- name
+- device_type
+- deployment_status
+- license_review_required
+- jsi_match_status
+- contract_status
+- contract_end_date
+- vc_mac
+- chassis_serial
+- chassis_mac
+- chassis_model
+- source_attribution
 
 ## Console Contract
 

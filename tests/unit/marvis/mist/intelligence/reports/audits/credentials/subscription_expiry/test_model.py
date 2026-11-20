@@ -309,6 +309,99 @@ def test_cross_org_inventory_summary_combines_deployed_and_stock() -> None:
     assert summary_by_type["ssr"].inventory_quantity == 1  # The SSR contributes one combined identity.
 
 
+def test_cross_org_deployed_row_uses_physical_chassis_serial_for_synthetic_virtual_mac() -> None:
+    """A synthetic 020003 identity keeps the physical chassis serial in deployed output."""
+    organization = OrganizationScope(
+        org_id="org-1",
+        org_name="T-Mobile",
+        source="msp",
+        request_status="success",
+    )  # Build a synthetic MSP organization.
+    inventory = [
+        {
+            "serial": "020003135CBF",
+            "mac": "020003135cbf",
+            "model": "EX4100-48MP",
+            "chassis_serial": "PHYSICAL1",
+            "chassis_mac": "38f20d35965b",
+            "chassis_model": "EX4100-48MP",
+            "vc_mac": "020003135cbf",
+            "type": "switch",
+            "site_id": "site-1",
+        }
+    ]  # Supply a synthetic VC virtual device with a physical chassis identity.
+    deployed = CrossOrgSubscriptionInventoryModel.build_deployed_inventory_rows(
+        organization,
+        inventory,
+    )  # Build deployed detail.
+    assert len(deployed) == 1  # One physical chassis identity remains.
+    assert deployed[0].serial == "PHYSICAL1"  # The synthetic virtual serial is not the canonical identity.
+    assert deployed[0].mac == "38f20d35965b"  # The physical chassis MAC remains visible.
+    assert deployed[0].vc_mac == "020003135cbf"  # The VC parent MAC remains visible.
+    assert deployed[0].chassis_serial == "PHYSICAL1"  # The chassis serial remains explicit.
+
+
+def test_cross_org_deployed_row_keeps_real_member_serial_when_vc_parent_is_present() -> None:
+    """A real member serial remains canonical when it differs from the VC parent."""
+    organization = OrganizationScope(
+        org_id="org-1",
+        org_name="T-Mobile",
+        source="msp",
+        request_status="success",
+    )  # Build a synthetic MSP organization.
+    inventory = [
+        {
+            "serial": "EY2225AX0590",
+            "mac": "38f20d35965b",
+            "model": "EX4100-48MP",
+            "chassis_serial": "PARENT1",
+            "chassis_mac": "020003135cbf",
+            "chassis_model": "EX4100-48MP",
+            "vc_mac": "020003135cbf",
+            "type": "switch",
+            "site_id": "site-1",
+        }
+    ]  # Supply one real member row and one VC parent identity.
+    deployed = CrossOrgSubscriptionInventoryModel.build_deployed_inventory_rows(
+        organization,
+        inventory,
+    )  # Build deployed detail.
+    assert len(deployed) == 1  # One real member identity remains.
+    assert deployed[0].serial == "EY2225AX0590"  # The real member serial wins.
+    assert deployed[0].chassis_serial == "PARENT1"  # The parent serial remains explicit.
+    assert deployed[0].vc_mac == "020003135cbf"  # The VC parent MAC remains visible.
+
+
+def test_cross_org_deployed_inventory_expands_nested_vc_members() -> None:
+    """Nested VC member records become separate deployed identities."""
+    organization = OrganizationScope(
+        org_id="org-1",
+        org_name="T-Mobile",
+        source="msp",
+        request_status="success",
+    )  # Build a synthetic MSP organization.
+    inventory = [
+        {
+            "serial": "020003135CBF",
+            "mac": "020003135cbf",
+            "model": "EX4100-48MP",
+            "vc_mac": "020003135cbf",
+            "type": "switch",
+            "site_id": "site-1",
+            "members": [
+                {"serial": "MEMBER1", "mac": "member-mac-1", "model": "EX4100-48MP"},
+                {"serial": "MEMBER2", "mac": "member-mac-2", "model": "EX4100-48MP"},
+            ],
+        }
+    ]  # Supply nested member identities under one VC record.
+    deployed = CrossOrgSubscriptionInventoryModel.build_deployed_inventory_rows(
+        organization,
+        inventory,
+    )  # Build separate deployed detail rows.
+    assert [row.serial for row in deployed] == ["MEMBER1", "MEMBER2"]  # Both physical members remain visible.
+    assert all(row.vc_mac == "020003135cbf" for row in deployed)  # Both rows keep the VC parent identity.
+
+
 def test_cross_org_stock_row_uses_virtual_chassis_identity_fallbacks() -> None:
     """A stock VC row keeps chassis serial, VC MAC, and chassis model."""
     organization = OrganizationScope(
