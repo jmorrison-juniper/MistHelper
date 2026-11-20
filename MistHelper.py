@@ -995,13 +995,13 @@ def _get_latest_pypi_version(package_name: str) -> str:  # Ask PyPI for a packag
         return ""  # Empty string signals 'latest unknown' so callers skip the upgrade check
 
 
-def _parse_requirement_line(line: str) -> tuple[str, str] | None:  # Parse one requirements.txt line
+def _parse_requirement_line(requirement_line: str) -> tuple[str, str] | None:  # Parse one requirements.txt line
     """Return (package_name, package_spec) for a dependency line, or None to skip it.
 
     Skips blank lines, full-line comments (including dev-only entries like '# pytest'),
     and lines that reduce to nothing after stripping a trailing inline comment.
     """
-    stripped = line.strip()  # Remove surrounding whitespace and the trailing newline
+    stripped = requirement_line.strip()  # Remove surrounding whitespace and the trailing newline
     if not stripped or stripped.startswith("#"):  # Ignore blank lines and any full-line comment
         return None  # Nothing to parse on this line
     if "#" in stripped:  # Line has a trailing inline comment after the spec
@@ -1022,8 +1022,8 @@ def _parse_requirements_file(
     packages: list[tuple[str, str]] = []  # Retain the dependency name and requirement text for each row.
     try:  # The file may be absent or unreadable. Handle that gracefully below
         with open(filepath, encoding="utf-8") as requirements_file:  # Open requirements.txt as UTF-8 text
-            for line in requirements_file:  # Process one dependency line at a time
-                parsed = _parse_requirement_line(line)  # Parse this line into (name, spec) or None to skip
+            for file_line in requirements_file:  # Process one dependency line at a time
+                parsed = _parse_requirement_line(file_line)  # Parse this line into (name, spec) or None to skip
                 if parsed is not None:  # Only keep lines that yielded a real dependency
                     packages.append(parsed)  # Record this dependency for the caller
         logger.debug("Parsed %s packages from %s", len(packages), filepath)  # Debug aid: how many specs were parsed
@@ -1174,9 +1174,9 @@ if "_parsed_limit" not in globals():  # Keep the parsed helper name without read
 DEFAULT_API_PAGE_LIMIT = 1000  # Bootstrap clamps and publishes the configured page limit.
 
 
-def _apply_dotenv_line(line: str) -> None:  # Set one KEY=VALUE pair from a .env line into the environment
+def _apply_dotenv_line(dotenv_line: str) -> None:  # Set one KEY=VALUE pair from a .env line into the environment
     """Parse one .env line and set it into os.environ without overwriting an existing process value."""
-    stripped = line.strip()  # Remove surrounding whitespace and the trailing newline
+    stripped = dotenv_line.strip()  # Remove surrounding whitespace and the trailing newline
     if not stripped or stripped.startswith("#") or "=" not in stripped:  # Skip blanks, comments, malformed entries
         return  # Nothing assignable on this line
     key, value = stripped.split("=", 1)  # Split on the first '=' (values may themselves contain '=')
@@ -1189,8 +1189,8 @@ def _fallback_load_dotenv() -> None:  # Minimal .env parser used when python-dot
     """Fallback .env loader when python-dotenv package is not installed."""
     try:  # The .env file is optional. Handle its absence/errors gracefully
         with open(".env", encoding="utf-8") as dotenv_file:  # Open .env in the current working directory
-            for line in dotenv_file:  # Process the file one line at a time
-                _apply_dotenv_line(line)  # Set this KEY=VALUE pair (skips blanks/comments internally)
+            for dotenv_line in dotenv_file:  # Process the file one line at a time
+                _apply_dotenv_line(dotenv_line)  # Set this KEY=VALUE pair (skips blanks/comments internally)
     except FileNotFoundError:  # No .env file present
         logging.debug("No .env file found")  # Not an error. Just note it at debug level
     except (OSError, UnicodeDecodeError, ValueError) as parse_error:  # Bad .env content must not stop startup
@@ -1744,7 +1744,7 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
         """Adapter exposing both class-like and module-like datetime access."""
 
         def __init__(self) -> None:  # Preserve the existing behavior during the compliance refactor.
-            from datetime import datetime, timedelta  # Local import keeps handler self-contained
+            from datetime import timedelta  # Local import keeps handler self-contained
 
             self._datetime_cls = datetime  # Capture class for __call__ forwarding
             self.now = datetime.now  # Expose datetime.now() at the top level
@@ -1773,10 +1773,10 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
     def _import_tqdm(self) -> Any:  # Preserve the existing behavior during the compliance refactor.
         """Special handler for tqdm import to ensure proper functionality."""
         try:
-            from tqdm import tqdm  # Attempt to import the real progress-bar library
+            from tqdm import tqdm as real_tqdm  # Attempt to import the real progress-bar library
 
             logger.debug("Successfully imported tqdm from package")  # Note the real library is available
-            return tqdm  # Use the genuine tqdm progress bar
+            return real_tqdm  # Use the genuine tqdm progress bar
         except ImportError:  # tqdm is not installed
             logging.warning("tqdm package not available, using fallback")  # Warn and degrade gracefully
 
@@ -1838,9 +1838,9 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
     @staticmethod
     def _parse_pip_show_version(pip_show_stdout: str) -> str | None:  # Extract the Version: field from pip show
         """Return the value of the 'Version:' line in pip show output, or None when absent."""
-        for line in pip_show_stdout.split("\n"):  # Scan each line of pip show output
-            if line.startswith("Version:"):  # Found the version field
-                return line.split(":", 1)[1].strip()  # Extract and return the version value
+        for pip_show_line in pip_show_stdout.split("\n"):  # Scan each line of pip show output
+            if pip_show_line.startswith("Version:"):  # Found the version field
+                return pip_show_line.split(":", 1)[1].strip()  # Extract and return the version value
         return None  # No Version: line present
 
     def _build_upgrade_cmd(self, package_spec: str) -> list[str]:  # Assemble the upgrade argv (UV or pip)
@@ -2248,9 +2248,9 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
         try:  # The function may be an attribute or require a direct import
             normalize_func = getattr(module_obj, "normalize_address_record", None)  # Look for the normalize function
             if not normalize_func:  # Attribute missing -- import directly from scourgify
-                from scourgify import normalize_address_record  # Direct import fallback
+                from scourgify import normalize_address_record as direct_normalize_address  # Direct import fallback
 
-                normalize_func = normalize_address_record  # Rebind the direct-import result
+                normalize_func = direct_normalize_address  # Rebind the direct-import result
             globals()["normalize_address_record"] = normalize_func  # Bind the resolved function globally
         except (ImportError, AttributeError):  # Package present but function unavailable
             logging.debug("Could not import normalize_address_record from scourgify, using fallback")  # Note fallback
@@ -2379,12 +2379,12 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
             logger.debug("mistapi not imported, skipping sub-module imports")  # Nothing to wire up
             return  # No work to do
         try:  # Failed to even access the cached mistapi object
-            mistapi = self.imports["mistapi"]  # Fetch the cached mistapi module object
+            mistapi_module = self.imports["mistapi"]  # Fetch the cached mistapi module object
             try:  # Sub-module wiring hit an unexpected issue
-                globals()["mistapi"] = mistapi  # Expose mistapi at module global scope
-                vars(sys.modules[__name__])["mistapi"] = mistapi  # Bind dynamic SDK module without a typed attr write
+                globals()["mistapi"] = mistapi_module  # Expose mistapi at module global scope
+                vars(sys.modules[__name__])["mistapi"] = mistapi_module  # Bind SDK module without a typed attr write
                 logger.debug("Successfully imported mistapi main module")  # Confirm SDK wired up
-                self._verify_mistapi_api_structure(mistapi)  # Run the hasattr structural check
+                self._verify_mistapi_api_structure(mistapi_module)  # Run the hasattr structural check
             except (KeyError, AttributeError, TypeError, RuntimeError) as sub_e:  # Optional SDK wiring failed safely
                 logging.debug(
                     "Note: mistapi sub-modules handled dynamically: %s", sub_e, exc_info=True
@@ -2393,10 +2393,10 @@ class GlobalImportManager:  # Preserve the existing behavior during the complian
             logging.warning("Error accessing mistapi: %s", e, exc_info=True)  # Warn with traceback for repair
 
     def _verify_mistapi_api_structure(
-        self, mistapi: Any
+        self, mistapi_module: Any
     ) -> None:  # Preserve the existing behavior during the compliance refactor.
         """Verify mistapi.api.v1 module structure is present and log the result."""
-        if hasattr(mistapi, "api") and hasattr(mistapi.api, "v1"):  # Confirm expected nested API surface
+        if hasattr(mistapi_module, "api") and hasattr(mistapi_module.api, "v1"):  # Confirm expected nested API surface
             logger.debug("mistapi.api.v1 module structure confirmed")  # Structure looks correct
         else:  # The expected nested structure is absent
             echo("mistapi.api.v1 structure not found - this may cause API call failures")  # Warn about likely failures
@@ -2934,11 +2934,11 @@ def _check_token_rate_limit(
         label: A secret-free identifier such as ``"2/3"`` that names this token in the log.
     """
     try:
-        import requests  # Import here -- only needed for this edge-case rate-limit probe path
+        import requests as http_client  # Import here -- only needed for this edge-case rate-limit probe path
 
         url = f"https://{test_host }/api/v1/self"  # Lightweight endpoint requiring auth for rate-limit probe
         headers = {"Authorization": f"Token {token }"}  # Standard Mist API bearer token header
-        response = requests.get(url, headers=headers, timeout=5)  # Short timeout -- probe, not full call
+        response = http_client.get(url, headers=headers, timeout=5)  # Short timeout -- probe, not full call
         if response.status_code == 429:  # HTTP 429 = Too Many Requests = rate-limited
             logger.debug(
                 "Token %s is rate-limited (HTTP 429)", label
@@ -3077,11 +3077,9 @@ def _log_session_attempt_traceback(
         exc: The exception whose traceback to capture and log.
     """
     try:
-        import traceback  # Import for traceback formatting -- deferred to avoid top-level overhead
-
         tb_details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))  # Format full traceback
-        for line in tb_details.rstrip().splitlines():  # Split into individual lines for log aggregator
-            logger.info("  TRACE: %s", line)  # Prefix with TRACE so operators can filter
+        for trace_line in tb_details.rstrip().splitlines():  # Split into individual lines for log aggregator
+            logger.info("  TRACE: %s", trace_line)  # Prefix with TRACE so operators can filter
     except (TypeError, ValueError, OSError, RuntimeError) as trace_err:  # Secondary trace logging must not hide auth
         logging.warning("Failed to log traceback: %s", trace_err, exc_info=True)  # Non-fatal with secondary trace
 
@@ -6777,10 +6775,10 @@ def execute_systematic_test_loop(  # Preserve the existing behavior during the c
         description = entry.title  # Read the display text without tuple-position unpacking.
         if func is None:  # Static rows cannot run in systematic mode.
             continue  # Skip impossible rows, though real MistHelper rows always have callables.
-        success, _duration = _systematic_test_run_option(
+        option_succeeded, _duration = _systematic_test_run_option(
             emitter, SystematicTestOption(option, func, description), i, len(safe_options), fast_enabled
         )  # Execute option with telemetry (issue #470: option identity bundled).
-        if success:  # Count success and failure separately for the final summary.
+        if option_succeeded:  # Count success and failure separately for the final summary.
             success_count += 1  # Increment on successful option execution.
         else:  # Non-success means the option raised or returned an error.
             error_count += 1  # Increment on failed option execution.
@@ -6928,8 +6926,8 @@ def _launch_web_portal(
     )  # Preserve the existing behavior during the compliance refactor.
 
     loader = PortalConfigLoader()  # Read web_port + other portal settings from env/.env
-    config = loader.load_config()  # Preserve the existing behavior during the compliance refactor.
-    port = config["web_port"]  # Preserve the existing behavior during the compliance refactor.
+    portal_config = loader.load_config()  # Preserve the existing behavior during the compliance refactor.
+    port = portal_config["web_port"]  # Preserve the existing behavior during the compliance refactor.
     host = _resolve_web_portal_host()  # Loopback on a workstation, all interfaces in a container, WEB_HOST wins
 
     app = WebPortalApp.create_app(  # Construct Flask app with shared API session + menu registry
@@ -7147,9 +7145,6 @@ def _run_metrics_snmp(
 
     protect_protocol_streams()  # First call of this mode. A later call cannot recall a sent record.
 
-    from src.foundation.support.utils.environment_utils import (
-        EnvironmentUtils,
-    )  # Import EnvironmentUtils for container detection
     from src.interfaces.monitoring.metrics_gateway.service import (
         GatewaySettings,
         build_cache,
@@ -7194,8 +7189,6 @@ def _run_mib_generator_mode(
     Args:
         args: The parsed command line.
     """
-    from pathlib import Path  # A local import keeps the start of the tool free of the generator modules.
-
     from src.operations.hardware.mib_generator.runner import (
         DEFAULT_OUTPUT,
         MibGeneratorRunner,
@@ -7522,10 +7515,10 @@ def setup_runtime_flags(
         logger.info("Standalone mode enabled via --standalone flag: ArangoDB/Redis disabled")  # Log env write
     globals()["args"] = args  # Register parsed args globally so menu functions can read CLI flags
     logger.debug("CLI args registered in globals()['args'] for menu function access")  # Log global assignment
-    IS_TEST_MODE = bool(  # Keep the old global behavior from stored CLI arguments.
+    test_mode_enabled = bool(  # Keep the old global behavior from stored CLI arguments.
         getattr(args, "test", False) or getattr(args, "testinteractive", False)
     )
-    logger.debug("IS_TEST_MODE set to %s", IS_TEST_MODE)  # Log the parsed test-mode state.
+    logger.debug("IS_TEST_MODE set to %s", test_mode_enabled)  # Log the parsed test-mode state.
     try:
         MainEntrypoint.context.fast_mode_enabled = bool(
             args.fast
@@ -8284,8 +8277,6 @@ if __name__ == "__main__":  # Preserve the existing behavior during the complian
             exc_traceback: types.TracebackType | None,
         ) -> None:
             try:
-                import traceback as _tb  # Preserve the existing behavior during the compliance refactor.
-
                 if issubclass(
                     exc_type, KeyboardInterrupt
                 ):  # Preserve the existing behavior during the compliance refactor.
@@ -8295,15 +8286,15 @@ if __name__ == "__main__":  # Preserve the existing behavior during the complian
                     )  # Preserve the existing behavior during the compliance refactor.
                     return  # Preserve the existing behavior during the compliance refactor.
                 formatted = "".join(
-                    _tb.format_exception(exc_type, exc_value, exc_traceback)
+                    traceback.format_exception(exc_type, exc_value, exc_traceback)
                 )  # Preserve the existing behavior during the compliance refactor.
                 logger.error(
                     "UNHANDLED TOP-LEVEL EXCEPTION TRACEBACK FOLLOWS"
                 )  # Preserve the existing behavior during the compliance refactor.
                 for (
-                    line
+                    formatted_line
                 ) in formatted.rstrip().splitlines():  # Preserve the existing behavior during the compliance refactor.
-                    logger.error(line)  # Preserve the existing behavior during the compliance refactor.
+                    logger.error(formatted_line)  # Preserve the existing behavior during the compliance refactor.
             except (
                 TypeError,
                 ValueError,
