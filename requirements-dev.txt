@@ -417,7 +417,7 @@ sortedcontainers==2.4.0
     #   hypothesis
 sshkeyboard==2.3.1
     # via misthelper
-stevedore==5.9.1
+stevedore==5.10.0
     # via bandit
 structlog==26.1.0
     # via misthelper
