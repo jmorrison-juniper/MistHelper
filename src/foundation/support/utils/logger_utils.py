@@ -10,6 +10,11 @@ in log files even when DEBUG level is enabled.
 import hashlib  # One-way digests for private values that must stay correlatable in a log
 import logging  # Standard library logging for type annotations
 import re  # Regex for pattern-based redaction
+import sys  # Detect terminal color support for the structlog console renderer
+from collections.abc import MutableMapping  # Type structlog event dictionaries accepted by processors
+from typing import Any  # Type key-value event dictionaries used by structlog processors
+
+import structlog  # Structured event frontend for database and DNS diagnostics
 
 REDACTED_PLACEHOLDER = "***REDACTED***"  # Canonical placeholder for scrubbed values
 PRIVATE_DIGEST_EMPTY = "none"  # Token used when the caller supplies no private text
@@ -21,6 +26,15 @@ _SENSITIVE_KEY_PATTERNS = re.compile(  # Compiled once at module load for perfor
     r"(password|passwd|secret|token|api_key|psk|credential|authorization|auth)",
     re.IGNORECASE,
 )
+
+
+def _redact_sensitive_event_dict(event_dict: MutableMapping[str, Any]) -> dict[str, Any]:
+    """Redact credential-shaped keys in one structlog event dictionary."""
+    sanitized = dict(event_dict)  # Copy the event so callers keep no mutated context.
+    for key in tuple(sanitized):  # Inspect every key in the current event.
+        if _SENSITIVE_KEY_PATTERNS.search(str(key)):  # The key names a credential-shaped field.
+            sanitized[key] = REDACTED_PLACEHOLDER  # Replace the private value at the structlog boundary.
+    return sanitized  # Return one safe event dictionary for rendering.
 
 
 def redact_secret(value: str) -> str:
@@ -101,6 +115,77 @@ def redact_if_sensitive(key: str, value: str) -> str:
     return value  # Key is not credential-like. Return value unchanged
 
 
+class StructuredLoggingFrontend:
+    """Configure structlog to render through MistHelper stdlib handlers."""
+
+    @staticmethod
+    def _foreign_pre_chain() -> list[Any]:
+        """Return processors that prepare stdlib records for structlog rendering."""
+        return [
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.stdlib.add_logger_name,
+            structlog.stdlib.add_log_level,
+            StructuredLoggingFrontend.redact_sensitive_fields,
+        ]  # Add timestamp, level, logger, and redaction to foreign records.
+
+    @staticmethod
+    def redact_sensitive_fields(
+        _logger: Any,
+        _method_name: str,
+        event_dict: MutableMapping[str, Any],
+    ) -> dict[str, Any]:
+        """Redact credential-shaped structlog keys before rendering."""
+        return _redact_sensitive_event_dict(event_dict)  # Delegate to the shared event-redaction helper.
+
+    @staticmethod
+    def console_formatter() -> structlog.stdlib.ProcessorFormatter:
+        """Build the terminal renderer and enable ANSI only for an interactive stream."""
+        supports_color = sys.stderr.isatty()  # A pipe or test capture gets no ANSI escape sequence.
+        return structlog.stdlib.ProcessorFormatter(
+            foreign_pre_chain=StructuredLoggingFrontend._foreign_pre_chain(),
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                structlog.dev.ConsoleRenderer(colors=supports_color, sort_keys=True),
+            ],
+        )  # Render one shared event style for terminal and stdlib records.
+
+    @staticmethod
+    def file_formatter() -> structlog.stdlib.ProcessorFormatter:
+        """Build a plain-text structured renderer for script.log."""
+        return structlog.stdlib.ProcessorFormatter(
+            foreign_pre_chain=StructuredLoggingFrontend._foreign_pre_chain(),
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                structlog.processors.KeyValueRenderer(
+                    key_order=["timestamp", "logger", "level", "event"],
+                    drop_missing=True,
+                ),
+            ],
+        )  # Keep key-value evidence searchable and free of ANSI color.
+
+    @staticmethod
+    def configure() -> None:
+        """Configure structlog to pass every event through stdlib logging."""
+        structlog.configure(
+            processors=[
+                structlog.contextvars.merge_contextvars,
+                structlog.stdlib.filter_by_level,
+                structlog.stdlib.add_logger_name,
+                structlog.stdlib.add_log_level,
+                structlog.processors.TimeStamper(fmt="iso"),
+                StructuredLoggingFrontend.redact_sensitive_fields,
+                structlog.processors.StackInfoRenderer(),
+                structlog.processors.format_exc_info,
+                structlog.processors.UnicodeDecoder(),
+                structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+            ],
+            context_class=dict,
+            logger_factory=structlog.stdlib.LoggerFactory(),
+            wrapper_class=structlog.stdlib.BoundLogger,
+            cache_logger_on_first_use=False,
+        )  # The stdlib handlers remain the level, output, and redaction backend.
+
+
 class SensitiveFilter(logging.Filter):
     """Redact credential-shaped values in messages and exception tracebacks.
 
@@ -153,6 +238,11 @@ class SensitiveFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         """Sanitize a record in place without suppressing safe diagnostics."""
         try:
+            if isinstance(record.msg, dict):  # Structlog passes an event dictionary to stdlib.
+                record.msg = _redact_sensitive_event_dict(record.msg)  # Redact keys without string conversion.
+                record.args = ()  # Keep the event dictionary as the ProcessorFormatter input.
+                self._redact_traceback(record)  # Protect any exception text on the same record.
+                return True  # Continue with the preserved dict event.
             message = record.getMessage()
             trusted_menu_message = self._is_trusted_menu_record(
                 record, message

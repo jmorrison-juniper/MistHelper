@@ -40,3 +40,14 @@
 **Alternatives considered**:
 - Detail only: rejected because 27,000 rows are difficult to reconcile in a console.
 - Summary only: rejected because serial, site, model, and connection evidence would be lost.
+
+## Decision 5: Use Structlog as the Frontend
+
+**Decision**: Configure structlog as the event frontend and keep stdlib logging as the console and file backend.
+
+**Rationale**: Structlog produces concise key-value diagnostics. Stdlb handlers still provide level filtering, file rotation, ANSI terminal control, traceback handling, and the existing redaction filter.
+
+**Alternatives considered**:
+- Replace stdlib logging with a standalone structlog setup: rejected because existing handlers and filters depend on stdlib integration.
+- Keep separate structlog JSON output: rejected because it bypasses the configured console and file level behavior.
+- Use only stdlib formatting: rejected because it does not provide the concise structured frontend requested for database and DNS diagnostics.

@@ -99,3 +99,41 @@ changelog.d/
 ## Complexity Tracking
 
 No Constitution violation is known.
+
+## Structlog Frontend Amendment
+
+### Logging Architecture
+
+The terminal and `script.log` handlers remain stdlib logging handlers.
+Structlog acts as the event frontend for database and DNS modules.
+The startup logging configuration owns one shared structlog configuration.
+The database package must not replace that configuration with JSON or another renderer.
+
+### Console and File Renderers
+
+The console handler uses a structlog console renderer.
+ANSI color is enabled only for an interactive terminal that accepts color.
+The file handler uses a plain-text structured renderer with no ANSI color.
+Both handlers apply separate stdlib levels from `CONSOLE_LOG_LEVEL` and `LOGGING_LOG_LEVEL`.
+
+### Redaction
+
+A structlog processor removes sensitive keys before rendering.
+The existing `SensitiveFilter` remains a final stdlib redaction boundary.
+The two boundaries protect credentials, passwords, tokens, secrets, authorization headers, and PSKs.
+
+### Startup Order
+
+Startup loads `.env` before logging configuration.
+Logging configuration then reads the environment levels and installs the console and file handlers.
+Structlog configuration occurs after the stdlib handlers exist.
+
+### Source Files
+
+- `src/foundation/support/utils/logger_utils.py` holds structured logging configuration and redaction helpers.
+- `src/foundation/support/refactors/main_entrypoint.py` installs console and file handlers and configures the frontend.
+- `src/foundation/persistence/db/__init__.py` keeps database modules on the shared frontend.
+
+### Validation
+
+Tests cover startup order, INFO and DEBUG suppression, WARNING visibility, console/file threshold differences, ANSI fallback, and secret redaction.

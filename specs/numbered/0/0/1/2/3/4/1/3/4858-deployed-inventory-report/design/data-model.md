@@ -76,3 +76,20 @@ Rules:
 - One deployed inventory row belongs to one organization and one site.
 - One deployed inventory summary row contains one organization and one device type.
 - One stock row belongs to one organization but has no deployed site.
+
+## Logging Record
+
+Fields:
+- Timestamp
+- Logger name
+- Severity level
+- Event name
+- Optional key-value context
+
+Rules:
+- The backend applies the configured console or file threshold.
+- INFO and DEBUG remain below WARNING and CRITICAL thresholds.
+- WARNING and ERROR remain visible at those thresholds.
+- Credential-shaped keys become the redaction placeholder.
+- Terminal output may enable ANSI color.
+- File output contains no required ANSI color sequence.

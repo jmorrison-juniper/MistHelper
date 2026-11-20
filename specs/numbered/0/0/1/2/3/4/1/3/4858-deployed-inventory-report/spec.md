@@ -55,6 +55,22 @@ An organization inventory read fails or returns an incomplete shape. The report 
 
 ---
 
+### User Story 4 - Read Consistent Structured Console Output (Priority: P2)
+
+A NOC operator starts MistHelper with warning or higher log thresholds. The terminal shows concise warning and error lines, while no structured INFO or DEBUG records leak into the console or the runtime log.
+
+**Why this priority**: This keeps startup, DNS, database, and inventory diagnostics readable without losing operational evidence.
+
+**Independent Test**: A test run configures both logging levels at WARNING and emits INFO, DEBUG, and WARNING records through the structured and standard logging frontends.
+
+**Acceptance Scenarios**:
+
+1. **Given** both logging thresholds are WARNING, **When** structured INFO and DEBUG records are emitted, **Then** neither record appears in the console or script.log.
+2. **Given** a structured WARNING record is emitted, **When** the thresholds are WARNING, **Then** the record appears once in the console and once in script.log.
+3. **Given** the terminal threshold is WARNING and the file threshold is INFO, **When** an INFO record is emitted, **Then** the record can appear in script.log and remains absent from the console.
+
+---
+
 ### Edge Cases
 
 - Inventory pagination crosses more than one page.
@@ -64,6 +80,10 @@ An organization inventory read fails or returns an incomplete shape. The report 
 - Inventory is 27,000 rows or more for one organization.
 - A license usage count and deployed inventory count differ.
 - JSI evidence is absent or does not match a serial.
+- Database or DNS diagnostics emit INFO, DEBUG, and WARNING levels.
+- A process uses structlog and standard Python logging in the same startup.
+- A log contains a token or password.
+- A terminal cannot support ANSI color sequences.
 
 ## Requirements *(mandatory)*
 
@@ -80,6 +100,12 @@ An organization inventory read fails or returns an incomplete shape. The report 
 - **FR-009**: The report MUST continue with visible partial results when another organization succeeds or fails.
 - **FR-010**: The report MUST use one read-only menu operation and linked reports.
 - **FR-011**: The report MUST not change an organization, device, subscription, or inventory state.
+- **FR-012**: Structured database and DNS records MUST use the same console threshold as standard Python log records.
+- **FR-013**: Structured records MUST use the same file threshold as standard Python log records.
+- **FR-014**: The console frontend MUST keep key-value context available for structured diagnostics.
+- **FR-015**: The file backend MUST keep timestamped plain-text records that remain readable and searchable.
+- **FR-016**: The console frontend MUST preserve the ASCII-only output rule and avoid a required ANSI color mode.
+- **FR-017**: Credentials and secrets MUST remain redacted in both structured and standard log records.
 
 ### Mist Cloud Transport Requirements *(include if feature uses Mist Cloud)*
 
@@ -94,12 +120,20 @@ An organization inventory read fails or returns an incomplete shape. The report 
 - Authentication and secret-redaction tests MUST keep passwords and tokens out of reports and logs.
 - No WebSocket transport is required.
 
+### Logging Transport Requirements
+
+- The standard Python logging system MUST remain the backend for console and file handlers.
+- The structlog frontend MUST emit through the same stdlib logger and handler levels.
+- The database and DNS modules MUST not create a separate console handler.
+
 ### Key Entities *(include if feature involves data)*
 
 - **Deployed Inventory Row**: One device identity that has a site assignment and its organization, MSP, site, model, type, serial, connection status, and source attribution.
 - **Deployed Inventory Summary**: One organization and device-type count that reconciles the deployed detail rows.
 - **Stock Inventory Row**: One unassigned device identity that requires a license or support review.
 - **Organization Status**: Organization authorization and source request status.
+- **Structured Console Record**: One structured diagnostic event with a name, level, message, and optional non-sensitive key-value context.
+- **Log Threshold**: One console or file minimum severity that suppresses lower-severity records.
 
 ## Success Criteria *(mandatory)*
 
@@ -112,6 +146,11 @@ An organization inventory read fails or returns an incomplete shape. The report 
 - **SC-005**: An inventory set with more than 1000 devices yields an exact reconciled count across all pages.
 - **SC-006**: Every failed organization has a visible status and Missing deployed count.
 - **SC-007**: No stock row with a site ID enters the deployed detail or summary.
+- **SC-008**: With both thresholds set to WARNING, 100 percent of INFO and DEBUG records from structlog and standard logging are absent from console and script.log.
+- **SC-009**: A structured WARNING record appears exactly once in the console and exactly once in script.log.
+- **SC-010**: A structured INFO record can appear in script.log at file level INFO while remaining absent from the console at WARNING.
+- **SC-011**: Database and DNS diagnostics retain key-value context without exposing credentials or passwords.
+- **SC-012**: The console remains readable in terminals that do not accept ANSI color sequences.
 
 ## Assumptions
 
@@ -121,3 +160,6 @@ An organization inventory read fails or returns an incomplete shape. The report 
 - The existing 2026-11-11 MSP inventory snapshot is a comparison baseline, not a live source.
 - The report keeps deployed detail and stock evidence separate in linked outputs.
 - Missing source values remain Missing, and Missing is not zero.
+- Standard Python logging remains the backend for console and file output.
+- Structlog is the structured frontend for database and DNS diagnostics.
+- Terminal ANSI color is optional and not required for correct information.

@@ -11,6 +11,7 @@
 - `[US1]` maps to deployed inventory detail and summary.
 - `[US2]` maps to deployed and stock separation.
 - `[US3]` maps to partial failure and Missing behavior.
+- `[US4]` maps to structlog console frontend and stdlib backend filtering.
 
 ## Phase 1: Setup
 
@@ -122,6 +123,27 @@
 - User Story 2 uses the deployed detail contract and keeps stock separate.
 - User Story 3 uses organization status and continues with partial results.
 - Documentation and live validation follow implementation.
+- User Story 4 uses the stdlib logging handlers and test seams already defined in issue 4858.
+
+## Phase 7: User Story 4 - Structlog Console Frontend (Priority: P2)
+
+**Goal**: Use structlog as the readable console frontend while stdlib logging remains the console and file backend.
+
+**Independent Test**: Warning threshold runs show no structlog or stdlib INFO or DEBUG records and show warning records once.
+
+### Tests for User Story 4
+
+- [X] T037 [P] [US4] Add startup-order and structlog level-routing tests in `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_main_entrypoint.py`. (delivered: test_main_entrypoint.py)
+- [X] T038 [P] [US4] Add database DNS INFO/DEBUG suppression coverage in `tests/unit/config/foundation/support/refactors/runtime/entrypoint/test_main_entrypoint.py`. (delivered: real loopback DNS resolution at WARNING threshold)
+
+### Implementation for User Story 4
+
+- [X] T039 [US4] Add a class-based structlog frontend and sensitive-key processor in `src/foundation/support/utils/logger_utils.py`. (delivered: StructuredLoggingFrontend)
+- [X] T040 [US4] Configure console and file ProcessorFormatter handlers in `src/foundation/support/refactors/main_entrypoint.py`. (delivered: console and file renderers)
+- [X] T041 [US4] Route database structlog configuration through the shared frontend in `src/foundation/persistence/db/__init__.py`. (delivered: configure_db_logging)
+- [X] T042 [US4] Run `python MistHelper.py` and prove zero INFO or DEBUG lines with both thresholds at WARNING. (delivered: ConsoleLow 0, LogLow 0)
+- [X] T043 [US4] Update the logging contract and quickstart in `specs/numbered/0/0/1/2/3/4/1/3/4858-deployed-inventory-report/design/`. (delivered: logging-contract.md and quickstart.md)
+- [X] T044 [US4] Run compile, Ruff, Black, mypy, targeted pytest, and no-argument script validation. (delivered: 7 logging tests, Ruff, Black, mypy, compile, and no-argument run)
 
 ## Parallel Execution Examples
 

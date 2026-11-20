@@ -28,6 +28,11 @@
 - [x] Pagination and Virtual Chassis evidence are clear
 - [x] Failure data remains visible and cannot become false success
 - [x] One menu operation can provide linked deployed, stock, and subscription reports
+- [x] Structured console records use the configured console threshold
+- [x] Structured file records use the configured file threshold
+- [x] The standard logging backend remains the source of handler output
+- [x] ANSI color is optional and ASCII-only fallback is defined
+- [x] Secret redaction is required for standard and structured records
 
 ## Mist Cloud Requirements
 

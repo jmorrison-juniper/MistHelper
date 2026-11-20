@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 import structlog
 
 from src.foundation.persistence.db import host_resolver
+from src.foundation.support.utils.logger_utils import StructuredLoggingFrontend
 
 ARANGO_DEFAULT_URL = "http://misthelper-arangodb:9529"  # Compose service URL used when ARANGO_HOST is unset.
 ARANGO_DEFAULT_HOSTNAME = "misthelper-arangodb"  # Host applied when a URL carries no host of its own.
@@ -31,23 +32,7 @@ WEBHOOK_SECRET_FIELD = "WEBHOOK_SECRET"  # nosec B105  # Name the Mist webhook s
 
 def configure_db_logging() -> None:
     """Configure structlog to use the MistHelper stdlib handlers."""
-    structlog.configure(
-        processors=[
-            structlog.contextvars.merge_contextvars,
-            structlog.stdlib.filter_by_level,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.UnicodeDecoder(),
-            structlog.processors.format_exc_info,
-            structlog.stdlib.render_to_log_kwargs,
-        ],
-        context_class=dict,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=False,
-    )
+    StructuredLoggingFrontend.configure()  # Keep database modules on the shared stdlib handlers.
 
 
 @dataclass

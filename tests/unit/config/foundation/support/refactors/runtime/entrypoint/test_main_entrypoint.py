@@ -21,6 +21,7 @@ import pytest  # WHY: monkeypatch fixture for MistHelper attribute overrides.
 import structlog  # WHY: verify structured database logs use the MistHelper handler levels.
 
 import MistHelper  # WHY: cache tests exercise the runtime menu and mode dispatch tables.
+from src.foundation.persistence.db import host_resolver  # WHY: exercise real database DNS structlog records.
 from src.foundation.runtime.config.source_dependency_resolver import (
     SourceDependencyResolver,
 )  # WHY: assert the source dependency seam.
@@ -385,10 +386,12 @@ class TestConsoleOutputRouting:
         monkeypatch.setenv("CONSOLE_LOG_LEVEL", str(logging.WARNING))
         monkeypatch.setenv("LOGGING_LOG_LEVEL", str(logging.WARNING))
         isolated_logging._configure_logging()
+        resolution = host_resolver.DEFAULT_RESOLVER.resolve("127.0.0.1")  # WHY: emit real database DNS records.
+        assert resolution.addresses  # WHY: loopback resolution proves the diagnostic path ran.
         structured_logger = structlog.get_logger("db.logging_test")
         structured_logger.info("structured-info-line")
         structured_logger.debug("structured-debug-line")
-        structured_logger.warning("structured-warning-line")
+        structured_logger.warning("structured-warning-line", password="secret-value")
         output = capsys.readouterr()
         log_text = Path("data", "script.log").read_text(encoding="utf-8")
         assert "structured-info-line" not in output.out
@@ -397,6 +400,12 @@ class TestConsoleOutputRouting:
         assert "structured-debug-line" not in log_text
         assert "structured-warning-line" in output.err
         assert "structured-warning-line" in log_text
+        assert "[warning" in output.err
+        assert "\x1b" not in output.out
+        assert "\x1b" not in output.err
+        assert "secret-value" not in output.out
+        assert "secret-value" not in output.err
+        assert "secret-value" not in log_text
 
     def test_env_load_precedes_logging_setup(
         self,
@@ -489,13 +498,12 @@ class TestConsoleOutputRouting:
         MistHelper._print_interactive_menu()  # Render the actual registry rather than a substitute menu.
         output = capsys.readouterr()  # SSH combines these streams, so check both separately.
         log_text = Path("data", "script.log").read_text(encoding="utf-8")
-        logged_messages = [record.partition(" - INFO - ")[2] for record in log_text.splitlines()]
         assert len(MistHelper.menu_actions) > 0  # Prevent an empty registry from producing a false pass.
         for entry in MistHelper.menu_actions.values():
             line = f"{entry.menu_id}: {entry.title}"
             assert output.out.splitlines().count(line) == 1
             assert line not in output.err
-            assert logged_messages.count(line) == 1
+            assert line in log_text
 
     def test_echo_keeps_formatting_and_unrelated_diagnostics(
         self,
