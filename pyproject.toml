@@ -85,7 +85,7 @@ dependencies = [
     # Upgrade capture portal (web application, request forgery guard, server)
     "Flask>=3.1.3,<4",
     "flask-wtf>=1.3.0,<2",
-    "gunicorn>=26.2.0,<27",
+    "gunicorn>=26.2.0,<28",
     # Windows cannot run Gunicorn, because `gunicorn.util` imports `fcntl` and
     # Windows ships no `fcntl`. `select_server_name()` therefore returns Waitress
     # on Windows, so a Windows install needs Waitress as a core dependency. A
