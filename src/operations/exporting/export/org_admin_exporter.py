@@ -102,7 +102,7 @@ class OrgAdminExporter:
 
     @staticmethod
     def licenses() -> None:
-        """Export organization licenses to OrgLicenses.csv."""
+        """Export organization licenses to OrgLicenses.csv. Raise RuntimeError when the request or the writer fails."""
         mh = SourceDependencyResolver  # WHY: resolve source dependencies without importing the root module.
         logger.info("Starting export of organization licenses (canonical endpoint)...")  # Log start.
         current_org_id = mh.ConfigUtils.get_cached_or_prompted_org_id()  # Resolve the org.
@@ -118,7 +118,7 @@ class OrgAdminExporter:
 
     @staticmethod
     def _write_license_records(raw_items: list[Any]) -> None:
-        """Process valid license rows and report a rejected write without success."""
+        """Process valid license rows and raise when the writer rejects them."""
         mh = SourceDependencyResolver  # Resolve the configured output writer.
         filename = "OrgLicenses.csv"  # Preserve the existing output name.
         logger.info("Processing %s license records", len(raw_items))  # Trace the data transform.
@@ -130,9 +130,11 @@ class OrgAdminExporter:
             processed, filename, api_function_name="listOrgLicenses"
         )
         logger.debug("License writer result for %s: %s", filename, written)  # Record the actual writer result.
-        if written is False:  # An explicit rejection must not produce a completion message.
-            logger.error("Failed to export licenses to %s: the writer rejected the export.", filename)
-            return  # Preserve the public None return on writer rejection.
+        if not written:  # A rejected write must fail the operation, so the menu harness reports it.
+            logger.error(
+                "Failed to export %d license records to %s: the writer rejected the export.", len(processed), filename
+            )  # Log the count and file, as the merged site and webhook exporters do.
+            raise RuntimeError(f"The writer rejected {filename}.")  # Raise so the menu runner reports failure.
         logger.info("Exported %s license records to %s.", len(processed), filename)  # Report only accepted output.
 
     @staticmethod

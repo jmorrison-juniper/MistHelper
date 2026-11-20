@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import socket
 import sqlite3
+import time
 from collections.abc import Iterator
 from types import SimpleNamespace
 from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 
+import MistHelper  # WHY: the menu harness that prints the reported outcome is a module-level function of the script.
 from src.operations.exporting.export import org_admin_exporter as module
 
 
@@ -52,6 +54,11 @@ def license_case(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(module, "SourceDependencyResolver", resolver)  # Prevent production configuration access.
     monkeypatch.setattr(module, "mistapi", sdk)  # Prevent real API calls and pagination.
     return SimpleNamespace(response=response, resolver=resolver, sdk=sdk, wrapper=wrapper, branch=request.param)
+
+
+def _menu_42_case() -> SimpleNamespace:
+    """Describe menu 42 in the shape that the menu harness reads."""
+    return SimpleNamespace(option="42", func=module.OrgAdminExporter.licenses, description="Organization licenses")
 
 
 class TestLicenseRequestStatus:
@@ -107,7 +114,7 @@ class TestLicenseRequestStatus:
 
 
 class TestLicenseWriteStatus:
-    """Preserve valid output while reporting empty results and rejected writes correctly."""
+    """Preserve valid output, report empty results, and report rejected writes as menu failures."""
 
     def test_none_wrapper_uses_direct_get(self, license_case: SimpleNamespace) -> None:
         """A wrapper set to None must retain the original direct request behavior."""
@@ -152,15 +159,29 @@ class TestLicenseWriteStatus:
         assert "No license records" in caplog.text  # Give the operator a truthful empty-result report.
         assert "Exported" not in caplog.text and "writing empty" not in caplog.text  # No false completion.
 
-    def test_writer_false(self, license_case: SimpleNamespace, caplog: pytest.LogCaptureFixture) -> None:
-        """An explicit writer rejection must report failure without changing the public return."""
+    def test_rejected_write_reports_failure(
+        self, license_case: SimpleNamespace, caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A rejected write must raise, so the menu harness prints a failure and never a success."""
         license_case.resolver.DataExporter.write_with_format_selection.return_value = False  # Model storage rejection.
         with caplog.at_level("INFO"):
-            result = module.OrgAdminExporter.licenses()  # Exercise the actual completion message path.
-        assert result is None  # Preserve the existing public result.
-        assert license_case.resolver.DataExporter.write_with_format_selection.call_count == 1  # No recovery output.
+            success, _ = MistHelper._invoke_one_systematic_test(MagicMock(), _menu_42_case(), {}, time.time())
+        output = capsys.readouterr().out  # Read the line that the operator sees.
+        assert success is False  # The harness records the operation as failed.
+        assert "[FAILED]" in output and "[SUCCESS]" not in output  # No success line for a rejected write.
+        assert license_case.resolver.DataExporter.write_with_format_selection.call_count == 1  # No recovery write.
         assert any(record.levelname == "ERROR" and "OrgLicenses.csv" in record.message for record in caplog.records)
         assert "Exported" not in caplog.text  # A rejected writer cannot prove that output exists.
+
+    def test_successful_write_reports_success(
+        self, license_case: SimpleNamespace, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """An accepted write must keep the menu success line and must not print a failure."""
+        success, _ = MistHelper._invoke_one_systematic_test(MagicMock(), _menu_42_case(), {}, time.time())
+        output = capsys.readouterr().out  # Read the line that the operator sees.
+        assert success is True  # The harness records the operation as completed.
+        assert "[SUCCESS]" in output and "[FAILED]" not in output  # The operator sees the success line only.
+        license_case.resolver.DataExporter.write_with_format_selection.assert_called_once()  # The write ran once.
 
     @pytest.mark.parametrize("stage", ("request", "transform", "writer"))
     def test_exception_propagates(
