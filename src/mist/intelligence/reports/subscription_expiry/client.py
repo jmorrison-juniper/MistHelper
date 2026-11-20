@@ -337,39 +337,69 @@ class SubscriptionExpiryClient:
         current = response  # Start with the first validated SDK response.
         seen_links: set[str] = set()  # Detect repeated continuation links.
         while True:  # Walk every page until the SDK reports no continuation.
-            status_code = getattr(current, "status_code", None)  # Read each page status.
-            if status_code != 200:  # No later page may become partial success.
-                raise SubscriptionExpiryClientError(f"{operation} returned HTTP {status_code}")  # Surface status.
-            payload = self._response_payload(current)  # Normalize the SDK wrapper.
-            if not isinstance(payload, list):  # The endpoint contract requires a list.
-                raise SubscriptionExpiryClientError(f"{operation} returned an invalid result list")  # Surface shape.
-            records.extend(row for row in payload if isinstance(row, dict))  # Keep mapping rows only.
-            next_link = getattr(current, "next", None)  # Read the SDK continuation link.
-            if not next_link:  # The final page has no continuation.
+            records.extend(self._validated_page_records(operation, current))  # Keep validated mapping rows.
+            next_link = self._continuation_link(operation, current, seen_links)  # Read and validate the next link.
+            if next_link is None:  # The final page has no continuation.
                 break  # Stop without inventing another page.
-            if not isinstance(next_link, str) or not next_link:  # A continuation needs a usable URL.
-                raise SubscriptionExpiryClientError(f"{operation} returned an invalid continuation")  # Surface link.
-            if next_link in seen_links:  # Repeated links would never complete.
-                raise SubscriptionExpiryClientError(f"{operation} returned a repeated continuation")  # Surface loop.
             seen_links.add(next_link)  # Remember this continuation before the SDK call.
             logger.info("Fetching the next %s page for %s", operation, target)  # Log before later-page read.
-
-            def page_call(page_response: Any = current) -> Any:
-                """Bind the exact SDK page response for one continuation request."""
-                return mistapi.get_next(
-                    mist_session=self.apisession,
-                    response=page_response,
-                )  # Request only the response that owns this continuation.
-
-            current = self._request_with_retry(
-                operation,
-                target,
-                page_call,
-            )  # Follow the SDK-provided continuation.
-            if current is None:  # A missing later response is incomplete.
-                raise SubscriptionExpiryClientError(f"{operation} returned no next page")  # Surface truncation.
+            current = self._fetch_continuation_page(operation, target, current)  # Follow the SDK continuation.
         logger.debug("Fetched %d mapping rows for %s", len(records), operation)  # Log page completion.
         return records  # Return every mapping row from every validated page.
+
+    def _validated_page_records(
+        self,
+        operation: str,
+        response: Any,
+    ) -> list[dict[str, Any]]:
+        """Validate one SDK page and return its mapping records."""
+        status_code = getattr(response, "status_code", None)  # Read one page status.
+        if status_code != 200:  # No later page may become partial success.
+            raise SubscriptionExpiryClientError(f"{operation} returned HTTP {status_code}")  # Surface status.
+        payload = self._response_payload(response)  # Normalize the SDK wrapper.
+        if not isinstance(payload, list):  # The endpoint contract requires a list.
+            raise SubscriptionExpiryClientError(f"{operation} returned an invalid result list")  # Surface shape.
+        return [row for row in payload if isinstance(row, dict)]  # Keep mapping rows only.
+
+    @staticmethod
+    def _continuation_link(
+        operation: str,
+        response: Any,
+        seen_links: set[str],
+    ) -> str | None:
+        """Return one valid SDK continuation link or None for the final page."""
+        next_link = getattr(response, "next", None)  # Read the SDK continuation link.
+        if not next_link:  # The final page has no continuation.
+            return None  # Stop without inventing another page.
+        if not isinstance(next_link, str) or not next_link:  # A continuation needs a usable URL.
+            raise SubscriptionExpiryClientError(f"{operation} returned an invalid continuation")  # Surface link.
+        if next_link in seen_links:  # Repeated links would never complete.
+            raise SubscriptionExpiryClientError(f"{operation} returned a repeated continuation")  # Surface loop.
+        return next_link  # Return one validated continuation link.
+
+    def _fetch_continuation_page(
+        self,
+        operation: str,
+        target: str,
+        response: Any,
+    ) -> Any:
+        """Read one SDK continuation response and reject a missing page."""
+
+        def page_call(page_response: Any = response) -> Any:
+            """Bind the exact SDK page response for one continuation request."""
+            return mistapi.get_next(
+                mist_session=self.apisession,
+                response=page_response,
+            )  # Request only the response that owns this continuation.
+
+        page = self._request_with_retry(
+            operation,
+            target,
+            page_call,
+        )  # Follow the SDK-provided continuation.
+        if page is None:  # A missing later response is incomplete.
+            raise SubscriptionExpiryClientError(f"{operation} returned no next page")  # Surface truncation.
+        return page  # Return the validated continuation response.
 
     @staticmethod
     def _list_payload(payload: Any) -> list[dict[str, Any]]:
