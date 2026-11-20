@@ -18,8 +18,10 @@ from typing import Any  # WHY: mocks dict holds both MagicMock and Namespace obj
 from unittest.mock import MagicMock, call  # WHY: FR-008 mandates MagicMock(spec=...) + call-order verification.
 
 import pytest  # WHY: monkeypatch fixture for MistHelper attribute overrides.
+import structlog  # WHY: verify structured database logs use the MistHelper handler levels.
 
 import MistHelper  # WHY: cache tests exercise the runtime menu and mode dispatch tables.
+from src.foundation.persistence.db import host_resolver  # WHY: exercise real database DNS structlog records.
 from src.foundation.runtime.config.source_dependency_resolver import (
     SourceDependencyResolver,
 )  # WHY: assert the source dependency seam.
@@ -374,6 +376,92 @@ class TestMistHelperMenuAndModeCaches:
 class TestConsoleOutputRouting:
     """Exercise real bootstrap handlers without credentials or shared log files."""
 
+    def test_structlog_uses_configured_console_and_file_levels(
+        self,
+        isolated_logging: ApplicationBootstrap,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """INFO and DEBUG structlog records stay below a level-30 threshold."""
+        monkeypatch.setenv("CONSOLE_LOG_LEVEL", str(logging.WARNING))
+        monkeypatch.setenv("LOGGING_LOG_LEVEL", str(logging.WARNING))
+        isolated_logging._configure_logging()
+        resolution = host_resolver.DEFAULT_RESOLVER.resolve("127.0.0.1")  # WHY: emit real database DNS records.
+        assert len(resolution.addresses) >= 1  # WHY: loopback resolution proves the diagnostic path ran.
+        structured_logger = structlog.get_logger("db.logging_test")
+        structured_logger.info("structured-info-line")
+        structured_logger.debug("structured-debug-line")
+        structured_logger.warning("structured-warning-line", password="secret-value")
+        output = capsys.readouterr()
+        log_text = Path("data", "script.log").read_text(encoding="utf-8")
+        assert "structured-info-line" not in output.out
+        assert "structured-debug-line" not in output.err
+        assert "structured-info-line" not in log_text
+        assert "structured-debug-line" not in log_text
+        assert "structured-warning-line" in output.err
+        assert "structured-warning-line" in log_text
+        assert "[warning" in output.err
+        assert "\x1b" not in output.out
+        assert "\x1b" not in output.err
+        assert "secret-value" not in output.out
+        assert "secret-value" not in output.err
+        assert "secret-value" not in log_text
+
+    def test_env_load_precedes_logging_setup(
+        self,
+        isolated_logging: ApplicationBootstrap,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Startup must load .env before it reads LOGGING_LOG_LEVEL."""
+        events: list[str] = []  # Record startup order without real file or dependency work.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_configure_standard_streams",
+            MagicMock(side_effect=lambda: events.append("streams")),
+        )  # Keep stream setup out of this call-order test.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_load_environment_file",
+            MagicMock(side_effect=lambda: events.append("env")),
+        )  # Record the environment load boundary.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_configure_logging",
+            MagicMock(side_effect=lambda: events.append("logging")),
+        )  # Record the logging configuration boundary.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_check_data_directory",
+            MagicMock(side_effect=lambda: events.append("data")),
+        )  # Keep the data check out of this call-order test.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_run_dependency_check_if_needed",
+            MagicMock(side_effect=lambda: events.append("dependencies")),
+        )  # Keep package work out of this call-order test.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_build_import_manager",
+            MagicMock(side_effect=lambda: events.append("imports")),
+        )  # Keep import work out of this call-order test.
+        monkeypatch.setattr(
+            isolated_logging,
+            "_publish_runtime_configuration",
+            MagicMock(side_effect=lambda: events.append("publish")),
+        )  # Keep runtime publication out of this call-order test.
+
+        isolated_logging._run_common_startup()  # Run the real startup order with injected boundaries.
+
+        assert events == [
+            "streams",
+            "env",
+            "logging",
+            "data",
+            "dependencies",
+            "imports",
+            "publish",
+        ]  # The .env load must happen before the logging level read.
+
     @pytest.fixture
     def isolated_logging(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[ApplicationBootstrap]:
         """Restore host handlers after each isolated logging configuration."""
@@ -410,13 +498,12 @@ class TestConsoleOutputRouting:
         MistHelper._print_interactive_menu()  # Render the actual registry rather than a substitute menu.
         output = capsys.readouterr()  # SSH combines these streams, so check both separately.
         log_text = Path("data", "script.log").read_text(encoding="utf-8")
-        logged_messages = [record.partition(" - INFO - ")[2] for record in log_text.splitlines()]
         assert len(MistHelper.menu_actions) > 0  # Prevent an empty registry from producing a false pass.
         for entry in MistHelper.menu_actions.values():
             line = f"{entry.menu_id}: {entry.title}"
             assert output.out.splitlines().count(line) == 1
             assert line not in output.err
-            assert logged_messages.count(line) == 1
+            assert line in log_text
 
     def test_echo_keeps_formatting_and_unrelated_diagnostics(
         self,

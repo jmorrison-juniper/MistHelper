@@ -7512,7 +7512,10 @@ def setup_runtime_flags(
     logger.debug("setup_runtime_flags: applying standalone and fast mode flags")  # Log entry
     if args.standalone:  # --standalone flag disables ArangoDB/Redis connections org-wide
         os.environ["MISTHELPER_STANDALONE"] = "true"  # Write env var so all components detect standalone mode
+        os.environ["WAN_SHARED_ADMISSION"] = "false"  # Disable Redis request admission for standalone reads
         logger.info("Standalone mode enabled via --standalone flag: ArangoDB/Redis disabled")  # Log env write
+    elif os.environ.get("MISTHELPER_STANDALONE", "").lower() == "true":  # Environment-only standalone mode.
+        os.environ["WAN_SHARED_ADMISSION"] = "false"  # Apply standalone precedence to existing environment runs
     globals()["args"] = args  # Register parsed args globally so menu functions can read CLI flags
     logger.debug("CLI args registered in globals()['args'] for menu function access")  # Log global assignment
     test_mode_enabled = bool(  # Keep the old global behavior from stored CLI arguments.
@@ -7841,6 +7844,9 @@ def _resolve_cli_org_id(
     if args.org:  # CLI explicitly provided the org ID.
         logger.info("Using org_id from CLI argument: %s", args.org)  # Log CLI org ID.
         return str(args.org)  # Return the CLI org ID (argparse gives Any, so narrow to str).
+    if str(getattr(args, "menu", "")) == "308":  # Menu 308 discovers all MSP organizations by design.
+        logger.info("Menu 308 uses cross-org discovery; skipping the one-org prompt")  # Explain the MSP-wide path.
+        return str(MainEntrypoint.context.org_id or "")  # Preserve an existing direct org as the optional seed.
     return ConfigUtils.get_cached_or_prompted_org_id()  # Fall back to cache or prompt.
 
 

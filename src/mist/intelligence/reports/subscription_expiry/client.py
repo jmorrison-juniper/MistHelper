@@ -218,39 +218,27 @@ class SubscriptionExpiryClient:
     def fetch_inventory(self, org_id: str) -> list[dict[str, Any]]:
         """Fetch all inventory pages for one organization."""
         logger.info("Fetching inventory for organization %s", org_id)  # Log before inventory read.
-        inventory: list[dict[str, Any]] = []  # Accumulate paginated inventory.
-        page = 1  # Start with the first page.
         page_size = runtime_settings.DEFAULT_API_PAGE_LIMIT  # Reuse the project page limit.
-        while True:  # Stop after the final page.
-            response = self._request_with_retry(
-                "getOrgInventory",
+        response = self._request_with_retry(
+            "getOrgInventory",
+            org_id,
+            lambda: mistapi.api.v1.orgs.inventory.getOrgInventory(
+                self.apisession,
                 org_id,
-                lambda page=page: mistapi.api.v1.orgs.inventory.getOrgInventory(
-                    self.apisession,
-                    org_id,
-                    limit=page_size,
-                    page=page,
-                ),
-            )  # Call one explicit inventory page.
-            status_code = getattr(response, "status_code", None)  # Read page status.
-            if status_code != 200:  # Inventory page failed.
-                raise SubscriptionExpiryClientError(f"Inventory returned HTTP {status_code}")  # Surface status.
-            payload = self._response_payload(response)  # Normalize response payload.
-            if isinstance(payload, list):  # A list payload is already paginated inventory.
-                page_rows = payload  # Use the list without another transformation.
-            elif isinstance(payload, dict):  # A dict payload can hold nested results.
-                page_rows = payload.get("results", [])  # Read nested inventory rows.
-            else:  # Unsupported payload shapes need a visible result.
-                page_rows = []  # Return no rows for an unsupported shape.
-            if not isinstance(page_rows, list):  # Invalid inventory shape.
-                raise SubscriptionExpiryClientError("Inventory returned an invalid result list")  # Surface shape.
-            inventory.extend(row for row in page_rows if isinstance(row, dict))  # Keep mapping rows.
-            next_link = getattr(response, "next", None)  # Read SDK continuation.
-            if not next_link and len(page_rows) < page_size:  # Last short page reached.
-                break  # Stop pagination.
-            page += 1  # Request the next page.
-        logger.debug("Fetched %d inventory rows", len(inventory))  # Log inventory count.
-        return inventory  # Return every inventory mapping.
+                limit=page_size,
+                page=1,
+                vc=True,
+            ),
+        )  # Call one first inventory page with Virtual Chassis expansion.
+        status_code = getattr(response, "status_code", None)  # Read inventory status.
+        if status_code != 200:  # Inventory page failed.
+            raise SubscriptionExpiryClientError(f"Inventory returned HTTP {status_code}")  # Surface status.
+        inventory = mistapi.get_all(response=response, mist_session=self.apisession)  # Follow SDK continuation.
+        if not isinstance(inventory, list):  # Invalid inventory shape.
+            raise SubscriptionExpiryClientError("Inventory returned an invalid result list")  # Surface shape.
+        inventory_rows = [row for row in inventory if isinstance(row, dict)]  # Keep only mapping rows.
+        logger.debug("Fetched %d inventory rows", len(inventory_rows))  # Log inventory count.
+        return inventory_rows  # Return every inventory mapping.
 
     def fetch_msp_licenses(self, msp_id: str) -> dict[str, Any] | None:
         """Fetch optional MSP purchase evidence or return None for an HTTP failure."""

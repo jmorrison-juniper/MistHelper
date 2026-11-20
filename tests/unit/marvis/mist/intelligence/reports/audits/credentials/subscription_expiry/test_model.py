@@ -9,6 +9,8 @@ from src.mist.intelligence.reports.subscription_expiry.model import (
     MISSING_VALUE,
     ConsoleSummary,
     CrossOrgSubscriptionInventoryModel,
+    DeployedInventoryRow,
+    DeployedInventorySummaryRow,
     JsiContractSource,
     LicenseSummarySource,
     LicenseUsageSource,
@@ -201,3 +203,129 @@ def test_cross_org_stock_and_jsi_join_keep_missing_evidence() -> None:
     assert stock_rows[0].jsi_match_status == "no-match"  # A different JSI serial is not a match.
     assert contract_rows[0].serial == "OTHER"  # Contract evidence keeps its own serial.
     assert contract_rows[0].contract_end_date == MISSING_VALUE  # Missing JSI date remains Missing.
+
+
+def test_cross_org_deployed_and_stock_inventory_stay_separate() -> None:
+    """Assigned devices enter deployed inventory and unassigned devices enter stock inventory."""
+    organization = OrganizationScope(
+        org_id="org-1",
+        org_name="T-Mobile",
+        msp_id="msp-1",
+        source="msp",
+        request_status="success",
+    )  # Build a synthetic MSP organization.
+    inventory = [
+        {
+            "serial": "AP1",
+            "mac": "mac-1",
+            "model": "AP43",
+            "type": "ap",
+            "site_id": "site-1",
+            "name": "Retail 1",
+            "connected": True,
+        },
+        {
+            "serial": "SSR1",
+            "mac": "mac-2",
+            "model": "SSR130",
+            "type": "gateway",
+            "name": "Warehouse",
+            "connected": False,
+        },
+    ]  # Include one assigned and one unassigned device.
+    deployed = CrossOrgSubscriptionInventoryModel.build_deployed_inventory_rows(
+        organization,
+        inventory,
+    )  # Build deployed detail rows.
+    stock = CrossOrgSubscriptionInventoryModel.build_stock_rows(
+        organization,
+        inventory,
+        None,
+    )  # Build stock detail rows.
+    summaries = CrossOrgSubscriptionInventoryModel.build_deployed_inventory_summary(
+        organization,
+        deployed,
+        "success",
+    )  # Reconcile deployed counts.
+    assert isinstance(deployed[0], DeployedInventoryRow)  # The deployed record has the new row type.
+    assert len(deployed) == 1  # The stock SSR is excluded from deployed detail.
+    assert deployed[0].serial == "AP1"  # The assigned AP serial remains visible.
+    assert deployed[0].site_id == "site-1"  # The assigned site survives classification.
+    assert deployed[0].deployment_status == "deployed"  # The assigned status is explicit.
+    assert len(stock) == 1  # The assigned AP is excluded from stock detail.
+    assert stock[0].serial == "SSR1"  # The unassigned SSR remains stock evidence.
+    assert isinstance(summaries[0], DeployedInventorySummaryRow)  # The summary has the new row type.
+    assert summaries[0].device_type == "ap"  # The summary groups assigned AP devices.
+    assert summaries[0].deployed_quantity == 1  # The summary counts one assigned AP.
+    assert summaries[0].request_status == "success"  # The successful inventory read stays visible.
+
+
+def test_cross_org_deployed_summary_preserves_missing_and_empty_results() -> None:
+    """A failed inventory read stays Missing and an empty success stays zero."""
+    organization = OrganizationScope(
+        org_id="org-1",
+        org_name="T-Mobile",
+        source="direct",
+        request_status="success",
+    )  # Build a direct organization.
+    missing_summary = CrossOrgSubscriptionInventoryModel.build_deployed_inventory_summary(
+        organization,
+        [],
+        "failed",
+    )  # Build the failed inventory summary.
+    empty_summary = CrossOrgSubscriptionInventoryModel.build_deployed_inventory_summary(
+        organization,
+        [],
+        "success",
+    )  # Build the successful empty summary.
+    assert missing_summary[0].device_type == MISSING_VALUE  # A failed read has no source device type.
+    assert missing_summary[0].deployed_quantity == MISSING_VALUE  # A failed read never becomes zero.
+    assert missing_summary[0].request_status == "failed"  # The failure status remains visible.
+    assert empty_summary[0].device_type == MISSING_VALUE  # A successful empty read has no source type.
+    assert empty_summary[0].deployed_quantity == 0  # A successful empty read may use zero.
+    assert empty_summary[0].request_status == "success"  # The successful empty read stays successful.
+
+
+def test_cross_org_deployed_inventory_collapses_duplicates_and_keeps_vc_members() -> None:
+    """Duplicate inventory rows collapse while distinct Virtual Chassis members remain."""
+    organization = OrganizationScope(
+        org_id="org-1",
+        org_name="T-Mobile",
+        source="msp",
+        request_status="success",
+    )  # Build a synthetic MSP organization.
+    inventory = [
+        {
+            "serial": "VC1",
+            "mac": "mac-1",
+            "model": "EX4100",
+            "type": "switch",
+            "site_id": "site-1",
+            "vc_mac": "vc-mac",
+            "connected": True,
+        },
+        {
+            "serial": "VC1",
+            "mac": "mac-1",
+            "model": "EX4100",
+            "type": "switch",
+            "site_id": "site-1",
+            "vc_mac": "vc-mac",
+            "connected": True,
+        },
+        {
+            "serial": "VC2",
+            "mac": "mac-2",
+            "model": "EX4100",
+            "type": "switch",
+            "site_id": "site-1",
+            "vc_mac": "vc-mac",
+            "connected": True,
+        },
+    ]  # Include duplicate evidence and a distinct VC member.
+    rows = CrossOrgSubscriptionInventoryModel.build_deployed_inventory_rows(
+        organization,
+        inventory,
+    )  # Build deployed detail rows.
+    assert len(rows) == 2  # One duplicate is removed and both distinct members remain.
+    assert [row.serial for row in rows] == ["VC1", "VC2"]  # The stable serial identity remains visible.

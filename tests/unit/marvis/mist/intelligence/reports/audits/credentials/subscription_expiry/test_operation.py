@@ -5,7 +5,10 @@ from __future__ import annotations  # Keep annotations import-safe during test c
 from dataclasses import dataclass, field  # Build compact fake dependency classes.
 from datetime import date  # Build deterministic report contexts.
 
-from src.mist.intelligence.reports.subscription_expiry.client import JsiAccountNotLinkedError
+from src.mist.intelligence.reports.subscription_expiry.client import (
+    JsiAccountNotLinkedError,
+    SubscriptionExpiryClientError,
+)
 from src.mist.intelligence.reports.subscription_expiry.model import (
     CONTRACT_RECORD_ABSENT_NOTE,
     MISSING_VALUE,
@@ -134,7 +137,23 @@ def test_cross_org_report_exports_linked_reports(capsys: object) -> None:
             return [LicenseUsageSource(usages={"SUB-SSR": 1})]
 
         def fetch_inventory(self, _org_id: str) -> list[dict[str, object]]:
-            return [{"serial": "SSR1", "model": "SSR130", "type": "gateway"}]
+            return [
+                {
+                    "serial": "AP1",
+                    "mac": "mac-ap",
+                    "model": "AP43",
+                    "type": "ap",
+                    "site_id": "site-1",
+                    "site_name": "HQ",
+                    "connected": True,
+                },
+                {
+                    "serial": "SSR1",
+                    "mac": "mac-ssr",
+                    "model": "SSR130",
+                    "type": "gateway",
+                },
+            ]
 
         def search_jsi_assets_and_contracts(self, _org_id: str) -> list[JsiContractSource]:
             return []
@@ -147,10 +166,12 @@ def test_cross_org_report_exports_linked_reports(capsys: object) -> None:
     )  # Run the synthetic cross-org operation.
     filenames = [call[1] for call in exporter.calls]  # Read export names.
     captured = capsys.readouterr().out  # Capture the console summary.
-    assert len(filenames) == 4  # Header-only contract evidence writes no exporter call.
+    assert len(filenames) == 6  # Header-only contract evidence writes no exporter call.
     assert "CrossOrgOrganizationStatus.csv" in filenames  # Organization status is present.
     assert "CrossOrgSubscriptionPurchase.csv" in filenames  # Purchase records are present.
     assert "CrossOrgSubscriptionBalance.csv" in filenames  # Balance records are present.
+    assert "CrossOrgDeployedInventory.csv" in filenames  # Deployed inventory detail is present.
+    assert "CrossOrgDeployedInventorySummary.csv" in filenames  # Deployed inventory summary is present.
     assert "CrossOrgStockInventory.csv" in filenames  # Stock inventory is present.
     assert "CrossOrgContractEvidence.csv" not in filenames  # Header-only contract evidence uses a direct file write.
     assert "Cross-org subscription inventory summary:" in captured  # The console summary is printed.
@@ -170,6 +191,82 @@ def test_cross_org_empty_export_writes_header_only(tmp_path: object, monkeypatch
         rows = list(reader)  # Materialize data rows.
     assert reader.fieldnames == fieldnames  # Preserve the exact header order.
     assert rows == []  # No fake Missing row exists.
+
+
+def test_cross_org_empty_export_uses_fallback_when_stable_name_is_locked(
+    tmp_path: object,
+    monkeypatch: object,
+) -> None:
+    """A locked stable report name produces a visible timestamped fallback file."""
+    import csv
+
+    data_path = tmp_path / "data"  # Isolate locked output under pytest temp storage.
+    data_path.mkdir()  # Create the report directory for the negative write test.
+    stable_path = data_path / "LockedCrossOrg.csv"  # Select the stable target name.
+    fieldnames = ["org_id", "org_name", "source", "request_status"]  # Use a stable header contract.
+    real_open = type(stable_path).open  # Preserve the real pathlib open method.
+
+    def deny_stable_open(candidate: object, *args: object, **kwargs: object) -> object:
+        if str(candidate).replace("/", "\\").endswith("LockedCrossOrg.csv"):  # Match stable relative or absolute path.
+            raise PermissionError(13, "locked by another process", str(candidate))
+        return real_open(candidate, *args, **kwargs)  # Allow the timestamped fallback write.
+
+    monkeypatch.chdir(tmp_path)  # Resolve data relative to the isolated workspace.
+    monkeypatch.setattr(type(stable_path), "open", deny_stable_open)  # Simulate a Windows file lock.
+    fallback_path = CrossOrgSubscriptionInventoryReport._write_empty_csv(
+        "LockedCrossOrg.csv",
+        fieldnames,
+    )  # Write the fallback header.
+    assert fallback_path != stable_path  # The stable locked name is not reused.
+    assert fallback_path.exists()  # The fallback file must be visible.
+    assert fallback_path.stem.startswith("LockedCrossOrg_")  # The fallback name carries a timestamp.
+    with fallback_path.open(newline="", encoding="utf-8") as csv_file:  # Read the fallback CSV.
+        reader = csv.DictReader(csv_file)  # Parse header-only output.
+        rows = list(reader)  # Materialize the zero data rows.
+    assert reader.fieldnames == fieldnames  # Preserve the exact header contract.
+    assert rows == []  # The fallback remains header-only.
+
+
+def test_cross_org_populated_export_uses_fallback_when_stable_name_is_locked(
+    tmp_path: object,
+    monkeypatch: object,
+) -> None:
+    """A populated report writes every row to a UTC fallback when the stable file is locked."""
+    import csv
+
+    data_path = tmp_path / "data"  # Isolate locked output under pytest temp storage.
+    data_path.mkdir()  # Create the report directory for the negative write test.
+    stable_path = data_path / "LockedCrossOrgPurchase.csv"  # Select the stable purchase name.
+    fieldnames = ["org_id", "subscription_type", "quantity"]  # Use a small report contract.
+    payload = [
+        {"org_id": "org-1", "subscription_type": "SUB-AP", "quantity": 30},
+        {"org_id": "org-2", "subscription_type": "SUB-SSR", "quantity": 12},
+    ]  # Provide one row for each synthetic organization.
+    real_open = type(stable_path).open  # Preserve the real pathlib open method.
+
+    def deny_stable_open(candidate: object, *args: object, **kwargs: object) -> object:
+        if str(candidate).replace("/", "\\").endswith("LockedCrossOrgPurchase.csv"):  # Match stable names.
+            raise PermissionError(13, "locked by another process", str(candidate))
+        return real_open(candidate, *args, **kwargs)  # Allow the timestamped fallback write.
+
+    monkeypatch.chdir(tmp_path)  # Resolve data relative to the isolated workspace.
+    monkeypatch.setattr(type(stable_path), "open", deny_stable_open)  # Simulate a Windows file lock.
+    fallback_path = CrossOrgSubscriptionInventoryReport._write_payload_csv(
+        payload,
+        "LockedCrossOrgPurchase.csv",
+        fieldnames,
+    )  # Write the populated fallback.
+    assert fallback_path != stable_path  # The stable locked name is not reused.
+    assert fallback_path.exists()  # The fallback file must be visible.
+    assert fallback_path.stem.startswith("LockedCrossOrgPurchase_")  # The fallback name carries a timestamp.
+    with fallback_path.open(newline="", encoding="utf-8") as csv_file:  # Read the fallback CSV.
+        reader = csv.DictReader(csv_file)  # Parse the populated report.
+        rows = list(reader)  # Materialize every source row.
+    assert reader.fieldnames == fieldnames  # Preserve the exact header contract.
+    assert rows == [
+        {"org_id": "org-1", "subscription_type": "SUB-AP", "quantity": "30"},
+        {"org_id": "org-2", "subscription_type": "SUB-SSR", "quantity": "12"},
+    ]  # Preserve every source row in the fallback.
 
 
 def test_cross_org_msp_purchase_read_runs_once_for_duplicate_grants() -> None:
@@ -232,3 +329,69 @@ def test_cross_org_msp_purchase_read_runs_once_for_duplicate_grants() -> None:
     )  # Locate the purchase report export.
     assert fetched_msp_ids == ["msp-1"]  # The duplicate grant causes one MSP request.
     assert len(purchase_call[0]) == 2  # Each organization receives one matched MSP purchase row.
+
+
+def test_cross_org_inventory_failure_keeps_missing_summary_and_partial_results() -> None:
+    """A failed inventory read remains Missing while another organization succeeds."""
+    exporter = FakeExporter()  # Capture export calls without file I/O.
+    dependencies = FakeDependencies(exporter)  # Inject the fake exporter.
+
+    class FakePartialInventoryClient:
+        """Fake cross-org client with one inventory success and one inventory failure."""
+
+        def discover_organizations(self, _org_id: str, _org_name: str) -> tuple[list[object], list[object]]:
+            return [
+                OrganizationScope(
+                    org_id="org-1",
+                    org_name="Failed Org",
+                    msp_id="msp-1",
+                    source="msp",
+                    request_status="success",
+                ),
+                OrganizationScope(
+                    org_id="org-2",
+                    org_name="Working Org",
+                    msp_id="msp-1",
+                    source="msp",
+                    request_status="success",
+                ),
+            ], []  # Return two synthetic authorized organizations.
+
+        def fetch_license_summary(self, _org_id: str) -> LicenseSummarySource:
+            return LicenseSummarySource(entitled={}, licenses=[])  # Avoid purchase overlap.
+
+        def fetch_license_usage_by_site(self, _org_id: str) -> list[LicenseUsageSource]:
+            return []  # Return no usage rows.
+
+        def fetch_inventory(self, org_id: str) -> list[dict[str, object]]:
+            if org_id == "org-1":  # Simulate one inventory denial.
+                raise SubscriptionExpiryClientError("Inventory returned HTTP 403")
+            return [
+                {
+                    "serial": "AP2",
+                    "mac": "mac-ap",
+                    "model": "AP43",
+                    "type": "ap",
+                    "site_id": "site-2",
+                    "connected": True,
+                }
+            ]  # Return one deployed AP for the successful organization.
+
+        def search_jsi_assets_and_contracts(self, _org_id: str) -> list[JsiContractSource]:
+            return []  # Return no contract evidence.
+
+    CrossOrgSubscriptionInventoryReport._run_with_client(
+        "org-1",
+        "Failed Org",
+        FakePartialInventoryClient(),
+        dependencies,
+    )  # Run synthetic partial inventory orchestration.
+    summary_call = next(
+        call for call in exporter.calls if call[1] == "CrossOrgDeployedInventorySummary.csv"
+    )  # Locate the deployed summary export.
+    missing_row = next(row for row in summary_call[0] if row["org_id"] == "org-1")  # Find failed org.
+    working_row = next(row for row in summary_call[0] if row["org_id"] == "org-2")  # Find successful org.
+    assert missing_row["deployed_quantity"] == MISSING_VALUE  # The failed read remains Missing.
+    assert missing_row["request_status"] == "failed"  # The failed inventory source is visible.
+    assert working_row["deployed_quantity"] == 1  # The successful inventory count remains usable.
+    assert working_row["request_status"] == "success"  # The successful inventory source is visible.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import os
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -433,6 +434,41 @@ def test_setup_runtime_flags_catches_fast_attr_error() -> None:
     args = Args()  # Use a local class so the property affects only this test.
     MistHelper.setup_runtime_flags(args)  # Runtime setup must keep startup controlled.
     assert MistHelper.MainEntrypoint.context.fast_mode_enabled is False  # Preserve the safe default.
+
+
+def test_setup_runtime_flags_standalone_disables_shared_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A standalone CLI run disables both database and Redis admission settings."""
+    monkeypatch.setenv("WAN_SHARED_ADMISSION", "true")  # Create a conflicting Redis-admission value.
+
+    class Args:
+        standalone = True  # Request standalone mode.
+        test = False  # Keep test-mode logic quiet.
+        testinteractive = False  # Keep interactive-test logic quiet.
+        fast = False  # Disable fast mode for this unit run.
+
+    MistHelper.setup_runtime_flags(Args())  # Apply CLI runtime flags.
+    assert os.getenv("MISTHELPER_STANDALONE") == "true"  # Standalone mode is visible to exporters.
+    assert os.getenv("WAN_SHARED_ADMISSION") == "false"  # Redis request accounting is disabled.
+
+
+def test_cross_org_menu_308_does_not_prompt_for_one_org(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Menu 308 discovery does not require a single organization prompt."""
+    prompt = MagicMock(name="get_cached_or_prompted_org_id")  # Capture an unwanted one-org prompt.
+    monkeypatch.setattr(
+        MistHelper.ConfigUtils,
+        "get_cached_or_prompted_org_id",
+        prompt,
+    )  # Replace the prompt seam for this test.
+    args = SimpleNamespace(menu="308", org=None)  # Minimal CLI arguments for menu 308.
+
+    resolved_org_id = MistHelper._resolve_cli_org_id(args)  # Run the cross-org org resolver.
+
+    prompt.assert_not_called()  # The MSP-wide report must not stop at one organization.
+    assert resolved_org_id == (MistHelper.MainEntrypoint.context.org_id or "")  # Preserve any selected direct org.
 
 
 def test_setup_runtime_flags_rejects_unexpected_error() -> None:

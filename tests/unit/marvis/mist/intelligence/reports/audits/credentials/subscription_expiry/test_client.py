@@ -134,9 +134,9 @@ def test_client_discovers_direct_and_msp_organizations(monkeypatch: pytest.Monke
     assert failures == []  # Both discovery calls succeed.
 
 
-def test_client_inventory_pagination_uses_explicit_page_arguments(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The client reads every inventory page with limit and page arguments."""
-    calls: list[tuple[int, int]] = []  # Record explicit pagination arguments.
+def test_client_inventory_pagination_uses_sdk_continuation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The client reads every inventory page with SDK continuation and Virtual Chassis."""
+    calls: list[tuple[int, bool, int]] = []  # Record inventory limit, VC, and page arguments.
 
     class FakeInventoryApi:
         """Fake inventory endpoint for two-page pagination."""
@@ -147,20 +147,23 @@ def test_client_inventory_pagination_uses_explicit_page_arguments(monkeypatch: p
             _org_id: str,
             limit: int,
             page: int,
+            vc: bool,
         ) -> SimpleNamespace:
-            calls.append((limit, page))  # Capture every page request.
-            if page == 1:
-                return SimpleNamespace(status_code=200, data=[{"serial": "one"}], next="/page-2")
-            return SimpleNamespace(status_code=200, data=[{"serial": "two"}], next=None)
+            calls.append((limit, vc, page))  # Capture pagination and Virtual Chassis arguments.
+            return SimpleNamespace(status_code=200, data=[{"serial": "one"}], next="/page-2")
 
     fake_sdk = SimpleNamespace(
-        api=SimpleNamespace(v1=SimpleNamespace(orgs=SimpleNamespace(inventory=FakeInventoryApi())))
-    )  # Build a synthetic SDK tree.
+        api=SimpleNamespace(v1=SimpleNamespace(orgs=SimpleNamespace(inventory=FakeInventoryApi()))),
+        get_all=lambda response, mist_session: [
+            {"serial": "one", "site_id": "site-1"},
+            {"serial": "two", "site_id": "site-2", "vc_mac": "vc-1"},
+        ],
+    )  # Build a synthetic SDK tree with SDK continuation.
     monkeypatch.setattr(client_module, "mistapi", fake_sdk)  # Replace SDK access for this test.
     client = SubscriptionExpiryClient(object())  # Build a synthetic client.
     inventory = client.fetch_inventory("org-1")  # Read both pages.
-    assert [row["serial"] for row in inventory] == ["one", "two"]  # Preserve page order.
-    assert calls == [(1000, 1), (1000, 2)]  # Use the shared page size and page numbers.
+    assert [row["serial"] for row in inventory] == ["one", "two"]  # Preserve continuation order.
+    assert calls == [(1000, True, 1)]  # Use the shared page size and VC expansion.
 
 
 def test_client_transport_failure_sentinel_remains_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -174,3 +177,28 @@ def test_client_transport_failure_sentinel_remains_an_error(monkeypatch: pytest.
     client = SubscriptionExpiryClient(object())  # Build a synthetic client.
     with pytest.raises(SubscriptionExpiryClientError, match="HTTP 0"):  # Require visible transport failure.
         client.fetch_license_summary("org-1")  # Trigger the sentinel status.
+
+
+def test_client_inventory_http_failure_remains_visible(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An inventory HTTP failure becomes a typed client error."""
+
+    class FakeInventoryApi:
+        """Fake inventory endpoint for one HTTP failure."""
+
+        @staticmethod
+        def getOrgInventory(
+            _session: object,
+            _org_id: str,
+            limit: int,
+            page: int,
+            vc: bool,
+        ) -> SimpleNamespace:
+            return SimpleNamespace(status_code=500, data={"error": "failure"})
+
+    fake_sdk = SimpleNamespace(
+        api=SimpleNamespace(v1=SimpleNamespace(orgs=SimpleNamespace(inventory=FakeInventoryApi())))
+    )  # Build a synthetic SDK tree.
+    monkeypatch.setattr(client_module, "mistapi", fake_sdk)  # Replace SDK access for this test.
+    client = SubscriptionExpiryClient(object())  # Build a synthetic client.
+    with pytest.raises(SubscriptionExpiryClientError, match="HTTP 500"):  # Require visible HTTP failure.
+        client.fetch_inventory("org-1")  # Trigger the inventory failure.

@@ -178,6 +178,44 @@ class StockInventoryRow:
 
 
 @dataclass(frozen=True)
+class DeployedInventoryRow:
+    """One assigned inventory device that is deployed at a Mist site."""
+
+    msp_id: str  # Identify the MSP source when available.
+    org_id: str  # Identify the organization source.
+    org_name: str  # Display the organization name.
+    site_id: str  # Identify the assigned Mist site.
+    site_name: str  # Display the assigned site name or Missing.
+    serial: str  # Preserve serial or Missing.
+    mac: str  # Preserve MAC or Missing.
+    model: str  # Preserve model or Missing.
+    name: str  # Preserve inventory name or Missing.
+    device_type: str  # Name ap, switch, gateway, mxedge, router, or other.
+    deployment_status: str  # Mark deployed rather than stock.
+    connected: str  # Preserve live connection status or Missing.
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a CSV-ready deployed inventory mapping."""
+        return asdict(self)  # Preserve field order for CSV export.
+
+
+@dataclass(frozen=True)
+class DeployedInventorySummaryRow:
+    """One organization and device-type deployed inventory count."""
+
+    msp_id: str  # Identify the MSP source when available.
+    org_id: str  # Identify the organization source.
+    org_name: str  # Display the organization name.
+    device_type: str  # Name the normalized deployed device type.
+    deployed_quantity: int | str  # Preserve the exact count or Missing.
+    request_status: str  # Name success, partial, failed, or unavailable.
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a CSV-ready deployed inventory summary mapping."""
+        return asdict(self)  # Preserve field order for CSV export.
+
+
+@dataclass(frozen=True)
 class ContractEvidenceRow:
     """One JSI contract evidence record."""
 
@@ -752,6 +790,95 @@ class CrossOrgSubscriptionInventoryModel:
             )  # Build one balance row.
         logger.debug("Built %d cross-org balance rows", len(rows))  # Log balance count.
         return rows  # Return stable subscription balances.
+
+    @staticmethod
+    def build_deployed_inventory_rows(
+        organization: OrganizationScope,
+        inventory: list[dict[str, Any]],
+    ) -> list[DeployedInventoryRow]:
+        """Build one deployed row for each inventory asset that has a site."""
+        logger.info("Building deployed inventory rows for %s", organization.org_id)  # Log before classification.
+        rows: list[DeployedInventoryRow] = []  # Accumulate deployed evidence.
+        seen: set[tuple[str, str, str, str]] = set()  # Deduplicate one live inventory identity.
+        for record in inventory:  # Walk every live inventory record.
+            row = CrossOrgSubscriptionInventoryModel._deployed_row(organization, record)  # Classify one record.
+            if row is None:  # Unassigned or malformed inventory is not deployed.
+                continue  # Keep stock records outside deployed output.
+            key = (row.serial, row.mac, row.model, row.site_id)  # Build the deployed duplicate key.
+            if key in seen:  # Skip repeated Virtual Chassis or source rows.
+                continue  # Preserve one row per deployed identity.
+            seen.add(key)  # Remember this deployed identity.
+            rows.append(row)  # Add the deployed row.
+        logger.debug("Built %d cross-org deployed inventory rows", len(rows))  # Log deployed count.
+        return sorted(rows, key=lambda row: (row.org_name, row.device_type, row.model, row.serial))
+
+    @staticmethod
+    def _deployed_row(
+        organization: OrganizationScope,
+        record: dict[str, Any],
+    ) -> DeployedInventoryRow | None:
+        """Classify one inventory record as deployed or return None for stock."""
+        if not isinstance(record, dict) or not record.get("site_id"):  # A site assignment proves deployment.
+            return None  # Keep unassigned devices in stock output.
+        serial = CrossOrgSubscriptionInventoryModel._text(record.get("serial") or record.get("chassis_serial"))
+        mac = CrossOrgSubscriptionInventoryModel._text(record.get("mac") or record.get("vc_mac"))
+        model = CrossOrgSubscriptionInventoryModel._text(record.get("model") or record.get("chassis_model"))
+        connected = record.get("connected")
+        connected_text = (
+            "True" if connected is True else "False" if connected is False else MISSING_VALUE
+        )  # Preserve the source connection state visibly.
+        return DeployedInventoryRow(
+            msp_id=organization.msp_id or MISSING_VALUE,
+            org_id=organization.org_id,
+            org_name=organization.org_name,
+            site_id=CrossOrgSubscriptionInventoryModel._text(record.get("site_id")),
+            site_name=CrossOrgSubscriptionInventoryModel._text(record.get("site_name")),
+            serial=serial,
+            mac=mac,
+            model=model,
+            name=CrossOrgSubscriptionInventoryModel._text(record.get("name")),
+            device_type=CrossOrgSubscriptionInventoryModel._inventory_type(record),
+            deployment_status="deployed",
+            connected=connected_text,
+        )  # Build one deployed inventory row.
+
+    @staticmethod
+    def build_deployed_inventory_summary(
+        organization: OrganizationScope,
+        deployed_rows: list[DeployedInventoryRow],
+        request_status: str,
+    ) -> list[DeployedInventorySummaryRow]:
+        """Count deployed inventory by organization and normalized device type."""
+        logger.info("Building deployed inventory summary for %s", organization.org_id)  # Log before grouping.
+        if request_status in ("failed", "unavailable"):  # A failed source read is not a zero count.
+            return [
+                DeployedInventorySummaryRow(
+                    msp_id=organization.msp_id or MISSING_VALUE,
+                    org_id=organization.org_id,
+                    org_name=organization.org_name,
+                    device_type=MISSING_VALUE,
+                    deployed_quantity=MISSING_VALUE,
+                    request_status=request_status,
+                )
+            ]  # Preserve Missing on source failure.
+        counts: dict[str, int] = {}  # Accumulate deployed counts by type.
+        for deployed_row in deployed_rows:  # Walk deployed detail rows.
+            counts[deployed_row.device_type] = counts.get(deployed_row.device_type, 0) + 1  # Count each row.
+        if not counts:  # A successful read found no deployed devices.
+            counts[MISSING_VALUE] = 0  # Represent a real empty result as zero.
+        rows = [
+            DeployedInventorySummaryRow(
+                msp_id=organization.msp_id or MISSING_VALUE,
+                org_id=organization.org_id,
+                org_name=organization.org_name,
+                device_type=device_type,
+                deployed_quantity=count,
+                request_status=request_status,
+            )
+            for device_type, count in sorted(counts.items())
+        ]  # Build stable summary rows.
+        logger.debug("Built %d cross-org deployed inventory summary rows", len(rows))  # Log summary count.
+        return rows  # Return the organization/type reconciliation.
 
     @staticmethod
     def build_stock_rows(

@@ -11,6 +11,8 @@ def test_cross_org_report_primary_keys_are_registered() -> None:
         "CrossOrgOrganizationStatus",
         "CrossOrgSubscriptionPurchase",
         "CrossOrgSubscriptionBalance",
+        "CrossOrgDeployedInventory",
+        "CrossOrgDeployedInventorySummary",
         "CrossOrgStockInventory",
         "CrossOrgContractEvidence",
     ):

@@ -31,6 +31,10 @@ from src.foundation.runtime.config.source_dependency_resolver import (
     SourceDependencyResolver,  # WHY: resolve source dependencies without importing the root module.
 )
 from src.foundation.support.utils.console import ConsoleEchoFilter
+from src.foundation.support.utils.logger_utils import (
+    SensitiveFilter,
+    StructuredLoggingFrontend,
+)  # Route structlog and stdlib records through the same handlers.
 
 logger = logging.getLogger(__name__)  # Name the logger for this module so a reader can filter by source.
 
@@ -169,9 +173,9 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
     def _run_common_startup(self) -> None:
         """Run the import-time side effects in a fixed explicit order."""
         self._configure_standard_streams()  # Prevent console encoding failures before user output begins.
-        self._configure_logging()  # Configure logging one time inside bootstrap.
-        self._check_data_directory()  # Fail early when the runtime data directory is not writable.
         self._load_environment_file()  # Load .env only after the caller asks for startup.
+        self._configure_logging()  # Configure logging after .env supplies the requested levels.
+        self._check_data_directory()  # Fail early when the runtime data directory is not writable.
         self._run_dependency_check_if_needed()  # Check packages only after help can exit cleanly.
         self._build_import_manager()  # Create the deferred import manager after logging exists.
         self._publish_runtime_configuration()  # Publish env-driven globals only after explicit startup begins.
@@ -195,15 +199,21 @@ class ApplicationBootstrap:  # Explicit startup step for CLI and web hosts
         console_handler = logging.StreamHandler()  # Preserve console logging for operators.
         console_handler.setLevel(console_level)  # Apply the requested console threshold.
         console_handler.addFilter(ConsoleEchoFilter())  # Keep the file copy without repeating direct terminal output.
+        console_handler.addFilter(SensitiveFilter())  # Redact credentials at the final console boundary.
+        console_formatter = StructuredLoggingFrontend.console_formatter()  # Build the terminal event renderer.
+        console_handler.setFormatter(console_formatter)  # Attach structlog formatting to the console handler.
         file_path = log_dir / "script.log"  # Preserve the existing log file name.
         file_handler = _MH.LogRotationSettings.from_environment().build_handler(str(file_path))  # Bound log growth.
         file_handler.setLevel(file_level)  # Apply the requested file threshold.
+        file_handler.addFilter(SensitiveFilter())  # Redact credentials at the final file boundary.
+        file_formatter = StructuredLoggingFrontend.file_formatter()  # Build the plain structured file renderer.
+        file_handler.setFormatter(file_formatter)  # Attach structlog formatting to the file handler.
         logging.basicConfig(  # Configure root logging only inside this bootstrap step.
             level=logging.DEBUG,  # Capture all records and let handlers filter them.
-            format="%(asctime)s - %(levelname)s - %(message)s",  # Keep the historical log line format.
             handlers=[file_handler, console_handler],  # Send startup and runtime records to file and console.
             force=True,  # Replace any host default handler with the MistHelper startup policy.
         )
+        StructuredLoggingFrontend.configure()  # Route structlog records through the configured stdlib handlers.
         self._install_log_sanitizer()  # Redact sensitive fields after the root logger exists.
 
     def _install_log_sanitizer(self) -> None:
