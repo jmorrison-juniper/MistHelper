@@ -5,7 +5,10 @@ from __future__ import annotations  # Keep annotations import-safe during test c
 from dataclasses import dataclass, field  # Build compact fake dependency classes.
 from datetime import date  # Build deterministic report contexts.
 
-from src.mist.intelligence.reports.subscription_expiry.client import JsiAccountNotLinkedError
+from src.mist.intelligence.reports.subscription_expiry.client import (
+    JsiAccountNotLinkedError,
+    SubscriptionExpiryClientError,
+)
 from src.mist.intelligence.reports.subscription_expiry.model import (
     CONTRACT_RECORD_ABSENT_NOTE,
     MISSING_VALUE,
@@ -134,7 +137,23 @@ def test_cross_org_report_exports_linked_reports(capsys: object) -> None:
             return [LicenseUsageSource(usages={"SUB-SSR": 1})]
 
         def fetch_inventory(self, _org_id: str) -> list[dict[str, object]]:
-            return [{"serial": "SSR1", "model": "SSR130", "type": "gateway"}]
+            return [
+                {
+                    "serial": "AP1",
+                    "mac": "mac-ap",
+                    "model": "AP43",
+                    "type": "ap",
+                    "site_id": "site-1",
+                    "site_name": "HQ",
+                    "connected": True,
+                },
+                {
+                    "serial": "SSR1",
+                    "mac": "mac-ssr",
+                    "model": "SSR130",
+                    "type": "gateway",
+                },
+            ]
 
         def search_jsi_assets_and_contracts(self, _org_id: str) -> list[JsiContractSource]:
             return []
@@ -147,10 +166,12 @@ def test_cross_org_report_exports_linked_reports(capsys: object) -> None:
     )  # Run the synthetic cross-org operation.
     filenames = [call[1] for call in exporter.calls]  # Read export names.
     captured = capsys.readouterr().out  # Capture the console summary.
-    assert len(filenames) == 4  # Header-only contract evidence writes no exporter call.
+    assert len(filenames) == 6  # Header-only contract evidence writes no exporter call.
     assert "CrossOrgOrganizationStatus.csv" in filenames  # Organization status is present.
     assert "CrossOrgSubscriptionPurchase.csv" in filenames  # Purchase records are present.
     assert "CrossOrgSubscriptionBalance.csv" in filenames  # Balance records are present.
+    assert "CrossOrgDeployedInventory.csv" in filenames  # Deployed inventory detail is present.
+    assert "CrossOrgDeployedInventorySummary.csv" in filenames  # Deployed inventory summary is present.
     assert "CrossOrgStockInventory.csv" in filenames  # Stock inventory is present.
     assert "CrossOrgContractEvidence.csv" not in filenames  # Header-only contract evidence uses a direct file write.
     assert "Cross-org subscription inventory summary:" in captured  # The console summary is printed.
@@ -232,3 +253,69 @@ def test_cross_org_msp_purchase_read_runs_once_for_duplicate_grants() -> None:
     )  # Locate the purchase report export.
     assert fetched_msp_ids == ["msp-1"]  # The duplicate grant causes one MSP request.
     assert len(purchase_call[0]) == 2  # Each organization receives one matched MSP purchase row.
+
+
+def test_cross_org_inventory_failure_keeps_missing_summary_and_partial_results() -> None:
+    """A failed inventory read remains Missing while another organization succeeds."""
+    exporter = FakeExporter()  # Capture export calls without file I/O.
+    dependencies = FakeDependencies(exporter)  # Inject the fake exporter.
+
+    class FakePartialInventoryClient:
+        """Fake cross-org client with one inventory success and one inventory failure."""
+
+        def discover_organizations(self, _org_id: str, _org_name: str) -> tuple[list[object], list[object]]:
+            return [
+                OrganizationScope(
+                    org_id="org-1",
+                    org_name="Failed Org",
+                    msp_id="msp-1",
+                    source="msp",
+                    request_status="success",
+                ),
+                OrganizationScope(
+                    org_id="org-2",
+                    org_name="Working Org",
+                    msp_id="msp-1",
+                    source="msp",
+                    request_status="success",
+                ),
+            ], []  # Return two synthetic authorized organizations.
+
+        def fetch_license_summary(self, _org_id: str) -> LicenseSummarySource:
+            return LicenseSummarySource(entitled={}, licenses=[])  # Avoid purchase overlap.
+
+        def fetch_license_usage_by_site(self, _org_id: str) -> list[LicenseUsageSource]:
+            return []  # Return no usage rows.
+
+        def fetch_inventory(self, org_id: str) -> list[dict[str, object]]:
+            if org_id == "org-1":  # Simulate one inventory denial.
+                raise SubscriptionExpiryClientError("Inventory returned HTTP 403")
+            return [
+                {
+                    "serial": "AP2",
+                    "mac": "mac-ap",
+                    "model": "AP43",
+                    "type": "ap",
+                    "site_id": "site-2",
+                    "connected": True,
+                }
+            ]  # Return one deployed AP for the successful organization.
+
+        def search_jsi_assets_and_contracts(self, _org_id: str) -> list[JsiContractSource]:
+            return []  # Return no contract evidence.
+
+    CrossOrgSubscriptionInventoryReport._run_with_client(
+        "org-1",
+        "Failed Org",
+        FakePartialInventoryClient(),
+        dependencies,
+    )  # Run synthetic partial inventory orchestration.
+    summary_call = next(
+        call for call in exporter.calls if call[1] == "CrossOrgDeployedInventorySummary.csv"
+    )  # Locate the deployed summary export.
+    missing_row = next(row for row in summary_call[0] if row["org_id"] == "org-1")  # Find failed org.
+    working_row = next(row for row in summary_call[0] if row["org_id"] == "org-2")  # Find successful org.
+    assert missing_row["deployed_quantity"] == MISSING_VALUE  # The failed read remains Missing.
+    assert missing_row["request_status"] == "failed"  # The failed inventory source is visible.
+    assert working_row["deployed_quantity"] == 1  # The successful inventory count remains usable.
+    assert working_row["request_status"] == "success"  # The successful inventory source is visible.

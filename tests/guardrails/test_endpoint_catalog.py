@@ -582,3 +582,12 @@ class TestMenuText:
         digest = hashlib.sha256(payload).hexdigest()  # Hash stable source or data, not Python's AST rendering.
         logging.debug("Computed menu identity %s for %s", digest, path)  # Record the checked identity.
         assert digest == expected, "the menu identity changed outside the allowed title edit"
+
+
+def test_menu308_deployed_inventory_contract_is_named() -> None:
+    """Menu 308 keeps separate deployed detail and summary export names."""
+    body = (REPOSITORY_ROOT / "src/mist/intelligence/reports/subscription_expiry/operation.py").read_text(
+        encoding="utf-8"
+    )  # Read the menu 308 report implementation.
+    assert "CrossOrgDeployedInventory.csv" in body  # The deployed detail file has a stable name.
+    assert "CrossOrgDeployedInventorySummary.csv" in body  # The deployed summary file has a stable name.

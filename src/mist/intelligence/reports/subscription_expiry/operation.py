@@ -5,7 +5,7 @@ from __future__ import annotations  # Keep annotations import-safe during tests.
 import csv  # Write explicit header-only CSV files for empty reports.
 import logging  # Record operation actions for operator traceability.
 import os  # Read direct organization and customer name settings without prompts.
-from dataclasses import replace  # Preserve organization scope while changing status.
+from dataclasses import dataclass, replace  # Preserve report payload and organization status.
 from datetime import date  # Type report date for source scoring.
 from pathlib import Path  # Build data paths with the platform path library.
 from typing import Any  # Type injectable test seams without importing root modules.
@@ -67,8 +67,23 @@ SOURCE_ATTRIBUTION = (
 CROSS_ORG_ORGANIZATION_STATUS_FILENAME = "CrossOrgOrganizationStatus.csv"
 CROSS_ORG_SUBSCRIPTION_PURCHASE_FILENAME = "CrossOrgSubscriptionPurchase.csv"
 CROSS_ORG_SUBSCRIPTION_BALANCE_FILENAME = "CrossOrgSubscriptionBalance.csv"
+CROSS_ORG_DEPLOYED_INVENTORY_FILENAME = "CrossOrgDeployedInventory.csv"
+CROSS_ORG_DEPLOYED_INVENTORY_SUMMARY_FILENAME = "CrossOrgDeployedInventorySummary.csv"
 CROSS_ORG_STOCK_INVENTORY_FILENAME = "CrossOrgStockInventory.csv"
 CROSS_ORG_CONTRACT_EVIDENCE_FILENAME = "CrossOrgContractEvidence.csv"
+
+
+@dataclass
+class CrossOrgReportPayload:
+    """Hold one menu 308 export payload for five or more linked reports."""
+
+    organization_rows: list[dict[str, Any]]
+    purchase_rows: list[dict[str, Any]]
+    balance_rows: list[dict[str, Any]]
+    deployed_inventory_rows: list[dict[str, Any]]
+    deployed_inventory_summary_rows: list[dict[str, Any]]
+    stock_rows: list[dict[str, Any]]
+    contract_rows: list[dict[str, Any]]
 
 
 class SubscriptionExpiryReport:
@@ -231,17 +246,13 @@ class CrossOrgSubscriptionInventoryReport:
 
     @staticmethod
     def _export_reports(
-        organization_rows: list[dict[str, Any]],
-        purchase_rows: list[dict[str, Any]],
-        balance_rows: list[dict[str, Any]],
-        stock_rows: list[dict[str, Any]],
-        contract_rows: list[dict[str, Any]],
+        payload: CrossOrgReportPayload,
         dependencies: Any,
     ) -> None:
-        """Export five linked CSV reports through DataExporter."""
+        """Export linked cross-org CSV reports through DataExporter."""
         reports = (
             (
-                organization_rows,
+                payload.organization_rows,
                 CROSS_ORG_ORGANIZATION_STATUS_FILENAME,
                 "CrossOrgOrganizationStatus",
                 [
@@ -255,7 +266,7 @@ class CrossOrgSubscriptionInventoryReport:
                 ],
             ),
             (
-                purchase_rows,
+                payload.purchase_rows,
                 CROSS_ORG_SUBSCRIPTION_PURCHASE_FILENAME,
                 "CrossOrgSubscriptionPurchase",
                 [
@@ -277,7 +288,7 @@ class CrossOrgSubscriptionInventoryReport:
                 ],
             ),
             (
-                balance_rows,
+                payload.balance_rows,
                 CROSS_ORG_SUBSCRIPTION_BALANCE_FILENAME,
                 "CrossOrgSubscriptionBalance",
                 [
@@ -299,7 +310,41 @@ class CrossOrgSubscriptionInventoryReport:
                 ],
             ),
             (
-                stock_rows,
+                payload.deployed_inventory_rows,
+                CROSS_ORG_DEPLOYED_INVENTORY_FILENAME,
+                "CrossOrgDeployedInventory",
+                [
+                    "msp_id",
+                    "org_id",
+                    "org_name",
+                    "site_id",
+                    "site_name",
+                    "serial",
+                    "mac",
+                    "model",
+                    "name",
+                    "device_type",
+                    "deployment_status",
+                    "connected",
+                    "source_attribution",
+                ],
+            ),
+            (
+                payload.deployed_inventory_summary_rows,
+                CROSS_ORG_DEPLOYED_INVENTORY_SUMMARY_FILENAME,
+                "CrossOrgDeployedInventorySummary",
+                [
+                    "msp_id",
+                    "org_id",
+                    "org_name",
+                    "device_type",
+                    "deployed_quantity",
+                    "request_status",
+                    "source_attribution",
+                ],
+            ),
+            (
+                payload.stock_rows,
                 CROSS_ORG_STOCK_INVENTORY_FILENAME,
                 "CrossOrgStockInventory",
                 [
@@ -320,7 +365,7 @@ class CrossOrgSubscriptionInventoryReport:
                 ],
             ),
             (
-                contract_rows,
+                payload.contract_rows,
                 CROSS_ORG_CONTRACT_EVIDENCE_FILENAME,
                 "CrossOrgContractEvidence",
                 [
@@ -355,27 +400,27 @@ class CrossOrgSubscriptionInventoryReport:
 
     @staticmethod
     def _print_summary(
-        organization_rows: list[dict[str, Any]],
-        purchase_rows: list[dict[str, Any]],
-        balance_rows: list[dict[str, Any]],
-        stock_rows: list[dict[str, Any]],
-        contract_rows: list[dict[str, Any]],
+        payload: CrossOrgReportPayload,
     ) -> None:
         """Print concise counts for every cross-org report category."""
         success_count = sum(
-            1 for row in organization_rows if row.get("request_status") in ("success", "partial")
+            1 for row in payload.organization_rows if row.get("request_status") in ("success", "partial")
         )  # Count organizations with usable data.
         failed_count = sum(
-            1 for row in organization_rows if row.get("request_status") in ("failed", "unavailable")
+            1 for row in payload.organization_rows if row.get("request_status") in ("failed", "unavailable")
         )  # Count organizations with failures.
         print("Cross-org subscription inventory summary:")  # Print summary heading.
-        print(f"  Organizations discovered: {len(organization_rows)}")  # Print org count.
+        print(f"  Organizations discovered: {len(payload.organization_rows)}")  # Print org count.
         print(f"  Organizations with data: {success_count}")  # Print usable count.
         print(f"  Organizations with failure: {failed_count}")  # Print failure count.
-        print(f"  Subscription purchase rows: {len(purchase_rows)}")  # Print purchase count.
-        print(f"  Subscription balance rows: {len(balance_rows)}")  # Print balance count.
-        print(f"  Stock inventory rows: {len(stock_rows)}")  # Print stock count.
-        print(f"  Contract evidence rows: {len(contract_rows)}")  # Print contract count.
+        print(f"  Subscription purchase rows: {len(payload.purchase_rows)}")  # Print purchase count.
+        print(f"  Subscription balance rows: {len(payload.balance_rows)}")  # Print balance count.
+        print(f"  Deployed inventory rows: {len(payload.deployed_inventory_rows)}")  # Print deployed count.
+        print(
+            f"  Deployed inventory summary rows: {len(payload.deployed_inventory_summary_rows)}"
+        )  # Print deployed summary count.
+        print(f"  Stock inventory rows: {len(payload.stock_rows)}")  # Print stock count.
+        print(f"  Contract evidence rows: {len(payload.contract_rows)}")  # Print contract count.
 
     @staticmethod
     def _run_with_client(
@@ -389,19 +434,23 @@ class CrossOrgSubscriptionInventoryReport:
             active_org_id,
             active_org_name,
         )  # Discover authorized scope.
-        organization_status_rows = [failure.to_dict() for failure in discovery_failures]  # Add failures.
+        payload = CrossOrgReportPayload(
+            organization_rows=[failure.to_dict() for failure in discovery_failures],
+            purchase_rows=[],
+            balance_rows=[],
+            deployed_inventory_rows=[],
+            deployed_inventory_summary_rows=[],
+            stock_rows=[],
+            contract_rows=[],
+        )  # Initialize one linked report payload.
         if not organizations:  # No authorized organization exists.
             CrossOrgSubscriptionInventoryReport._export_no_organizations(
                 active_org_id,
                 active_org_name,
-                organization_status_rows,
+                payload,
                 dependencies,
             )  # Export no-access evidence.
             return  # Stop without success-shaped subscription data.
-        purchase_rows: list[dict[str, Any]] = []  # Accumulate purchase evidence.
-        balance_rows: list[dict[str, Any]] = []  # Accumulate balance evidence.
-        stock_rows: list[dict[str, Any]] = []  # Accumulate stock evidence.
-        contract_rows: list[dict[str, Any]] = []  # Accumulate contract evidence.
         report_date = __import__("datetime").datetime.now(__import__("datetime").UTC).date()  # Use UTC run date.
         organization_status_by_id: dict[str, OrganizationScope] = {}  # Track final organization status.
         for organization in organizations:  # Read one authorized organization at a time.
@@ -409,56 +458,40 @@ class CrossOrgSubscriptionInventoryReport:
                 organization,
                 client,
                 report_date,
-                purchase_rows,
-                balance_rows,
-                stock_rows,
-                contract_rows,
+                payload,
                 organization_status_by_id,
             )  # Read and score one organization.
         CrossOrgSubscriptionInventoryReport._read_msp_purchases(
             organizations,
             client,
             report_date,
-            purchase_rows,
+            payload.purchase_rows,
         )  # Read optional MSP license evidence.
-        organization_status_rows.extend(
+        payload.organization_rows.extend(
             organization_status.to_dict() for organization_status in organization_status_by_id.values()
         )  # Add organization status rows.
         deduplicated_purchase_rows: dict[tuple[str, str, str], dict[str, Any]] = {}  # Dedupe purchase evidence.
-        for purchase_row in purchase_rows:  # Walk organization plus MSP purchases.
+        for purchase_row in payload.purchase_rows:  # Walk organization plus MSP purchases.
             key = (
                 str(purchase_row.get("org_id", MISSING_VALUE)),
                 str(purchase_row.get("record_id", MISSING_VALUE)),
                 str(purchase_row.get("subscription_type", MISSING_VALUE)),
             )  # Use org, record, and type as the purchase key.
             deduplicated_purchase_rows.setdefault(key, purchase_row)  # Keep the first source row.
-        deduplicated_purchase_payload = list(deduplicated_purchase_rows.values())  # Materialize rows.
-        CrossOrgSubscriptionInventoryReport._export_reports(
-            organization_status_rows,
-            deduplicated_purchase_payload,
-            balance_rows,
-            stock_rows,
-            contract_rows,
-            dependencies,
-        )  # Export all five reports.
-        CrossOrgSubscriptionInventoryReport._print_summary(
-            organization_status_rows,
-            deduplicated_purchase_payload,
-            balance_rows,
-            stock_rows,
-            contract_rows,
-        )  # Print linked result counts.
+        payload.purchase_rows = list(deduplicated_purchase_rows.values())  # Materialize deduplicated rows.
+        CrossOrgSubscriptionInventoryReport._export_reports(payload, dependencies)  # Export linked reports.
+        CrossOrgSubscriptionInventoryReport._print_summary(payload)  # Print linked result counts.
 
     @staticmethod
     def _export_no_organizations(
         active_org_id: str,
         active_org_name: str,
-        organization_status_rows: list[dict[str, Any]],
+        payload: CrossOrgReportPayload,
         dependencies: Any,
     ) -> None:
         """Export failure status and empty reports when no organization is accessible."""
-        if not organization_status_rows:  # Discovery returned no visible failure.
-            organization_status_rows.append(
+        if not payload.organization_rows:  # Discovery returned no visible failure.
+            payload.organization_rows.append(
                 OrganizationScope(
                     org_id=active_org_id or MISSING_VALUE,
                     org_name=active_org_name or MISSING_VALUE,
@@ -467,21 +500,8 @@ class CrossOrgSubscriptionInventoryReport:
                     error="No accessible organization",
                 ).to_dict()
             )  # Name the no-access condition.
-        CrossOrgSubscriptionInventoryReport._export_reports(
-            organization_status_rows,
-            [],
-            [],
-            [],
-            [],
-            dependencies,
-        )  # Export failure status and empty reports.
-        CrossOrgSubscriptionInventoryReport._print_summary(
-            organization_status_rows,
-            [],
-            [],
-            [],
-            [],
-        )  # Print zero and failure counts.
+        CrossOrgSubscriptionInventoryReport._export_reports(payload, dependencies)  # Export empty reports.
+        CrossOrgSubscriptionInventoryReport._print_summary(payload)  # Print zero and failure counts.
 
     @staticmethod
     def _read_summary(
@@ -543,15 +563,11 @@ class CrossOrgSubscriptionInventoryReport:
         organization: OrganizationScope,
         client: SubscriptionExpiryClient,
         report_date: date,
-        purchase_rows: list[dict[str, Any]],
-        balance_rows: list[dict[str, Any]],
-        stock_rows: list[dict[str, Any]],
-        contract_rows: list[dict[str, Any]],
+        payload: CrossOrgReportPayload,
         organization_status_by_id: dict[str, OrganizationScope],
     ) -> None:
         """Read and score one organization."""
         logger.info("Reading cross-org data for %s", organization.org_id)  # Log before org reads.
-        success_count = 0  # Count successful source reads.
         errors: list[str] = []  # Collect visible source failures.
         summary, summary_success = CrossOrgSubscriptionInventoryReport._read_summary(
             client,
@@ -574,45 +590,118 @@ class CrossOrgSubscriptionInventoryReport:
             errors,
         )  # Read JSI evidence.
         success_count = summary_success + usage_success + inventory_success + jsi_success  # Sum success.
-        if summary is not None:  # Summary is usable.
-            purchase_rows.extend(
-                row.to_dict()
-                for row in CrossOrgSubscriptionInventoryModel.build_purchase_rows(
-                    organization,
-                    summary.licenses,
-                    report_date,
-                )
-            )  # Add purchase rows.
-            balance_rows.extend(
-                row.to_dict()
-                for row in CrossOrgSubscriptionInventoryModel.build_subscription_balances(
-                    organization,
-                    summary,
-                    usages,
-                    report_date,
-                )
-            )  # Add balance rows.
-        stock_rows.extend(
+        CrossOrgSubscriptionInventoryReport._add_subscription_rows(
+            organization,
+            report_date,
+            summary,
+            usages,
+            payload,
+        )  # Add subscription purchase and balance rows.
+        CrossOrgSubscriptionInventoryReport._add_inventory_rows(
+            organization,
+            inventory,
+            inventory_success,
+            jsi,
+            payload,
+        )  # Add deployed and stock inventory rows.
+        CrossOrgSubscriptionInventoryReport._add_contract_rows(organization, jsi, payload)  # Add contract evidence.
+        request_status = CrossOrgSubscriptionInventoryReport._organization_request_status(success_count)
+        organization_status_by_id[organization.org_id] = replace(
+            organization,
+            request_status=request_status,
+            error="; ".join(errors) if errors else None,
+        )  # Preserve final organization status.
+
+    @staticmethod
+    def _organization_request_status(success_count: int) -> str:
+        """Score organization status from the number of successful source reads."""
+        if success_count == 4:  # All four source reads succeeded.
+            return "success"  # Preserve full source success.
+        if success_count > 0:  # One or more source reads succeeded.
+            return "partial"  # Preserve visible partial evidence.
+        return "failed"  # Preserve complete source failure.
+
+    @staticmethod
+    def _add_subscription_rows(
+        organization: OrganizationScope,
+        report_date: date,
+        summary: LicenseSummarySource | None,
+        usages: list[LicenseUsageSource],
+        payload: CrossOrgReportPayload,
+    ) -> None:
+        """Add purchase and balance rows when a license summary is usable."""
+        if summary is None:  # License summary unavailable.
+            return  # Preserve organization status and no false rows.
+        payload.purchase_rows.extend(
+            row.to_dict()
+            for row in CrossOrgSubscriptionInventoryModel.build_purchase_rows(
+                organization,
+                summary.licenses,
+                report_date,
+            )
+        )  # Add purchase rows.
+        payload.balance_rows.extend(
+            row.to_dict()
+            for row in CrossOrgSubscriptionInventoryModel.build_subscription_balances(
+                organization,
+                summary,
+                usages,
+                report_date,
+            )
+        )  # Add balance rows.
+
+    @staticmethod
+    def _add_inventory_rows(
+        organization: OrganizationScope,
+        inventory: list[dict[str, Any]],
+        inventory_success: int,
+        jsi: list[JsiContractSource] | None,
+        payload: CrossOrgReportPayload,
+    ) -> None:
+        """Add deployed inventory, deployed summary, and stock rows."""
+        logger.info("Scoring inventory rows for %s", organization.org_id)  # Log before inventory classification.
+        inventory_status = "success" if inventory_success == 1 else "failed"  # Score source read.
+        deployed_rows = CrossOrgSubscriptionInventoryModel.build_deployed_inventory_rows(
+            organization,
+            inventory,
+        )  # Classify deployed inventory once.
+        payload.deployed_inventory_rows.extend(row.to_dict() for row in deployed_rows)  # Add deployed detail.
+        payload.deployed_inventory_summary_rows.extend(
+            row.to_dict()
+            for row in CrossOrgSubscriptionInventoryModel.build_deployed_inventory_summary(
+                organization,
+                deployed_rows,
+                inventory_status,
+            )
+        )  # Add deployed summary.
+        payload.stock_rows.extend(
             row.to_dict()
             for row in CrossOrgSubscriptionInventoryModel.build_stock_rows(
                 organization,
                 inventory,
                 jsi,
             )
-        )  # Add stock rows.
-        contract_rows.extend(
+        )  # Add stock detail.
+        logger.debug(
+            "Added %d deployed rows and %d stock rows",
+            len(deployed_rows),
+            len(payload.stock_rows),
+        )  # Log inventory result counts.
+
+    @staticmethod
+    def _add_contract_rows(
+        organization: OrganizationScope,
+        jsi: list[JsiContractSource] | None,
+        payload: CrossOrgReportPayload,
+    ) -> None:
+        """Add JSI contract evidence rows to the report payload."""
+        payload.contract_rows.extend(
             row.to_dict()
             for row in CrossOrgSubscriptionInventoryModel.build_contract_rows(
                 organization,
                 jsi,
             )
-        )  # Add contract rows.
-        request_status = "success" if success_count == 4 else "partial" if success_count > 0 else "failed"
-        organization_status_by_id[organization.org_id] = replace(
-            organization,
-            request_status=request_status,
-            error="; ".join(errors) if errors else None,
-        )  # Preserve final organization status.
+        )  # Add contract evidence.
 
     @staticmethod
     def _read_msp_purchases(
