@@ -241,7 +241,7 @@ Start here, then follow the group that matches your task.
 | Page | What it holds |
 |------|---------------|
 | [Container deployment](documentation/container-deployment.md) | The other deployment methods, the proxy certificate, and the rules that keep your data safe |
-| [Security and safety](documentation/security.md) | The credential rules and the destructive operation rules |
+| [Security and safety](documentation/security.md) | Credential rules, log redaction, and destructive operation rules |
 
 ### Understand
 

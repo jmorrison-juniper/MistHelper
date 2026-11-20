@@ -18,7 +18,7 @@ _PRIVATE_DIGEST_LENGTH = 12  # Hex characters kept from the digest. Enough to st
 # Regex patterns that identify credential-like keys in log records.
 # Match is case-insensitive so "Password", "PASSWORD", "password" all trigger.
 _SENSITIVE_KEY_PATTERNS = re.compile(  # Compiled once at module load for performance
-    r"(password|passwd|secret|token|api_key|psk|credential|auth)",
+    r"(password|passwd|secret|token|api_key|psk|credential|authorization|auth)",
     re.IGNORECASE,
 )
 
@@ -102,7 +102,7 @@ def redact_if_sensitive(key: str, value: str) -> str:
 
 
 class SensitiveFilter(logging.Filter):
-    """Logging filter that scrubs credential-like substrings from log messages.
+    """Redact credential-shaped values in messages and exception tracebacks.
 
     Install on a handler to provide a defence-in-depth layer: even if a
     caller accidentally logs a raw password, this filter replaces it before
@@ -115,37 +115,89 @@ class SensitiveFilter(logging.Filter):
         logging.getLogger().addHandler(handler)
 
     The filter uses the same regex patterns as ``redact_if_sensitive()``.
-    It operates on the formatted message string, so it catches values that
-    slipped through argument formatting as well.
+    It sanitizes the formatted message and the exception text cache before a
+    standard handler formats the record. This includes exception chains and
+    cached text from earlier handlers. Safe traceback context stays visible.
+    Credential separators do not cross line boundaries. Ordinary credential
+    labels also recognize spaces and tabs without assignment punctuation.
+    Only an exact menu entry from the console writer keeps its static title.
+    Untrusted text and all exception text use the conservative redaction rule.
+    Authorization headers protect the complete remaining line, including structured parameters.
+    Any same-line diagnostic after that header is also removed.
+    The exact email verification URL route protects its nonempty suffix,
+    including punctuation, query, and fragment text, until whitespace.
+    Adjacent non-whitespace diagnostic punctuation is also removed because
+    punctuation alone cannot identify the end of a credential.
+    Arbitrary unlabeled secrets and direct SDK console output are outside
+    this pattern-based handler contract.
+
+    The filter does not log its own actions because recursive logging can
+    re-enter the filter. If rendering fails, it emits a safe diagnostic instead.
     """
 
     # Simple value-redaction pattern: anything after an = or : that looks like
     # it belongs to a sensitive key.  Matches patterns like:
     #   password=abc123  or  "password": "abc123"
     _VALUE_PATTERN = re.compile(  # Compiled once at class load for performance
-        r"(?P<key>" + _SENSITIVE_KEY_PATTERNS.pattern + r')[=:\s"\']+(?P<value>\S+)',
+        r"(?P<key>" + _SENSITIVE_KEY_PATTERNS.pattern + r')[=: \t"\']+(?P<value>\S+)',
         re.IGNORECASE,
+    )
+    _AUTHORIZATION_PATTERN = re.compile(
+        r"""(?P<key>authorization)[ \t"']*[:=][ \t]*[^ \t\r\n][^\r\n]*""",
+        re.IGNORECASE,
+    )
+    _VERIFICATION_URL_PATTERN = re.compile(
+        r"""(?P<route>(?<![\w/])(?:(?i:https?)://[^/\s<>"'?#]+)?/api/v1/self/update/verify/)\S+"""
     )
 
     def filter(self, record: logging.LogRecord) -> bool:
-        """Scrub the formatted log message in-place before it is emitted.
-
-        Args:
-            record: The log record being processed by the handler.
-
-        Returns:
-            True always — we never suppress records, only sanitize them.
-        """
+        """Sanitize a record in place without suppressing safe diagnostics."""
         try:
-            message = record.getMessage()  # Render the final formatted message string
-            sanitized = self._VALUE_PATTERN.sub(  # Replace credential values in-place
-                r"\g<key>=***REDACTED***",  # Keep the key name, replace only the value
-                message,
-            )
-            if sanitized != message:  # Only mutate if something was actually scrubbed
-                record.msg = sanitized  # Replace the message with the sanitized version
-                record.args = ()  # Clear args so getMessage() uses the new msg directly
-        except Exception as error:  # nosec B110 - Keep broad because logging here can re-enter this filter.
-            record.msg = "Log redaction failed: %s: %s"  # Replace the unsafe record with a diagnostic.
-            record.args = (type(error).__name__, error)  # Name the failure type without a recursive log call.
-        return True  # Always pass the record on. We only sanitize, never suppress
+            message = record.getMessage()
+            trusted_menu_message = self._is_trusted_menu_record(
+                record, message
+            )  # WHY: mark static rows, not caller text.
+            sanitized = (
+                message if trusted_menu_message else self._redact_text(message)
+            )  # WHY: redact each other message.
+            if sanitized != message:
+                record.msg = sanitized
+                record.args = ()
+            self._redact_traceback(record)
+        except Exception as error:
+            record.msg = "Log redaction failed: %s"
+            record.args = (type(error).__name__,)
+            record.exc_info = None
+            record.exc_text = None
+            record.stack_info = None
+        return True
+
+    def _is_trusted_menu_record(self, record: logging.LogRecord, message: str) -> bool:
+        """Trust only the exact static menu entry emitted by the console writer."""
+        from src.foundation.support.utils.menu_entry import (
+            MenuEntry,  # WHY: immutable rows define the trusted message source.
+        )
+
+        entry = getattr(record, "_misthelper_menu_entry", None)  # WHY: only the writer attaches this provenance field.
+        expected = (
+            f"{entry.menu_id}: {entry.title}" if isinstance(entry, MenuEntry) else ""
+        )  # WHY: match the registered key and title.
+        return (
+            record.name == "src.foundation.support.utils.console"  # WHY: trust only the writer logger.
+            and isinstance(entry, MenuEntry)  # WHY: a plain string cannot claim trusted provenance.
+            and not record.args  # WHY: formatting arguments cannot alter the registered title.
+            and message == expected  # WHY: trust applies only to the exact writer output.
+        )
+
+    def _redact_text(self, text: str) -> str:
+        """Apply the same credential rule to message and exception text."""
+        text = self._VERIFICATION_URL_PATTERN.sub(r"\g<route>***REDACTED***", text)
+        text = self._AUTHORIZATION_PATTERN.sub(r"\g<key>=***REDACTED***", text)
+        return self._VALUE_PATTERN.sub(r"\g<key>=***REDACTED***", text)
+
+    def _redact_traceback(self, record: logging.LogRecord) -> None:
+        """Protect the exception cache, including text from earlier handlers."""
+        if record.exc_info and not record.exc_text:
+            record.exc_text = logging.Formatter().formatException(record.exc_info)
+        if record.exc_text:
+            record.exc_text = self._redact_text(record.exc_text)

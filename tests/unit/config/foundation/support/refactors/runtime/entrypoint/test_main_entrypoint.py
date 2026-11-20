@@ -29,6 +29,8 @@ from src.foundation.support.refactors.main_entrypoint import (  # WHY: SUT direc
     ApplicationBootstrap,
     MainEntrypoint,
 )
+from src.foundation.support.utils.console import MenuEntryConsoleWriter  # WHY: menu rendering has a typed writer.
+from src.foundation.support.utils.logger_utils import SensitiveFilter  # WHY: prove menu titles survive redaction.
 from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: menu cache fixtures use the production row model.
 
 
@@ -262,8 +264,16 @@ class TestMistHelperMenuAndModeCaches:
             rendered = message % args if args else message  # WHY: match MistHelper.echo formatting behavior.
             lines.append(rendered)  # WHY: keep exact text for the assertion.
 
+        def fake_display(entry: MenuEntry) -> None:
+            lines.append(
+                f"{entry.menu_id}: {entry.title}"
+            )  # WHY: preserve the existing cache assertion without terminal I/O.
+
         monkeypatch.setattr(MistHelper, "menu_actions", menu_actions)  # WHY: use a small registry fixture.
         monkeypatch.setattr(MistHelper, "echo", fake_echo)  # WHY: capture printed text without side effects.
+        monkeypatch.setattr(
+            MenuEntryConsoleWriter, "display", staticmethod(fake_display)
+        )  # WHY: capture typed menu output.
         monkeypatch.setattr(MistHelper, "_SORTED_MENU_KEYS_CACHE", None)  # WHY: start from a cold cache.
 
         MistHelper._print_interactive_menu()  # WHY: build the initial cached order.
@@ -395,6 +405,8 @@ class TestConsoleOutputRouting:
             monkeypatch.setenv("CONSOLE_LOG_LEVEL", console_level)
         isolated_logging._configure_logging()  # Install the real console and rotating file handlers.
         isolated_logging._configure_logging()  # Prove repeated startup does not accumulate handlers.
+        for handler in logging.getLogger().handlers:  # Exercise the real menu through protected outputs.
+            handler.addFilter(SensitiveFilter())  # Preserve titles only when their typed menu provenance matches.
         MistHelper._print_interactive_menu()  # Render the actual registry rather than a substitute menu.
         output = capsys.readouterr()  # SSH combines these streams, so check both separately.
         log_text = Path("data", "script.log").read_text(encoding="utf-8")

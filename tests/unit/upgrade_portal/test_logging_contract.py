@@ -39,6 +39,7 @@ from __future__ import annotations
 import ast
 import logging
 import re
+import sys
 from io import StringIO  # Captures the real handler output without writing the synthetic marker to the console.
 from pathlib import Path
 from typing import NamedTuple
@@ -637,3 +638,148 @@ def test_the_installed_portal_handler_redacts_exception_text_and_keeps_context()
         package_logger.handlers = original_handlers  # Return the original handler chain.
         package_logger.setLevel(original_level)  # Return the original threshold.
         package_logger.propagate = original_propagate  # Return the original ancestor-routing choice.
+
+
+class PortalTracebackProbe:
+    """Exercise the real portal handler without changing shared logger state."""
+
+    token = "ISSUE4704_SYNTHETIC_PORTAL_TOKEN"
+    password = "ISSUE4704_SYNTHETIC_PORTAL_PASSWORD"
+
+    def __init__(self, earlier_handler: bool) -> None:
+        """Attach an optional earlier formatter before the protected handler."""
+        self.output = StringIO()
+        self.earlier_output = StringIO()
+        self.logger = logging.Logger(PROBE_LOGGER, logging.INFO)
+        if earlier_handler:
+            self.logger.addHandler(logging.StreamHandler(self.earlier_output))
+        self.handler = factory.build_log_handler()
+        assert isinstance(self.handler, logging.StreamHandler)
+        self.handler.setStream(self.output)
+        self.logger.addHandler(self.handler)
+
+    def emit(self, chain: str) -> None:
+        """Log a real synthetic failure and a safe diagnostic through both handlers."""
+        try:
+            try:
+                raise ValueError(f"token={self.token}")
+            except ValueError as error:
+                if chain == "cause":
+                    raise RuntimeError(f"password={self.password}") from error
+                if chain == "context":
+                    raise RuntimeError(f"password={self.password}")  # noqa: B904 - This case must use implicit context.
+                raise
+        except (ValueError, RuntimeError):
+            self.logger.exception(
+                "portal: dependency failure token=%s",
+                self.token,
+                extra={factory.RUN_FIELD: PROBE_RUN_ID, factory.SITE_FIELD: PROBE_SITE_ID},
+            )
+        self.logger.info(ORDINARY_MESSAGE)
+
+
+@pytest.mark.parametrize("chain", ["direct", "cause", "context"])
+@pytest.mark.parametrize("earlier_handler", [False, True])
+def test_real_portal_handler_protects_traceback_cache(chain: str, earlier_handler: bool) -> None:
+    """Protect full tracebacks even when an earlier handler cached raw text."""
+    probe = PortalTracebackProbe(earlier_handler)
+    try:
+        probe.emit(chain)
+        rendered = probe.output.getvalue()
+        assert probe.token not in rendered and probe.password not in rendered
+        assert "***REDACTED***" in rendered
+        assert "Traceback (most recent call last):" in rendered and "ValueError" in rendered
+        assert "test_logging_contract.py" in rendered and "in emit" in rendered
+        assert ORDINARY_MESSAGE in rendered and "portal: dependency failure" in rendered
+        assert f"run={PROBE_RUN_ID}" in rendered and f"site={PROBE_SITE_ID}" in rendered
+        if earlier_handler:
+            assert probe.token in probe.earlier_output.getvalue(), "The earlier handler did not create a raw cache."
+        if chain != "direct":
+            assert "RuntimeError" in rendered
+    finally:
+        for handler in probe.logger.handlers:
+            handler.close()
+
+
+class PortalCredentialRecord:
+    """Build real exception chains to check the portal's full rendered output."""
+
+    @staticmethod
+    def build(text: str, chain: str) -> logging.LogRecord:
+        """Retain the exception and source frames without contacting a service."""
+        try:
+            try:
+                raise ValueError(text)
+            except ValueError as error:
+                if chain == "cause":
+                    raise RuntimeError("Dependency failed") from error
+                if chain == "context":
+                    raise RuntimeError("Dependency failed")  # noqa: B904 - Prove implicit exception context.
+                raise
+        except (ValueError, RuntimeError):
+            return logging.makeLogRecord(
+                {
+                    "msg": text,
+                    "levelno": logging.ERROR,
+                    "exc_info": sys.exc_info(),
+                    "run_id": PROBE_RUN_ID,
+                    "site_id": PROBE_SITE_ID,
+                }
+            )
+
+
+@pytest.mark.parametrize("chain", ["cause", "context"])
+@pytest.mark.parametrize("cached", [False, True])
+def test_real_portal_preserves_complete_safe_exception_chain(chain: str, cached: bool) -> None:
+    """Keep the exact safe report when a credential word ends an exception."""
+    record = PortalCredentialRecord.build("Invalid token", chain)
+    expected = logging.Formatter(factory.LOG_FORMAT).format(record)
+    record.exc_text = None
+    probe = PortalTracebackProbe(cached)
+    try:
+        probe.logger.handle(record)
+        assert probe.output.getvalue() == expected + "\n"
+        assert "ValueError: Invalid token\n" in expected
+        assert "RuntimeError: Dependency failed" in expected
+        if cached:
+            assert "Invalid token" in probe.earlier_output.getvalue()
+    finally:
+        for handler in probe.logger.handlers:
+            handler.close()
+
+
+@pytest.mark.parametrize("chain", ["direct", "cause", "context"])
+@pytest.mark.parametrize("cached", [False, True])
+@pytest.mark.parametrize(
+    "label",
+    [
+        "Authorization: Bearer",
+        "aUtHoRiZaTiOn: bEaReR",
+        "AUTHORIZATION: Basic",
+        "Authorization: Custom-Scheme",
+        'Authorization: Digest username="synthetic", realm="example", response=',
+        "Authorization: AWS4-HMAC-SHA256 Credential=synthetic, SignedHeaders=host, Signature=",
+        "password=",
+        "token=",
+    ],
+)
+def test_real_portal_redacts_labeled_values_in_messages_and_exceptions(chain: str, cached: bool, label: str) -> None:
+    """Remove synthetic labeled values throughout fresh and cached chains."""
+    text = f"Request failed {label} ISSUE4705_SYNTHETIC_PORTAL_VALUE\nSafe following diagnostic"
+    record = PortalCredentialRecord.build(text, chain)
+    probe = PortalTracebackProbe(cached)
+    try:
+        probe.logger.handle(record)
+        rendered = probe.output.getvalue()
+        assert "ISSUE4705_SYNTHETIC_PORTAL_VALUE" not in rendered
+        assert "***REDACTED***" in rendered and "ValueError: Request failed" in rendered
+        assert rendered.count("Safe following diagnostic") == 2
+        assert "Traceback (most recent call last):" in rendered and "in build" in rendered
+        assert f"run={PROBE_RUN_ID}" in rendered and f"site={PROBE_SITE_ID}" in rendered
+        if chain != "direct":
+            assert "RuntimeError: Dependency failed" in rendered
+        if cached:
+            assert "ISSUE4705_SYNTHETIC_PORTAL_VALUE" in probe.earlier_output.getvalue()
+    finally:
+        for handler in probe.logger.handlers:
+            handler.close()

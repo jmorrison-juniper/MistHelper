@@ -18,7 +18,12 @@ import logging  # WHY: caplog level assertions require the logging module.
 
 import pytest
 
-from src.foundation.support.utils.console import ConsoleEchoFilter, echo  # WHY: stable helper and console filter.
+from src.foundation.support.utils.console import (
+    ConsoleEchoFilter,
+    MenuEntryConsoleWriter,
+    echo,
+)  # WHY: stable console APIs preserve output and log provenance.
+from src.foundation.support.utils.menu_entry import MenuEntry  # WHY: the writer accepts immutable registered rows.
 
 _CONSOLE_LOGGER_NAME = "src.foundation.support.utils.console"  # WHY: module logger name resolved by __name__.
 
@@ -39,6 +44,28 @@ def test_echo_plain_literal_prints_stdout_and_logs_info(capsys, caplog) -> None:
     assert records[0].levelno == logging.INFO  # Contract C-4: INFO level.
     assert records[0].msg == "Menu"  # The msg preserves the literal for %-style deferral.
     assert records[0].args in ((), None)  # No args were passed.
+
+
+def test_menu_entry_writer_marks_only_the_registered_row(capsys, caplog) -> None:
+    """Keep the original menu row intact while recording its typed source."""
+    caplog.set_level(logging.INFO, logger=_CONSOLE_LOGGER_NAME)  # WHY: capture the writer's informational record.
+    entry = MenuEntry(
+        menu_id="273",  # WHY: match the registered operation identifier.
+        handler=lambda: None,  # WHY: provide a callable without invoking an operation.
+        title="Admin and API Token Hygiene Report",  # WHY: exercise words the untrusted filter recognizes.
+        category="safe",  # WHY: represent a non-destructive menu row.
+    )
+    MenuEntryConsoleWriter.display(entry)  # WHY: emit terminal text and the typed log record together.
+    captured = capsys.readouterr()  # WHY: verify the operator-facing output remains unchanged.
+    records = [
+        record for record in caplog.records if record.name == _CONSOLE_LOGGER_NAME
+    ]  # WHY: ignore unrelated pytest records.
+    assert captured.out == "273: Admin and API Token Hygiene Report\n"  # WHY: preserve the exact terminal line.
+    assert len(records) == 1  # WHY: the writer emits one corresponding log record.
+    assert (
+        records[0].getMessage() == "273: Admin and API Token Hygiene Report"
+    )  # WHY: preserve the exact file-log message.
+    assert records[0]._misthelper_menu_entry is entry  # WHY: verify typed provenance uses the registered object.
 
 
 def test_echo_percent_s_percent_d_formats_stdout_and_log_args(capsys, caplog) -> None:

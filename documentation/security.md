@@ -6,6 +6,7 @@ practices keep both safe.
 | Area | Practice |
 |------|---------|
 | Credentials | Loaded from `.env`, never logged in cleartext |
+| Logs | Labeled credentials, authorization values, and verification URL suffixes are redacted. Registered menu titles use typed provenance. Identical untrusted text remains protected. Arbitrary unlabeled secrets remain outside this guarantee. |
 | Destructive operations | Uppercase warnings, and an explicit typed confirmation |
 | File output | Filenames sanitized, and path traversal blocked in the helpers |
 | SSH | The Paramiko host key auto-add stays inside trusted internal contexts |
