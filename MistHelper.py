@@ -7844,6 +7844,9 @@ def _resolve_cli_org_id(
     if args.org:  # CLI explicitly provided the org ID.
         logger.info("Using org_id from CLI argument: %s", args.org)  # Log CLI org ID.
         return str(args.org)  # Return the CLI org ID (argparse gives Any, so narrow to str).
+    if str(getattr(args, "menu", "")) == "308":  # Menu 308 discovers all MSP organizations by design.
+        logger.info("Menu 308 uses cross-org discovery; skipping the one-org prompt")  # Explain the MSP-wide path.
+        return str(MainEntrypoint.context.org_id or "")  # Preserve an existing direct org as the optional seed.
     return ConfigUtils.get_cached_or_prompted_org_id()  # Fall back to cache or prompt.
 
 

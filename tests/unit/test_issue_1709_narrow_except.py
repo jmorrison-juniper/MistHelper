@@ -453,6 +453,24 @@ def test_setup_runtime_flags_standalone_disables_shared_admission(
     assert os.getenv("WAN_SHARED_ADMISSION") == "false"  # Redis request accounting is disabled.
 
 
+def test_cross_org_menu_308_does_not_prompt_for_one_org(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Menu 308 discovery does not require a single organization prompt."""
+    prompt = MagicMock(name="get_cached_or_prompted_org_id")  # Capture an unwanted one-org prompt.
+    monkeypatch.setattr(
+        MistHelper.ConfigUtils,
+        "get_cached_or_prompted_org_id",
+        prompt,
+    )  # Replace the prompt seam for this test.
+    args = SimpleNamespace(menu="308", org=None)  # Minimal CLI arguments for menu 308.
+
+    resolved_org_id = MistHelper._resolve_cli_org_id(args)  # Run the cross-org org resolver.
+
+    prompt.assert_not_called()  # The MSP-wide report must not stop at one organization.
+    assert resolved_org_id == (MistHelper.MainEntrypoint.context.org_id or "")  # Preserve any selected direct org.
+
+
 def test_setup_runtime_flags_rejects_unexpected_error() -> None:
     """The runtime flag setup lets an unexpected fast attribute defect escape."""
 
