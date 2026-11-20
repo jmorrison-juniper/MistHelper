@@ -1,112 +1,117 @@
-"""Validate source identities before they enter collection or cache records."""
+"""Validate WAN entity identities before a caller uses their route values."""
 
+import hashlib
+import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 
 class IdentityValidator:
-    """Validate opaque identifiers without changing their source values."""
+    """Validate opaque source identifiers without changing their values."""
 
-    IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")  # Bound route-safe identifiers.
-    PEER_MAC_PATTERN = re.compile(
-        r"^(?:(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12})$"
-    )  # Accept two MAC forms.
+    IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    PEER_MAC_PATTERN = re.compile(r"^(?:(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{12})$")
 
     @classmethod
-    def identifier(cls, value: object, field_name: str) -> str:
-        """Reject empty, unsafe, or oversized source identifiers."""
-        if not isinstance(value, str) or not cls.IDENTIFIER_PATTERN.fullmatch(value):  # Check the whole value.
-            raise ValueError(f"{field_name} must contain 1 through 128 safe characters.")  # Name the invalid field.
-        if value in {".", ".."}:  # Do not accept path components as identifiers.
-            raise ValueError(f"{field_name} cannot be a path component.")  # Stop before path use.
-        return value  # Preserve the original source identifier.
+    def identifier(cls, value: str, field_name: str) -> str:
+        """Reject empty, unsafe, or oversized opaque source identifiers."""
+        if not isinstance(value, str) or not cls.IDENTIFIER_PATTERN.fullmatch(value):
+            raise ValueError(f"{field_name} must contain 1 through 128 safe characters.")
+        if value in {".", ".."}:
+            raise ValueError(f"{field_name} cannot be a path component.")
+        return value
 
     @classmethod
-    def peer_mac(cls, value: object) -> str:
-        """Validate a compact or colon-separated peer MAC."""
-        if not isinstance(value, str) or not cls.PEER_MAC_PATTERN.fullmatch(value):  # Require a full MAC match.
-            raise ValueError("peer_mac must contain 12 hex digits or six colon-separated octets.")  # Reject bad input.
-        return value  # Keep the exact source representation.
-
-    @staticmethod
-    def port_name(value: object, field_name: str) -> str:
-        """Validate a source port name without rejecting interface separators."""
-        if not isinstance(value, str) or not value.strip():  # Require a source port value.
-            raise ValueError(f"{field_name} must contain a non-empty source value.")  # Reject absent identifiers.
-        if len(value) > 128 or any(ord(char) < 32 for char in value):  # Bound printable values.
-            raise ValueError(f"{field_name} must contain at most 128 printable characters.")  # Reject control data.
-        if any(part in {".", ".."} for part in value.split("/")):  # Reject traversal components.
-            raise ValueError(f"{field_name} cannot contain a path traversal component.")  # Stop before path use.
-        return value  # Preserve the exact source value.
+    def peer_mac(cls, value: str) -> str:
+        """Validate compact or colon-separated MACs without changing source values."""
+        if not isinstance(value, str) or not cls.PEER_MAC_PATTERN.fullmatch(value):
+            raise ValueError("peer_mac must use 12 hexadecimal digits or six colon-separated hexadecimal octets.")
+        return value
 
 
 @dataclass(frozen=True, slots=True)
 class SiteIdentity:
-    """Keep organization and site values together as one natural identity."""
+    """Keep organization and site values together as one site identity."""
 
     org_id: str
     site_id: str
 
     def __post_init__(self) -> None:
-        """Validate parent values before a site identity is used."""
-        IdentityValidator.identifier(self.org_id, "org_id")  # Validate organization scope.
-        IdentityValidator.identifier(self.site_id, "site_id")  # Validate the selected site.
+        """Validate both parent values before constructing a site identity."""
+        IdentityValidator.identifier(self.org_id, "org_id")
+        IdentityValidator.identifier(self.site_id, "site_id")
 
     @property
     def natural_key(self) -> tuple[str, str]:
-        """Return source identity values without a generated key."""
-        return (self.org_id, self.site_id)  # Preserve the API identity.
+        """Return the source identity without adding a generated key."""
+        return self.org_id, self.site_id
 
     def to_dict(self) -> dict[str, str]:
         """Return JSON-compatible source identity values."""
-        return {"org_id": self.org_id, "site_id": self.site_id}  # Keep names stable for cache consumers.
+        return {"org_id": self.org_id, "site_id": self.site_id}
 
 
 @dataclass(frozen=True, slots=True)
 class GatewayIdentity:
-    """Keep an opaque gateway identifier inside its selected site."""
+    """Keep an opaque gateway value within its verified site context."""
 
     site: SiteIdentity
     gateway_id: str
 
     def __post_init__(self) -> None:
-        """Validate the gateway value before route or cache use."""
-        IdentityValidator.identifier(self.gateway_id, "gateway_id")  # Reject unsafe gateway values.
+        """Validate the gateway value before route or storage use."""
+        IdentityValidator.identifier(self.gateway_id, "gateway_id")
 
     @property
     def natural_key(self) -> tuple[str, str, str]:
-        """Return organization, site, and source gateway values."""
-        return (*self.site.natural_key, self.gateway_id)  # Preserve parent context.
+        """Return the organization, site, and original gateway values."""
+        return (*self.site.natural_key, self.gateway_id)
 
     def to_dict(self) -> dict[str, str]:
-        """Return JSON-compatible identity values with parent context."""
-        return {**self.site.to_dict(), "gateway_id": self.gateway_id}  # Include the parent identity.
+        """Return JSON-compatible identity values with their parent context."""
+        return {**self.site.to_dict(), "gateway_id": self.gateway_id}
+
+    @classmethod
+    def from_stats_row(cls, row: Mapping[str, object], org_id: str) -> GatewayIdentity:
+        """Build a gateway identity from verified organization-stat fields."""
+        if row.get("org_id") != org_id:
+            raise ValueError("WAN row organization does not match the selected organization.")
+        site_id, gateway_id = row.get("site_id"), row.get("mac")
+        if not isinstance(site_id, str) or not isinstance(gateway_id, str):
+            raise ValueError("WAN gateway stats require site_id and mac strings.")
+        return cls(SiteIdentity(org_id, site_id), gateway_id)
 
 
 @dataclass(frozen=True, slots=True)
 class CircuitIdentity:
-    """Keep a WAN port name under its gateway identity."""
+    """Keep the exact WAN port name under its gateway identity."""
 
     gateway: GatewayIdentity
     port_name: str
 
     def __post_init__(self) -> None:
-        """Validate the port name while preserving slash separators."""
-        IdentityValidator.port_name(self.port_name, "port_name")  # Preserve interface separators safely.
+        """Validate the port name while retaining its slash separators."""
+        if not isinstance(self.port_name, str) or not self.port_name.strip():
+            raise ValueError("port_name must contain a non-empty source value.")
+        if len(self.port_name) > 128 or any(ord(character) < 32 for character in self.port_name):
+            raise ValueError("port_name must contain at most 128 printable characters.")
+        if any(part in {".", ".."} for part in self.port_name.split("/")):
+            raise ValueError("port_name cannot contain a path traversal component.")
 
     @property
     def natural_key(self) -> tuple[str, str, str, str]:
-        """Return the full source path and exact port name."""
-        return (*self.gateway.natural_key, self.port_name)  # Keep the complete identity.
+        """Return the full parent path and exact port name."""
+        return (*self.gateway.natural_key, self.port_name)
 
     def to_dict(self) -> dict[str, str]:
-        """Return JSON-compatible identity values with parent context."""
-        return {**self.gateway.to_dict(), "port_name": self.port_name}  # Keep the source field name.
+        """Return JSON-compatible identity values with their parent context."""
+        return {**self.gateway.to_dict(), "port_name": self.port_name}
 
 
 @dataclass(frozen=True, slots=True)
 class PeerPathIdentity:
-    """Keep peer paths distinct by their complete tunnel identity."""
+    """Keep peer paths separate by their explicit tunnel identity."""
 
     gateway: GatewayIdentity
     port_name: str
@@ -115,29 +120,47 @@ class PeerPathIdentity:
     tunnel_identity: str
 
     def __post_init__(self) -> None:
-        """Validate local and remote path fields without deriving an identity."""
-        CircuitIdentity(self.gateway, self.port_name)  # Validate the local port.
-        CircuitIdentity(self.gateway, self.peer_port_id)  # Validate the remote port.
-        IdentityValidator.peer_mac(self.peer_mac)  # Validate the remote peer MAC.
-        IdentityValidator.identifier(self.tunnel_identity, "tunnel_identity")  # Validate the explicit tunnel key.
+        """Validate peer fields without deriving an unverified tunnel key."""
+        CircuitIdentity(self.gateway, self.port_name)
+        CircuitIdentity(self.gateway, self.peer_port_id)
+        IdentityValidator.peer_mac(self.peer_mac)
+        IdentityValidator.identifier(self.tunnel_identity, "tunnel_identity")
 
     @property
-    def natural_key(self) -> tuple[str, ...]:
-        """Return every source value that distinguishes a peer path."""
+    def natural_key(self) -> tuple[str, str, str, str, str, str, str]:
+        """Return each parent and peer-path identity value."""
         return (
             *self.gateway.natural_key,
             self.port_name,
             self.peer_port_id,
             self.peer_mac,
             self.tunnel_identity,
-        )  # Keep all path fields.
+        )
 
     def to_dict(self) -> dict[str, str]:
-        """Return peer identity values with their site and gateway context."""
-        return {  # Keep the remote path explicit for cache consumers.
-            **self.gateway.to_dict(),  # Retain organization and gateway scope.
-            "port_name": self.port_name,  # Preserve the local port.
-            "peer_port_id": self.peer_port_id,  # Preserve the remote port.
-            "peer_mac": self.peer_mac,  # Preserve the peer address.
-            "tunnel_identity": self.tunnel_identity,  # Preserve the tunnel discriminator.
+        """Return JSON-compatible identity values with their parent context."""
+        return {
+            **self.gateway.to_dict(),
+            "port_name": self.port_name,
+            "peer_port_id": self.peer_port_id,
+            "peer_mac": self.peer_mac,
+            "tunnel_identity": self.tunnel_identity,
         }
+
+    @classmethod
+    def from_stats_row(cls, row: Mapping[str, object], org_id: str) -> PeerPathIdentity:
+        """Build a full path key from the peer fields returned by organization stats."""
+        gateway = GatewayIdentity.from_stats_row(row, org_id)
+        path_fields = [row.get(name) for name in ("peer_site_id", "peer_port_id", "type")]
+        if any(not isinstance(value, str) or not value.strip() for value in path_fields):
+            raise ValueError("WAN peer path requires peer_site_id, peer_port_id, and type.")
+        port_name, peer_port_id, peer_mac = row.get("port_id"), row.get("peer_port_id"), row.get("peer_mac")
+        if not isinstance(port_name, str) or not isinstance(peer_port_id, str) or not isinstance(peer_mac, str):
+            raise ValueError("WAN peer stats require port_id, peer_port_id, and peer_mac strings.")
+        return cls(
+            gateway,
+            port_name,
+            peer_port_id,
+            peer_mac,
+            hashlib.sha256(json.dumps(path_fields).encode()).hexdigest(),
+        )

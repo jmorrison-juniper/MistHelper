@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "wan_performance/_dashboard_components.html" import chart_grid, kpi_grid, table_panel %}
+{% block title %}WAN Performance - {{ config.PORTAL.title }}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/wan_performance.css') }}">
+{% endblock %}
+
+{% block content %}
+<section class="container-fluid wan-performance" data-testid="wan-overview">
+    {% include "wan_performance/_data_state.html" %}
+    <div class="wan-status" data-testid="wan-overview-status">
+        <span><strong>Data:</strong> Synthetic offline example</span>
+        <span><strong>Mist API:</strong> Not connected</span>
+        <span><strong>Refresh:</strong> Disabled for synthetic data</span>
+    </div>
+    <header class="wan-page-heading">
+        <div>
+            <h1>WAN Performance Dashboard</h1>
+            <p>Real-time WAN circuit monitoring for NOC operations</p>
+        </div>
+        <a class="btn btn-primary" data-testid="wan-live-link"
+           href="{{ url_for('wan_performance.live.overview') }}">Open live snapshots</a>
+    </header>
+
+    <p class="wan-data-note" data-testid="wan-unknown-metrics">
+        Congestion duration and historical availability: Not established in offline data.
+    </p>
+    {{ kpi_grid(dashboard.pages["overview"].kpis, "wan-overview-kpis") }}
+
+    {% set overview = dashboard.pages["overview"] %}
+    {% set congested = overview.tables[0] %}
+    <div class="wan-overview-layout">
+        <div class="wan-overview-stack" data-testid="wan-overview-tables">
+            <section class="wan-panel" data-testid="wan-top-congested-circuits">
+                <header class="wan-panel-heading"><h2>{{ congested.title }}</h2></header>
+                <div class="table-responsive">
+                    <table class="table table-sm wan-table">
+                        <thead><tr>{% for column in congested.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr></thead>
+                        <tbody>
+                        {% for row in congested.rows %}
+                        <tr>
+                            {% for value in row %}
+                            <td>
+                                {% if loop.index0 == 1 %}
+                                <a data-testid="wan-gateway-link"
+                                   href="{{ url_for('wan_performance.gateway', gateway_id=dashboard.circuit.gateway.gateway_id, site_id=dashboard.circuit.gateway.site.site_id) }}">{{ value }}</a>
+                                {% elif loop.index0 == 2 %}
+                                <a data-testid="wan-port-link"
+                                   href="{{ url_for('wan_performance.port', site_id=dashboard.circuit.gateway.site.site_id, port_name=dashboard.circuit.port_name, gateway_id=dashboard.circuit.gateway.gateway_id) }}">{{ value }}</a>
+                                {% else %}{{ value }}{% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="{{ congested.columns|length }}">{{ congested.empty_message }}</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            {{ table_panel(overview.tables[1], "wan-active-alerts") }}
+            {{ table_panel(overview.tables[2], "wan-sle-degraded-sites") }}
+        </div>
+        <div class="wan-overview-stack" data-testid="wan-overview-charts">
+            {{ chart_grid(overview.charts[:1], "wan-region-summary-chart") }}
+            {{ chart_grid(overview.charts[1:2], "wan-utilization-distribution-chart") }}
+        </div>
+    </div>
+
+    {{ chart_grid(overview.charts[2:4], "wan-overview-trends") }}
+
+    <section class="wan-site-controls" aria-label="Synthetic time-series controls">
+        <strong>Site Time-Series Selection</strong>
+        <label>Site
+            <select class="form-select" disabled><option>{{ dashboard.site_name }}</option></select>
+        </label>
+        <label>Time Range
+            <select class="form-select" disabled><option>Last 24 Hours</option></select>
+        </label>
+        <label>Auto-Refresh
+            <input class="form-check-input" type="checkbox" disabled>
+        </label>
+    </section>
+    {{ chart_grid(dashboard.pages["overview"].charts[4:], "wan-site-charts") }}
+</section>
+{% endblock %}
