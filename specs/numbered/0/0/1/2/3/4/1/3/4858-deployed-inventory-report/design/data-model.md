@@ -53,6 +53,25 @@ Rules:
 - A failed organization inventory read returns Missing quantity.
 - A successful organization with no deployed records returns zero deployed quantity.
 
+## Inventory Summary
+
+Fields:
+- MSP ID
+- Organization ID
+- Organization name
+- Device type
+- Deployed quantity
+- Stock quantity
+- Inventory quantity
+- Source inventory status
+- Source attribution
+
+Rules:
+- Count each deployed detail row once.
+- Count each stock detail row once.
+- `inventory_quantity` is the sum of deployed and stock quantities.
+- Failed inventory reads use `Missing` for every quantity.
+
 ## Stock Inventory Row
 
 Fields:

@@ -170,8 +170,7 @@ class SubscriptionExpiryClient:
             lambda: mistapi.api.v1.msps.orgs.listMspOrgs(self.apisession, msp_id),
         )  # Call MSP organization discovery.
         status_code = getattr(response, "status_code", None)  # Read MSP status.
-        payload = self._response_payload(response)  # Normalize MSP payload.
-        if status_code != 200 or not isinstance(payload, list):  # MSP discovery failed.
+        if status_code != 200:  # MSP discovery failed at the first page.
             failures.append(
                 OrganizationScope(
                     org_id=MISSING_VALUE,
@@ -183,7 +182,25 @@ class SubscriptionExpiryClient:
                 )
             )  # Preserve visible failure.
             return  # Keep direct organizations.
-        for org in payload:  # Walk each MSP organization.
+        try:  # Validate every continuation page before organization data is added.
+            org_rows = self._paginate_list_response(
+                "listMspOrgs",
+                msp_id,
+                response,
+            )  # Follow all MSP organization pages.
+        except SubscriptionExpiryClientError as error:  # A later page or invalid shape is incomplete.
+            failures.append(
+                OrganizationScope(
+                    org_id=MISSING_VALUE,
+                    org_name=f"MSP {msp_id}",
+                    msp_id=msp_id,
+                    source="msp",
+                    request_status="failed",
+                    error=str(error),
+                )
+            )  # Preserve visible MSP pagination failure.
+            return  # Keep direct organizations.
+        for org in org_rows:  # Walk each MSP organization.
             if not isinstance(org, dict):  # Skip malformed org rows.
                 continue  # Keep only mapping rows.
             org_id = org.get("id")  # Read organization ID.
@@ -233,10 +250,11 @@ class SubscriptionExpiryClient:
         status_code = getattr(response, "status_code", None)  # Read inventory status.
         if status_code != 200:  # Inventory page failed.
             raise SubscriptionExpiryClientError(f"Inventory returned HTTP {status_code}")  # Surface status.
-        inventory = mistapi.get_all(response=response, mist_session=self.apisession)  # Follow SDK continuation.
-        if not isinstance(inventory, list):  # Invalid inventory shape.
-            raise SubscriptionExpiryClientError("Inventory returned an invalid result list")  # Surface shape.
-        inventory_rows = [row for row in inventory if isinstance(row, dict)]  # Keep only mapping rows.
+        inventory_rows = self._paginate_list_response(
+            "getOrgInventory",
+            org_id,
+            response,
+        )  # Follow all inventory pages.
         logger.debug("Fetched %d inventory rows", len(inventory_rows))  # Log inventory count.
         return inventory_rows  # Return every inventory mapping.
 
@@ -307,6 +325,51 @@ class SubscriptionExpiryClient:
     def _response_payload(response: Any) -> Any:
         """Return response.data when present, otherwise return the response itself."""
         return getattr(response, "data", response)  # Support SDK responses and plain test containers.
+
+    def _paginate_list_response(
+        self,
+        operation: str,
+        target: str,
+        response: Any,
+    ) -> list[dict[str, Any]]:
+        """Follow validated SDK continuation pages and return mapping rows."""
+        records: list[dict[str, Any]] = []  # Accumulate only mapping rows.
+        current = response  # Start with the first validated SDK response.
+        seen_links: set[str] = set()  # Detect repeated continuation links.
+        while True:  # Walk every page until the SDK reports no continuation.
+            status_code = getattr(current, "status_code", None)  # Read each page status.
+            if status_code != 200:  # No later page may become partial success.
+                raise SubscriptionExpiryClientError(f"{operation} returned HTTP {status_code}")  # Surface status.
+            payload = self._response_payload(current)  # Normalize the SDK wrapper.
+            if not isinstance(payload, list):  # The endpoint contract requires a list.
+                raise SubscriptionExpiryClientError(f"{operation} returned an invalid result list")  # Surface shape.
+            records.extend(row for row in payload if isinstance(row, dict))  # Keep mapping rows only.
+            next_link = getattr(current, "next", None)  # Read the SDK continuation link.
+            if not next_link:  # The final page has no continuation.
+                break  # Stop without inventing another page.
+            if not isinstance(next_link, str) or not next_link:  # A continuation needs a usable URL.
+                raise SubscriptionExpiryClientError(f"{operation} returned an invalid continuation")  # Surface link.
+            if next_link in seen_links:  # Repeated links would never complete.
+                raise SubscriptionExpiryClientError(f"{operation} returned a repeated continuation")  # Surface loop.
+            seen_links.add(next_link)  # Remember this continuation before the SDK call.
+            logger.info("Fetching the next %s page for %s", operation, target)  # Log before later-page read.
+
+            def page_call(page_response: Any = current) -> Any:
+                """Bind the exact SDK page response for one continuation request."""
+                return mistapi.get_next(
+                    mist_session=self.apisession,
+                    response=page_response,
+                )  # Request only the response that owns this continuation.
+
+            current = self._request_with_retry(
+                operation,
+                target,
+                page_call,
+            )  # Follow the SDK-provided continuation.
+            if current is None:  # A missing later response is incomplete.
+                raise SubscriptionExpiryClientError(f"{operation} returned no next page")  # Surface truncation.
+        logger.debug("Fetched %d mapping rows for %s", len(records), operation)  # Log page completion.
+        return records  # Return every mapping row from every validated page.
 
     @staticmethod
     def _list_payload(payload: Any) -> list[dict[str, Any]]:

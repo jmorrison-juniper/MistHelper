@@ -209,6 +209,8 @@ class DeployedInventorySummaryRow:
     device_type: str  # Name the normalized deployed device type.
     deployed_quantity: int | str  # Preserve the exact count or Missing.
     request_status: str  # Name success, partial, failed, or unavailable.
+    stock_quantity: int | str = 0  # Preserve the stock count or Missing in combined summaries.
+    inventory_quantity: int | str = 0  # Preserve the combined count or Missing in combined summaries.
 
     def to_dict(self) -> dict[str, Any]:
         """Return a CSV-ready deployed inventory summary mapping."""
@@ -583,8 +585,10 @@ class CrossOrgSubscriptionInventoryModel:
             return "ap"  # Return AP type.
         if source_type == "switch":  # Switch inventory uses switch subscriptions.
             return "switch"  # Return switch type.
-        if source_type == "gateway" or model.startswith("SSR"):  # Gateway and SSR share WAN or SSR licensing.
-            return "gateway"  # Return gateway type for gateway and SSR rows.
+        if model.startswith("SSR"):  # SSR devices use the WAN or SSR subscription category.
+            return "ssr"  # Return a separate SSR type.
+        if source_type == "gateway":  # Gateway devices use gateway inventory.
+            return "gateway"  # Return gateway type.
         if source_type == "mxedge":  # Mist Edge has its own inventory type.
             return "mxedge"  # Return Mist Edge type.
         if source_type == "router":  # Router assets need separate inventory review.
@@ -881,6 +885,59 @@ class CrossOrgSubscriptionInventoryModel:
         return rows  # Return the organization/type reconciliation.
 
     @staticmethod
+    def build_inventory_summary(
+        organization: OrganizationScope,
+        deployed_rows: list[DeployedInventoryRow],
+        stock_rows: list[StockInventoryRow],
+        request_status: str,
+    ) -> list[DeployedInventorySummaryRow]:
+        """Count deployed, stock, and combined inventory by organization and device type."""
+        logger.info("Building inventory summary for %s", organization.org_id)  # Log before grouping.
+        if request_status in ("failed", "unavailable"):  # A failed source read is not a zero count.
+            return [
+                DeployedInventorySummaryRow(
+                    msp_id=organization.msp_id or MISSING_VALUE,
+                    org_id=organization.org_id,
+                    org_name=organization.org_name,
+                    device_type=MISSING_VALUE,
+                    deployed_quantity=MISSING_VALUE,
+                    stock_quantity=MISSING_VALUE,
+                    inventory_quantity=MISSING_VALUE,
+                    request_status=request_status,
+                )
+            ]  # Preserve Missing on source failure.
+        counts: dict[str, dict[str, int]] = {}  # Accumulate deployed and stock counts by type.
+        for deployed_row in deployed_rows:  # Walk deployed detail rows.
+            device_counts = counts.setdefault(
+                deployed_row.device_type,
+                {"deployed": 0, "stock": 0},
+            )  # Prepare type totals.
+            device_counts["deployed"] += 1  # Count one deployed identity.
+        for stock_row in stock_rows:  # Walk stock detail rows.
+            device_counts = counts.setdefault(
+                stock_row.device_type,
+                {"deployed": 0, "stock": 0},
+            )  # Prepare type totals.
+            device_counts["stock"] += 1  # Count one stock identity.
+        if not counts:  # A successful read found no inventory devices.
+            counts[MISSING_VALUE] = {"deployed": 0, "stock": 0}  # Represent a real empty result as zero.
+        rows = [
+            DeployedInventorySummaryRow(
+                msp_id=organization.msp_id or MISSING_VALUE,
+                org_id=organization.org_id,
+                org_name=organization.org_name,
+                device_type=device_type,
+                deployed_quantity=device_counts["deployed"],
+                stock_quantity=device_counts["stock"],
+                inventory_quantity=device_counts["deployed"] + device_counts["stock"],
+                request_status=request_status,
+            )
+            for device_type, device_counts in sorted(counts.items())
+        ]  # Build one stable combined summary row per device type.
+        logger.debug("Built %d cross-org inventory summary rows", len(rows))  # Log combined count.
+        return rows  # Return the organization/type reconciliation.
+
+    @staticmethod
     def build_stock_rows(
         organization: OrganizationScope,
         inventory: list[dict[str, Any]],
@@ -927,9 +984,13 @@ class CrossOrgSubscriptionInventoryModel:
         """Build one stock row or return None for assigned inventory."""
         if not isinstance(record, dict) or record.get("site_id"):  # Assigned devices stay out of stock.
             return None  # Skip assigned inventory.
-        serial = CrossOrgSubscriptionInventoryModel._text(record.get("serial"))  # Normalize serial.
-        mac = CrossOrgSubscriptionInventoryModel._text(record.get("mac"))  # Normalize MAC.
-        model = CrossOrgSubscriptionInventoryModel._text(record.get("model"))  # Normalize model.
+        serial = CrossOrgSubscriptionInventoryModel._text(
+            record.get("serial") or record.get("chassis_serial")
+        )  # Normalize serial.
+        mac = CrossOrgSubscriptionInventoryModel._text(record.get("mac") or record.get("vc_mac"))  # Normalize MAC.
+        model = CrossOrgSubscriptionInventoryModel._text(
+            record.get("model") or record.get("chassis_model")
+        )  # Normalize model.
         jsi_match = jsi_by_serial.get(serial if serial != MISSING_VALUE else "")  # Find serial evidence.
         match_status = CrossOrgSubscriptionInventoryModel._jsi_match_status(jsi, jsi_match)  # Score match.
         contract_status = CrossOrgSubscriptionInventoryModel._stock_contract_status(jsi_match)  # Preserve status.

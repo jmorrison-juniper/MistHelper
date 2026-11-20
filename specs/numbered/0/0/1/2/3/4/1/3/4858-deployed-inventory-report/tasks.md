@@ -111,6 +111,8 @@
 - [X] T032 [P] Add deployed inventory menu and SDK guard coverage in `tests/guardrails/test_endpoint_catalog.py`. (delivered: operation and primary-key tests)
 - [X] T033 Run compile, Ruff, Black, mypy, targeted pytest, Radon, Bandit, and test-quality gates. (delivered: compile, Ruff, Black, mypy, Radon, Bandit, 115 focused tests, and test-quality preflight pass)
 - [X] T034 Run menu reference generation and verify no menu documentation drift. (delivered: 16 menu maps unchanged)
+- [X] T045 [US1] Add a combined deployed, stock, and organization inventory summary export in `src/mist/intelligence/reports/subscription_expiry/`. (delivered: `CrossOrgInventorySummary.csv`, combined summary dataclass, and stock VC fallbacks)
+- [X] T046 [US3] Validate later inventory pages, MSP organization continuation pages, and later-page HTTP failures in `tests/unit/marvis/mist/intelligence/reports/audits/credentials/subscription_expiry/test_client.py`. (delivered: SDK continuation and later-page failure tests)
 - [ ] T035 Run an interactive MSP menu 308 report and compare T-Mobile USA Retail deployed inventory with the 2026-11-11 snapshot. (pending: interactive 2FA sign-in; existing snapshot shows 27,030 T-Mobile USA Retail devices)
 - [X] T036 Open the pull request for issue 4858 after all required CI checks pass. (delivered: PR #4859)
 

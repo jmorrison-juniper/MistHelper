@@ -16,6 +16,7 @@ from src.mist.intelligence.reports.subscription_expiry.model import (
     LicenseUsageSource,
     OrganizationScope,
     ReportContext,
+    StockInventoryRow,
     SubscriptionExpiryModel,
 )
 
@@ -260,6 +261,82 @@ def test_cross_org_deployed_and_stock_inventory_stay_separate() -> None:
     assert summaries[0].request_status == "success"  # The successful inventory read stays visible.
 
 
+def test_cross_org_inventory_summary_combines_deployed_and_stock() -> None:
+    """The combined inventory summary adds deployed and stock identities once."""
+    organization = OrganizationScope(
+        org_id="org-1",
+        org_name="T-Mobile",
+        source="msp",
+        request_status="success",
+    )  # Build a synthetic MSP organization.
+    inventory = [
+        {
+            "serial": "AP1",
+            "mac": "mac-ap",
+            "model": "AP43",
+            "type": "ap",
+            "site_id": "site-1",
+        },
+        {
+            "serial": "SSR1",
+            "mac": "mac-ssr",
+            "model": "SSR130",
+            "type": "gateway",
+        },
+    ]  # Include one deployed AP and one stock gateway.
+    deployed = CrossOrgSubscriptionInventoryModel.build_deployed_inventory_rows(
+        organization,
+        inventory,
+    )  # Build deployed detail once.
+    stock = CrossOrgSubscriptionInventoryModel.build_stock_rows(
+        organization,
+        inventory,
+        None,
+    )  # Build stock detail once.
+    summaries = CrossOrgSubscriptionInventoryModel.build_inventory_summary(
+        organization,
+        deployed,
+        stock,
+        "success",
+    )  # Build combined organization and device-type totals.
+    summary_by_type = {summary.device_type: summary for summary in summaries}  # Index the summary by type.
+    assert isinstance(summary_by_type["ap"], DeployedInventorySummaryRow)  # The AP summary has the row type.
+    assert summary_by_type["ap"].deployed_quantity == 1  # The deployed AP remains visible.
+    assert summary_by_type["ap"].stock_quantity == 0  # The AP is not stock.
+    assert summary_by_type["ap"].inventory_quantity == 1  # The AP contributes one combined identity.
+    assert summary_by_type["ssr"].deployed_quantity == 0  # The SSR is not deployed.
+    assert summary_by_type["ssr"].stock_quantity == 1  # The SSR remains in stock.
+    assert summary_by_type["ssr"].inventory_quantity == 1  # The SSR contributes one combined identity.
+
+
+def test_cross_org_stock_row_uses_virtual_chassis_identity_fallbacks() -> None:
+    """A stock VC row keeps chassis serial, VC MAC, and chassis model."""
+    organization = OrganizationScope(
+        org_id="org-1",
+        org_name="T-Mobile",
+        source="direct",
+        request_status="success",
+    )  # Build a synthetic direct organization.
+    inventory = [
+        {
+            "chassis_serial": "CHASSIS1",
+            "vc_mac": "vc-mac",
+            "chassis_model": "EX4100",
+            "type": "switch",
+        }
+    ]  # Supply physical VC identity fields without a site assignment.
+    stock = CrossOrgSubscriptionInventoryModel.build_stock_rows(
+        organization,
+        inventory,
+        None,
+    )  # Build the stock detail row.
+    assert len(stock) == 1  # One physical stock identity remains visible.
+    assert isinstance(stock[0], StockInventoryRow)  # The stock record has the row type.
+    assert stock[0].serial == "CHASSIS1"  # The chassis serial survives.
+    assert stock[0].mac == "vc-mac"  # The VC MAC survives.
+    assert stock[0].model == "EX4100"  # The chassis model survives.
+
+
 def test_cross_org_deployed_summary_preserves_missing_and_empty_results() -> None:
     """A failed inventory read stays Missing and an empty success stays zero."""
     organization = OrganizationScope(
@@ -278,12 +355,27 @@ def test_cross_org_deployed_summary_preserves_missing_and_empty_results() -> Non
         [],
         "success",
     )  # Build the successful empty summary.
+    missing_inventory_summary = CrossOrgSubscriptionInventoryModel.build_inventory_summary(
+        organization,
+        [],
+        [],
+        "failed",
+    )  # Build the failed combined inventory summary.
+    empty_inventory_summary = CrossOrgSubscriptionInventoryModel.build_inventory_summary(
+        organization,
+        [],
+        [],
+        "success",
+    )  # Build the successful empty combined inventory summary.
     assert missing_summary[0].device_type == MISSING_VALUE  # A failed read has no source device type.
     assert missing_summary[0].deployed_quantity == MISSING_VALUE  # A failed read never becomes zero.
     assert missing_summary[0].request_status == "failed"  # The failure status remains visible.
     assert empty_summary[0].device_type == MISSING_VALUE  # A successful empty read has no source type.
     assert empty_summary[0].deployed_quantity == 0  # A successful empty read may use zero.
     assert empty_summary[0].request_status == "success"  # The successful empty read stays successful.
+    assert missing_inventory_summary[0].inventory_quantity == MISSING_VALUE  # A failed combined total stays Missing.
+    assert missing_inventory_summary[0].request_status == "failed"  # The combined failure stays visible.
+    assert empty_inventory_summary[0].inventory_quantity == 0  # A successful empty combined total is zero.
 
 
 def test_cross_org_deployed_inventory_collapses_duplicates_and_keeps_vc_members() -> None:

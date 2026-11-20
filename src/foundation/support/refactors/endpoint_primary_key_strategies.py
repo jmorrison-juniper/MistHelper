@@ -3401,6 +3401,20 @@ ENDPOINT_PRIMARY_KEY_STRATEGIES = {
         "unique_constraints": [],
         "description": "Cross-organization deployed inventory counts",
     },
+    "CrossOrgInventorySummary": {
+        "type": "auto_increment_with_unique",
+        "primary_key": ["misthelper_internal_id"],
+        "indexes": [
+            "org_id",
+            "device_type",
+            "deployed_quantity",
+            "stock_quantity",
+            "inventory_quantity",
+            "request_status",
+        ],
+        "unique_constraints": [],
+        "description": "Cross-organization deployed, stock, and combined inventory counts",
+    },
     "CrossOrgContractEvidence": {
         "type": "auto_increment_with_unique",
         "primary_key": ["misthelper_internal_id"],
