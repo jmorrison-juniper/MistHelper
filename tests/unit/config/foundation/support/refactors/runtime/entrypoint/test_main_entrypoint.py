@@ -387,7 +387,7 @@ class TestConsoleOutputRouting:
         monkeypatch.setenv("LOGGING_LOG_LEVEL", str(logging.WARNING))
         isolated_logging._configure_logging()
         resolution = host_resolver.DEFAULT_RESOLVER.resolve("127.0.0.1")  # WHY: emit real database DNS records.
-        assert resolution.addresses  # WHY: loopback resolution proves the diagnostic path ran.
+        assert len(resolution.addresses) >= 1  # WHY: loopback resolution proves the diagnostic path ran.
         structured_logger = structlog.get_logger("db.logging_test")
         structured_logger.info("structured-info-line")
         structured_logger.debug("structured-debug-line")
