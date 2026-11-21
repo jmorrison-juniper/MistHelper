@@ -120,6 +120,19 @@ def test_sqlite_distinct_window_adds_a_separate_keyed_row(sqlite_path: Path, ope
     assert count == (2,)
 
 
+def test_sqlite_preserves_carriage_returns(sqlite_path: Path) -> None:
+    """Keep raw carriage returns through the real SQLite processing path."""
+    processing = sqlite_module._resolve_runtime_dependencies().DataProcessingUtils
+    processing.escape_multiline.side_effect = (
+        sqlite_module.SourceDependencyResolver.DataProcessingUtils.escape_multiline
+    )
+    row = {**_window(HISTOGRAM_OPERATION), "value": "a\r\nb"}
+    assert SQLiteDatabaseWriter([row], "sle_window", HISTOGRAM_OPERATION).write() is True
+    with closing(sqlite3.connect(sqlite_path)) as connection:
+        stored = connection.execute("SELECT value FROM sle_window").fetchall()
+    assert stored == [("a\r\\nb",)]
+
+
 @pytest.mark.parametrize("operation", OPERATIONS)
 def test_arango_repeated_exports_preserve_legacy_documents(operation: str) -> None:
     """Replace only the new deterministic document while keeping legacy UUID records."""

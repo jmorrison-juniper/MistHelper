@@ -259,12 +259,12 @@ class TestGetUniqueKeys:
 class TestEscapeMultiline:
     """Cover DataProcessingUtils.escape_multiline including list branch (line 147)."""
 
-    def test_newline_and_cr_escaped(self) -> None:
-        """String values get newline escaped and CR stripped."""
+    def test_newline_escaped_and_cr_preserved(self) -> None:
+        """Preserve carriage returns for output-specific processing."""
         # WHY: exercises the isinstance(value, str) branch.
         data = [{"txt": "a\r\nb"}]  # Windows-style line ending.
         result = DataProcessingUtils.escape_multiline(data)  # Escape in place.
-        assert result[0]["txt"] == "a\\nb"  # CR removed, LF escaped.
+        assert result[0]["txt"] == "a\r\\nb"  # Preserve CR and keep legacy LF escaping.
 
     def test_list_value_joined_as_csv(self) -> None:
         """List values are joined as CSV strings (line 147)."""
