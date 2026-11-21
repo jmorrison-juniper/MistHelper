@@ -47,7 +47,7 @@ Move the Spec Kit scaffolding from 1.1.2 to 1.4.3 in the parts that do not carry
 
 ## Constitution Check
 
-- Five children at most for each structural directory. The feature root holds three files.
+- Five children at most for each structural directory. The feature directory contains three files.
 - No secret in any file.
-- The new JSON helper writes ASCII only.
+- The helper for JSON writes only ASCII characters.
 - The routed core does not change.

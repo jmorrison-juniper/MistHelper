@@ -14,7 +14,7 @@
 
 A maintainer runs the Spec Kit skills. The setup scripts that the skills call read the active feature and return JSON.
 
-**Why this priority**: A broken setup script stops every Spec Kit workflow.
+**Why this priority**: A script that fails stops every Spec Kit workflow.
 
 **Independent Test**: In the worktree, run `check-prerequisites.ps1 -Json -PathsOnly`, `setup-plan.ps1 -Json`, `setup-tasks.ps1 -Json`, and `resolve-template.ps1 spec-template -Json`. Each command exits 0 and returns JSON.
 
@@ -41,11 +41,11 @@ A maintainer creates a new feature record. The record goes under `specs/numbered
 
 ### User Story 3 - Reviewers see what the upgrade keeps (Priority: P2)
 
-A reviewer reads the pull request and the issue. Each file that differs from 1.4.3 has a stated reason.
+A reviewer reads the pull request and the issue. Each file that differs from 1.4.3 gives a reason.
 
 **Why this priority**: A partial upgrade is acceptable only when the reviewer knows what remains.
 
-**Independent Test**: The pull request body lists each kept file, its reason, and the follow-up issue.
+**Independent Test**: The body of the pull request lists each kept file, its reason, and the follow-up issue.
 
 **Acceptance Scenarios**:
 
@@ -68,7 +68,7 @@ A reviewer reads the pull request and the issue. Each file that differs from 1.4
 - **FR-004**: The change MUST NOT change `create-new-feature.ps1`, `spec-route.ps1`, the four routed templates, or the routing code in `common.ps1`.
 - **FR-005**: The change MUST NOT change the git extension, the `speckit-git-*` skills, the `speckit-taskstoissues` skill, or the `speckit.git.*` agents.
 - **FR-006**: The change MUST NOT add `.specify/.gitignore`. That file would ignore the tracked `.specify/feature.json`.
-- **FR-007**: The change MUST add one release note fragment for issue #4869.
+- **FR-007**: The change MUST add one fragment to the release notes for issue #4869.
 
 ### Key Entities
 
@@ -79,7 +79,7 @@ A reviewer reads the pull request and the issue. Each file that differs from 1.4
 
 ### Measurable Outcomes
 
-- **SC-001**: Each of the four setup scripts exits 0 in the worktree test.
+- **SC-001**: The four setup scripts exit with 0 in the worktree test.
 - **SC-002**: The dry run prints a path under `specs/numbered/`.
 - **SC-003**: Each changed PowerShell file parses with zero errors.
 - **SC-004**: The guardrail run states the examined counts and reports zero failures.
