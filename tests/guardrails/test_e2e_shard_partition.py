@@ -10,6 +10,8 @@ or when the required gate stops failing on a shard result other than success.
 
 import copy
 import logging
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -114,6 +116,26 @@ def test_each_shard_keeps_the_options_of_the_single_job(workflow: dict[str, Any]
 def test_the_required_gate_reads_the_shard_result(workflow: dict[str, Any]) -> None:
     """The "E2E smoke tests" check fails when a shard is not a success."""
     assert ShardPartitionAudit.check_gate(workflow) == "E2E smoke tests"
+
+
+@pytest.mark.parametrize(
+    ("shard_result", "expected_return_code"),
+    [("success", 0), ("failure", 1), ("cancelled", 1), ("skipped", 1)],
+)
+def test_the_required_gate_rejects_non_success_shard_results(
+    workflow: dict[str, Any], shard_result: str, expected_return_code: int
+) -> None:
+    """Run the actual gate script and reject cancelled shards as well as failures."""
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("The E2E gate outcome test needs Bash.")
+    gate = workflow["jobs"]["playwright"]
+    step = next(step for step in gate["steps"] if step.get("run"))
+    script = step["run"].replace("${{ needs.playwright_shards.result }}", shard_result)
+    result = subprocess.run([bash, "-e", "-c", script], capture_output=True, text=True, check=False)
+    assert result.returncode == expected_return_code, result.stdout + result.stderr
+    if shard_result == "cancelled":
+        assert "finished with cancelled" in result.stdout
 
 
 @pytest.mark.parametrize("mutation", ["gap", "overlap", "outside"])
