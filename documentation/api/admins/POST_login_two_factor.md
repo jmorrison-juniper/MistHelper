@@ -88,4 +88,4 @@ Use this endpoint to complete two-factor authentication after initial login when
 
 ## MistHelper Notes
 
-Not currently used by MistHelper. MistHelper uses API token authentication and does not handle interactive 2FA flows.
+MistHelper uses this endpoint when a password login requires a two-factor code. It asks the operator for the code. It sends the email, password, and code through the `mistapi` SDK.
