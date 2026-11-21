@@ -37,7 +37,7 @@ dependencies = [
     "keyring>=25.7.0,<26",
     
     # CLI and user interface
-    "prettytable>=3.18.0,<4",
+    "prettytable>=3.19.0,<4",
     "tqdm>=4.70.1,<5",
     "sshkeyboard>=2.3.1,<3",
     "rich>=15.0.0,<16",
@@ -45,19 +45,19 @@ dependencies = [
     
     # Data processing and configuration
     "jsonschema>=4.26.0,<5",
-    "numpy>=2.5.4,<3",
+    "numpy>=2.5.5,<3",
     "matplotlib>=3.11.2,<4",
     "python-dotenv>=1.2.4,<2",
-    "PyYAML>=6.0.3,<7",
+    "PyYAML>=6.0.4,<7",
 
     # AI analysis (Mist Ideas Analyzer)
-    "openai>=3.33.0,<4",
+    "openai>=3.57.0,<4",
 
     # Bounded PDF text sampling for the Juniper documentation corpus harvester
-    "pdfplumber>=0.11.10,<1",
+    "pdfplumber>=0.11.11,<1",
     
     # SSH client
-    "paramiko>=5.0.0,<6",
+    "paramiko>=5.1.0,<6",
 
     # Terminal emulation for SSH operations
     "pyte>=0.8.2,<1",
@@ -67,14 +67,14 @@ dependencies = [
     "rapidfuzz>=3.14.6,<4",
 
     # Interactive visualization (Dash interactive view, Plotly and Kaleido static)
-    "dash>=4.4.1,<5",
+    "dash>=4.5.1,<5",
     "plotly>=7.1.0,<8",
     "pillow>=13.0.0,<14",
-    "kaleido>=1.5.0,<2",
+    "kaleido>=1.5.2,<2",
 
     # Polyglot database backends (ArangoDB + Redis TimeSeries)
-    "python-arango>=8.3.6,<9",
-    "redis[hiredis]>=7.4.0,<9",
+    "python-arango>=8.3.7,<9",
+    "redis[hiredis]>=8.1.0,<9",
 
     # Structured logging for database modules
     "structlog>=26.1.0,<27",
@@ -85,7 +85,7 @@ dependencies = [
     # Upgrade capture portal (web application, request forgery guard, server)
     "Flask>=3.1.3,<4",
     "flask-wtf>=1.3.0,<2",
-    "gunicorn>=26.2.0,<28",
+    "gunicorn>=27.0.1,<28",
     # Windows cannot run Gunicorn, because `gunicorn.util` imports `fcntl` and
     # Windows ships no `fcntl`. `select_server_name()` therefore returns Waitress
     # on Windows, so a Windows install needs Waitress as a core dependency. A
@@ -98,23 +98,23 @@ dependencies = [
 dev = [
     # Each pin equals the pin in requirements-dev.txt (issue #3400). The guard
     # tests/guardrails/test_dependency_declaration_parity.py compares the two.
-    "uv==0.13.8",  # Provide the export command to CI jobs that install with pip.
+    "uv==0.13.9",  # Provide the export command to CI jobs that install with pip.
     "podman-compose==1.6.0",
-    "ruff==0.17.5",
+    "ruff==0.17.6",
     "black==26.10.1",
     "mypy==2.4.1",
     "types-requests==2.33.0.20261030",
     "types-paramiko==5.1.0.20261030",
-    "types-tqdm==4.70.0.20260906",
+    "types-tqdm==4.70.0.20261106",
     "pytest==9.2.0",
     "pytest-cov==7.1.0",
     "pytest-timeout==2.4.0",
-    "hypothesis==6.170.13",
-    "playwright==1.64.1",  # This package has no browser. Run python -m playwright install chromium.
+    "hypothesis==6.170.17",
+    "playwright==1.65.2",  # This package has no browser. Run python -m playwright install chromium.
     "pytest-playwright==0.10.0",  # supplies the `page` fixture; playwright alone has no pytest plugin
     "bandit[toml]==1.9.4",
     "pip-audit==2.10.1",
-    "pylint==4.1.3",
+    "pylint==4.1.4",
     "radon==6.0.1",
     "vulture==2.16",
     "pydocstyle[toml]==6.3.0",
@@ -122,9 +122,9 @@ dev = [
     # Full commit of devtools release v0.6.4, as in requirements-dev.txt.
     "misthelper-devtools @ git+https://github.com/jmorrison-juniper/misthelper-devtools.git@2239e7bd468fd27e40c43f2b87fcd35a2e49672b",
     # Declared only here until the later slices of issue #3400 settle them.
-    "coverage>=7.0.0",
+    "coverage>=7.17.4",
     "libcst>=1.9.0,<2",         # AST-based codemod for #429 logging f-string sweep
-    "pre-commit>=3.0.0",
+    "pre-commit>=4.7.0",
 ]
 container = [
     "uvicorn>=0.20.0",

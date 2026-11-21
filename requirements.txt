@@ -14,7 +14,7 @@ bcrypt==5.0.0
     # via paramiko
 blinker==1.9.0
     # via flask
-certifi==2026.10.23
+certifi==2026.11.20
     # via requests
 cffi==2.1.1 ; platform_python_implementation != 'PyPy'
     # via
@@ -42,7 +42,7 @@ cryptography==50.0.2
     #   secretstorage
 cycler==0.12.1
     # via matplotlib
-dash==4.5.0
+dash==4.5.1
     # via misthelper
 deprecation==2.1.0
     # via mistapi
@@ -61,9 +61,9 @@ h11==0.16.0 ; sys_platform != 'emscripten'
     # via httpcore2
 hiredis==3.5.0
     # via redis
-httpcore2==2.16.0 ; sys_platform != 'emscripten'
+httpcore2==2.16.2 ; sys_platform != 'emscripten'
     # via httpx2
-httpx2==2.16.0
+httpx2==2.16.2
     # via openai
 httpx2-jsfetch==1.0 ; sys_platform == 'emscripten'
     # via httpx2
@@ -82,7 +82,7 @@ itsdangerous==2.2.0
     # via
     #   flask
     #   flask-wtf
-janus==2.0.0
+janus==2.1.1
     # via dash
 jaraco-classes==3.4.0
     # via keyring
@@ -102,7 +102,7 @@ jsonschema==4.26.0
     # via misthelper
 jsonschema-specifications==2025.9.1
     # via jsonschema
-kaleido==1.5.0
+kaleido==1.5.2
     # via misthelper
 keyring==25.7.0
     # via
@@ -132,16 +132,16 @@ more-itertools==11.2.1
     # via
     #   jaraco-classes
     #   jaraco-functools
-narwhals==2.28.0
+narwhals==2.29.0
     # via plotly
 nest-asyncio==1.6.0
     # via dash
-numpy==2.5.4
+numpy==2.5.5
     # via
     #   contourpy
     #   matplotlib
     #   misthelper
-openai==3.50.0
+openai==3.57.0
     # via misthelper
 packaging==26.3
     # via
@@ -155,30 +155,30 @@ paramiko==5.1.0
     # via misthelper
 pdfminer-six==20260107
     # via pdfplumber
-pdfplumber==0.11.10
+pdfplumber==0.11.11
     # via misthelper
 pillow==13.0.0
     # via
     #   matplotlib
     #   misthelper
     #   pdfplumber
-platformdirs==4.14.5
+platformdirs==4.14.8
     # via choreographer
 plotly==7.1.0
     # via
     #   dash
     #   misthelper
-prettytable==3.18.0
+prettytable==3.19.0
     # via misthelper
 probableparsing==0.0.1
     # via usaddress
 pycparser==3.12 ; implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
     # via cffi
-pydantic==2.14.3
+pydantic==2.14.4
     # via
     #   dash
     #   openai
-pydantic-core==2.50.4
+pydantic-core==2.50.5
     # via pydantic
 pygments==2.21.0
     # via
@@ -206,7 +206,7 @@ python-dotenv==1.2.4
     #   misthelper
 pywin32-ctypes==0.2.3 ; sys_platform == 'win32'
     # via keyring
-pyyaml==6.0.3
+pyyaml==6.0.4
     # via
     #   misthelper
     #   yaml-config

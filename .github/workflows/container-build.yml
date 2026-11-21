@@ -89,7 +89,7 @@ jobs:
           python-version: '3.15'
 
       - name: Install pinned UV
-        run: python -m pip install uv==0.13.8  # Use the package manager version declared in pyproject.toml.
+        run: python -m pip install uv==0.13.9  # Use the package manager version declared in pyproject.toml.
 
       - name: Sync locked test dependencies
         run: uv sync --locked --extra dev --no-install-project  # Use the committed lock without installing the project.
