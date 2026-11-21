@@ -23,6 +23,7 @@ export default function ConfirmationDialog({
 
   const canConfirm = confirmKeyword ? keyword === confirmKeyword : true;
 
+  // Keep focus on the field when an open dialog gains a keyword requirement.
   useEffect(() => {
     if (confirmKeyword && inputRef.current) {
       inputRef.current.focus();
@@ -33,7 +34,8 @@ export default function ConfirmationDialog({
     // Headless UI must render a real element here. A Fragment cannot carry the
     // ref and the aria attributes that the dialog sets, so `as={Fragment}`
     // threw "Passing props on Fragment" and the dialog never appeared.
-    <Dialog open onClose={onCancel}>
+    // Let the focus trap choose the input during its own initialization.
+    <Dialog open onClose={onCancel} initialFocus={inputRef}>
       <div className="fixed inset-0 bg-black/50 z-40" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
         <DialogPanel className="bg-surface-primary rounded-lg shadow-xl max-w-md w-full p-6" aria-describedby="confirm-description confirm-impact">
