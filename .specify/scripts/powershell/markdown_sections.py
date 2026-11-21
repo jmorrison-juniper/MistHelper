@@ -44,10 +44,7 @@ def validate_section_selector(strategy: str, selector: object, *, present: bool)
         not isinstance(selector, str)
         or not selector
         or selector != selector.lower()
-        or any(
-            char not in "-_" and unicodedata.category(char)[0] not in "LN"
-            for char in selector
-        )
+        or any(char not in "-_" and unicodedata.category(char)[0] not in "LN" for char in selector)
     ):
         raise ValueError(
             "replace-section selector must be a non-empty lowercase anchor "
@@ -113,9 +110,7 @@ def _anchor(text: str) -> str:
         text,
     )
     return "".join(
-        "-" if char == " " else char
-        for char in text.lower()
-        if char in " -_" or unicodedata.category(char)[0] in "LN"
+        "-" if char == " " else char for char in text.lower() if char in " -_" or unicodedata.category(char)[0] in "LN"
     )
 
 
@@ -159,27 +154,27 @@ def replace_section(
 
     matches = [index for index, heading in enumerate(headings) if _anchor(heading[1]) == selector]
     if len(matches) != 1:
-        raise SectionReplacementError({
-            "code": "SECTION_NOT_FOUND" if not matches else "SECTION_AMBIGUOUS",
-            "preset": preset,
-            "contribution": contribution,
-            "artifact": artifact,
-            "selector": selector,
-            "match_count": len(matches),
-            "candidates": [
-                {"heading": headings[index][1], "line": headings[index][2]}
-                for index in matches
-            ],
-            "remediation": (
-                "Check the selector and current target headings."
-                if not matches else "Make the target heading anchors unique."
-            ),
-        })
+        raise SectionReplacementError(
+            {
+                "code": "SECTION_NOT_FOUND" if not matches else "SECTION_AMBIGUOUS",
+                "preset": preset,
+                "contribution": contribution,
+                "artifact": artifact,
+                "selector": selector,
+                "match_count": len(matches),
+                "candidates": [{"heading": headings[index][1], "line": headings[index][2]} for index in matches],
+                "remediation": (
+                    "Check the selector and current target headings."
+                    if not matches
+                    else "Make the target heading anchors unique."
+                ),
+            }
+        )
 
     index = matches[0]
     level, _, _, _, body_start = headings[index]
     body_end = next(
-        (heading[3] for heading in headings[index + 1:] if heading[0] <= level),
+        (heading[3] for heading in headings[index + 1 :] if heading[0] <= level),
         len(content),
     )
     if (
@@ -210,10 +205,11 @@ def _main() -> int:
     try:
         content = args.input.read_bytes() if args.input else sys.stdin.buffer.read()
         result = replace_section(
-            content.decode("utf-8"), args.replacement.read_bytes().decode("utf-8"),
-            base64.b64decode(args.selector, validate=True).decode("utf-8")
-            if args.selector_base64 else args.selector,
-            preset=args.preset, contribution=str(args.replacement),
+            content.decode("utf-8"),
+            args.replacement.read_bytes().decode("utf-8"),
+            base64.b64decode(args.selector, validate=True).decode("utf-8") if args.selector_base64 else args.selector,
+            preset=args.preset,
+            contribution=str(args.replacement),
             artifact=args.artifact,
         ).encode("utf-8")
         if args.output:
