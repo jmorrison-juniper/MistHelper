@@ -255,8 +255,13 @@ class SubscriptionExpiryClient:
             org_id,
             response,
         )  # Follow all inventory pages.
-        logger.debug("Fetched %d inventory rows", len(inventory_rows))  # Log inventory count.
-        return inventory_rows  # Return every inventory mapping.
+        expanded_rows = self._expand_virtual_chassis_members(org_id, inventory_rows)  # Read physical VC members.
+        logger.debug(
+            "Fetched %d inventory rows and expanded %d VC member rows",
+            len(inventory_rows),
+            len(expanded_rows),
+        )  # Log inventory and expansion counts.
+        return expanded_rows  # Return every inventory and physical VC member mapping.
 
     def fetch_msp_licenses(self, msp_id: str) -> dict[str, Any] | None:
         """Fetch optional MSP purchase evidence or return None for an HTTP failure."""
@@ -400,6 +405,241 @@ class SubscriptionExpiryClient:
         if page is None:  # A missing later response is incomplete.
             raise SubscriptionExpiryClientError(f"{operation} returned no next page")  # Surface truncation.
         return page  # Return the validated continuation response.
+
+    @staticmethod
+    def _is_synthetic_virtual_identity(value: Any) -> bool:
+        """Identify Mist synthetic Virtual Chassis MAC and serial values."""
+        text = str(value).strip().lower() if value is not None else ""  # Normalize source text.
+        return text.startswith("020003") or text.startswith("020004")  # Name the synthetic prefixes.
+
+    @staticmethod
+    def _is_switch_record(record: dict[str, Any]) -> bool:
+        """Return True for one switch inventory record."""
+        return str(record.get("type") or "").strip().lower() == "switch"  # A switch uses the VC status endpoint.
+
+    @staticmethod
+    def _is_logical_vc_candidate(
+        record: dict[str, Any],
+    ) -> bool:
+        """Return True for a logical VC or FPC0 inventory record."""
+        serial = str(record.get("serial") or "").strip()  # Read the logical or physical serial.
+        mac = str(record.get("mac") or "").strip()  # Read the logical or physical MAC.
+        vc_mac = str(record.get("vc_mac") or "").strip()  # Read the VC parent MAC.
+        if SubscriptionExpiryClient._is_synthetic_virtual_identity(serial):  # A synthetic serial names a logical VC.
+            return True  # The row needs physical member expansion.
+        if SubscriptionExpiryClient._is_synthetic_virtual_identity(mac):  # A synthetic MAC names a logical VC.
+            return True  # The row needs physical member expansion.
+        return bool(vc_mac and vc_mac.lower() == mac.lower())  # FPC0 and virtual MAC use the VC status endpoint.
+
+    @staticmethod
+    def _partner_device_id(
+        record: dict[str, Any],
+        inventory: list[dict[str, Any]],
+        vc_mac: str,
+    ) -> str:
+        """Find a partner inventory ID for a logical VC without an ID field."""
+        for partner in inventory:  # Walk candidate partner rows.
+            if not isinstance(partner, dict):  # Skip malformed partner rows.
+                continue  # Keep only mapping rows.
+            partner_id = str(partner.get("id") or "").strip()  # Read partner device ID.
+            if not partner_id:  # A partner needs an ID.
+                continue  # Try the next partner.
+            partner_vc = str(partner.get("vc_mac") or "").lower()  # Read partner VC MAC.
+            partner_mac = str(partner.get("mac") or "").lower()  # Read partner physical MAC.
+            if partner_vc == vc_mac.lower() or partner_mac == vc_mac.lower():  # Match the VC identity.
+                return partner_id  # Use the matching partner ID.
+        return ""  # No partner carries a usable ID.
+
+    @staticmethod
+    def _vc_device_id(
+        record: dict[str, Any],
+        inventory: list[dict[str, Any]],
+        vc_mac: str,
+    ) -> str:
+        """Resolve the device ID needed by getSiteDeviceVirtualChassis."""
+        device_id = str(record.get("id") or record.get("device_id") or "").strip()  # Read direct ID fields.
+        if device_id:  # The inventory row carries the needed ID.
+            return device_id  # Use the direct ID.
+        return SubscriptionExpiryClient._partner_device_id(record, inventory, vc_mac)  # Find a partner ID.
+
+    @staticmethod
+    def _logical_vc_context(
+        record: dict[str, Any],
+        inventory: list[dict[str, Any]],
+    ) -> tuple[str, str, str] | None:
+        """Return site, device, and VC MAC values for one logical VC row."""
+        if not isinstance(record, dict):  # Skip malformed records.
+            return None  # Keep no VC context.
+        if not SubscriptionExpiryClient._is_switch_record(record):  # Only switches have this VC status endpoint.
+            return None  # Keep AP and gateway inventory unchanged.
+        site_id = str(record.get("site_id") or "").strip()  # Read the required site path field.
+        if not site_id:  # A VC status call needs a site.
+            return None  # Keep the row without expansion.
+        mac = str(record.get("mac") or "").strip()  # Read the logical or physical MAC.
+        vc_mac = str(record.get("vc_mac") or "").strip()  # Read the VC parent MAC.
+        if not SubscriptionExpiryClient._is_logical_vc_candidate(
+            record
+        ):  # Real member rows use vc_mac but are not the logical parent.
+            return None  # Keep physical member rows unchanged.
+        device_id = SubscriptionExpiryClient._vc_device_id(
+            record, inventory, vc_mac
+        )  # Resolve the inventory device ID.
+        if not device_id:  # A VC status call needs the device ID.
+            return None  # Keep the logical row without expansion.
+        vc_parent = vc_mac or mac  # Preserve the VC parent MAC.
+        return site_id, device_id, vc_parent  # Return one VC call context.
+
+    def _fetch_virtual_chassis_members(
+        self,
+        org_id: str,
+        site_id: str,
+        device_id: str,
+    ) -> list[dict[str, Any]]:
+        """Fetch physical VC member records through the existing Mist status endpoint."""
+        logger.info(
+            "Fetching Virtual Chassis members for organization %s at site %s",
+            org_id,
+            site_id,
+        )  # Log before the read-only VC status call.
+        response = self._request_with_retry(
+            "getSiteDeviceVirtualChassis",
+            f"{org_id}/{site_id}/{device_id}",
+            lambda: mistapi.api.v1.sites.devices.getSiteDeviceVirtualChassis(
+                self.apisession,
+                site_id,
+                device_id,
+            ),
+        )  # Call the proven menu 17 and 63 endpoint.
+        status_code = getattr(response, "status_code", None)  # Read VC status.
+        if status_code != 200:  # A failed member status call is not physical evidence.
+            logger.warning(
+                "Virtual Chassis status returned HTTP %s for site %s device %s",
+                status_code,
+                site_id,
+                device_id,
+            )  # Surface the status without fabricating members.
+            return []  # Leave the logical inventory row for model filtering.
+        payload = self._response_payload(response)  # Normalize the SDK wrapper.
+        if not isinstance(payload, dict):  # The VC status contract uses an object.
+            logger.warning(
+                "Virtual Chassis status returned an invalid result object for site %s device %s",
+                site_id,
+                device_id,
+            )  # Surface invalid shape.
+            return []  # Leave the logical inventory row for model filtering.
+        members = payload.get("members")  # Read the physical member list.
+        if not isinstance(members, list):  # No member evidence exists.
+            logger.debug(
+                "Virtual Chassis status has no member list for site %s device %s",
+                site_id,
+                device_id,
+            )  # Explain the no-member outcome.
+            return []  # Leave the logical inventory row for model filtering.
+        normalized = [member for member in members if isinstance(member, dict)]  # Keep only mapping member records.
+        logger.debug(
+            "Fetched %d physical Virtual Chassis members for site %s device %s",
+            len(normalized),
+            site_id,
+            device_id,
+        )  # Log physical member count.
+        return normalized  # Return one physical member record per VC member.
+
+    @staticmethod
+    def _member_value(
+        member: dict[str, Any],
+        keys: tuple[str, ...],
+        fallback: Any = MISSING_VALUE,
+    ) -> Any:
+        """Return the first present VC member value."""
+        for key in keys:  # Check each source field in priority order.
+            value = member.get(key)  # Read one member field.
+            if value not in (None, ""):  # A visible value is usable.
+                return value  # Return the first usable value.
+        return fallback  # Preserve Missing or a parent fallback.
+
+    @staticmethod
+    def _physical_vc_member_record(
+        logical_record: dict[str, Any],
+        vc_payload_mac: str,
+        member: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build one physical inventory record from a VC status member."""
+        record = dict(logical_record)  # Copy parent organization and site context.
+        record.pop("members", None)  # Remove the nested source list before output.
+        serial = SubscriptionExpiryClient._member_value(member, ("serial", "chassis_serial"))  # Read serial.
+        mac = SubscriptionExpiryClient._member_value(member, ("mac", "chassis_mac"))  # Read MAC.
+        model = SubscriptionExpiryClient._member_value(
+            member,
+            ("model", "chassis_model"),
+            record.get("model") or MISSING_VALUE,
+        )  # Read model.
+        record["serial"] = serial  # Preserve Missing instead of synthetic.
+        record["mac"] = mac  # Preserve the physical MAC.
+        record["model"] = model  # Preserve the physical model.
+        record["name"] = SubscriptionExpiryClient._member_value(
+            member,
+            ("name",),
+            record.get("name") or MISSING_VALUE,
+        )  # Preserve member name.
+        record["vc_mac"] = vc_payload_mac or MISSING_VALUE  # Preserve the logical VC MAC.
+        record["chassis_serial"] = serial or MISSING_VALUE  # Preserve explicit chassis serial.
+        record["chassis_mac"] = mac or MISSING_VALUE  # Preserve explicit chassis MAC.
+        record["chassis_model"] = model or MISSING_VALUE  # Preserve explicit chassis model.
+        record["vc_role"] = member.get("vc_role")  # Preserve member role when the source provides it.
+        record["fpc_idx"] = member.get("fpc_idx")  # Preserve member FPC index.
+        return record  # Return one physical member identity.
+
+    @staticmethod
+    def _physical_vc_records(
+        logical_record: dict[str, Any],
+        vc_payload_mac: str,
+        members: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Build physical inventory records from a VC status member list."""
+        parent_mac = (
+            vc_payload_mac or str(logical_record.get("vc_mac") or logical_record.get("mac") or "").strip()
+        )  # Preserve the VC parent MAC.
+        return [
+            SubscriptionExpiryClient._physical_vc_member_record(
+                logical_record,
+                parent_mac,
+                member,
+            )
+            for member in members
+        ]  # Return one verified physical member record per member.
+
+    def _expand_virtual_chassis_members(
+        self,
+        org_id: str,
+        inventory: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Expand logical switch VC rows into physical member inventory rows."""
+        expanded: list[dict[str, Any]] = []  # Accumulate inventory and physical member rows.
+        seen_vc: set[tuple[str, str, str]] = set()  # Read one logical VC once.
+        for record in inventory:  # Walk every paginated inventory record.
+            context = self._logical_vc_context(record, inventory)  # Resolve VC call context.
+            if context is None:  # Standalone or physical member row.
+                expanded.append(record)  # Preserve it unchanged.
+                continue  # Continue without a VC status call.
+            site_id, device_id, vc_mac = context  # Unpack one logical VC context.
+            key = (site_id, device_id, vc_mac)  # Build the duplicate key.
+            if key in seen_vc:  # Another record represents the same logical VC.
+                continue  # Avoid duplicate status calls and member rows.
+            seen_vc.add(key)  # Remember this logical VC.
+            members = self._fetch_virtual_chassis_members(org_id, site_id, device_id)  # Fetch physical members.
+            if not members:  # The status call failed or found no members.
+                expanded.append(record)  # Preserve the source row for visible fallback and model filtering.
+                continue  # Continue without physical evidence.
+            vc_payload_mac = str(record.get("vc_mac") or record.get("mac") or vc_mac).strip()  # Resolve parent MAC.
+            expanded.extend(
+                self._physical_vc_records(record, vc_payload_mac, members)
+            )  # Add one record per physical member.
+        logger.debug(
+            "Expanded %d inventory rows to %d inventory and VC member rows",
+            len(inventory),
+            len(expanded),
+        )  # Log expansion counts.
+        return expanded  # Return inventory evidence for the model classifier.
 
     @staticmethod
     def _list_payload(payload: Any) -> list[dict[str, Any]]:

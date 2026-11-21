@@ -21,9 +21,9 @@ flowchart LR
     root --> f_orgs_inventory["orgs/inventory<br/>14 menu options"]
     root --> f_orgs_stats["orgs/stats<br/>8 menu options"]
     root --> f_orgs_devices["orgs/devices<br/>6 menu options"]
+    root --> f_sites_devices["sites/devices<br/>6 menu options"]
     root --> f_orgs_gatewaytemplates["orgs/gatewaytemplates<br/>5 menu options"]
     root --> f_orgs_jsi["orgs/jsi<br/>5 menu options"]
-    root --> f_sites_devices["sites/devices<br/>5 menu options"]
     root --> f_orgs_networktemplates["orgs/networktemplates<br/>4 menu options"]
     root --> f_sites_insights["sites/insights<br/>4 menu options"]
     root --> f_sites_stats["sites/stats<br/>4 menu options"]
@@ -1357,7 +1357,7 @@ flowchart LR
 - Title: Export cross-org subscription, entitlement, and stock inventory report
 - Handler: `CrossOrgSubscriptionInventoryReport.run`
 - Shared helpers: [`DataExporter`](Menu-API-Endpoints#dataexporter), [`SourceDependencyResolver`](Menu-API-Endpoints#sourcedependencyresolver)
-- Endpoints: 7
+- Endpoints: 8
 
 ```mermaid
 flowchart LR
@@ -1370,6 +1370,7 @@ flowchart LR
     c1 --> e5["GET<br/>/api/v1/orgs<br/>/{org_id}/licenses"]
     c1 --> e6["GET<br/>/api/v1/orgs<br/>/{org_id}/licenses<br/>/usages"]
     c1 --> e7["GET<br/>/api/v1/self"]
+    c1 --> e8["GET<br/>/api/v1/sites<br/>/{site_id}/devices<br/>/{device_id}/vc"]
 ```
 
 | Method | Path | SDK function | Called from | Found by |
@@ -1381,3 +1382,4 @@ flowchart LR
 | GET | `/api/v1/orgs/{org_id}/licenses` | [`orgs.licenses.getOrgLicensesSummary`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-summary) | [`SubscriptionExpiryClient.fetch_license_summary`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
 | GET | `/api/v1/orgs/{org_id}/licenses/usages` | [`orgs.licenses.getOrgLicensesBySite`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/licenses/get-org-licenses-by-site) | [`SubscriptionExpiryClient.fetch_license_usage_by_site`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
 | GET | `/api/v1/self` | [`self.self.getSelf`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/account/get-self) | [`SubscriptionExpiryClient.fetch_profile`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/subscription_expiry/client.py) | Call |
+| GET | `/api/v1/sites/{site_id}/devices/{device_id}/vc` | [`sites.devices.getSiteDeviceVirtualChassis`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/wired/virtual-chassis/get-site-device-virtual-chassis) | [`SubscriptionExpiryClient._fetch_virtual_chassis_members`](https://github.com/jmorrison-juniper/MistHelper/blob/main/src/mist/intelligence/reports/subscription_expiry/client.py) | Call |

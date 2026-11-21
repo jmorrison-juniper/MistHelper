@@ -52,6 +52,8 @@ The summary does not combine deployed devices with unassigned stock.
 Use the `inventory_quantity` column to review all organization-assigned inventory identities.
 The `serial` column uses the physical chassis serial when a source row has a synthetic 020003 or 020004 virtual identity.
 The `vc_mac`, `chassis_serial`, `chassis_mac`, and `chassis_model` columns preserve the source VC evidence.
+Menu 308 reads `getSiteDeviceVirtualChassis` for logical switch inventory.
+Each `members[].serial` value becomes one deployed physical switch row.
 
 The report reconciles every paginated inventory page.
 One inventory set can contain 27,000 or more deployed devices.

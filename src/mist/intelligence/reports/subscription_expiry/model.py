@@ -840,11 +840,12 @@ class CrossOrgSubscriptionInventoryModel:
         """Return the physical serial for a synthetic identity."""
         if top_serial == MISSING_VALUE:  # No source serial exists.
             return chassis_serial  # Use the explicit chassis serial.
-        if (
-            CrossOrgSubscriptionInventoryModel._is_synthetic_virtual_identity(top_serial)
-            and chassis_serial != MISSING_VALUE
-        ):  # A synthetic identity has a physical serial.
-            return chassis_serial  # Replace the synthetic serial.
+        if CrossOrgSubscriptionInventoryModel._is_synthetic_virtual_identity(
+            top_serial
+        ):  # A synthetic identity has no physical serial by itself.
+            return (
+                chassis_serial if chassis_serial != MISSING_VALUE else MISSING_VALUE
+            )  # Require physical member evidence.
         return top_serial  # Keep a real member or device serial.
 
     @staticmethod
@@ -856,13 +857,17 @@ class CrossOrgSubscriptionInventoryModel:
         """Return the physical MAC or the visible VC parent MAC."""
         if top_mac == MISSING_VALUE:  # No source MAC exists.
             mac = chassis_mac  # Use the explicit chassis MAC.
-        elif (
-            CrossOrgSubscriptionInventoryModel._is_synthetic_virtual_identity(top_mac) and chassis_mac != MISSING_VALUE
-        ):  # A synthetic MAC has a physical chassis MAC.
-            mac = chassis_mac  # Replace the synthetic MAC.
+        elif CrossOrgSubscriptionInventoryModel._is_synthetic_virtual_identity(
+            top_mac
+        ):  # A synthetic MAC has no physical MAC alone.
+            mac = chassis_mac if chassis_mac != MISSING_VALUE else MISSING_VALUE  # Require physical chassis evidence.
         else:  # The source has a real member MAC.
             mac = top_mac  # Keep the real MAC.
-        if mac == MISSING_VALUE and vc_mac != MISSING_VALUE:  # Only the VC parent MAC is visible.
+        if (
+            mac == MISSING_VALUE
+            and vc_mac != MISSING_VALUE
+            and not CrossOrgSubscriptionInventoryModel._is_synthetic_virtual_identity(top_mac)
+        ):  # Only a real row can fall back to the VC parent MAC.
             return vc_mac  # Use the parent MAC.
         return mac  # Return the canonical MAC.
 
@@ -950,6 +955,8 @@ class CrossOrgSubscriptionInventoryModel:
         serial, mac, model, vc_mac, chassis_serial, chassis_mac, chassis_model = (
             CrossOrgSubscriptionInventoryModel._canonical_inventory_identity(record)
         )  # Resolve the physical and VC identities once.
+        if serial == MISSING_VALUE and mac == MISSING_VALUE:  # A synthetic VC row needs physical evidence.
+            return None  # Do not count a logical or placeholder identity as a deployed device.
         connected = record.get("connected")
         connected_text = (
             "True" if connected is True else "False" if connected is False else MISSING_VALUE
@@ -1116,6 +1123,8 @@ class CrossOrgSubscriptionInventoryModel:
         serial, mac, model, vc_mac, chassis_serial, chassis_mac, chassis_model = (
             CrossOrgSubscriptionInventoryModel._canonical_inventory_identity(record)
         )  # Resolve the physical and VC identities once.
+        if serial == MISSING_VALUE and mac == MISSING_VALUE:  # A synthetic VC row needs physical evidence.
+            return None  # Do not count a logical or placeholder identity as stock.
         jsi_match = jsi_by_serial.get(serial if serial != MISSING_VALUE else "")  # Find serial evidence.
         match_status = CrossOrgSubscriptionInventoryModel._jsi_match_status(jsi, jsi_match)  # Score match.
         contract_status = CrossOrgSubscriptionInventoryModel._stock_contract_status(jsi_match)  # Preserve status.

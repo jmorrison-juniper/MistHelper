@@ -24,6 +24,9 @@ Required fields:
 - source_attribution
 
 Deployment status is `deployed`.
+For a logical Virtual Chassis, the detail file contains one row per physical member serial.
+The synthetic virtual MAC remains visible as `vc_mac`.
+The VC status call supplies `members[].serial`, `members[].mac`, and `members[].model`.
 
 ## CrossOrgDeployedInventorySummary.csv
 

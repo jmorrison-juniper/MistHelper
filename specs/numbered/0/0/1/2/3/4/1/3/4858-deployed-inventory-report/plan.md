@@ -1,6 +1,6 @@
 # Implementation Plan: Deployed Inventory Report
 
-**Branch**: `fix/4858-deployed-inventory-report` | **Date**: 2026-11-19 | **Spec**: [Feature specification](./spec.md)
+**Branch**: `fix/4858-vc-member-serials` | **Date**: 2026-11-20 | **Spec**: [Feature specification](./spec.md)
 
 ## Summary
 
@@ -13,6 +13,8 @@ The existing 2026-11-11 MSP inventory snapshot recorded 27,030 T-Mobile USA Reta
 **Language/Version**: Python 3.15.2
 
 **Primary Dependencies**: mistapi 0.64.1, MistHelper DataExporter, existing subscription report classes
+The VC member follow-up uses `getSiteDeviceVirtualChassis` for each logical switch row.
+It uses the existing inventory `members[].serial`, `members[].mac`, and `members[].model` evidence.
 
 **Storage**: CSV files under `data/` and optional existing SQLite or polyglot mirrors
 
@@ -53,8 +55,10 @@ The existing 2026-11-11 MSP inventory snapshot recorded 27,030 T-Mobile USA Reta
 - Menu 308 remains read-only and in the safe category.
 - The report writes CSV data to `data/`.
 - The inventory source uses mistapi `getOrgInventory`.
+- The physical VC source uses mistapi `getSiteDeviceVirtualChassis`.
 - Pagination follows the SDK continuation path.
 - Virtual Chassis members remain separate inventory records.
+- Synthetic VC identities remain excluded until physical member evidence succeeds.
 - Missing counts remain Missing instead of false zero values.
 - Primary-key strategies cover any new deployed inventory report table.
 - The pull request title and commit subject use a Conventional Commits form.

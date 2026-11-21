@@ -393,7 +393,7 @@ pie showData
 | [305](Menu-API-Endpoints-Destructive#menu-305) | DESTRUCTIVE: Organization Auto-Upgrade Policy - Set model versions and restore all site inheritance (Requires typing 'CONFIGURE', verified full backups, supports --dry-run) | `destructive` | 11 |
 | [306](Menu-API-Endpoints-Destructive#menu-306) | DESTRUCTIVE: Restore organization and site firmware policies from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run) | `destructive` | 7 |
 | [307](Menu-API-Endpoints-Safe#menu-307) | Export AP warning and error codes across all sites | `safe` | 7 |
-| [308](Menu-API-Endpoints-Safe#menu-308) | Export cross-org subscription, entitlement, and stock inventory report | `safe` | 7 |
+| [308](Menu-API-Endpoints-Safe#menu-308) | Export cross-org subscription, entitlement, and stock inventory report | `safe` | 8 |
 
 ## Menu options with no endpoint
 
