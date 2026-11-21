@@ -58,3 +58,19 @@ A serial merge avoids conflicting dependency edits.
 
 - Branch 4867 before PR 4806 causes a lock conflict.
 - Closing PR 4806 would disable an existing update stream and is not necessary.
+
+## Package Exceptions
+
+**TypeScript**: Retain TypeScript 6.0.3. TypeScript 7.0.2 is incompatible with
+the installed typescript-eslint parser and plugin. The portal lint gate fails
+when TypeScript 7 is selected.
+
+**jsdom**: Retain jsdom 29.1.1. jsdom 31.0.0 requires Node 24.15 or newer.
+The local validation interpreter is Node 24.12.
+
+**Mando**: Retain Mando 0.7.1. Radon 6.0.1 declares
+`mando (<0.8,>=0.6)`, so Mando 0.8.2 is outside the supported range.
+
+**Lupa**: Keep the Fakeredis Lua extra. Lupa 2.8 has no Python 3.15 Windows
+wheel. A local Windows source build fails under MSVC even with vcvars64.
+The Linux CI environment remains the supported validation path for Lua tests.

@@ -15,40 +15,40 @@ license = { text = "MIT" }
 authors = [{ name = "jmorrison-juniper" }]
 
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
-    "celery[redis]>=5.4",
-    "sqlalchemy[asyncio]>=2.0",  # Issue #3346: SQLAlchemy 2.1 does not install greenlet, and the async engine needs it.
-    "alembic>=1.14",
-    "asyncpg>=0.30",
-    "psycopg2-binary>=2.9",
-    "pydantic>=2.10",
-    "pydantic-settings>=2.7",
-    "httpx>=0.28",
-    "redis>=5.2",
-    "tenacity>=9.0",
-    "structlog>=24.4",
-    "deepdiff>=8.0,<9.0",  # DeepDiff 9 builds cachebox with PyO3, which does not support Python 3.15 yet.
-    "prometheus-client>=0.21",
-    "opentelemetry-sdk>=1.29",
-    "opentelemetry-instrumentation-fastapi>=0.50b0",
-    "apscheduler>=3.11",
-    "hvac>=2.3",
-    "mistapi>=0.60",
-    "cryptography>=44.0",
-    "authlib>=1.4",
+    "fastapi>=0.165",
+    "uvicorn[standard]>=0.54",
+    "celery[redis]>=5.7",
+    "sqlalchemy[asyncio]>=2.1.9",  # Issue #3346: SQLAlchemy 2.1 does not install greenlet, and the async engine needs it.
+    "alembic>=1.20.1",
+    "asyncpg>=0.32",
+    "psycopg2-binary>=2.9.13",
+    "pydantic>=2.14.4",
+    "pydantic-settings>=2.16.3",
+    "httpx>=0.28.1",
+    "redis>=8.1",
+    "tenacity>=9.2.1",
+    "structlog>=26.1",
+    "deepdiff>=8.6.2,<9.0",  # DeepDiff 9 builds cachebox with PyO3, which does not support Python 3.15 yet.
+    "prometheus-client>=0.26",
+    "opentelemetry-sdk>=1.45.2",
+    "opentelemetry-instrumentation-fastapi>=0.66b2",
+    "apscheduler>=3.11.3",
+    "hvac>=2.4",
+    "mistapi>=0.64.1",
+    "cryptography>=50.0.2",
+    "authlib>=1.9.10",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3",
-    "pytest-asyncio>=0.24",
-    "pytest-cov>=6.0",
-    "httpx>=0.28",
-    "testcontainers>=4.9",
-    "fakeredis[lua]>=2.38",
-    "ruff>=0.8",
-    "mypy>=1.13",
+    "pytest==9.2.0",
+    "pytest-asyncio==1.5.0",
+    "pytest-cov==7.1.0",
+    "httpx==0.28.1",
+    "testcontainers==4.15.0",
+    "fakeredis[lua]==2.40.0",
+    "ruff==0.17.6",
+    "mypy==2.4.1",
 ]
 
 # ---------------------------------------------------------------------------
