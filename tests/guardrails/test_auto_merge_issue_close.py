@@ -43,6 +43,7 @@ SHARED_PREFIX = "jmorrison-juniper/misthelper-devtools/.github/workflows/"
 
 # A full commit cannot move. A branch or a tag can move without a change here.
 FULL_COMMIT = re.compile(r"@[0-9a-f]{40}$")
+VERIFIED_MERGE_RECOVERY_COMMIT = "0fdcf610c87a281bd4e952486d6154b2bf45fec4"
 
 
 def load_workflow(path: Path) -> dict[Any, Any]:
@@ -136,6 +137,12 @@ class TestAutoMergeJob:
         # A local copy would drift from the other Mist repositories.
         problems = shared_call_problems(auto_merge["jobs"][MERGE_JOB_NAME], "reusable-auto-merge.yml")
         assert not problems, "\n".join(problems)
+
+    def test_merge_recovery_uses_the_verified_shared_commit(self, auto_merge: dict[Any, Any]) -> None:
+        """The caller must use the shared commit tested for merge-in-progress outcomes."""
+        # The shared commit tests confirmed merges, pending auto-merge, and unverified outcomes.
+        expected = f"{SHARED_PREFIX}reusable-auto-merge.yml@{VERIFIED_MERGE_RECOVERY_COMMIT}"
+        assert auto_merge["jobs"][MERGE_JOB_NAME]["uses"] == expected
 
     def test_the_job_grants_each_scope_of_the_shared_jobs(self, auto_merge: dict[Any, Any]) -> None:
         """A missing scope fails the whole run before any shared job starts."""
