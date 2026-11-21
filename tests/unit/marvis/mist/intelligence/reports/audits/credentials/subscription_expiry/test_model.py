@@ -372,6 +372,31 @@ def test_cross_org_deployed_row_keeps_real_member_serial_when_vc_parent_is_prese
     assert deployed[0].vc_mac == "020003135cbf"  # The VC parent MAC remains visible.
 
 
+def test_cross_org_deployed_inventory_excludes_unverified_synthetic_vc_row() -> None:
+    """A synthetic virtual MAC without physical member evidence adds no deployed count."""
+    organization = OrganizationScope(
+        org_id="org-1",
+        org_name="T-Mobile",
+        source="msp",
+        request_status="success",
+    )  # Build a synthetic MSP organization.
+    inventory = [
+        {
+            "serial": "020003135CBF",
+            "mac": "020003135cbf",
+            "vc_mac": "020003135cbf",
+            "model": "EX4100-48MP",
+            "type": "switch",
+            "site_id": "site-1",
+        }
+    ]  # Supply one unverified synthetic logical VC row.
+    deployed = CrossOrgSubscriptionInventoryModel.build_deployed_inventory_rows(
+        organization,
+        inventory,
+    )  # Build deployed detail.
+    assert deployed == []  # The synthetic identity is not a physical device count.
+
+
 def test_cross_org_deployed_inventory_expands_nested_vc_members() -> None:
     """Nested VC member records become separate deployed identities."""
     organization = OrganizationScope(

@@ -26,6 +26,7 @@
 - [x] The deployed inventory view and the stock inventory view are separate
 - [x] The organization and device-type totals are clear
 - [x] Pagination and Virtual Chassis evidence are clear
+- [x] Physical member serial expansion is testable
 - [x] Failure data remains visible and cannot become false success
 - [x] One menu operation can provide linked deployed, stock, and subscription reports
 - [x] Structured console records use the configured console threshold

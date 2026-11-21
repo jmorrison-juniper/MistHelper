@@ -170,6 +170,142 @@ def test_client_discovers_msp_organizations_across_continuation_pages(monkeypatc
     assert failures == []  # Both organization pages complete successfully.
 
 
+def test_client_inventory_expands_logical_vc_into_physical_members(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A logical VC inventory row expands to the physical member serials."""
+    vc_calls: list[tuple[str, str, str]] = []  # Record VC status API context.
+
+    class FakeInventoryApi:
+        """Fake inventory endpoint for one logical VC row."""
+
+        @staticmethod
+        def getOrgInventory(
+            _session: object,
+            _org_id: str,
+            limit: int,
+            page: int,
+            vc: bool,
+        ) -> SimpleNamespace:
+            return SimpleNamespace(
+                status_code=200,
+                data=[
+                    {
+                        "id": "device-1",
+                        "serial": "020003135CBF",
+                        "mac": "020003135cbf",
+                        "vc_mac": "020003135cbf",
+                        "model": "EX4100-48MP",
+                        "type": "switch",
+                        "site_id": "site-1",
+                        "name": "VC Stack",
+                    }
+                ],
+                next=None,
+            )  # Supply one synthetic logical VC row.
+
+    class FakeSiteDevicesApi:
+        """Fake site devices API for one VC status call."""
+
+        @staticmethod
+        def getSiteDeviceVirtualChassis(
+            _session: object,
+            site_id: str,
+            device_id: str,
+        ) -> SimpleNamespace:
+            vc_calls.append(("getSiteDeviceVirtualChassis", site_id, device_id))  # Capture VC context.
+            return SimpleNamespace(
+                status_code=200,
+                data={
+                    "mac": "020003135cbf",
+                    "members": [
+                        {"serial": "MEMBER1", "mac": "member-mac-1", "model": "EX4100-48MP"},
+                        {"serial": "MEMBER2", "mac": "member-mac-2", "model": "EX4100-48MP"},
+                    ],
+                },
+            )  # Supply two physical member identities.
+
+    fake_sdk = SimpleNamespace(
+        api=SimpleNamespace(
+            v1=SimpleNamespace(
+                orgs=SimpleNamespace(inventory=FakeInventoryApi()),
+                sites=SimpleNamespace(devices=FakeSiteDevicesApi()),
+            )
+        ),
+        get_next=lambda mist_session, response: None,
+    )  # Build a synthetic SDK tree.
+    monkeypatch.setattr(client_module, "mistapi", fake_sdk)  # Replace the SDK so no network call occurs.
+    client = SubscriptionExpiryClient(object())  # Build a synthetic client.
+    inventory = client.fetch_inventory("org-1")  # Read and expand the logical VC.
+    assert [row["serial"] for row in inventory] == ["MEMBER1", "MEMBER2"]  # Preserve both physical serials.
+    assert all(row["vc_mac"] == "020003135cbf" for row in inventory)  # Preserve the VC parent MAC.
+    assert vc_calls == [("getSiteDeviceVirtualChassis", "site-1", "device-1")]  # Use the site and device IDs.
+
+
+def test_client_inventory_keeps_logical_vc_when_member_status_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed VC status call leaves no unverified physical count."""
+
+    class FakeInventoryApi:
+        """Fake inventory endpoint for one logical VC row."""
+
+        @staticmethod
+        def getOrgInventory(
+            _session: object,
+            _org_id: str,
+            limit: int,
+            page: int,
+            vc: bool,
+        ) -> SimpleNamespace:
+            return SimpleNamespace(
+                status_code=200,
+                data=[
+                    {
+                        "id": "device-1",
+                        "serial": "020003135CBF",
+                        "mac": "020003135cbf",
+                        "vc_mac": "020003135cbf",
+                        "model": "EX4100-48MP",
+                        "type": "switch",
+                        "site_id": "site-1",
+                    }
+                ],
+                next=None,
+            )  # Supply one synthetic logical VC row.
+
+    class FakeSiteDevicesApi:
+        """Fake site devices API for one VC status failure."""
+
+        @staticmethod
+        def getSiteDeviceVirtualChassis(
+            _session: object,
+            site_id: str,
+            device_id: str,
+        ) -> SimpleNamespace:
+            return SimpleNamespace(status_code=500, data={"error": "failure"})  # Simulate VC status failure.
+
+    fake_sdk = SimpleNamespace(
+        api=SimpleNamespace(
+            v1=SimpleNamespace(
+                orgs=SimpleNamespace(inventory=FakeInventoryApi()),
+                sites=SimpleNamespace(devices=FakeSiteDevicesApi()),
+            )
+        ),
+        get_next=lambda mist_session, response: None,
+    )  # Build a synthetic SDK tree.
+    monkeypatch.setattr(client_module, "mistapi", fake_sdk)  # Replace the SDK so no network call occurs.
+    client = SubscriptionExpiryClient(object())  # Build a synthetic client.
+    inventory = client.fetch_inventory("org-1")  # Read the logical VC with a failed status call.
+    assert inventory == [
+        {
+            "id": "device-1",
+            "serial": "020003135CBF",
+            "mac": "020003135cbf",
+            "vc_mac": "020003135cbf",
+            "model": "EX4100-48MP",
+            "type": "switch",
+            "site_id": "site-1",
+        }
+    ]  # The synthetic row remains as evidence, but later model logic excludes it.
+
+
 def test_client_inventory_pagination_uses_sdk_continuation(monkeypatch: pytest.MonkeyPatch) -> None:
     """The client reads every inventory page with SDK continuation and Virtual Chassis."""
     calls: list[tuple[int, bool, int]] = []  # Record inventory limit, VC, and page arguments.

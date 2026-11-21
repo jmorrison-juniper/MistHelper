@@ -116,6 +116,9 @@
 - [X] T047 [US2] Add synthetic VC, real-member, and nested-member inventory tests in `tests/unit/marvis/mist/intelligence/reports/audits/credentials/subscription_expiry/test_model.py`. (delivered: physical chassis serial and nested member tests)
 - [X] T048 [US2] Add canonical chassis identity fields and nested VC expansion in `src/mist/intelligence/reports/subscription_expiry/model.py`. (delivered: chassis serial, MAC, model, and VC MAC fields)
 - [X] T049 [US2] Export chassis and VC identity fields in `src/mist/intelligence/reports/subscription_expiry/operation.py`. (delivered: deployed and stock CSV field contracts)
+- [X] T050 [US1] Read `getSiteDeviceVirtualChassis` for each logical switch and return physical member serials. (delivered: `SubscriptionExpiryClient._fetch_virtual_chassis_members` and `_expand_virtual_chassis_members`)
+- [X] T051 [US2] Expand VC member rows and deduplicate physical member identities in menu 308. (delivered: physical member records in `model.py` and member deduplication)
+- [X] T052 [US3] Preserve Missing and partial failure behavior when a VC member status call fails. (delivered: synthetic rows remain visible, and model classification excludes unverified synthetic identities)
 - [ ] T035 Run an interactive MSP menu 308 report and compare T-Mobile USA Retail deployed inventory with the 2026-11-11 snapshot. Verify physical chassis serials replace synthetic 020003 or 020004 identities. (pending: interactive 2FA sign-in; existing snapshot shows 27,030 T-Mobile USA Retail devices)
 - [X] T036 Open the pull request for issue 4858 after all required CI checks pass. (delivered: PR #4859)
 

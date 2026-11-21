@@ -1,6 +1,6 @@
 # Feature Specification: Deployed Inventory Report
 
-**Feature Branch**: `fix/4858-deployed-inventory-report`
+**Feature Branch**: `fix/4858-vc-member-serials`
 
 **Created**: 2026-11-19
 
@@ -110,6 +110,10 @@ A NOC operator starts MistHelper with warning or higher log thresholds. The term
 - **FR-017**: Credentials and secrets MUST remain redacted in both structured and standard log records.
 - **FR-018**: Menu 308 MUST prefer a physical chassis serial over a synthetic 020003 or 020004 virtual identity.
 - **FR-019**: Deployed and stock inventory reports MUST expose the VC MAC, chassis serial, chassis MAC, and chassis model when the source provides them.
+- **FR-020**: Menu 308 MUST read `getSiteDeviceVirtualChassis` for each logical Virtual Chassis that inventory identifies.
+- **FR-021**: The report MUST create one deployed inventory row for each serial in the VC response members list.
+- **FR-022**: The report MUST not count the synthetic 020003 or 020004 identity as a physical device.
+- **FR-023**: The report MUST deduplicate a physical member across the inventory view and the VC response.
 
 ### Mist Cloud Transport Requirements *(include if feature uses Mist Cloud)*
 
@@ -155,6 +159,9 @@ A NOC operator starts MistHelper with warning or higher log thresholds. The term
 - **SC-010**: A structured INFO record can appear in script.log at file level INFO while remaining absent from the console at WARNING.
 - **SC-011**: Database and DNS diagnostics retain key-value context without exposing credentials or passwords.
 - **SC-012**: The console remains readable in terminals that do not accept ANSI color sequences.
+- **SC-013**: A two-member Virtual Chassis contributes exactly two deployed serial identities.
+- **SC-014**: A synthetic virtual MAC contributes no deployed serial when it has no member serial evidence.
+- **SC-015**: A physical member serial that appears in both source views contributes one deployed identity.
 
 ## Assumptions
 
@@ -162,6 +169,7 @@ A NOC operator starts MistHelper with warning or higher log thresholds. The term
 - The inventory source distinguishes deployed devices by a site ID.
 - The organization license usage result may differ from the inventory count and remains a separate entitlement view.
 - The existing 2026-11-11 MSP inventory snapshot is a comparison baseline, not a live source.
+- The VC status endpoint provides the physical member serial in `members[].serial`.
 - The report keeps deployed detail and stock evidence separate in linked outputs.
 - Missing source values remain Missing, and Missing is not zero.
 - Standard Python logging remains the backend for console and file output.
