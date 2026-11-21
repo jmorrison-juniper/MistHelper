@@ -54,16 +54,16 @@ UV_SYSTEM_CERTS=1 UV_LINK_MODE=copy uv venv --python 3.15 --seed .venv
 
 ### Installer selection and reports
 
-The bootstrap checks for `uv` once per invocation.
-If `uv` is available, the bootstrap uses its resolved executable for each present requirement file.
-Each command uses `uv pip install --python <worktree interpreter> -r <requirement file>`.
-The explicit interpreter prevents installation into another environment.
+The bootstrap finds `uv` on PATH, then in the per-user folders, and then as a module of the bootstrap interpreter.
+It logs the search result before any installation.
+It installs `uv` with pip for this user only when no installation exists.
+It never runs that pip install in an externally managed Python. It stops with the next action instead. See issue #4876.
+The bootstrap changes no package pins or dependency declarations.
 
-If `uv` is absent, the bootstrap uses `<worktree interpreter> -m pip install -r <requirement file>`.
-It reports the absence before installation.
-The bootstrap does not install `uv` automatically.
-It keeps pip available for configuration discovery and the absence-only fallback.
-It changes no package pins or dependency declarations.
+The locked sync stops when the configured package index does not match `uv.lock`.
+The final message names that cause.
+Run the bootstrap again with `--public-lock-index` to sync from the public index for that run only.
+The option changes no pip configuration.
 
 Each uv installation receives these child-only settings:
 
