@@ -628,3 +628,15 @@ except Exception:
 
     return $content
 }
+
+function ConvertTo-AsciiJson {
+    <#
+    .SYNOPSIS
+    Serialize an object as one line of JSON that contains only ASCII characters.
+    #>
+    param([Parameter(Mandatory = $true, ValueFromPipeline = $true)]$InputObject)
+    # Compact output keeps the JSON on one line.
+    $json = $InputObject | ConvertTo-Json -Compress
+    # Escape each non-ASCII character as a \uXXXX sequence, so the console and the logs stay ASCII.
+    return [regex]::Replace($json, '[^\x00-\x7F]', { param($m) '\u{0:x4}' -f [int][char]$m.Value })
+}
