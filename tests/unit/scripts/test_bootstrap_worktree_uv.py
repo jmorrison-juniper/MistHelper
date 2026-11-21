@@ -266,10 +266,10 @@ def test_public_lock_index_points_only_this_run_at_the_public_index(
         "UV_EXTRA_INDEX_URL": "https://extra.example.test/simple/",
     }
     _policy_with_uv().sync(tmp_path, environment, public_lock_index=True)
-    assert runner.environments[0] is not None  # The sync received a child environment.
-    assert runner.environments[0]["UV_INDEX_URL"] == PUBLIC_INDEX_URL
+    child_environment = runner.environments[0] or {}  # An absent copy becomes empty, so the next line names the missing key.
+    assert child_environment.get("UV_INDEX_URL") == PUBLIC_INDEX_URL  # The public index must be the only index for this run.
     for name in ("UV_DEFAULT_INDEX", "UV_INDEX", "UV_EXTRA_INDEX_URL"):
-        assert name not in runner.environments[0]  # No competing source may survive the public choice.
+        assert name not in child_environment  # No competing source may survive the public choice.
 
 
 def test_public_lock_index_is_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
