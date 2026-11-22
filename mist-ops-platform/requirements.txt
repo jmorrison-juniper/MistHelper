@@ -53,7 +53,7 @@ cryptography==50.0.2
     #   mist-ops-platform (mist-ops-platform/pyproject.toml)
     #   authlib
     #   joserfc
-deepdiff==8.6.2
+deepdiff==9.2.1
     # via mist-ops-platform (mist-ops-platform/pyproject.toml)
 deprecation==2.1.0
     # via mistapi
