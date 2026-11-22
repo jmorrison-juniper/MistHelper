@@ -50,6 +50,9 @@ class TestLockedSync:
         """A missing UV tool is installed for the base interpreter before the sync."""
         calls: list[tuple[list[str], dict[str, object]]] = []  # Record UV setup and the project sync.
         monkeypatch.setattr(bootstrap_worktree.shutil, "which", lambda name: None)  # Model a missing UV command.
+        monkeypatch.setattr(bootstrap_worktree, "uv_candidate_folders", lambda: [])  # Keep this host's folders out.
+        monkeypatch.setattr(bootstrap_worktree, "module_runs_uv", lambda interpreter: False)  # Model no module install.
+        monkeypatch.setattr(bootstrap_worktree, "is_externally_managed", lambda: False)  # Allow the pip install path.
         monkeypatch.setattr(PipIndexProbe, "fallback_index", lambda probe: None)  # Keep the test offline.
         monkeypatch.setattr(sys, "_base_executable", "/base/python", raising=False)  # Isolate the user interpreter.
         monkeypatch.setattr(
@@ -71,6 +74,9 @@ class TestLockedSync:
         """A failed UV installation must not run a non-locked fallback."""
         commands: list[list[str]] = []  # Record commands so no fallback can hide the failure.
         monkeypatch.setattr(bootstrap_worktree.shutil, "which", lambda name: None)  # Model a missing UV command.
+        monkeypatch.setattr(bootstrap_worktree, "uv_candidate_folders", lambda: [])  # Keep this host's folders out.
+        monkeypatch.setattr(bootstrap_worktree, "module_runs_uv", lambda interpreter: False)  # Model no module install.
+        monkeypatch.setattr(bootstrap_worktree, "is_externally_managed", lambda: False)  # Allow the pip install path.
         monkeypatch.setattr(PipIndexProbe, "fallback_index", lambda probe: None)  # Keep the test offline.
         monkeypatch.setattr(sys, "_base_executable", "/base/python", raising=False)  # Isolate the user interpreter.
         monkeypatch.setattr(
@@ -136,6 +142,8 @@ class TestLockedSync:
         )  # WHY: Return one fresh source decision per invocation.
 
         def run(command: list[str], env: dict[str, str], **options: object) -> subprocess.CompletedProcess[str]:
+            if "--check" in command:  # WHY: The lock check is current, so only sync results are scripted.
+                return subprocess.CompletedProcess(command, 0)
             environments.append(env)  # WHY: Retain the environment passed to each sync.
             return subprocess.CompletedProcess(command, results.pop(0))  # WHY: Return the selected status.
 
@@ -196,7 +204,7 @@ class TestLockedSyncSources:
         """A configured pip index remains the source for the locked sync."""
         monkeypatch.setenv("PIP_INDEX_URL", MIRROR_URL)  # Model a caller-selected mirror.
         monkeypatch.delenv("UV_INDEX_URL", raising=False)  # Start without a UV override.
-        policy = WorktreeBootstrapper.InstallationPolicy("/tools/uv", {}, None, "/base/python")
+        policy = WorktreeBootstrapper.InstallationPolicy(["/tools/uv"], {}, None, "/base/python")
 
         environment = WorktreeBootstrapper(Path("root"))._install_environment(policy)  # Build a child-only mapping.
 
@@ -332,7 +340,7 @@ class TestLockedSyncSources:
         expected: tuple[str | None, str | None],
     ) -> None:
         """Caller settings override install and global config, which override nothing."""
-        policy = WorktreeBootstrapper.InstallationPolicy("/tools/uv", sources, None, "/base/python")
+        policy = WorktreeBootstrapper.InstallationPolicy(["/tools/uv"], sources, None, "/base/python")
         environment = dict(caller)  # Isolate all mappings from the caller dictionary.
         environment["UV_CONFIG_FILE"] = "caller-uv.toml"  # Model a config file that could override source choices.
 
@@ -407,7 +415,13 @@ class TestIndexProbe:
             "global.index-url": "https://primary.example.invalid/simple/",
             "global.extra-index-url": "https://extra.example.invalid/simple/",
         }
-        assert calls[0][0] == ["/worktree/.venv/bin/python", "-m", "pip", "config", "list"]  # Use worktree pip.
+        assert calls[0][0] == [
+            str(Path("/worktree/.venv/bin/python")),
+            "-m",
+            "pip",
+            "config",
+            "list",
+        ]  # Use worktree pip.
         assert calls[0][1]["timeout"] == 30  # Bound the configuration read.
 
     def test_configuration_snapshot_keeps_whitespace_and_all_source_values(
@@ -669,7 +683,7 @@ class TestBootstrapMain:
             WorktreeBootstrapper, "create_environment", lambda self, recreate=False: events.append("create")
         )
         monkeypatch.setattr(
-            WorktreeBootstrapper, "sync_dependencies", lambda self: events.append("sync")
+            WorktreeBootstrapper, "sync_dependencies", lambda self, **options: events.append("sync")
         )  # Record the locked dependency step.
         monkeypatch.setattr(
             WorktreeBootstrapper, "check_environment_health", lambda self: events.append("health")
@@ -713,7 +727,7 @@ class TestBootstrapMain:
         events: list[object] = []  # Record steps that must stop before browser setup.
         self._patch_main(tmp_path, monkeypatch, events)  # Keep every external step local.
 
-        def fail_sync(self: WorktreeBootstrapper) -> None:
+        def fail_sync(self: WorktreeBootstrapper, **options: object) -> None:
             events.append("sync")  # Record the failure point before the bootstrap reports it.
             raise RuntimeError("locked sync failed")  # Stop later readiness checks.
 

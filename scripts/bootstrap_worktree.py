@@ -148,6 +148,20 @@ PUBLIC_LOCK_WARNING = (
 )
 
 
+# The phrase that uv prints when the committed lock does not match the project or
+# the index. Only this phrase proves a stale lock, so every other failure stays unknown.
+STALE_LOCK_TEXT = "needs to be updated"
+
+
+class ProcessFailedError(RuntimeError):
+    """Report a tool that started and returned a failing exit code."""
+
+    def __init__(self, message: str, returncode: int) -> None:
+        """Store the message and the exit code of the tool that failed."""
+        super().__init__(message)  # Keep the message that the caller prints.
+        self.returncode = returncode  # Keep the exit code, so a caller can tell a ran tool from a launch failure.
+
+
 class PipIndexProbe:
     """Report whether the configured pip index accepts a connection."""
 
@@ -244,13 +258,22 @@ class PipIndexProbe:
         return PUBLIC_INDEX_URL  # Give the caller the index to use for this run.
 
 
+def windows_user_scripts_folder(app_data: str, home: Path) -> Path:
+    """Return the pip --user scripts folder of this Python on Windows, with or without APPDATA."""
+    base = Path(app_data) if app_data else home / "AppData" / "Roaming"  # Fall back to the profile default.
+    return (
+        base / "Python" / f"Python{sys.version_info.major}{sys.version_info.minor}" / "Scripts"
+    )  # Match pip's layout.
+
+
 def uv_candidate_folders() -> list[Path]:
     """Return the per-user folders where a uv installation normally lives."""
     scheme = "nt_user" if os.name == "nt" else "posix_user"  # Select the per-user scheme of this platform.
     folders = [Path(sysconfig.get_path("scripts", scheme))]  # pip --user places the uv command here.
     if os.name == "nt":  # The Windows default does not depend on APPDATA being set in this shell.
-        app_data = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")  # Fall back to the profile.
-        folders.append(app_data / "Python" / f"Python{sys.version_info.major}{sys.version_info.minor}" / "Scripts")
+        folders.append(
+            windows_user_scripts_folder(os.environ.get("APPDATA", ""), Path.home())
+        )  # Check the pip layout too.
     folders.append(Path.home() / ".local" / "bin")  # The standalone uv installer places the command here.
     LOGGER.debug("Prepared %s per-user folders for the uv search.", len(folders))  # Report only the count.
     return folders  # Give the caller the folders in search order.
@@ -443,9 +466,9 @@ class WorktreeBootstrapper:
             command = [*self.command_prefix, "sync", "--locked", "--extra", "dev"]  # Enforce the committed lock.
             LOGGER.info("Synchronizing project dependencies from uv.lock.")  # Trace before the package operation.
             LOGGER.debug("Prepared %s arguments for the locked sync.", len(command))  # Report command size.
-            try:  # A failed sync is diagnosed before the caller sees it.
+            try:  # A tool that ran and failed may have a lock cause, which the diagnosis names.
                 self._run(command, environment, "The locked UV sync", root)  # Use the project root and stop on failure.
-            except RuntimeError as error:  # The lock may be the cause of this failure.
+            except ProcessFailedError as error:  # Only a sync that ran can have a lock cause.
                 cause = self.diagnose_sync_failure(root, environment)  # A lock cause, or None.
                 if cause is None:  # The failure has another cause, so the original error stays.
                     raise  # Re-raise the original failure unchanged.
@@ -487,7 +510,13 @@ class WorktreeBootstrapper:
                 LOGGER.error("The lock check could not run (%s).", type(error).__name__)  # Name the failed check.
                 return None  # No verdict, so the caller keeps the original error.
             LOGGER.debug("The lock check returned code %s.", result.returncode)  # Report the code, not the text.
-            return result.returncode == 0  # Zero means uv accepts the committed lock.
+            if result.returncode == 0:  # Zero means uv accepts the committed lock.
+                return True  # The lock is current for this index.
+            output = f"{result.stdout or ''}{result.stderr or ''}"  # Read the verdict text, which is never printed.
+            if STALE_LOCK_TEXT in output:  # Only uv's stale-lock phrase proves that the lock is out of date.
+                return False  # The lock needs an update, so the caller names the cause.
+            LOGGER.warning("The lock check failed without a stale-lock verdict.")  # Name the unknown outcome.
+            return None  # Keep the original failure, because no cause can be named.
 
         def _run(self, command: list[str], environment: dict[str, str], context: str, root: Path | None = None) -> None:
             """Run one tool command and stop when its process fails."""
@@ -506,7 +535,9 @@ class WorktreeBootstrapper:
             LOGGER.debug("%s returned code %s.", context, result.returncode)  # Report the subprocess result.
             if result.returncode != 0:  # Do not continue after a failed locked install.
                 LOGGER.error("%s failed with code %s.", context, result.returncode)  # Surface command failure.
-                raise RuntimeError(f"{context} failed with code {result.returncode}.")  # Stop the bootstrap.
+                raise ProcessFailedError(  # Keep the exit code, so a launch error stays distinct.
+                    f"{context} failed with code {result.returncode}.", result.returncode
+                )
 
     @property
     def interpreter(self) -> Path:

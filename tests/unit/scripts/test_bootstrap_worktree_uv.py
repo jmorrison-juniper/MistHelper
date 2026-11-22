@@ -26,16 +26,19 @@ from scripts.bootstrap_worktree import (
     LOCK_DRIFT_MESSAGE,
     PUBLIC_INDEX_URL,
     UV_EXECUTABLE_NAME,
+    ProcessFailedError,
     WorktreeBootstrapper,
     build_parser,
     find_uv_command,
     normalize_index,
     read_lock_registry,
+    windows_user_scripts_folder,
 )
 
 LOGGER = logging.getLogger(__name__)  # WHY: keep test log records on the module logger.
 INTERPRETER = "C:/Python/python.exe"  # A fixed interpreter path keeps the command lists readable.
 MIRROR_URL = "https://mirror.example.test/simple/"  # A non-public index that the lock does not name.
+STALE_OUTPUT = "error: The lockfile at `uv.lock` needs to be updated, but `--locked` was provided."
 
 
 # ---------------------------------------------------------------------------
@@ -46,9 +49,10 @@ MIRROR_URL = "https://mirror.example.test/simple/"  # A non-public index that th
 class ScriptedRun:
     """Record each subprocess call and answer with the next scripted return code."""
 
-    def __init__(self, codes: tuple[int, ...] = ()) -> None:
+    def __init__(self, codes: tuple[int, ...] = (), stderr: str = "") -> None:
         """Store the return codes that the next calls return, in order."""
         self.codes = list(codes)  # Pop one code for each call, and return zero after the list ends.
+        self.stderr = stderr  # Give each answer the same error text, when a test needs a verdict message.
         self.commands: list[list[str]] = []  # Keep every argument list, so a test can assert the order.
         self.environments: list[dict[str, str] | None] = []  # Copy each child environment at call time.
 
@@ -58,7 +62,7 @@ class ScriptedRun:
         env = kwargs.get("env")  # Read the child environment that the code under test passed.
         self.environments.append(dict(env) if isinstance(env, dict) else None)  # Keep a copy for the assertions.
         code = self.codes.pop(0) if self.codes else 0  # Return success after the scripted codes end.
-        return subprocess.CompletedProcess(command, code, stdout="", stderr="")
+        return subprocess.CompletedProcess(command, code, stdout="", stderr=self.stderr)
 
 
 def _fail_if_called(*args: object, **kwargs: object) -> bool:
@@ -67,8 +71,8 @@ def _fail_if_called(*args: object, **kwargs: object) -> bool:
 
 
 def _failing_sync(command: list[str], environment: dict[str, str], context: str, root: Path | None = None) -> None:
-    """Stand in for the locked sync, and fail it the way uv fails on a lock mismatch."""
-    raise RuntimeError(f"{context} failed with code 1.")
+    """Stand in for the locked sync, and fail it the way a tool fails with an exit code."""
+    raise ProcessFailedError(f"{context} failed with code 1.", 1)
 
 
 def _write_lock(root: Path, registry: str) -> None:
@@ -148,15 +152,18 @@ def test_user_folder_search_uses_the_per_user_scheme_of_this_platform() -> None:
     assert bootstrap.uv_candidate_folders()[0] == expected
 
 
-def test_windows_user_folder_does_not_depend_on_appdata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """A shell that hides APPDATA still finds the Windows per-user folder under the profile."""
-    monkeypatch.setattr(bootstrap.os, "name", "nt")  # Take the Windows branch on any host.
-    monkeypatch.setenv("APPDATA", "")  # The shell that runs the bootstrap may hide APPDATA.
-    monkeypatch.setattr(
-        bootstrap.Path, "home", classmethod(lambda cls: tmp_path)
-    )  # Point the profile at the temp folder.
-    expected = tmp_path / "AppData" / "Roaming" / "Python" / f"Python{sys.version_info.major}{sys.version_info.minor}"
-    assert expected / "Scripts" in bootstrap.uv_candidate_folders()
+def test_windows_user_scripts_folder_uses_the_given_app_data(tmp_path: Path) -> None:
+    """A set APPDATA chooses the per-user Python folder under it."""
+    version = f"Python{sys.version_info.major}{sys.version_info.minor}"
+    expected = tmp_path / "Roaming" / "Python" / version / "Scripts"
+    assert windows_user_scripts_folder(str(tmp_path / "Roaming"), tmp_path) == expected
+
+
+def test_windows_user_scripts_folder_falls_back_to_the_profile(tmp_path: Path) -> None:
+    """An empty APPDATA, as in a shell that hides it, falls back to the profile default."""
+    version = f"Python{sys.version_info.major}{sys.version_info.minor}"
+    expected = tmp_path / "AppData" / "Roaming" / "Python" / version / "Scripts"
+    assert windows_user_scripts_folder("", tmp_path) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -209,8 +216,43 @@ def test_is_externally_managed_reads_the_pep_668_marker(tmp_path: Path, monkeypa
 
 
 # ---------------------------------------------------------------------------
-# Lock cause and the public option
+# Lock verdict and the cause of a failed sync
 # ---------------------------------------------------------------------------
+
+
+def test_lock_is_current_accepts_a_zero_exit_code(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A zero exit code from the lock check means uv accepts the committed lock."""
+    runner = ScriptedRun(codes=(0,))
+    monkeypatch.setattr(bootstrap.subprocess, "run", runner)
+    assert _policy_with_uv().lock_is_current(tmp_path, {}) is True
+    assert runner.commands == [["C:/Tools/uv.exe", "lock", "--check"]]
+
+
+def test_lock_is_current_names_a_stale_lock_only_from_the_stale_phrase(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only uv's stale-lock phrase proves that the lock needs an update."""
+    runner = ScriptedRun(codes=(1,), stderr=STALE_OUTPUT)
+    monkeypatch.setattr(bootstrap.subprocess, "run", runner)
+    assert _policy_with_uv().lock_is_current(tmp_path, {}) is False
+
+
+def test_lock_is_current_keeps_an_unrelated_failure_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed lock check without the stale phrase names no cause, so the original error stays."""
+    runner = ScriptedRun(codes=(2,), stderr="error: failed to fetch the package index")
+    monkeypatch.setattr(bootstrap.subprocess, "run", runner)
+    assert _policy_with_uv().lock_is_current(tmp_path, {}) is None
+
+
+def test_lock_is_current_keeps_a_launch_failure_unknown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A lock check that cannot start names no cause."""
+
+    def broken_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        """Raise the launch error that a missing executable raises."""
+        raise OSError("the executable cannot start")
+
+    monkeypatch.setattr(bootstrap.subprocess, "run", broken_run)
+    assert _policy_with_uv().lock_is_current(tmp_path, {}) is None
 
 
 def test_sync_names_an_index_mismatch_without_the_mirror_address(
@@ -243,7 +285,7 @@ def test_sync_names_lock_drift_when_the_indexes_match(tmp_path: Path, monkeypatc
 def test_sync_keeps_the_original_error_when_the_lock_has_no_fault(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, verdict: bool | None
 ) -> None:
-    """A current lock, or a lock check that cannot run, leaves the original failure unchanged."""
+    """A current lock, or a lock check that cannot name a cause, leaves the original failure unchanged."""
     _write_lock(tmp_path, PUBLIC_INDEX_URL)
     policy = _policy_with_uv()
     monkeypatch.setattr(policy, "_run", _failing_sync)
@@ -251,6 +293,33 @@ def test_sync_keeps_the_original_error_when_the_lock_has_no_fault(
     with pytest.raises(RuntimeError, match="The locked UV sync failed with code 1.") as raised:
         policy.sync(tmp_path, {"UV_INDEX_URL": MIRROR_URL})
     assert str(raised.value) == "The locked UV sync failed with code 1."
+
+
+def test_sync_checks_the_lock_once_for_a_tool_that_ran_and_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tool that exits with a failing code gets one lock check, and no further command."""
+    runner = ScriptedRun(codes=(3, 2))  # The sync fails, and the lock check fails for another reason.
+    monkeypatch.setattr(bootstrap.subprocess, "run", runner)
+    with pytest.raises(RuntimeError, match="The locked UV sync failed with code 3.") as raised:
+        _policy_with_uv().sync(tmp_path, {})
+    assert str(raised.value) == "The locked UV sync failed with code 3."
+    assert len(runner.commands) == 2  # One sync and one lock check, and no further command.
+
+
+def test_sync_does_not_check_the_lock_after_a_launch_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A tool that never started cannot name a lock cause, so no second command runs."""
+    commands: list[list[str]] = []  # Record each attempted launch.
+
+    def fail(command: list[str], **kwargs: object) -> None:
+        """Record the attempt and raise the launch error."""
+        commands.append(list(command))
+        raise OSError("the executable cannot start")
+
+    monkeypatch.setattr(bootstrap.subprocess, "run", fail)
+    with pytest.raises(RuntimeError, match="could not start"):
+        _policy_with_uv().sync(tmp_path, {})
+    assert len(commands) == 1  # The lock check must not run after a launch failure.
 
 
 def test_public_lock_index_points_only_this_run_at_the_public_index(
