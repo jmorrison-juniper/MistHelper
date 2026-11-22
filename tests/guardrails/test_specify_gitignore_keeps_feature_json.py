@@ -69,7 +69,7 @@ def write_fixture(repository: Path, ignore_text: str) -> None:
         ignore_text: Full content of the fixture `.specify/.gitignore` file.
     """
     (repository / ".specify").mkdir()
-    (repository / ".specify" / ".gitignore").write_text(ignore_text, encoding="utf-8")
+    (repository / ".specify" / ".gitignore").write_bytes(ignore_text.encode("utf-8"))
     subprocess.run(["git", "init", "--quiet"], cwd=repository, check=True)
 
 
@@ -102,6 +102,19 @@ def test_reinclude_after_the_rule_keeps_the_pointer(tmp_path: Path) -> None:
     """
     write_fixture(tmp_path, "feature.json\n!feature.json\n")
     assert not pointer_is_ignored(tmp_path), "the re-include rule must win"
+
+
+def test_reinclude_with_crlf_line_endings_keeps_the_pointer(tmp_path: Path) -> None:
+    """A re-include rule keeps the pointer when the ignore file has CRLF endings.
+
+    Windows checkouts write CRLF line endings, so this fixture matches the
+    main platform of the repository.
+
+    Args:
+        tmp_path: Empty directory that pytest provides for this test.
+    """
+    write_fixture(tmp_path, "feature.json\r\n!feature.json\r\n")
+    assert not pointer_is_ignored(tmp_path), "CRLF must not break the re-include rule"
 
 
 def test_reinclude_before_the_rule_does_not_keep_the_pointer(tmp_path: Path) -> None:
