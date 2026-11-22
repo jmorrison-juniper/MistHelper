@@ -32,14 +32,14 @@ if (-not $paths) {
     exit 1
 }
 
-if (-not (Test-Path $paths.IMPL_PLAN -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath $paths.IMPL_PLAN -PathType Leaf)) {
     [Console]::Error.WriteLine("ERROR: plan.md not found in $($paths.FEATURE_DIR)")
     $planCommand = '/speckit-plan'
     [Console]::Error.WriteLine("Run $planCommand first to create the implementation plan.")
     exit 1
 }
 
-if (-not (Test-Path $paths.FEATURE_SPEC -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath $paths.FEATURE_SPEC -PathType Leaf)) {
     [Console]::Error.WriteLine("ERROR: spec.md not found in $($paths.FEATURE_DIR)")
     $specifyCommand = '/speckit-specify'
     [Console]::Error.WriteLine("Run $specifyCommand first to create the feature structure.")
@@ -81,7 +81,7 @@ if ($Json) {
         AVAILABLE_DOCS = $docs
         TASKS_TEMPLATE = $tasksTemplate
         TASKS_TEMPLATE_CONTENT = $tasksTemplateContent
-    } | ConvertTo-Json -Compress
+    } | ConvertTo-AsciiJson
 } else {
     Write-Output "FEATURE_DIR: $($paths.FEATURE_DIR)"
     Write-Output "TASKS_TEMPLATE: $(if ($tasksTemplate) { $tasksTemplate } else { 'not found' })"

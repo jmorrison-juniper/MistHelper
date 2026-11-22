@@ -76,7 +76,7 @@ if ($PathsOnly) {
             FEATURE_SPEC = $paths.FEATURE_SPEC
             IMPL_PLAN    = $paths.IMPL_PLAN
             TASKS        = $paths.TASKS
-        } | ConvertTo-Json -Compress
+        } | ConvertTo-AsciiJson
     } else {
         Write-Output "REPO_ROOT: $($paths.REPO_ROOT)"
         Write-Output "BRANCH: $($paths.CURRENT_BRANCH)"
@@ -89,22 +89,31 @@ if ($PathsOnly) {
 }
 
 # Validate required directories and files
-if (-not (Test-Path $paths.FEATURE_DIR -PathType Container)) {
+if (-not (Test-Path -LiteralPath $paths.FEATURE_DIR -PathType Container)) {
     [Console]::Error.WriteLine("ERROR: Feature directory not found: $($paths.FEATURE_DIR)")
     $specifyCommand = '/speckit-specify'
     [Console]::Error.WriteLine("Run $specifyCommand first to create the feature structure.")
     exit 1
 }
 
-if (-not (Test-Path $paths.IMPL_PLAN -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath $paths.IMPL_PLAN -PathType Leaf)) {
     [Console]::Error.WriteLine("ERROR: plan.md not found in $($paths.FEATURE_DIR)")
     $planCommand = '/speckit-plan'
     [Console]::Error.WriteLine("Run $planCommand first to create the implementation plan.")
     exit 1
 }
 
+if ((Get-Item -LiteralPath $paths.IMPL_PLAN).Length -eq 0) {
+    [Console]::Error.WriteLine("ERROR: plan.md is empty in $($paths.FEATURE_DIR)")
+    $planCommand = '/speckit-plan'
+    [Console]::Error.WriteLine(
+        "Populate it, or remove the empty file and rerun $planCommand with a valid plan template."
+    )
+    exit 1
+}
+
 # Check for spec.md if required
-if ($RequireSpec -and -not (Test-Path $paths.FEATURE_SPEC -PathType Leaf)) {
+if ($RequireSpec -and -not (Test-Path -LiteralPath $paths.FEATURE_SPEC -PathType Leaf)) {
     [Console]::Error.WriteLine("ERROR: spec.md not found in $($paths.FEATURE_DIR)")
     $specifyCommand = '/speckit-specify'
     [Console]::Error.WriteLine("Run $specifyCommand first to create the feature specification.")
@@ -112,7 +121,7 @@ if ($RequireSpec -and -not (Test-Path $paths.FEATURE_SPEC -PathType Leaf)) {
 }
 
 # Check for tasks.md if required
-if ($RequireTasks -and -not (Test-Path $paths.TASKS -PathType Leaf)) {
+if ($RequireTasks -and -not (Test-Path -LiteralPath $paths.TASKS -PathType Leaf)) {
     [Console]::Error.WriteLine("ERROR: tasks.md not found in $($paths.FEATURE_DIR)")
     $tasksCommand = '/speckit-tasks'
     [Console]::Error.WriteLine("Run $tasksCommand first to create the task list.")
@@ -134,7 +143,7 @@ if ((Test-Path $paths.CONTRACTS_DIR) -and (Get-ChildItem -Path $paths.CONTRACTS_
 if (Test-Path $paths.QUICKSTART) { $docs += [IO.Path]::GetRelativePath($paths.FEATURE_DIR, $paths.QUICKSTART) }
 
 # Include tasks.md if requested and it exists
-if ($IncludeTasks -and (Test-Path $paths.TASKS)) {
+if ($IncludeTasks -and (Test-Path -LiteralPath $paths.TASKS)) {
     $docs += 'tasks.md'
 }
 
@@ -157,7 +166,7 @@ if ($Json) {
     if ($Template) {
         $result.TEMPLATE_CONTENT = $templateContent
     }
-    [PSCustomObject]$result | ConvertTo-Json -Compress
+    [PSCustomObject]$result | ConvertTo-AsciiJson
 } else {
     # Text output
     Write-Output "FEATURE_DIR:$($paths.FEATURE_DIR)"
