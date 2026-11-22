@@ -88,6 +88,9 @@ class TestBootstrapComposeProvider:
         with (
             patch("scripts.bootstrap_worktree.sys.platform", "win32"),
             patch("scripts.bootstrap_worktree.shutil.which", return_value=uv_path),
+            patch("scripts.bootstrap_worktree.uv_candidate_folders", return_value=[]),  # Keep the per-user uv out.
+            patch("scripts.bootstrap_worktree.module_runs_uv", return_value=False),  # Test the install path.
+            patch("scripts.bootstrap_worktree.is_externally_managed", return_value=False),  # No host policy.
             patch.object(PipIndexProbe, "fallback_index", return_value=None),
             patch("scripts.bootstrap_worktree.subprocess.run", return_value=CompletedProcess([], 0)) as install,
         ):

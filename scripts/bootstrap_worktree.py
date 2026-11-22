@@ -10,6 +10,16 @@ exist. Run this script one time in each new worktree. See issue #1866.
 Usage:
     uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py
     uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py --recreate
+    uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py --public-lock-index
+
+The script finds uv on PATH, then in the per-user install folders, and then as a
+module of the bootstrap interpreter. It installs uv with pip only when no
+installation exists. It stops with a clear message when the interpreter is
+externally managed. See issue #4876.
+
+When the configured package index does not match uv.lock, the locked sync stops
+and names the cause. The --public-lock-index option syncs from the public index
+for that run only. It never writes your pip configuration. See issue #4876.
 
 The script works on Windows, macOS, and Linux. The script prints the path of the
 interpreter that it created.
@@ -28,10 +38,12 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import shutil
 import socket
 import subprocess  # nosec B404 - the script starts pip and uv with fixed argument lists.
 import sys
+import sysconfig
 import time
 import venv
 from pathlib import Path
@@ -95,6 +107,59 @@ TOKEN_VARIABLES: tuple[str, ...] = ("GH_TOKEN", "GITHUB_TOKEN")
 GH_PROBE_TIMEOUT_SECONDS = 15.0
 # The repository-local setting that pins Git credentials to the write account.
 GIT_USERNAME_CONFIG = "credential.https://github.com.username"
+
+# The lockfile of the locked sync. Its registry lines name the index that the lock
+# was resolved against.
+LOCKFILE_NAME = "uv.lock"
+
+# The line that uv.lock writes for each registry source. The first match names the
+# index that the lock expects.
+LOCK_REGISTRY_PATTERN = re.compile(r'source = \{ registry = "([^"]+)" \}')
+
+# The executable name of uv on this platform.
+UV_EXECUTABLE_NAME = "uv.exe" if os.name == "nt" else "uv"
+
+# The marker file that PEP 668 places in the standard library of an externally
+# managed Python. A pip install into that Python fails by design.
+EXTERNALLY_MANAGED_MARKER = "EXTERNALLY-MANAGED"
+
+# The seconds that the script waits for a uv probe, and for a lock check. The lock
+# check resolves every package, so a slow mirror needs a long wait.
+UV_PROBE_TIMEOUT_SECONDS = 30.0
+LOCK_CHECK_TIMEOUT_SECONDS = 600.0
+
+# The cause messages. Each names the cause and the next action in plain words.
+EXTERNALLY_MANAGED_MESSAGE = (
+    "uv is not installed. This Python is externally managed, so the bootstrap cannot "
+    "install uv with pip. Install uv, add its folder to PATH, and run the bootstrap again."
+)
+INDEX_MISMATCH_MESSAGE = (
+    "The configured package index does not match uv.lock, so the locked sync cannot start. "
+    "Run the bootstrap again with --public-lock-index to use the public index for that run only. "
+    "Your pip configuration is not changed."
+)
+LOCK_DRIFT_MESSAGE = (
+    "uv.lock does not match pyproject.toml, so the locked sync cannot start. "
+    "Run uv lock on a branch, review the change, and commit the lockfile."
+)
+PUBLIC_LOCK_WARNING = (
+    "Caution: the locked sync uses the public index for this run only, to match uv.lock. "
+    "Your pip configuration is not changed."
+)
+
+
+# The phrase that uv prints when the committed lock does not match the project or
+# the index. Only this phrase proves a stale lock, so every other failure stays unknown.
+STALE_LOCK_TEXT = "needs to be updated"
+
+
+class ProcessFailedError(RuntimeError):
+    """Report a tool that started and returned a failing exit code."""
+
+    def __init__(self, message: str, returncode: int) -> None:
+        """Store the message and the exit code of the tool that failed."""
+        super().__init__(message)  # Keep the message that the caller prints.
+        self.returncode = returncode  # Keep the exit code, so a caller can tell a ran tool from a launch failure.
 
 
 class PipIndexProbe:
@@ -193,6 +258,103 @@ class PipIndexProbe:
         return PUBLIC_INDEX_URL  # Give the caller the index to use for this run.
 
 
+def windows_user_scripts_folder(app_data: str, home: Path) -> Path:
+    """Return the pip --user scripts folder of this Python on Windows, with or without APPDATA."""
+    base = Path(app_data) if app_data else home / "AppData" / "Roaming"  # Fall back to the profile default.
+    return (
+        base / "Python" / f"Python{sys.version_info.major}{sys.version_info.minor}" / "Scripts"
+    )  # Match pip's layout.
+
+
+def uv_candidate_folders() -> list[Path]:
+    """Return the per-user folders where a uv installation normally lives."""
+    scheme = "nt_user" if os.name == "nt" else "posix_user"  # Select the per-user scheme of this platform.
+    folders = [Path(sysconfig.get_path("scripts", scheme))]  # pip --user places the uv command here.
+    if os.name == "nt":  # The Windows default does not depend on APPDATA being set in this shell.
+        folders.append(
+            windows_user_scripts_folder(os.environ.get("APPDATA", ""), Path.home())
+        )  # Check the pip layout too.
+    folders.append(Path.home() / ".local" / "bin")  # The standalone uv installer places the command here.
+    LOGGER.debug("Prepared %s per-user folders for the uv search.", len(folders))  # Report only the count.
+    return folders  # Give the caller the folders in search order.
+
+
+def module_runs_uv(interpreter: str) -> bool:
+    """Return True when the interpreter runs uv as a module."""
+    LOGGER.debug("Checking whether the bootstrap interpreter runs uv as a module.")  # Trace before the probe.
+    try:  # A broken interpreter is not an installation, so the search goes on.
+        result = subprocess.run(  # nosec B603 - the argument list holds no shell input.
+            [interpreter, "-m", "uv", "--version"],  # Ask the module for its version.
+            capture_output=True,
+            text=True,
+            timeout=UV_PROBE_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as error:  # Any probe failure means the module is absent.
+        LOGGER.debug("The uv module probe failed (%s).", type(error).__name__)  # Keep the detail private.
+        return False  # Report no module installation.
+    LOGGER.debug("The uv module probe returned code %s.", result.returncode)  # Report the code only.
+    return result.returncode == 0  # A zero code means the module runs.
+
+
+def find_uv_command(bootstrap_python: str) -> list[str] | None:
+    """Return the command prefix that runs uv, or None when no installation is found."""
+    LOGGER.info("Selecting the UV command.")  # Trace before the search.
+    on_path = shutil.which("uv")  # A PATH installation wins over every per-user folder.
+    if on_path is not None:  # The shell would run this command, so the script runs it too.
+        LOGGER.info("Using uv from PATH.")  # Name the source of the command.
+        return [on_path]  # Give the caller the PATH executable.
+    for folder in uv_candidate_folders():  # Check the per-user folders in their search order.
+        candidate = folder / UV_EXECUTABLE_NAME  # Build the executable path with pathlib.
+        if candidate.is_file():  # A file in a per-user folder is an installation.
+            LOGGER.info("Using uv from the per-user folder %s.", folder)  # Report the folder, which holds no secret.
+            return [str(candidate)]  # Give the caller the per-user executable.
+    if module_runs_uv(bootstrap_python):  # The bootstrap interpreter may already hold uv as a module.
+        LOGGER.info("Using uv as a module of the bootstrap interpreter.")  # Name the module source.
+        return [bootstrap_python, "-m", "uv"]  # Give the caller the module command.
+    LOGGER.info("No uv installation was found.")  # Name the absence before any install decision.
+    return None  # The caller decides whether an install is allowed.
+
+
+def is_externally_managed() -> bool:
+    """Return True when the running interpreter carries the PEP 668 marker."""
+    stdlib = Path(sysconfig.get_path("stdlib"))  # Read the standard library of the running interpreter.
+    return (stdlib / EXTERNALLY_MANAGED_MARKER).is_file()  # The marker means pip must not install here.
+
+
+def read_lock_registry(lock_path: Path) -> str | None:
+    """Return the registry URL that uv.lock records, or None when the file names none."""
+    LOGGER.debug("Reading the registry that uv.lock records.")  # Trace before the read.
+    try:  # A missing lockfile is reported by the sync, so the read only needs to fail quietly.
+        text = lock_path.read_text(encoding="utf-8")  # Read the committed lockfile as text.
+    except OSError as error:  # Any read failure leaves the registry unknown.
+        LOGGER.debug("The lockfile could not be read (%s).", type(error).__name__)  # Keep the path private.
+        return None  # Report the unknown registry.
+    match = LOCK_REGISTRY_PATTERN.search(text)  # The first registry line names the index.
+    return match.group(1) if match else None  # Give the URL, or None when the lock names none.
+
+
+def normalize_index(url: str) -> str:
+    """Return an index URL in a form that compares equal across a trailing slash and case."""
+    return url.rstrip("/").lower()  # Remove the trailing slash and fold the case.
+
+
+def configured_index(environment: dict[str, str]) -> str | None:
+    """Return the default index that the child environment gives to uv."""
+    index_url = environment.get("UV_INDEX_URL")  # The bootstrap sets this name for each run.
+    default_index = environment.get("UV_DEFAULT_INDEX")  # uv reads this name when the first is absent.
+    return index_url or default_index or None  # Keep the first value that is set.
+
+
+def use_public_lock_index(environment: dict[str, str]) -> None:
+    """Point the locked sync at the public index and remove every other index source of the child."""
+    LOGGER.info("Applying the public index for the locked sync.")  # Trace before the child-only change.
+    for name in ("UV_DEFAULT_INDEX", "UV_INDEX", "UV_EXTRA_INDEX_URL"):  # Clear each competing source first.
+        environment.pop(name, None)  # A kept mirror would make the lock check fail again.
+    environment["UV_INDEX_URL"] = PUBLIC_INDEX_URL  # The public index is the registry that uv.lock records.
+    LOGGER.warning(PUBLIC_LOCK_WARNING)  # State the consequence, and keep the pip configuration unchanged.
+
+
 class WorktreeBootstrapper:
     """Create one virtual environment and install the project dependencies."""
 
@@ -221,21 +383,22 @@ class WorktreeBootstrapper:
         """Apply one invocation's locked sync command and package-source policy."""
 
         def __init__(
-            self, uv_path: str | None, sources: dict[str, str], override: str | None, bootstrap_python: str
+            self, uv_command: list[str] | None, sources: dict[str, str], override: str | None, bootstrap_python: str
         ) -> None:  # Keep selected tools and sources local to one invocation.
             """Store the UV command and source snapshot for one locked sync."""
             LOGGER.info("Preparing the locked sync policy.")  # Trace before copying source state.
-            self.uv_path = uv_path  # Retain the exact discovery result without another lookup.
+            self.uv_command = uv_command  # Retain the discovery result, or None when UV must be installed.
             self.bootstrap_python = bootstrap_python  # Keep the host interpreter outside the managed environment.
-            self.command_prefix = [uv_path] if uv_path else [bootstrap_python, "-m", "uv"]  # Support user installs.
+            module_command = [bootstrap_python, "-m", "uv"]  # The module form runs after an install, too.
+            self.command_prefix = uv_command or module_command  # Prefer the discovered command.
             self.sources = dict(sources)  # Do not share mutable configuration state with another invocation.
             self.override = override  # Keep the existing probe's public decision authoritative.
             LOGGER.debug(  # Keep source values private.
                 "Prepared %s package-source settings for UV.", len(self.sources)  # Report only a count.
             )
-            if uv_path is None:  # Tool absence remains the only automatic pip-selection reason.
-                LOGGER.info("uv is absent. The bootstrap will install it for this user.")  # Explain the next action.
-            else:  # A resolved executable remains the selected tool.
+            if uv_command is None:  # No installation was found, so the install step decides what happens.
+                LOGGER.info("uv was not found on PATH or in the per-user folders.")  # Name the absence.
+            else:  # A resolved command remains the selected tool.
                 LOGGER.info("Using uv for locked dependency synchronization.")  # Identify the selected tool.
 
         def apply(self, environment: dict[str, str]) -> None:  # Change only the fresh installation child.
@@ -284,21 +447,76 @@ class WorktreeBootstrapper:
                 LOGGER.debug("Mapped %s source. Configured: %s.", name, bool(source))  # Report only source presence.
 
         def install_uv(self, environment: dict[str, str]) -> None:
-            """Install UV outside the managed project environment when the command is missing."""
-            if self.uv_path is not None:  # An existing executable needs no installation.
+            """Install UV outside the managed project environment when no installation was found."""
+            if self.uv_command is not None:  # An existing installation needs no installation.
                 return  # Keep the existing UV installation unchanged.
+            if is_externally_managed():  # pip refuses to install into this interpreter, so stop with the next action.
+                LOGGER.error("uv is absent, and pip is not used in an externally managed Python.")  # Name the cause.
+                raise RuntimeError(EXTERNALLY_MANAGED_MESSAGE)  # Report the cause and the next action.
             environment.pop("PYTHONNOUSERSITE", None)  # Let the module runner find UV in the user package site.
             command = [self.bootstrap_python, "-m", "pip", "install", "--user", "uv"]  # Keep UV outside .venv.
             LOGGER.info("Installing uv in the current user's Python environment.")  # Trace before pip runs.
             LOGGER.debug("Prepared %s arguments for the UV tool installation.", len(command))  # Report command size.
             self._run(command, environment, "The uv tool installation")  # Stop if UV cannot be installed.
 
-        def sync(self, root: Path, environment: dict[str, str]) -> None:
+        def sync(self, root: Path, environment: dict[str, str], public_lock_index: bool = False) -> None:
             """Synchronize the project from its locked manifest and development extra."""
+            if public_lock_index:  # The operator chose the public index for this run only.
+                use_public_lock_index(environment)  # Point this child at the public index before the sync.
             command = [*self.command_prefix, "sync", "--locked", "--extra", "dev"]  # Enforce the committed lock.
             LOGGER.info("Synchronizing project dependencies from uv.lock.")  # Trace before the package operation.
             LOGGER.debug("Prepared %s arguments for the locked sync.", len(command))  # Report command size.
-            self._run(command, environment, "The locked UV sync", root)  # Use the project root and stop on failure.
+            try:  # A tool that ran and failed may have a lock cause, which the diagnosis names.
+                self._run(command, environment, "The locked UV sync", root)  # Use the project root and stop on failure.
+            except ProcessFailedError as error:  # Only a sync that ran can have a lock cause.
+                cause = self.diagnose_sync_failure(root, environment)  # A lock cause, or None.
+                if cause is None:  # The failure has another cause, so the original error stays.
+                    raise  # Re-raise the original failure unchanged.
+                raise RuntimeError(cause) from error  # Report the lock cause and keep the original failure chained.
+
+        def diagnose_sync_failure(self, root: Path, environment: dict[str, str]) -> str | None:
+            """Return the lock cause of a failed sync, or None when the failure has another cause."""
+            LOGGER.info("Checking uv.lock after the locked sync failed.")  # Trace before the lock verdict.
+            current = self.lock_is_current(root, environment)  # Ask uv for a verdict on the committed lock.
+            if current is None:  # The check could not run, so no cause can be named.
+                return None  # The caller keeps the original error.
+            if current:  # The lock is current, so the failure has another cause.
+                LOGGER.info("uv.lock is current, so the sync failed for another reason.")  # Name the conclusion.
+                return None  # The caller keeps the original error.
+            registry = read_lock_registry(root / LOCKFILE_NAME)  # Read the index that the lock was resolved against.
+            configured = configured_index(environment)  # Read the index that this run would give to uv.
+            if registry and configured:  # Both indexes must be known before a mismatch can be named.
+                if normalize_index(configured) != normalize_index(registry):  # Compare the indexes only.
+                    LOGGER.warning("The package index does not match uv.lock.")  # Name the cause, not the URL.
+                    return INDEX_MISMATCH_MESSAGE  # Give the operator the option that repairs this run.
+            LOGGER.warning("uv.lock does not match pyproject.toml.")  # Name the drift cause.
+            return LOCK_DRIFT_MESSAGE  # Give the operator the commit steps.
+
+        def lock_is_current(self, root: Path, environment: dict[str, str]) -> bool | None:
+            """Return True or False for the committed lock, or None when uv cannot answer."""
+            command = [*self.command_prefix, "lock", "--check"]  # Ask uv for a read-only verdict.
+            LOGGER.info("Checking uv.lock against pyproject.toml.")  # Trace before the resolution.
+            try:  # A launch failure cannot name a lock cause, so the answer stays unknown.
+                result = subprocess.run(  # nosec B603 - the argument list holds no shell input.
+                    command,
+                    check=False,
+                    env=environment,
+                    cwd=root,
+                    capture_output=True,  # Keep the verdict text out of the console, because it can name an index.
+                    text=True,
+                    timeout=LOCK_CHECK_TIMEOUT_SECONDS,
+                )
+            except (OSError, subprocess.SubprocessError) as error:  # Report the error kind only.
+                LOGGER.error("The lock check could not run (%s).", type(error).__name__)  # Name the failed check.
+                return None  # No verdict, so the caller keeps the original error.
+            LOGGER.debug("The lock check returned code %s.", result.returncode)  # Report the code, not the text.
+            if result.returncode == 0:  # Zero means uv accepts the committed lock.
+                return True  # The lock is current for this index.
+            output = f"{result.stdout or ''}{result.stderr or ''}"  # Read the verdict text, which is never printed.
+            if STALE_LOCK_TEXT in output:  # Only uv's stale-lock phrase proves that the lock is out of date.
+                return False  # The lock needs an update, so the caller names the cause.
+            LOGGER.warning("The lock check failed without a stale-lock verdict.")  # Name the unknown outcome.
+            return None  # Keep the original failure, because no cause can be named.
 
         def _run(self, command: list[str], environment: dict[str, str], context: str, root: Path | None = None) -> None:
             """Run one tool command and stop when its process fails."""
@@ -317,7 +535,9 @@ class WorktreeBootstrapper:
             LOGGER.debug("%s returned code %s.", context, result.returncode)  # Report the subprocess result.
             if result.returncode != 0:  # Do not continue after a failed locked install.
                 LOGGER.error("%s failed with code %s.", context, result.returncode)  # Surface command failure.
-                raise RuntimeError(f"{context} failed with code {result.returncode}.")  # Stop the bootstrap.
+                raise ProcessFailedError(  # Keep the exit code, so a launch error stays distinct.
+                    f"{context} failed with code {result.returncode}.", result.returncode
+                )
 
     @property
     def interpreter(self) -> Path:
@@ -342,21 +562,19 @@ class WorktreeBootstrapper:
         )  # Build the environment with pip and a portable interpreter path.
         LOGGER.debug("Created the virtual environment")
 
-    def sync_dependencies(self) -> None:  # Keep installer selection local to this invocation.
+    def sync_dependencies(self, public_lock_index: bool = False) -> None:  # Keep the installer choice local.
         """Synchronize the locked project and its development dependencies."""
-        LOGGER.info("Selecting the UV command.")  # Trace before executable discovery.
-        uv_path = shutil.which("uv")  # Use the installed command when discovery reports it.
-        LOGGER.debug("uv is available: %s.", uv_path is not None)  # Report availability without caller paths.
+        bootstrap_python = getattr(sys, "_base_executable", sys.executable)  # Keep UV outside the project environment.
+        uv_command = find_uv_command(bootstrap_python)  # Search before any install.
         self.index_override = None  # Clear an earlier public decision before the new configuration read.
         probe = PipIndexProbe(self.interpreter)  # Own a fresh source snapshot for this invocation.
         self.index_override = probe.fallback_index()  # Retain one existing index decision for both files.
-        bootstrap_python = getattr(sys, "_base_executable", sys.executable)  # Keep UV outside the project environment.
         policy = self.InstallationPolicy(  # Keep the source settings and tool command local to this run.
-            uv_path, probe.source_settings, self.index_override, bootstrap_python
+            uv_command, probe.source_settings, self.index_override, bootstrap_python
         )
         environment = self._install_environment(policy)  # Keep caller settings and index choices local to the child.
-        policy.install_uv(environment)  # Install UV only when executable discovery reports absence.
-        policy.sync(self.root, environment)  # Install exactly the locked project and development extra.
+        policy.install_uv(environment)  # Install UV only when no installation was found.
+        policy.sync(self.root, environment, public_lock_index=public_lock_index)  # Install exactly the locked project.
         LOGGER.debug("Completed one locked dependency sync.")
 
     def install_browser_driver(self) -> bool:
@@ -456,6 +674,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--recreate",
         action="store_true",
         help="Delete the existing .venv directory before the script creates a new one.",
+    )
+    parser.add_argument(  # Give the user one option to use the public index for a run.
+        "--public-lock-index",
+        action="store_true",
+        help=(
+            "Sync from the public index for this run only, when the configured index does not match uv.lock. "
+            "Your pip configuration is not changed."
+        ),
     )
     return parser  # Give the caller the ready parser.
 
@@ -669,7 +895,7 @@ def main(argv: list[str] | None = None) -> int:
     StaleSourceSweeper(root).sweep()  # Remove the orphaned package directories that a branch switch left behind.
     try:  # Report a failed step as one clear message, because the user reads the console.
         bootstrapper.create_environment(recreate=args.recreate)  # Create the environment first.
-        bootstrapper.sync_dependencies()  # Install the locked project and development dependencies.
+        bootstrapper.sync_dependencies(public_lock_index=args.public_lock_index)  # Install the locked project.
     except (OSError, RuntimeError) as error:  # A file error or a failed install stops the script.
         LOGGER.error("The bootstrap failed: %s", error)
         return 1  # Report the failure to the shell.
