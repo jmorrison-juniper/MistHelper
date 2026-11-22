@@ -8,7 +8,7 @@
 // Issue #1852 records that the project shipped no test at all.
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 
@@ -25,7 +25,7 @@ function renderDialog(confirmKeyword: string | null) {
   // A spy records each call, so a test can prove the button fired the action.
   const onConfirm = vi.fn();
   const onCancel = vi.fn();
-  render(
+  const view = render(
     <ConfirmationDialog
       title="Start the firmware upgrade"
       description="This action upgrades every device in the wave."
@@ -35,7 +35,7 @@ function renderDialog(confirmKeyword: string | null) {
       onCancel={onCancel}
     />,
   );
-  return { onConfirm, onCancel };
+  return { ...view, onConfirm, onCancel };
 }
 
 /** Return the Confirm button of the rendered dialog. */
@@ -45,6 +45,61 @@ function confirmButton(): HTMLButtonElement {
 }
 
 describe('ConfirmationDialog keyword gate', () => {
+  it('keeps focus in the dialog when no keyword is required', async () => {
+    const { onConfirm, onCancel } = renderDialog(null);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('dialog')));
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('focuses a keyword field inserted into an already-open dialog', async () => {
+    const { rerender, onConfirm, onCancel } = renderDialog(null);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('dialog')));
+    rerender(
+      <ConfirmationDialog
+        title="Start the firmware upgrade"
+        description="This action upgrades every device in the wave."
+        impact="42 devices restart and lose service for about 5 minutes."
+        confirmKeyword={KEYWORD}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('textbox')));
+    expect(confirmButton().disabled).toBe(true);
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('focuses the keyword field after the dialog opens', async () => {
+    renderDialog(KEYWORD);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByLabelText(/to confirm/i));
+    });
+  });
+
+  it('accepts the exact keyword in the focused field without starting an action', async () => {
+    const { onConfirm, onCancel } = renderDialog(KEYWORD);
+    const field = screen.getByRole('textbox');
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    fireEvent.change(field, { target: { value: KEYWORD } });
+    expect(confirmButton().disabled).toBe(false);
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+    fireEvent.click(confirmButton());
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it.each([' UPGRADE', 'UPGRADE '])('keeps the Confirm button locked for whitespace in "%s"', (keyword) => {
+    const { onConfirm } = renderDialog(KEYWORD);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: keyword } });
+    expect(confirmButton().disabled).toBe(true);
+    fireEvent.click(confirmButton());
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
   it('keeps the Confirm button locked until the operator types the keyword', () => {
     renderDialog(KEYWORD);
     // The gate must start closed, because an empty field is not a confirmation.
