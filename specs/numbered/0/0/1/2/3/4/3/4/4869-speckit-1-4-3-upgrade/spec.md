@@ -67,7 +67,7 @@ A reviewer reads the pull request and the issue. Each file that differs from 1.4
 - **FR-003**: The change MUST update `check-prerequisites.ps1`, `setup-plan.ps1`, `setup-tasks.ps1`, and `resolve-template.ps1` to 1.4.3. Each script MUST keep the local `-NoPersist` call and the five-children guard.
 - **FR-004**: The change MUST NOT change `create-new-feature.ps1`, `spec-route.ps1`, the four routed templates, or the routing code in `common.ps1`.
 - **FR-005**: The change MUST NOT change the git extension, the `speckit-git-*` skills, the `speckit-taskstoissues` skill, or the `speckit.git.*` agents.
-- **FR-006**: The change MUST NOT add `.specify/.gitignore`. That file would ignore the tracked `.specify/feature.json`.
+- **FR-006**: The change MUST NOT add an unmodified `.specify/.gitignore`. That file would ignore the tracked `.specify/feature.json`. Issue #4882 adds a copy that re-includes `.specify/feature.json` after the upstream rule.
 - **FR-007**: The change MUST add one fragment to the release notes for issue #4869.
 
 ### Key Entities

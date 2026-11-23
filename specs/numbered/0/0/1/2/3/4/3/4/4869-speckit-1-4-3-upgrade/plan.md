@@ -33,7 +33,7 @@ Move the Spec Kit scaffolding from 1.1.2 to 1.4.3 in the parts that do not carry
 | `skills/speckit-git-*`, `skills/speckit-taskstoissues` | Keep the repository version | Git extension 1.0.0 |
 | `agents/speckit.git.*` | Keep the repository version | Git extension 1.0.0 |
 | `extensions/git/**`, `extensions/.registry`, `extensions.yml` | Keep the repository version | Git extension and companion registry |
-| `.specify/.gitignore` | Do not add | It would ignore `feature.json` |
+| `.specify/.gitignore` | Add a copy that re-includes `feature.json` (issue #4882) | The upstream rule ignores `feature.json`. The CLI keeps a customized copy on refresh. |
 
 ## Verification Plan
 
