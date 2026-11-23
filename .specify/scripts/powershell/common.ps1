@@ -157,6 +157,10 @@ function Get-FeaturePathsEnv {
     #   1. SPECIFY_FEATURE_DIRECTORY env var (explicit override)
     #   2. .specify/feature.json "feature_directory" key (persisted by specify command)
     #   3. Error - no feature context available
+    # SPECIFY_FEATURE_NO_PERSIST is the environment equivalent of -NoPersist. An orchestrator
+    # sets it so that no script in the process tree writes .specify/feature.json (#4128).
+    $noPersist = [bool]$NoPersist -or $env:SPECIFY_FEATURE_NO_PERSIST -eq '1' -or $env:SPECIFY_FEATURE_NO_PERSIST -eq 'true'
+
     $featureJson = Join-Path $repoRoot '.specify/feature.json'
     if ($env:SPECIFY_FEATURE_DIRECTORY) {
         $featureDir = $env:SPECIFY_FEATURE_DIRECTORY
@@ -164,8 +168,8 @@ function Get-FeaturePathsEnv {
         if (-not [System.IO.Path]::IsPathRooted($featureDir)) {
             $featureDir = Join-Path $repoRoot $featureDir
         }
-    } elseif (Test-Path $featureJson) {
-        $featureJsonRaw = Get-Content -LiteralPath $featureJson -Raw
+    } elseif (Test-Path -LiteralPath $featureJson) {
+        $featureJsonRaw = [System.IO.File]::ReadAllText($featureJson, [System.Text.Encoding]::UTF8)
         try {
             $featureConfig = $featureJsonRaw | ConvertFrom-Json
         } catch {
@@ -189,7 +193,7 @@ function Get-FeaturePathsEnv {
     
     $featureDir = [IO.Path]::GetFullPath($featureDir)
     Assert-SpecFeatureSelection -RepoRoot $repoRoot -FeatureDir $featureDir
-    if ($env:SPECIFY_FEATURE_DIRECTORY -and -not $NoPersist) {
+    if ($env:SPECIFY_FEATURE_DIRECTORY -and -not $noPersist) {
         Save-FeatureJson -RepoRoot $repoRoot -FeatureDirectory $env:SPECIFY_FEATURE_DIRECTORY
     }
 
@@ -264,7 +268,7 @@ function Assert-SpecFeatureSelection {
 
 function Test-FileExists {
     param([string]$Path, [string]$Description)
-    if (Test-Path -Path $Path -PathType Leaf) {
+    if (Test-Path -LiteralPath $Path -PathType Leaf) {
         Write-Output "  [OK] $Description"
         return $true
     } else {
@@ -281,7 +285,7 @@ function Test-DirHasFiles {
     # only contents are subdirectories (e.g. contracts/v1/openapi.yaml) as
     # non-empty like bash check_dir. Filtering out subdirectories would
     # mis-report such a directory as empty.
-    if ((Test-Path -Path $Path -PathType Container) -and (Get-ChildItem -Path $Path -ErrorAction SilentlyContinue | Select-Object -First 1)) {
+    if ((Test-Path -LiteralPath $Path -PathType Container) -and (Get-ChildItem -LiteralPath $Path -ErrorAction SilentlyContinue | Select-Object -First 1)) {
         Write-Output "  [OK] $Description"
         return $true
     } else {
