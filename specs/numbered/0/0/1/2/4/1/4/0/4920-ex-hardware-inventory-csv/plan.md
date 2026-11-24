@@ -124,6 +124,7 @@ src/mist/realtime/websocket_streams/live/sessions/settings.py     # hardware_con
 src/mist/realtime/websocket_streams/web/services/operations/hardware_xml.py   # csv format
 src/mist/realtime/websocket_streams/web/services/operations/artifacts.py     # finish step hook
 src/mist/realtime/websocket_streams/web/services/operations/sessions.py       # limits, scope in preview
+src/mist/realtime/websocket_streams/web/services/assembly/collaborators.py    # scope-aware collaborators
 src/mist/realtime/websocket_streams/web/blueprint/routes/sessions.py          # csv download branch
 src/mist/realtime/websocket_streams/web/blueprint/responses/download.py       # csv response
 src/mist/realtime/websocket_streams/web/templates/websockets_page.html        # output choice, link
@@ -140,7 +141,8 @@ tests/unit/ex_hardware_inventory/
   run/                      # batch run, publisher, routing
   test_hardware_operation.py
 tests/integration/ex_hardware_inventory/   # CLI flow with a fake batch service
-tests/unit/websocket_streams/web/          # csv preset, finish step, download, settings
+tests/unit/websocket_streams/web/          # csv preset, finish step, download
+tests/unit/websocket_streams/live/sessions/   # the new setting in test_ws_stream_settings.py
 tests/e2e/websockets_tab/                  # the new output choice
 ```
 

@@ -164,7 +164,7 @@ Report:
 - **FR-020**: A run MUST write exactly one CSV report with one header row. The file uses UTF-8 text.
 - **FR-021**: The report MUST hold one row for each hardware item of each switch that returned a valid reply. A hardware item is the chassis, a module, a sub-module, or a deeper part.
 - **FR-022**: The report MUST hold one outcome row for each attempted target that returned no valid reply. The row MUST state the outcome (failed, skipped, or cancelled) and the reason.
-- **FR-023**: Every row MUST show the run time in UTC in ISO 8601 form, the scope, the organization, the site, and the switch. The switch data MUST include its identifier, its host name, and its MAC address when Mist reports them.
+- **FR-023**: Every row MUST show the run time in UTC in ISO 8601 form, the scope, the organization, the site, and the switch. The switch data MUST include its identifier and its host name.
 - **FR-024**: Every hardware row MUST show its level, its path from the chassis, its element type, and every field that the switch returned for that item. A field that an item lacks stays empty. The report MUST NOT drop a returned field.
 - **FR-025**: The columns MUST keep a fixed order. The rows MUST keep a stable order: organization, site, switch, then the order of the reply.
 - **FR-026**: The tool MUST write a text value that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return so that a spreadsheet does not read it as a formula.
