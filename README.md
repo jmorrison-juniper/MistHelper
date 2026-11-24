@@ -5,143 +5,47 @@ Network operations and data export for the Juniper Mist Cloud.
 [![Quality Gates](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/ci.yml)
 [![Container Build](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml/badge.svg)](https://github.com/jmorrison-juniper/MistHelper/actions/workflows/container-build.yml)
 
-This page is the entry point. It tells you what MistHelper is and how to start
-it as a container. Every other subject has its own page, and the
-[Documentation](#documentation) map below sends you there.
-
 ## What
 
-MistHelper is a menu-driven tool for the Juniper Mist Cloud. It reads your
-organizations, your sites, your devices, and your clients, and it writes what it
-finds to a file or to a database. It also runs a small set of change operations,
-such as a firmware upgrade.
+MistHelper is a menu-driven tool for the Juniper Mist Cloud. It reads your organizations, sites, devices, and clients. It writes each result to a CSV file or to a database.
 
-The tool holds **307 operations**, numbered 1 to 308 with one gap at 152.
-It also serves a web portal, an upgrade capture portal, and a metrics gateway.
-The web portal includes a read-only WAN Dashboard for gateway status, port
-details, traffic, WAN Insights, and CSV exports. See the
-[Web Portal guide](documentation/wiki/Web-Portal.md) for its workflows.
-Read [the operator guide](documentation/operator-guide.md) for what each part
-does.
-
-Menu 164 builds WAN VPNs from gateway profiles. It uses no profile data from a
-failed Mist response.
-
-Menus 213 and 214 export site application lists and site system events. When an
-output write fails, each menu logs an error that names the endpoint and the
-output file. It does not claim that the export succeeded.
-
-Menu 254 searches organization inventory. It reports an initial request failure
-instead of an empty result. It reports a failed output write without claiming
-that the export succeeded.
-
-Menu 280 exports the alert digest handover report. Use it to group recent alarms
-for a shift change.
-
-Menu 281 acknowledges recent unacknowledged alarms. It requires typing
-`ACK <count>` to confirm, and `--dry-run` previews the acknowledgement request.
-
-Menu 286 runs client CoA, reauthentication, and disconnect actions. It requires
-typing the target to confirm, and `--dry-run` previews the client request.
-
-Menu 287 replaces a Mist inventory device for RMA. It requires typing `REPLACE`
-to confirm, and `--dry-run` previews the replacement request.
-
-Menu 291 optimizes or resets site RRM with before and after plan capture. It
-defaults to a dry run. Use `--live-run` and then type `OPTIMIZE` or `RESET` to
-send the RRM request.
-
-Menu 292 imports PSKs, user MACs, and assets from CSV. It requires typing
-`IMPORT <row_count>` to confirm, and `--dry-run` previews the import request.
-
-Menu 293 runs Mist Edge lifecycle actions. It requires typing `CLAIM`, `ASSIGN`,
-`UNASSIGN`, `BOUNCE`, or `UPGRADE` to confirm, and `--dry-run` previews the
-lifecycle request.
-
-Menus 294 to 304 read Juniper service data, such as service requests, RMAs,
-and warranty records. Each menu is read-only, and it writes local exports only.
-Set the `JUNIPER_*` values in your `.env` file before you run one. The file
-`deploy/.env.example` lists each value. Read [the Juniper RMA guide](documentation/menu-operations-294-304.md)
-for the output files and the troubleshooting steps of each menu.
+It runs change operations, such as a firmware upgrade. A change operation changes the Mist Cloud or a device. It also serves a web portal, an upgrade capture portal, and a metrics gateway.
 
 ## Why
 
-The Mist web interface answers one question at a time, on one page. An operator
-who must report on a whole organization, or repeat the same read every week,
-cannot work that way.
+The Mist web interface answers one question at a time, on one page. An operator who must report on a full organization cannot work that way.
 
-MistHelper turns each of those reads into one numbered operation. One operation
-returns the whole organization in a CSV file or a database table, and a
-scheduled job can run the same number again tomorrow. For a firmware upgrade, it
-records the state of the site before the change and after it, so you hold
-evidence of what moved.
+MistHelper turns each read into one numbered operation. One operation writes the data of a full organization to a CSV file or a database table. A scheduled job can run the same operation again.
 
-Two rules shape the whole tool. An operation that changes the cloud asks for a
-typed confirmation from a person. An automated test pass never runs one.
+Two rules shape the tool. A change operation asks a person to type a confirmation word before it runs. An automated test run does not start a change operation.
 
 ## Who
 
-MistHelper is for the network operations engineer who owns a Mist organization.
-It also serves a network operations center that runs the same report on a
-schedule, and a managed service provider that works across more than one
-organization.
+MistHelper is for network operators who manage one or more Mist organizations. You do not have to write Python.
 
-You can use a Mist API token or sign in with `--login` and your Mist email and
-password. If your account requires two-factor authentication, MistHelper prompts
-for a verification code. You do not need to write Python. See the [command line
-reference](documentation/cli-reference.md#flags) for more about `--login`.
+You can use a Mist API token. You can also run `--login` with your Mist email and password. If Mist requires two-factor authentication for your account, MistHelper prompts for a verification code. For more about `--login`, see the [command line reference](documentation/cli-reference.md#flags).
 
 ## Where
 
-MistHelper runs as a container on your own machine or on your own server. The
-container carries Python, every dependency, the two data stores, and both
-portals.
+MistHelper runs as a container on your own machine or your own server. It reaches the Mist Cloud API over HTTPS. It writes each output file to `data/`.
 
-It reaches the Mist Cloud API over HTTPS. It writes every output file to
-`data/`, which the container shares with your machine. When you use an API
-token, MistHelper sends it to Mist in an HTTPS `Authorization` header. Keep the
-token in your local `.env` file. Git ignores that file. With `--login`,
-MistHelper uses your email and password and prompts for a verification code
-when Mist requires two-factor authentication.
+With an API token, MistHelper sends the token to Mist over HTTPS. Keep the token in your local `.env` file, which Git ignores.
 
 ## When
 
-Use MistHelper when you need one of these.
+Use MistHelper for one of these tasks.
 
 | You need | Start at |
 |----------|----------|
-| The whole organization in a CSV file or a database | [Menu reference](documentation/menu_reference.md) |
+| The full organization in a CSV file or a database | [Menu reference](documentation/menu_reference.md) |
 | The same export on a schedule | [Command line reference](documentation/cli-reference.md) |
 | A record of a site before a firmware upgrade and after it | [Upgrade capture portal](documentation/upgrade_capture_portal.md) |
 | A feed for Prometheus, Grafana, or an SNMP poller | [Operator guide](documentation/operator-guide.md) |
 | A command run across many devices over SSH | [SSH guide](documentation/SSH_GUIDE.md) |
-| Read the Juniper service requests of a date window (menu 294) | [Menu reference](documentation/menu_reference.md) |
-| Read one Juniper service request with every field (menu 295) | [Menu reference](documentation/menu_reference.md) |
-| Read one Juniper RMA with its items (menu 296) | [Menu reference](documentation/menu_reference.md) |
-| Read the notes of one Juniper service request (menu 297) | [Menu reference](documentation/menu_reference.md) |
-| Read the Juniper list of values (menu 298) | [Menu reference](documentation/menu_reference.md) |
-| Read the Juniper software release list (menu 299) | [Menu reference](documentation/menu_reference.md) |
-| Read the asset bulk links of a date window (menu 300, blocked until Juniper enables the asset API) | [Menu reference](documentation/menu_reference.md) |
-| Confirm your Juniper service API access (menu 301) | [Menu reference](documentation/menu_reference.md) |
-| Match Mist support tickets to Juniper RMAs (menu 302) | [Menu reference](documentation/menu_reference.md) |
-| Look up one Juniper service request or RMA (menu 303) | [Menu reference](documentation/menu_reference.md) |
-| Look up warranty and contract data for serial numbers (menu 304) | [Menu reference](documentation/menu_reference.md) |
-| Set organization firmware standards with verified backups and progress (menu 305) | [Organization auto-upgrade policy](documentation/org-auto-upgrade-policy.md) |
-| Restore firmware policies with complete verified recovery backups and progress (menu 306) | [Backup restoration](documentation/backup-restoration.md) |
-| Export connected or disconnected APs with reported warning or error codes (menu 307) | [AP warning report](documentation/ap-warning-report.md) |
-| Review subscriptions and stock equipment across every authorized organization (menu 308) | [Cross-org subscription and stock report](documentation/cross-org-subscription-stock.md) |
 
-Repeated site SLE histogram exports replace the keyed record for matching
-request dimensions and returned `start` and `end` values. Impact-summary exports
-also match on returned `classifier` and `failure` values. Both exports preserve
-all existing SQLite rows and ArangoDB documents.
+## Run as a container
 
-## How to set it up as a container
-
-The container is the supported way to run MistHelper.
-
-You need a container runtime. Podman is the documented runtime for this guide.
-Docker parity is tracked in issue #2721.
+The container is the supported way to run MistHelper. Before you start, install Podman.
 
 ### Step 1: Get the files
 
@@ -156,24 +60,17 @@ cd MistHelper
 cp documentation\sample.env .env
 ```
 
-Open `.env` and set `MIST_HOST` to name your Mist cloud, such as
-`api.mist.com`. For API-token authentication, also set `MIST_APITOKEN` to your
-Mist API token. Interactive `--login` does not need an API token.
+Open `.env`. Set `MIST_HOST` to your Mist cloud name, such as `api.mist.com`. To use an API token, set `MIST_APITOKEN` to your token. MistHelper sends the token to Mist over HTTPS. Interactive `--login` does not require an API token.
 
-To create a token for API-token authentication, sign in to
-<https://manage.mist.com>, open Organization, then API Tokens, then create a
-token.
+To create an API token, open <https://manage.mist.com>. Open Organization. Then, open API Tokens. Create a token.
 
-Warning: `.env` may hold a live API token. The repository ignores that file.
-Never commit it, and never paste its contents into an issue.
+Warning: The `.env` file can hold your Mist API token. Git ignores this file. Do not commit this file. Do not paste its contents into an issue. A leaked token gives access to your Mist organization.
 
-### Step 3: Let the data folder accept a write
+### Step 3: Let the data folder accept writes
 
-On Windows and on macOS, no step is needed. The container runtime runs in a
-virtual machine, and the file share already accepts the write.
+On Windows and on macOS, skip this step. The container runtime runs in a virtual machine, and the shared folder accepts writes.
 
-On Linux with rootless Podman, give the folder to the container account. The
-container runs as the user `misthelper`, which holds UID 1000.
+On Linux with rootless Podman, change the owner of `data` to the container user. The container user is `misthelper` with UID 1000.
 
 ```bash
 podman unshare chown -R 1000:1000 data
@@ -185,29 +82,25 @@ podman unshare chown -R 1000:1000 data
 podman compose up -d
 ```
 
-The command starts the default profile. It includes the application, the
-document store, and the site lock store.
+This command starts three containers: `misthelper-app`, `misthelper-arangodb`, and `misthelper-redis`.
 
-`podman compose` calls an external provider. On Windows, name `podman-compose`
-as the provider one time, because the default provider sends the bind mount as
-a Windows path and the application service then refuses to start:
+On Windows, use `podman-compose` as the compose provider. The default provider sends the bind mount as a Windows path, and the `misthelper` service then refuses to start.
 
 ```powershell
 .venv\Scripts\python.exe -m pip install podman-compose
 $env:PODMAN_COMPOSE_PROVIDER = "podman-compose.exe"
 ```
 
-Read [the container deployment page](documentation/container-deployment.md) to
-keep that setting for every shell and for the other deployment methods.
+Read the [container deployment page](documentation/container-deployment.md) to keep this variable in all shells.
 
-### Step 5: Check it
+### Step 5: Check the stack
 
 ```powershell
 podman ps
 curl http://127.0.0.1:8055/ready
 ```
 
-Three containers answer, and the address reports a ready state.
+The list shows three containers. When all checks pass, the ready address returns code 200 and the status `ready`.
 
 ### Step 6: Open the menu
 
@@ -215,80 +108,29 @@ Three containers answer, and the address reports a ready state.
 podman exec -it misthelper-app python MistHelper.py
 ```
 
-Type the number of an operation. The tool asks for anything else that it needs.
-Read [the operator guide](documentation/operator-guide.md) for the portals, the
-SSH access, the metrics gateway, and the output paths.
+Type the number of an operation. The tool asks for each value that it needs. To use your email and password, add `--login` to the end of the command.
+
+Read the [operator guide](documentation/operator-guide.md) for the portals, SSH access, the metrics gateway, and the output paths.
 
 ## Documentation
 
-Start here, then follow the group that matches your task.
-
-### Operate
-
 | Page | What it holds |
 |------|---------------|
-| [Operator guide](documentation/operator-guide.md) | The menu families, the portals, SSH access, the metrics gateway, and where the output lands |
-| [Menu reference](documentation/menu_reference.md) | Every operation, its safety level, and an example. Generated from the code. |
-| [Menu API endpoint map](documentation/menu-api/README.md) | The Mist API endpoints that each menu option calls |
-| [Menu highlights](documentation/menu-highlights.md) | The operations that arrived most recently |
-| [Command line reference](documentation/cli-reference.md) | Every flag, the two test modes, and the output paths |
-| [Upgrade capture portal](documentation/upgrade_capture_portal.md) | The operator guide for the portal on port 8056 |
-| [SSH guide](documentation/SSH_GUIDE.md) | Remote access on port 2200 |
-| [NOC runbooks](documentation/noc-runbooks) | Task guides for the operations center |
-
-### Deploy
-
-| Page | What it holds |
-|------|---------------|
-| [Container deployment](documentation/container-deployment.md) | The other deployment methods, the proxy certificate, and the rules that keep your data safe |
+| [Container deployment](documentation/container-deployment.md) | The other deployment methods and the rules that keep your data safe |
 | [Security and safety](documentation/security.md) | Credential rules, log redaction, and destructive operation rules |
-
-### Understand
-
-| Page | What it holds |
-|------|---------------|
-| [Architecture](documentation/architecture.md) | The package layout, the diagrams, and the decomposition record |
-| [Diagram suite](documentation/diagrams/README.md) | All 20 Mermaid diagram types |
-| [API notes](documentation/api) | The Mist API specification and the endpoint notes |
-| [Changelog](CHANGELOG.md) | The version history |
-
-### Develop
-
-Worktree setup uses available uv and uses pip only when uv is absent. See the development setup guide below.
-
-| Page | What it holds |
-|------|---------------|
-| [Development setup](documentation/development-setup.md) | Run the code from a source checkout |
+| [NOC runbooks](documentation/noc-runbooks) | Task guides for the operations center |
+| [Development setup](documentation/development-setup.md) | How to run the code from a source checkout |
 | [Contributing](documentation/contributing.md) | The branch workflow, the labels, and the review rules |
 | [Contributor map for `MistHelper.py`](documentation/CONTRIBUTING-MistHelper.md) | The stable symbols and the packages that guide entry-point changes |
-| [Quality gates](documentation/quality-gates.md) | The quality gates that every pull request runs |
 | [Release-note fragments](changelog.d/README.md) | The file that each change adds for its release note |
-| [Writing guide](documentation/ASD-STE100_writing-guide.md) | The Simplified Technical English rules for every document |
-| [Stranded branch review](documentation/stranded-branch-review.md) | Why a cleanup never deletes a branch that has no pull request |
+| [API notes](documentation/api) | The Mist API specification and the endpoint notes |
+| [Quality gates](documentation/quality-gates.md) | The checks that each pull request runs |
+| [Writing guide](documentation/ASD-STE100_writing-guide.md) | The Simplified Technical English rules for each document |
+| [Architecture](documentation/architecture.md) | The package layout, the diagrams, and the decomposition record |
+| [Changelog](CHANGELOG.md) | The version history |
 
-### Wiki
-
-The wiki holds the same subjects in a browsable form. Start at
-[the wiki home page](https://github.com/jmorrison-juniper/MistHelper/wiki).
-The wiki source is in `documentation/wiki/`. Edit it there, but read it on
-the wiki: its page-to-page links work only on the published wiki.
-
-| Wiki page | What it holds |
-|-----------|---------------|
-| [Menu Reference](https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-Reference) | Every actionable menu operation |
-| [Menu API Endpoints](https://github.com/jmorrison-juniper/MistHelper/wiki/Menu-API-Endpoints) | The endpoints behind each menu option |
-| [Container Setup](https://github.com/jmorrison-juniper/MistHelper/wiki/Container-Setup) | Build strategies and local usage |
-| [Web Portal](https://github.com/jmorrison-juniper/MistHelper/wiki/Web-Portal) | Browser operations, WAN status and traffic, CSV exports, live WebSocket streams, device utilities, scoped client suggestions, packet captures, screen views, the interactive remote shell, [licensing comparison](documentation/licensing-comparison.md), and cancellation of unsubmitted operations |
-| [SSH Remote Access](https://github.com/jmorrison-juniper/MistHelper/wiki/SSH-Remote-Access) | SSH server deployment and session management |
-| [Data Model](https://github.com/jmorrison-juniper/MistHelper/wiki/Data-Model) | CSV, SQLite, and polyglot output details |
-| [MSP Support](https://github.com/jmorrison-juniper/MistHelper/wiki/MSP-Support) | Multi-org operations for a managed service provider |
-| [Maps Manager](https://github.com/jmorrison-juniper/MistHelper/wiki/Maps-Manager) | The standalone interactive map viewer |
-| [Performance](https://github.com/jmorrison-juniper/MistHelper/wiki/Performance) | Rate limiting and fast mode |
-| [Troubleshooting](https://github.com/jmorrison-juniper/MistHelper/wiki/Troubleshooting) | Common issues and solutions |
-| [Testing](https://github.com/jmorrison-juniper/MistHelper/wiki/Testing) | Systematic test mode and the CI pipeline |
-| [Support](https://github.com/jmorrison-juniper/MistHelper/wiki/Support) | How to get help and report an issue |
+The [wiki](https://github.com/jmorrison-juniper/MistHelper/wiki) holds the same subjects in a browsable form. Its source is in `documentation/wiki/`. Read the published wiki, because its page links work only there.
 
 ## License
 
-CC-BY-NC-SA-4.0, the Creative Commons
-Attribution-NonCommercial-ShareAlike 4.0 International license.
+The [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International license](LICENSE) (CC-BY-NC-SA-4.0) covers MistHelper.

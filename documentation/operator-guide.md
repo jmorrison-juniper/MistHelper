@@ -115,6 +115,24 @@ Menus 294 to 304 read the Juniper service APIs. Read
 [Menu operations 294 to 304](menu-operations-294-304.md) for the Juniper settings,
 the output files, the ticket matching rule, and the troubleshooting steps.
 
+Menu 164 is a destructive operation, and it requires uppercase `APPLY` confirmation. It builds WAN VPNs from gateway profiles. It uses no profile data from a failed Mist response.
+
+Menus 213 and 214 export site application lists and site system events. When an output write fails, each menu logs an error that names the endpoint and the output file. It does not claim that the export succeeded.
+
+Menu 254 searches organization inventory. It reports an initial request failure instead of an empty result. It reports a failed output write without claiming that the export succeeded.
+
+Before you run menu 305, read [the organization auto-upgrade policy](org-auto-upgrade-policy.md).
+
+Caution: Menu 305 saves organization firmware versions by model, and it removes every supported local site override. To apply the displayed settings, type `CONFIGURE`.
+
+Before you run menu 306, read [the backup restoration guide](backup-restoration.md).
+
+Menu 306 restores organization and site firmware policies from private backups. Type `RESTORE` exactly to confirm. Preparation verifies the recovery backups before the confirmation controls appear.
+
+Menu 307 exports connected or disconnected APs with reported warning or error codes. Read [the AP warning report](ap-warning-report.md) for the output files.
+
+Menu 308 reviews subscriptions and stock equipment across every authorized organization. Read [the cross-org subscription and stock report](cross-org-subscription-stock.md) for the output files.
+
 ## What MistHelper does
 
 | Area | What you get |
