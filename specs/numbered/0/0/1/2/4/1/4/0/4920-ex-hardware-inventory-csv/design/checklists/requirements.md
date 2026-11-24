@@ -16,7 +16,7 @@
 ## Requirement Completeness
 
 - [x] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
@@ -34,5 +34,6 @@
 ## Notes
 
 - Iteration 1: the item "Requirements are testable and unambiguous" fails. FR-013 names "the documented maximum" for targets. FR-016 names "a documented default" and "the documented range" for concurrency. The spec does not state the values. The clarify step must set them.
+- Iteration 2 (clarify session 2026-11-24): the item passes. FR-013 now states 1000 targets. FR-016 states the variable `PORTAL_WS_HARDWARE_CONCURRENCY`, the default 3, and the range 1 through 5. The clarifications section records five decisions with their rationale.
 - The fixed command, the confirmation phrase, and the CSV format come from the request. They are requirements, not implementation leaks.
 - Items marked incomplete require spec updates before `/speckit-plan`.

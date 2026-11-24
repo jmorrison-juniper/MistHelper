@@ -8,6 +8,16 @@
 
 **Input**: Issue #4920: Add one command that finds the scope of the Mist credential, opens a WebSocket shell on every connected EX switch with bounded concurrency, runs `show chassis hardware detail | display xml | no-more`, and compiles every switch reply into one CSV report. The credential can cover one organization or an MSP. Offer the command as a CLI menu and as an action on the Multi Site tab of the WebSockets page.
 
+## Clarifications
+
+### Session 2026-11-24
+
+- Q: What are the default and the range of the concurrency setting, and what happens when the value is not valid? → A: The variable is `PORTAL_WS_HARDWARE_CONCURRENCY`. The default is 3 and the range is 1 through 5. These match the Multi Site batch limits. A bad value falls back to the default with one warning that names the variable. This is the repository idiom for `PORTAL_WS_*` settings. The preview shows the value in use.
+- Q: What is the maximum number of targets? → A: The maximum is 1000 targets in one batch, as in every Multi Site batch. The CLI runs one batch for each organization, so the limit applies to each organization. The portal runs one batch for the whole preview, so the limit applies to the whole run. An MSP with more than 1000 EX switches uses the CLI.
+- Q: Which registry category does menu 309 use? → A: `resource_intensive`. The unattended sweeps skip it, and its skip reason says that it opens a shell on every connected EX switch. The typed phrase is the consent gate.
+- Q: How does each front end write the report? → A: The CLI writes through `DataExporter.write_with_format_selection` and forces the CSV backend. It uses a unique UTC-stamped name and then checks the file. The exporter does not write atomically. The portal publishes the CSV with its atomic artifact writer.
+- Q: Which organization does a credential with several organization grants and no MSP grant use? → A: It uses the configured `org_id` when that organization is among the grants. When no `org_id` is set and the grants name one organization, it uses that one. In every other case it stops and tells the operator to set `org_id`.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Collect one CSV for an organization from the CLI (Priority: P1)
@@ -78,8 +88,8 @@ An operator sets one environment variable to choose how many switches the tool o
 **Acceptance Scenarios**:
 
 1. **Given** the variable holds a valid value, **When** the run starts, **Then** the tool never holds more open shells than that value.
-2. **Given** the variable is not set, **When** the run starts, **Then** the tool uses the documented default.
-3. **Given** the variable holds text that is not a whole number or a number outside the documented range, **When** the run starts, **Then** the tool stops before any request to a device and names the variable and the range.
+2. **Given** the variable is not set, **When** the run starts, **Then** the tool uses the default of 3.
+3. **Given** the variable holds text that is not a whole number or a number outside the range 1 through 5, **When** the run starts, **Then** the tool uses the default of 3, logs one warning that names the variable, and shows the value in use in the preview.
 4. **Given** the CLI and the portal, **When** the variable is set, **Then** both use the same value for this action.
 
 ---
@@ -110,7 +120,7 @@ An operator opens the CSV in a spreadsheet and sends it to a colleague. The repo
 - The token cannot open a shell on a device (HTTP 403 on shell creation).
 - Mist answers HTTP 429 during discovery or while the tool opens a shell.
 - The MSP organization list is denied, or it lists an organization whose devices the token cannot read.
-- An MSP has many organizations and the total target count exceeds the documented maximum.
+- An MSP has more than 1000 connected EX switches in total. The CLI runs each organization as its own batch. The portal refuses the whole preview.
 - The operator ends the input or presses Ctrl+C at the prompt or during the run.
 - The output folder is not writable, or the report name already exists.
 - Two organizations hold devices with the same host name or the same serial number.
@@ -126,7 +136,7 @@ Scope:
 - **FR-002**: Before any request to a device, the tool MUST read the profile of the credential and decide the scope: organization scope or MSP scope. The tool MUST show the credential type, the scope, the organization count, and the target count before it asks for confirmation.
 - **FR-003**: The tool MUST choose MSP scope only when the profile holds an MSP grant and the tool can list the organizations of that grant. In every other case, the tool MUST use organization scope.
 - **FR-004**: If the tool cannot read the profile, it MUST stop before it opens any shell and MUST state the reason. A refused profile MUST NOT count as "no access" without a message.
-- **FR-005**: In organization scope, the tool MUST use only the organization that the credential grants or that the operator configured. In MSP scope, the tool MUST use every organization that the login can access.
+- **FR-005**: In organization scope, the tool MUST use only one organization. That organization is the configured `org_id` when the grants include it. When no `org_id` is set and the grants name one organization, it is that one. In every other case, the tool MUST stop and tell the operator to set `org_id`. In MSP scope, the tool MUST use every organization that the login can access.
 - **FR-006**: If the MSP organization list is denied with HTTP 403, the tool MUST say so once and continue in organization scope.
 - **FR-007**: A failure in one organization MUST NOT stop the other organizations. The failure MUST appear in the report.
 
@@ -137,13 +147,13 @@ Targets:
 - **FR-010**: A virtual chassis MUST be one target. Its member chassis MUST appear as separate hardware items.
 - **FR-011**: Discovery MUST read every page. It MUST report an access error or a page error separately from an empty result.
 - **FR-012**: When the turn of a target comes, the tool MUST check its status again. A switch that is no longer connected MUST get a skipped outcome and not a command failure.
-- **FR-013**: The tool MUST refuse a run with more targets than the documented maximum. It MUST NOT cut the list.
+- **FR-013**: The tool MUST refuse a batch with more than 1000 targets. It MUST NOT cut the list. The CLI runs one batch for each organization, so the limit applies to each organization. The portal runs one batch for the whole preview, so the limit applies to the whole run.
 
 Collection:
 
 - **FR-014**: The tool MUST run exactly one command on each target: `show chassis hardware detail | display xml | no-more`. The command is fixed. Operator text MUST NOT reach a device.
 - **FR-015**: The tool MUST reuse the verified collector of issue #4769. That collector waits for a stable CLI prompt, bounds the capture, removes only verified terminal framing, validates the XML, and rejects a reply that holds a credential.
-- **FR-016**: The tool MUST hold at most N shells open at the same time. N comes from one environment variable. The tool MUST use a documented default when the variable is not set. It MUST refuse a value outside the documented range and MUST name the variable in the message.
+- **FR-016**: The tool MUST hold at most N shells open at the same time. N comes from the environment variable `PORTAL_WS_HARDWARE_CONCURRENCY`. The default is 3 and the range is 1 through 5. A value outside the range, or text that is not a whole number, MUST give the default and one warning that names the variable. The preview MUST show the value in use.
 - **FR-017**: The CLI and the portal MUST read the same variable for this action.
 - **FR-018**: When the operator cancels, the tool MUST stop queued targets, close active shells, keep finished data, and mark the report as partial.
 - **FR-019**: The tool MUST apply the existing per-target time limits. A target that exceeds a limit MUST get a failed outcome. Its partial text MUST NOT enter the report.
@@ -157,8 +167,8 @@ Report:
 - **FR-024**: Every hardware row MUST show its level, its path from the chassis, its element type, and every field that the switch returned for that item. A field that an item lacks stays empty. The report MUST NOT drop a returned field.
 - **FR-025**: The columns MUST keep a fixed order. The rows MUST keep a stable order: organization, site, switch, then the order of the reply.
 - **FR-026**: The tool MUST write a text value so that a spreadsheet does not read it as a formula.
-- **FR-027**: The tool MUST write the report in one atomic step. No partial file may appear under the final name. The CLI writes under `data/`. The portal writes in its run folder.
-- **FR-028**: The CLI MUST send the rows through the configured output backends. CSV is the default backend. The rows MUST carry natural keys.
+- **FR-027**: The portal MUST publish the report in one atomic step. No partial file may appear under the final name. The CLI MUST write the report through the standard exporter under a unique UTC-stamped name under `data/`. It MUST then check the file against the rows and MUST remove the file and report an error when the check fails.
+- **FR-028**: The CLI MUST send the rows through the configured output backends and MUST force the CSV format for the report file. The rows MUST carry natural keys.
 
 CLI menu:
 
@@ -216,11 +226,11 @@ Safety and observability:
 - Mist offers no field that names the token type. The tool decides the scope from the profile grants and from the result of the MSP organization list.
 - The CLI reads the organization from the existing `org_id` setting. The portal reads it from its configured organization.
 - The tool reuses the collector, the target filter, the fixed command, and the typed confirmation of issue #4769.
-- The menu category is a category that the unattended sweeps skip, because the action opens a shell on many devices.
+- The menu category is `resource_intensive`, because the action opens a shell on many devices. The unattended sweeps skip that category.
 - The portal keeps one authenticated Mist session. An MSP run in the portal uses the same session for every organization.
 - Live validation uses the one test organization of the configured token. The owner tests MSP scope later.
 - Tests use mocked Mist responses and a fake WebSocket. They need no production credential.
-- The numeric limits (default concurrency, concurrency range, target maximum) come from the existing collector limits. The plan records the final values.
+- The 1000-target limit, the concurrency default of 3, and the concurrency range of 1 through 5 come from the existing Multi Site batch limits.
 
 ## Non-Goals
 
