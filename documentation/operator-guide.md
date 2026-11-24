@@ -115,7 +115,7 @@ Menus 294 to 304 read the Juniper service APIs. Read
 [Menu operations 294 to 304](menu-operations-294-304.md) for the Juniper settings,
 the output files, the ticket matching rule, and the troubleshooting steps.
 
-Menu 164 is a destructive operation, and it requires uppercase `APPLY` confirmation. It builds WAN VPNs from gateway profiles. It uses no profile data from a failed Mist response.
+Menu 164 is a destructive operation, and it requires uppercase `APPLY` confirmation. It applies the configuration that menu 150 extracts to other gateway templates.
 
 Menus 213 and 214 export site application lists and site system events. When an output write fails, each menu logs an error that names the endpoint and the output file. It does not claim that the export succeeded.
 
