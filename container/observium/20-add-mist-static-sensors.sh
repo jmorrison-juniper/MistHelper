@@ -25,14 +25,16 @@
 # Where:
 #   `my_init` runs every executable file under /etc/my_init.d/ in name order
 #   before it starts Observium. This script reaches that folder through a
-#   read-only bind mount in compose.yml. config.php itself lives on the
-#   `misthelper-observium-config` volume, so a first-time write here persists
-#   across every later restart without repeating the work (see the marker
-#   check below).
+#   read-only bind mount in compose.yml. The image script firstrun.sh creates
+#   config.php. A name that starts with a digit sorts before firstrun.sh, so
+#   compose.yml mounts this script as zz-add-mist-static-sensors.sh instead.
+#   config.php itself lives on the `misthelper-observium-config` volume, so a
+#   first-time write here persists across every later restart without
+#   repeating the work (see the marker check below).
 set -e  # Stop on the first error, so a partial edit never reaches config.php.
 
 CONFIG_PHP="/config/config.php"  # The persisted Observium settings file (symlinked from /opt/observium/config.php).
-MARKER="MISTHELPER_STATIC_SENSORS_V5"  # Bumped only if the sensor set below changes shape.
+MARKER="MISTHELPER_STATIC_SENSORS_V6"  # Bumped whenever the block below changes. The older block is removed first.
 
 if [ ! -f "$CONFIG_PHP" ]; then  # A missing file means Observium has not finished its first boot yet.
     echo "[MIST-SENSORS] ERROR: $CONFIG_PHP not found. Observium may not be initialized yet." >&2
@@ -42,6 +44,14 @@ fi
 if grep -q "$MARKER" "$CONFIG_PHP"; then  # A prior start already appended this block.
     echo "[MIST-SENSORS] $CONFIG_PHP already carries the Mist static sensors. Nothing to do."
     exit 0
+fi
+
+# An older block keeps running and keeps failing, so remove it first. The range
+# needs both markers. Without the end marker, sed would delete to the end of the
+# file, so a damaged file is left alone.
+if grep -q "^// End MistHelper static sensors$" "$CONFIG_PHP"; then  # Only a complete older block is removed.
+    sed -i '/^\/\/ MISTHELPER_STATIC_SENSORS_V[0-9]*$/,/^\/\/ End MistHelper static sensors$/d' "$CONFIG_PHP"  # Drop the older block.
+    echo "[MIST-SENSORS] Removed an older Mist static sensor block from $CONFIG_PHP."
 fi
 
 # Append a self-contained PHP block. It looks the device up by hostname at
@@ -85,13 +95,23 @@ $mist_device_id = NULL;
 // or directory" even though Observium's own framework connects fine (it forces
 // TCP internally). Normalize the host here instead of guessing its method.
 $mist_db_host = ($config['db_host'] === 'localhost') ? '127.0.0.1' : $config['db_host'];
-$mist_db_link = @mysqli_connect($mist_db_host, $config['db_user'], $config['db_pass'], $config['db_name']);
-if ($mist_db_link) {
+// PHP 8 throws mysqli_sql_exception for a failed connect or query, and @ does not
+// stop the throw. On first boot the schema does not exist yet, so the lookup runs
+// inside try. A throw outside it would abort every Observium entry point, and that
+// includes the discovery run that creates the schema.
+$mist_db_link = null;
+try {
+    $mist_db_link = mysqli_connect($mist_db_host, $config['db_user'], $config['db_pass'], $config['db_name']);
     $mist_result = mysqli_query($mist_db_link, "SELECT device_id FROM devices WHERE hostname = 'misthelper-app' LIMIT 1");
     if ($mist_result && ($mist_row = mysqli_fetch_assoc($mist_result))) {
         $mist_device_id = (int)$mist_row['device_id'];
     }
-    mysqli_close($mist_db_link);
+} catch (Throwable $mist_error) {
+    // No server or no schema yet. The sensors register on a later load, once the device exists.
+} finally {
+    if ($mist_db_link) {
+        mysqli_close($mist_db_link);
+    }
 }
 if ($mist_device_id) {
     // mistOrg subtree of MISTHELPER-MIB.mib: .1.3.6.1.4.1.8072.9999.9999.1.<column>.0
@@ -112,7 +132,7 @@ if ($mist_device_id) {
     // sensor name promises.
     $config['sensors']['static'][] = ['device_id' => $mist_device_id, 'class' => 'gauge', 'oid' => $mist_base . '.92.0', 'descr' => 'Mist scrape duration seconds', 'multiplier' => 0.001];
 }
-unset($mist_device_id, $mist_db_host, $mist_db_link, $mist_result, $mist_row, $mist_base);
+unset($mist_device_id, $mist_db_host, $mist_db_link, $mist_result, $mist_row, $mist_base, $mist_error);
 // End MistHelper static sensors
 EOF
 sed -i "s/\$MARKER/$MARKER/" "$CONFIG_PHP"  # Turn the literal placeholder into the real marker the check above reads.
