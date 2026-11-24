@@ -104,7 +104,7 @@ An operator opens the CSV in a spreadsheet and sends it to a colleague. The repo
 
 **Acceptance Scenarios**:
 
-1. **Given** a run that the operator cancels, **When** it ends, **Then** the report holds the finished switches, outcome rows for the others, and a marker that the report is partial.
+1. **Given** a run that the operator cancels, **When** it ends, **Then** the report holds the finished switches and an outcome row for each other target, and the console summary and the portal manifest mark the run as partial.
 2. **Given** a switch reply that holds a credential, **When** the tool validates it, **Then** the tool saves no row from that reply and records a failed outcome that names no secret value.
 3. **Given** a text value that begins with `=`, `+`, `-`, or `@`, **When** the tool writes it, **Then** a spreadsheet does not read it as a formula.
 4. **Given** a write failure, **When** the tool saves the report, **Then** no partial file appears under the final name.
@@ -136,8 +136,8 @@ Scope:
 - **FR-002**: Before any request to a device, the tool MUST read the profile of the credential and decide the scope: organization scope or MSP scope. The tool MUST show the credential type, the scope, the organization count, and the target count before it asks for confirmation.
 - **FR-003**: The tool MUST choose MSP scope only when the profile holds an MSP grant and the tool can list the organizations of that grant. In every other case, the tool MUST use organization scope.
 - **FR-004**: If the tool cannot read the profile, it MUST stop before it opens any shell and MUST state the reason. A refused profile MUST NOT count as "no access" without a message.
-- **FR-005**: In organization scope, the tool MUST use only one organization. That organization is the configured `org_id` when the grants include it. When no `org_id` is set and the grants name one organization, it is that one. In every other case, the tool MUST stop and tell the operator to set `org_id`. In MSP scope, the tool MUST use every organization that the login can access.
-- **FR-006**: If the MSP organization list is denied with HTTP 403, the tool MUST say so once and continue in organization scope.
+- **FR-005**: In organization scope, the tool MUST use only one organization. That organization is the configured `org_id` when the grants include it. When no `org_id` is set and the grants name one organization, it is that one. In every other case, the tool MUST stop and tell the operator to set `org_id`. In MSP scope, the tool MUST use every organization that the login can access: the organizations of the MSP lists and the direct grants, without repeats.
+- **FR-006**: If the MSP organization list is denied with HTTP 403 or fails in any other way, the tool MUST say so once and continue in organization scope.
 - **FR-007**: A failure in one organization MUST NOT stop the other organizations. The failure MUST appear in the report.
 
 Targets:
@@ -148,6 +148,7 @@ Targets:
 - **FR-011**: Discovery MUST read every page. It MUST report an access error or a page error separately from an empty result.
 - **FR-012**: When the turn of a target comes, the tool MUST check its status again. A switch that is no longer connected MUST get a skipped outcome and not a command failure.
 - **FR-013**: The tool MUST refuse a batch with more than 1000 targets. It MUST NOT cut the list. The CLI runs one batch for each organization, so the limit applies to each organization. The portal runs one batch for the whole preview, so the limit applies to the whole run.
+- **FR-042**: When a run has no target, the tool MUST write no report and MUST say so.
 
 Collection:
 
@@ -155,7 +156,7 @@ Collection:
 - **FR-015**: The tool MUST reuse the verified collector of issue #4769. That collector waits for a stable CLI prompt, bounds the capture, removes only verified terminal framing, validates the XML, and rejects a reply that holds a credential.
 - **FR-016**: The tool MUST hold at most N shells open at the same time. N comes from the environment variable `PORTAL_WS_HARDWARE_CONCURRENCY`. The default is 3 and the range is 1 through 5. A value outside the range, or text that is not a whole number, MUST give the default and one warning that names the variable. The preview MUST show the value in use.
 - **FR-017**: The CLI and the portal MUST read the same variable for this action.
-- **FR-018**: When the operator cancels, the tool MUST stop queued targets, close active shells, keep finished data, and mark the report as partial.
+- **FR-018**: When the operator cancels, the tool MUST stop queued targets, close active shells, keep finished data, and give each unfinished target an outcome row. The tool MUST mark the run as partial in the console summary and in the portal manifest.
 - **FR-019**: The tool MUST apply the existing per-target time limits. A target that exceeds a limit MUST get a failed outcome. Its partial text MUST NOT enter the report.
 
 Report:
@@ -166,9 +167,10 @@ Report:
 - **FR-023**: Every row MUST show the run time in UTC in ISO 8601 form, the scope, the organization, the site, and the switch. The switch data MUST include its identifier, its host name, and its MAC address when Mist reports them.
 - **FR-024**: Every hardware row MUST show its level, its path from the chassis, its element type, and every field that the switch returned for that item. A field that an item lacks stays empty. The report MUST NOT drop a returned field.
 - **FR-025**: The columns MUST keep a fixed order. The rows MUST keep a stable order: organization, site, switch, then the order of the reply.
-- **FR-026**: The tool MUST write a text value so that a spreadsheet does not read it as a formula.
+- **FR-026**: The tool MUST write a text value that starts with `=`, `+`, `-`, `@`, a tab, or a carriage return so that a spreadsheet does not read it as a formula.
 - **FR-027**: The portal MUST publish the report in one atomic step. No partial file may appear under the final name. The CLI MUST write the report through the standard exporter under a unique UTC-stamped name under `data/`. It MUST then check the file against the rows and MUST remove the file and report an error when the check fails.
 - **FR-028**: The CLI MUST send the rows through the configured output backends and MUST force the CSV format for the report file. The rows MUST carry natural keys.
+- **FR-041**: The tool MUST keep the report within the saved-output limit of the run. The portal limit is 64 MiB. The tool MUST NOT publish a report that would pass the limit, and it MUST say so.
 
 CLI menu:
 
@@ -188,7 +190,7 @@ Safety and observability:
 
 - **FR-037**: The tool MUST NOT print, log, or save the token, a WebSocket address, or any other credential.
 - **FR-038**: Every meaningful action MUST log before it runs and after it finishes. Log text uses ASCII only.
-- **FR-039**: The tool MUST obey the Mist rate limit and MUST use bounded concurrency.
+- **FR-039**: The tool MUST obey the Mist rate limit and MUST use bounded concurrency. On HTTP 429, the tool MUST stop the affected step, report it, and go on. It MUST NOT retry in a tight loop.
 - **FR-040**: Live validation MUST use read-only commands and MUST run on one organization only.
 
 ### Mist Cloud Transport Requirements
@@ -223,6 +225,7 @@ Safety and observability:
 
 - The feature covers the EX family only, because the working collector of issue #4769 covers only EX. A switch of another family stays out of scope.
 - The credential is a Mist API token or an interactive login. The tool does not create or change a credential.
+- An MSP report holds the data of several customers. The operator handles the file under the same rules as any other export.
 - Mist offers no field that names the token type. The tool decides the scope from the profile grants and from the result of the MSP organization list.
 - The CLI reads the organization from the existing `org_id` setting. The portal reads it from its configured organization.
 - The tool reuses the collector, the target filter, the fixed command, and the typed confirmation of issue #4769.

@@ -1,0 +1,89 @@
+# Quickstart: EX Hardware Inventory CSV
+
+This guide proves the feature end to end. Run each scenario from the worktree root. Use the Python 3.15 environment of the repository. No scenario needs a production credential, except the live scenario, which is read-only and runs on one organization.
+
+## Prerequisites
+
+- The worktree for branch `feat/4920-ex-hardware-inventory-csv`.
+- The environment from `scripts/bootstrap_worktree.py`, or the `.venv` of the main checkout.
+- For the live scenario only: the variables `MIST_APITOKEN`, `MIST_HOST`, and `org_id` in the process. The loader script copies them from the `.env` file of the main checkout. It prints no value. It also sets `MISTHELPER_STANDALONE=true`, so the run writes no database.
+
+## Scenario 1: Report rules (no network)
+
+```powershell
+python -m pytest tests/unit/ex_hardware_inventory/report -q
+```
+
+Expected: every test passes. The flattener reads a synthetic reply with the real shape: a default namespace on `chassis-inventory`, `junos:style` on `chassis`, `cli/banner`, one-space version fields, empty serial fields, disk and USB modules, and a two-member virtual chassis. The report holds one row for each item and keeps the fixed column order. A cell that starts with `=` gets an apostrophe.
+
+## Scenario 2: Scope detection (mocked Mist)
+
+```powershell
+python -m pytest tests/unit/ex_hardware_inventory/scope -q
+```
+
+Expected: an organization token gives organization scope. An MSP login with a good organization list gives MSP scope. An MSP grant with HTTP 403 gives organization scope and one note. A refused profile stops the run. A credential with several grants and no `org_id` stops the run.
+
+## Scenario 3: Concurrency (fake shell)
+
+```powershell
+python -m pytest tests/unit/ex_hardware_inventory/run tests/unit/websocket_streams -q -k "concurrency or hardware"
+```
+
+Expected: with 12 targets and limits of 1, 3, and 5, the peak number of open shells never exceeds the limit. An unset variable gives 3. A bad value gives 3 and one warning that names `PORTAL_WS_HARDWARE_CONCURRENCY`.
+
+## Scenario 4: The CLI flow (mocked batch service)
+
+```powershell
+python -m pytest tests/unit/ex_hardware_inventory/test_hardware_operation.py tests/integration/ex_hardware_inventory -q
+```
+
+Expected: a wrong phrase opens no shell and writes no file. The right phrase runs each organization in turn. One failing switch gives one outcome row. A Ctrl+C gives a partial report. An MSP run with one failing organization finishes the others.
+
+## Scenario 5: The Multi Site action (fake services and a fake browser)
+
+```powershell
+python -m pytest tests/unit/websocket_streams/web -q -k "csv"
+python -m pytest tests/e2e/websockets_tab/test_websockets_page.py -q -k "csv"
+```
+
+Expected: the output choice **One combined CSV report** appears. A preview shows the scope line. A finished run lists `hardware/inventory.csv` in the manifest and offers the download. XML, JSON, and both runs behave as before.
+
+## Scenario 6: Repository guards
+
+```powershell
+python -m pytest tests/guardrails/test_nested_package_structure.py tests/guardrails/test_src_domain_structure.py tests/guardrails/test_endpoint_catalog.py tests/guardrails/test_operation_registry_menu_coverage.py tests/guardrails/test_destructive_menu_docs.py tests/guardrails/test_portal_operation_coverage.py -q
+python -m pytest tests/unit/websocket_streams/live/transport/runtime/test_ws_feature_structure.py -q
+python scripts/generate_menu_wiki.py
+python -m scripts.menu_api_map
+git status --short
+```
+
+Expected: every guard passes. The generators change only the documented menu pages, and a second run changes nothing.
+
+## Scenario 7: Live read-only run on one organization
+
+```powershell
+. "<temp folder>\live-env.ps1"
+python MistHelper.py --menu 309
+```
+
+Steps:
+
+1. Check that step 1 names one organization and the scope `organization`.
+2. Check that step 2 shows the number of connected EX switches that you expect.
+3. Type the phrase that the menu shows.
+4. Wait for the summary line and the report path.
+5. Open the report. Check that the number of distinct `device_id` values equals the collected count.
+6. Compare the serial numbers: the set of `item_serial_number` values in the report must equal the set of `serial-number` values in the saved XML files of the run folder.
+7. Search the report, the run folder, and the log for the token. Expect zero matches.
+
+Expected: the run ends with exit code 0, one report file, and no secret in any output. The issue gets only aggregate counts.
+
+## Scenario 8: MSP scope (mocked only)
+
+```powershell
+python -m pytest tests/unit/ex_hardware_inventory/run/test_hardware_routing.py -q
+```
+
+Expected: the scope-aware picker returns the sites of all organizations. The checker builds each request for the right organization. One preview holds targets from several organizations and shows the organization count. The owner tests live MSP scope later.
