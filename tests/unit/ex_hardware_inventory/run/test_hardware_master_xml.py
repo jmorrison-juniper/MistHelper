@@ -153,10 +153,16 @@ class TestXmlWriterCopy:
 
     def test_xml_space_preserve_keeps_all_white_space_below_it(self) -> None:
         """A subtree that asks to preserve white space is copied as it is, and default turns formatting on again."""
-        source = '<r xml:space="preserve">\n  <a>\n    <b/>\n  </a>\n  <c xml:space="default">\n    <d/>\n  </c>\n</r>'
+        source = (
+            '<r xml:space="preserve">\n\t<a>\n\t\t<b/>\n\t</a>\n\n  <c xml:space="default">\n\t\t<d/>\n\n\t</c>\n</r>'
+        )
         copied = XmlWriter.copy(source, 0)
-        assert copied.startswith('<r xml:space="preserve">\n  <a>\n    <b/>\n  </a>\n  ')  # Kept as it is.
-        assert copied.endswith('<c xml:space="default">\n    <d/>\n  </c>\n</r>')  # The default subtree is formatted.
+        # The tabs and the blank line stay where the source has them. Only the subtree below `default` is formatted.
+        assert (
+            copied
+            == '<r xml:space="preserve">\n\t<a>\n\t\t<b/>\n\t</a>\n\n  <c xml:space="default">\n    <d/>\n  </c>\n</r>'
+        )
+        assert XmlWriter.copy(source.replace('xml:space="preserve"', 'xml:space="default"'), 0) != copied  # Control.
 
     def test_element_only_content_is_formatted_even_when_the_source_has_no_white_space(self) -> None:
         """A source with no indentation at all still gives one element on each line."""
@@ -375,6 +381,23 @@ class TestMasterXmlBuilder:
         assert [s.get("name") for s in root.iterfind(".//mh:site", NS)] == ["A-site", "b-site", "b-site"]
         assert [d.get("name") for d in root.iterfind(".//mh:device", NS)] == ["EX-0", "ex-3", "ex-1", "Ex-2"]
 
+    def test_the_sort_ignores_case_at_the_organization_site_and_device_level(self) -> None:
+        """A capital letter sorts before every small letter in a raw sort. This file sorts by the folded name."""
+        results = [
+            make_result("ex-B", org=(ORG_A, "Zulu"), site=(SITE_A, "Zebra")),
+            make_result("ex-a", org=(ORG_A, "Zulu"), site=(SITE_A, "Zebra")),
+            make_result("ex-c", org=(ORG_A, "Zulu"), site=(SITE_B, "apple")),
+            make_result("ex-d", org=(ORG_B, "alpha"), site=(SITE_A, "Site")),
+        ]
+        root = ET.fromstring(make_document(results).data)
+        assert [o.get("name") for o in root.iterfind("mh:organization", NS)] == ["alpha", "Zulu"]  # Not Zulu first.
+        assert [s.get("name") for s in root.iterfind(".//mh:site", NS)] == [
+            "Site",
+            "apple",
+            "Zebra",
+        ]  # Not Zebra first.
+        assert [d.get("name") for d in root.iterfind(".//mh:device", NS)] == ["ex-d", "ex-c", "ex-a", "ex-B"]
+
     def test_two_organizations_with_one_name_stay_two_elements(self) -> None:
         """The identifier splits them, so no device moves into the wrong organization."""
         results = [make_result("ex-1", org=(ORG_A, "Same")), make_result("ex-2", org=(ORG_B, "Same"))]
@@ -438,6 +461,16 @@ class TestMasterXmlBuilder:
         """Even the declaration has bytes, so no limit at or below zero can hold a document."""
         with pytest.raises(ReportTooLarge):
             MasterXmlBuilder.compile([], "organization", RUN_UTC, limit)
+
+    def test_the_limit_counts_bytes_and_not_characters(self) -> None:
+        """A name of two-byte characters is short in characters and long in bytes. The byte limit decides."""
+        results = [make_result("ex-" + chr(0xE9) * 200)]
+        document = make_document(results)
+        characters = len(document.data.decode("utf-8"))
+        assert len(document.data) > characters  # The file holds multi-byte characters.
+        with pytest.raises(ReportTooLarge, match="bytes"):
+            MasterXmlBuilder.compile(results, "organization", RUN_UTC, characters)  # Enough characters, too few bytes.
+        assert MasterXmlBuilder.compile(results, "organization", RUN_UTC, len(document.data)).data == document.data
 
     def test_the_builder_stops_early_when_the_text_passes_the_limit_while_it_grows(self) -> None:
         """Many large replies stop the build at the limit, and no bytes come out."""

@@ -5,9 +5,10 @@ from __future__ import annotations
 import csv  # Read the report the way a spreadsheet would.
 import xml.etree.ElementTree as ET  # A standard reader, so the tests share no code with the XML writer.
 from collections import Counter  # Compare the statuses of the two files as multisets.
+from datetime import datetime, tzinfo  # Freeze the clock of one test, so the file names are known.
 from pathlib import Path  # Test output stays under the pytest temporary folder.
 from types import SimpleNamespace  # Resolver doubles.
-from typing import Any  # Doubles have no public type.
+from typing import Any, Self  # Doubles have no public type, and a classmethod returns its own class.
 from unittest.mock import Mock  # Record the prompt.
 
 import pytest  # Capture the console and patch the seams.
@@ -602,6 +603,31 @@ class TestMasterXml:
             "skipped",
         ]
         assert self.serials(root) == []  # No reply was embedded.
+
+    def test_the_master_xml_takes_the_numbered_name_of_the_report_when_the_first_name_is_taken(
+        self, harness: Harness, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The first report name is taken, so the report gets `_2`. The XML file must take the same number."""
+
+        class FrozenClock(datetime):
+            """A clock that stands still, so the names of the two files are known before the run."""
+
+            @classmethod
+            def now(cls, tz: tzinfo | None = None) -> Self:
+                """Return one fixed time."""
+                return cls(2026, 11, 25, 18, 46, 6, tzinfo=tz)
+
+        monkeypatch.setattr(operation_module, "datetime", FrozenClock)
+        data = harness.tmp_path / "data"
+        data.mkdir()
+        (data / "ExHardwareInventory_20261125T184606Z.csv").write_text("earlier report", encoding="utf-8")
+        harness.answer = "RUN 1 TARGETS"
+        harness.script.previews[ORG_A] = preview_of(ORG_A, "Alpha", [1])
+        harness.script.runs[ORG_A] = result_of(ORG_A, "Alpha", {1: ("completed", "")})
+        _, lines = run_menu(capsys)
+        assert f"Report: {Path('data') / 'ExHardwareInventory_20261125T184606Z_2.csv'} (" in "\n".join(lines)
+        assert f"Master XML: {Path('data') / 'ExHardwareInventory_20261125T184606Z_2.xml'} (1 devices)" in lines
+        assert [path.name for path in self.master_files(harness)] == ["ExHardwareInventory_20261125T184606Z_2.xml"]
 
 
 class TestMenuRegistration:

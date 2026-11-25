@@ -220,6 +220,23 @@ class TestFinishStep:
                 writer.finish(outcomes)
             assert logged in caplog.text and (not hidden or hidden not in caplog.text)
 
+    def test_the_two_reports_together_must_fit_the_quota_that_the_replies_left(self, tmp_path: Path) -> None:
+        """One byte short fails both reports. The exact size publishes both. Each report alone would fit."""
+        artifacts, writer, outcomes = finished_run(tmp_path / "probe", "csv-master-xml")
+        replies = writer._record.bytes_written  # The quota that the saved replies use.
+        published(artifacts, writer, outcomes)
+        sizes = {name: (tmp_path / "probe").rglob(f"inventory.{name}") for name in ("csv", "xml")}
+        both = sum(next(found).stat().st_size for found in sizes.values())  # The size of the two reports together.
+        short, short_writer, short_outcomes = finished_run(tmp_path / "short", "csv-master-xml")
+        short.OUTPUT_LIMIT = short_writer._record.bytes_written + both - 1  # One byte too small for the pair.
+        with pytest.raises(StreamRequestError) as refusal:
+            short_writer.finish(short_outcomes)
+        assert refusal.value.code == "output_failed" and not list((tmp_path / "short").rglob("inventory.*"))
+        exact, exact_writer, exact_outcomes = finished_run(tmp_path / "exact", "csv-master-xml")
+        exact.OUTPUT_LIMIT = exact_writer._record.bytes_written + both  # The pair fits with no byte to spare.
+        assert {CSV_NAME, XML_NAME} <= set(published(exact, exact_writer, exact_outcomes)["files"])
+        assert exact_writer._record.bytes_written == replies + both  # The quota counts both reports.
+
     def test_one_report_that_does_not_fit_fails_the_run_and_publishes_neither(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
