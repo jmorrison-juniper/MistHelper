@@ -48,6 +48,7 @@ from src.operations.exporting.ex_hardware_inventory.run.publisher import (
 logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep artifact fields safe and bounded.
 
 REPORT_NAME = "hardware/inventory.csv"  # The combined CSV of a hardware run, relative to its run folder.
+MASTER_XML_NAME = "hardware/inventory.xml"  # The combined XML file of a hardware run, in the same folder.
 
 
 @dataclass(slots=True)
@@ -255,7 +256,7 @@ class BatchArtifactStorage:
         with record.lock:
             record.outcomes = [self.metadata.codec.outcome(item) for item in outcomes]  # Remove private metadata.
             record.partial = record.partial or any(item.get("state") != "completed" for item in outcomes)
-            if record.status != "failed" and record.output.get("format") == "csv":
+            if record.status != "failed" and HardwareXmlPreset.REPORT_KINDS.get(str(record.output.get("format"))):
                 self.reports.publish(record)  # A failure sets the failed status and keeps the saved replies.
             if record.status != "failed":
                 record.status = "ready"  # The manifest write must succeed before completion.
@@ -678,25 +679,39 @@ class BatchArtifactStorage:
 
     @dataclass
     class Reports:
-        """Compile the combined CSV of a hardware run and publish it next to the saved replies."""
+        """Compile the combined reports of a hardware run and publish them next to the saved replies."""
 
         storage: BatchArtifactStorage  # Share the quota, the checked paths, and the atomic publication.
 
         def publish(self, record: BatchArtifactRecord) -> None:
-            """Compile the CSV from the saved replies and publish it, or fail the run and keep the replies."""
-            scope = record.output.get("scope")  # The service stores the organizations of the run at the start.
-            hook = ReportHook(
-                lambda name: self.storage.files.read_bytes(record, Path(name), self.storage.owner.RECORD_LIMIT).decode(
-                    "utf-8"
-                ),
-                scope if isinstance(scope, Mapping) else None,
-            )  # The hook reads each saved reply only through the checked path.
-            try:  # Any failure keeps the XML files and marks the artifact failed.
-                data = hook.compile(record.outcomes, self.storage.owner.OUTPUT_LIMIT - record.bytes_written)
-                BatchArtifactWriter.Hardware.Publication(self.storage, record).commit((REPORT_NAME,), [data], len(data))
+            """Compile each report that the format asks for and publish them together, or fail the run."""
+            try:  # Any failure keeps the saved replies and marks the artifact failed.
+                reports = self._compile(record)  # The file name and the checked bytes of each report.
+                names, contents = tuple(name for name, _ in reports), [data for _, data in reports]  # Same order.
+                BatchArtifactWriter.Hardware.Publication(self.storage, record).commit(
+                    names, contents, sum(map(len, contents))
+                )  # All reports appear, or none does.
             except (ValueError, OSError, StreamRequestError) as error:
                 record.status, record.partial = "failed", True  # The summary then reports a failed output.
                 logger.emit(logging.ERROR, "web.artifact.report.error", {"status": type(error).__name__})
+
+        def _compile(self, record: BatchArtifactRecord) -> list[tuple[str, bytes]]:
+            """Return the file name and the checked bytes of each report, within the quota that the replies left."""
+            scope = record.output.get("scope")  # The service stores the organizations of the run at the start.
+            hook = ReportHook(self._reader(record), scope if isinstance(scope, Mapping) else None)  # One run time.
+            builders = {"csv": (REPORT_NAME, hook.compile), "xml": (MASTER_XML_NAME, hook.compile_xml)}
+            remaining = self.storage.owner.OUTPUT_LIMIT - record.bytes_written  # The quota that the replies left.
+            reports: list[tuple[str, bytes]] = []  # In the order of the format, CSV first.
+            for kind in HardwareXmlPreset.REPORT_KINDS.get(str(record.output.get("format")), ()):
+                name, build = builders[kind]  # The file name and the builder of this report.
+                reports.append((name, build(record.outcomes, remaining)))  # The builder refuses a file over the limit.
+                remaining -= len(reports[-1][1])  # The next report must fit in what is left.
+            return reports
+
+        def _reader(self, record: BatchArtifactRecord) -> Callable[[str], str]:
+            """Return a reader that gives the saved text of one reply, only through the checked path."""
+            limit = self.storage.owner.RECORD_LIMIT  # One reply is never larger than one record.
+            return lambda name: self.storage.files.read_bytes(record, Path(name), limit).decode("utf-8")
 
 
 class BatchSessionBindings:
@@ -770,6 +785,8 @@ class SessionArtifactService:
         self.bind_batch = self._bindings.bind_batch  # Expose the atomic public binding operation.
         self.manifest = self._bindings.manifest  # Expose the safe public summary operation.
         self.cleanup_expired = self._bindings.cleanup_expired  # The manager calls the retention owner directly.
+        self.csv_download = self.ReportDownload(self, REPORT_NAME, "csv", "combined CSV report")  # The CSV report.
+        self.xml_download = self.ReportDownload(self, MASTER_XML_NAME, "xml", "combined XML file")  # The master XML.
         self.csv_preview = self.Preview(self.csv_download)  # The table reads only what the download holds.
 
     def delete(self, session_id: str) -> dict[str, object]:
@@ -822,24 +839,32 @@ class SessionArtifactService:
             with record.lock:
                 record.pins -= 1  # Release the cleanup pin after the snapshot is complete.
 
-    def csv_download(self, session_id: str) -> tuple[str, bytes]:
-        """Return the published combined CSV of one completed hardware run."""
-        self._storage.require_ready()  # A not-ready portal cannot create downloads.
-        self._manager.session(session_id)  # Reject unknown or expired parents before file access.
-        writer = self._bindings.writer(session_id)  # Single Site sessions have no report.
-        if writer is None:
-            raise StreamRequestError("not_batch", "The session is not a Multi Site batch.")
-        record = writer._record  # The private record owns completion state and pins.
-        with record.lock:
-            if not record.complete or REPORT_NAME not in record.files:  # Only the CSV output publishes a report.
-                raise StreamRequestError("artifact_not_ready", "The combined CSV report is not ready.")
-            record.pins += 1  # Pin the files while the report is read.
-        try:
-            data = self._storage.files.read_bytes(record, Path(REPORT_NAME), self.OUTPUT_LIMIT)  # Checked path.
-        finally:
+    class ReportDownload:
+        """Read one published combined report of a completed hardware run (issues #4920 and #4933)."""
+
+        def __init__(self, service: SessionArtifactService, name: str, suffix: str, label: str) -> None:
+            """Bind the service, the saved file name, the download suffix, and the plain name of the report."""
+            self._service, self._name, self._suffix, self._label = service, name, suffix, label
+
+        def __call__(self, session_id: str) -> tuple[str, bytes]:
+            """Return a server-made file name and the bytes of the report, or refuse with a plain sentence."""
+            service = self._service  # The storage, the manager, and the bindings stay with the service.
+            service._storage.require_ready()  # A not-ready portal cannot create downloads.
+            service._manager.session(session_id)  # Reject unknown or expired parents before file access.
+            writer = service._bindings.writer(session_id)  # Single Site sessions have no report.
+            if writer is None:
+                raise StreamRequestError("not_batch", "The session is not a Multi Site batch.")
+            record = writer._record  # The private record owns completion state and pins.
             with record.lock:
-                record.pins -= 1  # Release the cleanup pin after the read.
-        return f"ExHardwareInventory_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.csv", data  # Server-made name.
+                if not record.complete or self._name not in record.files:  # Only the chosen format publishes it.
+                    raise StreamRequestError("artifact_not_ready", f"The {self._label} is not ready.")
+                record.pins += 1  # Pin the files while the report is read.
+            try:
+                data = service._storage.files.read_bytes(record, Path(self._name), service.OUTPUT_LIMIT)  # Checked.
+            finally:
+                with record.lock:
+                    record.pins -= 1  # Release the cleanup pin after the read.
+            return f"ExHardwareInventory_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.{self._suffix}", data
 
     class Preview:
         """Return one page of the published combined CSV as table data (issue #4931)."""

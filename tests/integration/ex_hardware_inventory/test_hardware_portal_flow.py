@@ -10,6 +10,7 @@ import csv  # Read the downloaded report the way a spreadsheet would.
 import io  # Wrap the report text for the CSV reader.
 import json  # Read the manifest.
 import time  # Poll the batch until it ends.
+import xml.etree.ElementTree as ET  # A standard reader, so the tests share no code with the XML writer.
 import zipfile  # Check the archive entries.
 from collections.abc import Callable, Iterator  # Type the fixture and the hook between the preview and the start.
 from io import BytesIO  # Wrap the archive bytes.
@@ -22,6 +23,7 @@ import requests  # Build the transport faults that the SDK can raise.
 from src.mist.realtime.websocket_streams.live.sessions.manager import factory as manager_factory  # The shell seam.
 from src.mist.realtime.websocket_streams.live.sessions.manager.factory import BatchRunner  # Patch the timers.
 from tests.unit.ex_hardware_inventory.support.hardware_fakes import FakeMist, Payloads, ledger_session  # Fakes.
+from tests.unit.ex_hardware_inventory.support.hardware_master_xml import NS, infoset_of  # Readers.
 from tests.unit.ex_hardware_inventory.support.hardware_shells import FakeOrganization, FakeShells, make_uuid  # Fakes.
 from web_portal.app import WebPortalApp  # The real portal app.
 from web_portal.menu_registry import build_static_menu_actions  # Normal menu actions.
@@ -127,6 +129,31 @@ def report_rows(client: Any, session_id: str) -> list[dict[str, str]]:
     return list(csv.DictReader(io.StringIO(response.get_data(as_text=True), newline="")))
 
 
+def master_root(client: Any, session_id: str) -> ET.Element:
+    """Download the combined XML file and parse it with a standard reader that the tool does not use."""
+    response = client.get(f"/api/websockets/batches/{session_id}/download?format=xml")
+    assert response.status_code == 200 and response.mimetype == "application/xml"
+    assert response.headers["Content-Disposition"].startswith("attachment; filename=ExHardwareInventory_")
+    return ET.fromstring(response.get_data())
+
+
+def two_sites(portal: Portal) -> None:
+    """Script four connected switches in two sites: one good, one with bad XML, one silent, and one more good."""
+    portal.org_token()
+    portal.mist.add(
+        ORG_A,
+        (SITE_1, "Site One"),
+        [(make_uuid(101), "ex-01", "switch", "EX4100-48P"), (make_uuid(102), "ex-02", "switch", "EX4100-48P")],
+    )
+    portal.mist.add(
+        ORG_A,
+        (SITE_2, "Site Two"),
+        [(make_uuid(201), "ex-03", "switch", "EX4100-48P"), (make_uuid(202), "ex-04", "switch", "EX4100-48P")],
+    )
+    portal.shells.behavior[make_uuid(102)] = "bad_xml"
+    portal.shells.behavior[make_uuid(202)] = "silent"
+
+
 @pytest.fixture
 def portal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Portal:
     """Build the fakes for one test."""
@@ -136,21 +163,7 @@ def portal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Portal:
 class TestOrganizationScope:
     """The portal action for one organization: preview, run, publish, and download."""
 
-    def build(self, portal: Portal) -> None:
-        """Script four connected switches in two sites: one good, one with bad XML, one silent, and one more good."""
-        portal.org_token()
-        portal.mist.add(
-            ORG_A,
-            (SITE_1, "Site One"),
-            [(make_uuid(101), "ex-01", "switch", "EX4100-48P"), (make_uuid(102), "ex-02", "switch", "EX4100-48P")],
-        )
-        portal.mist.add(
-            ORG_A,
-            (SITE_2, "Site Two"),
-            [(make_uuid(201), "ex-03", "switch", "EX4100-48P"), (make_uuid(202), "ex-04", "switch", "EX4100-48P")],
-        )
-        portal.shells.behavior[make_uuid(102)] = "bad_xml"
-        portal.shells.behavior[make_uuid(202)] = "silent"
+    build = staticmethod(two_sites)  # Four switches in two sites. The master XML tests use the same scenario.
 
     def test_the_csv_output_runs_end_to_end_and_the_download_works(self, portal: Portal) -> None:
         """The preview shows the scope, the run publishes the CSV, and the download returns it."""
@@ -305,7 +318,105 @@ class TestOrganizationScope:
         portal.mist.add(ORG_A, (SITE_1, "Site One"), [(make_uuid(101), "ex-01", "switch", "EX4100-48P")])
 
 
-class TestMistFailures:
+class TestMasterXmlOutput:
+    """The combined XML file of the portal, alone or with the CSV report (issue #4933)."""
+
+    @staticmethod
+    def zipped_replies(client: Any, session_id: str) -> dict[str, bytes]:
+        """Return the saved reply of each collected switch from the archive, by the device label in the name."""
+        archive = client.get(f"/api/websockets/batches/{session_id}/download?format=zip")
+        with zipfile.ZipFile(BytesIO(archive.get_data())) as zipped:
+            return {
+                name.rsplit("/", 1)[-1].split("--", 1)[0]: zipped.read(name)
+                for name in zipped.namelist()
+                if name.endswith(".xml") and not name.endswith("inventory.xml")
+            }
+
+    def test_the_master_xml_output_publishes_one_valid_file_and_no_csv(self, portal: Portal) -> None:
+        """One run gives a file that a standard reader accepts, with every switch and each reply of its saved file."""
+        two_sites(portal)
+        for client in portal.build():
+            preview, batch, session_id = run_batch(client, "master-xml")
+            assert preview["format"] == "master-xml" and preview["fixed_commands"] == [COMMAND]
+            assert batch["artifact_status"] == "ready" and batch["format"] == "master-xml"
+            manifest = client.get(f"/api/websockets/batches/{session_id}/artifacts").get_json()
+            assert "hardware/inventory.xml" in manifest["files"] and "hardware/inventory.csv" not in manifest["files"]
+            root = master_root(client, session_id)
+            devices = {device.get("name"): device for device in root.iterfind(".//mh:device", NS)}
+            assert {name: device.get("status") for name, device in devices.items()} == {
+                "ex-01": "collected",
+                "ex-02": "failed",
+                "ex-03": "collected",
+                "ex-04": "failed",
+            }
+            assert devices["ex-02"].get("detail") == "The reply was not a valid chassis inventory."
+            assert devices["ex-04"].get("detail") == "The shell did not show a stable prompt."
+            assert (root.get("scope"), root.get("devices"), root.get("collected"), root.get("failed")) == (
+                "organization",
+                "4",
+                "2",
+                "2",
+            )
+            saved = self.zipped_replies(client, session_id)
+            for label in ("ex-01", "ex-03"):  # The embedded reply is the saved reply, apart from formatting.
+                (embedded,) = list(devices[label])
+                assert infoset_of(embedded) == infoset_of(ET.fromstring(saved[label])), label
+            refusal = client.get(f"/api/websockets/batches/{session_id}/download?format=csv")
+            assert refusal.status_code == 409 and refusal.get_json()["code"] == "artifact_not_ready"
+            assert TOKEN not in json.dumps(manifest) + ET.tostring(root, encoding="unicode")
+
+    def test_the_csv_and_master_xml_output_publishes_both_files_that_agree(self, portal: Portal) -> None:
+        """Both reports appear together. They name the same switches with the same statuses."""
+        two_sites(portal)
+        for client in portal.build():
+            _, batch, session_id = run_batch(client, "csv-master-xml")
+            assert batch["artifact_status"] == "ready" and batch["format"] == "csv-master-xml"
+            manifest = client.get(f"/api/websockets/batches/{session_id}/artifacts").get_json()
+            assert {"hardware/inventory.csv", "hardware/inventory.xml"} <= set(manifest["files"])
+            from_csv = {(row["device_name"], row["collection_status"]) for row in report_rows(client, session_id)}
+            from_xml = {
+                (device.get("name"), device.get("status"))
+                for device in master_root(client, session_id).iterfind(".//mh:device", NS)
+            }
+            assert from_csv == from_xml and len(from_xml) == 4
+            table = client.get(f"/api/websockets/batches/{session_id}/csv-preview")
+            assert table.status_code == 200  # The table needs the CSV report, and it is there.
+            with zipfile.ZipFile(
+                BytesIO(client.get(f"/api/websockets/batches/{session_id}/download?format=zip").data)
+            ) as z:
+                assert {"hardware/inventory.csv", "hardware/inventory.xml"} <= set(z.namelist())
+
+    @pytest.mark.parametrize("output_format", ["xml", "json", "both", "csv"])
+    def test_the_other_outputs_publish_no_master_xml(self, portal: Portal, output_format: str) -> None:
+        """Only the two master XML formats write the file, and the download says that it is not ready."""
+        two_sites(portal)
+        for client in portal.build():
+            _, _, session_id = run_batch(client, output_format)
+            manifest = client.get(f"/api/websockets/batches/{session_id}/artifacts").get_json()
+            assert "hardware/inventory.xml" not in manifest["files"]
+            refusal = client.get(f"/api/websockets/batches/{session_id}/download?format=xml")
+            assert refusal.status_code == 409 and refusal.get_json()["code"] == "artifact_not_ready"
+
+    def test_an_msp_run_lists_each_organization_and_the_unread_one_has_no_site(self, portal: Portal) -> None:
+        """The scope of the run decides the organization elements, and Mist can fail one of them."""
+        portal.msp_login()
+        portal.mist.add(ORG_A, (SITE_1, "Site One"), [(make_uuid(101), "ex-01", "switch", "EX4100-48P")])
+        portal.mist.add(ORG_B, (SITE_2, "Site Two"), [(make_uuid(201), "ex-02", "switch", "EX4100-48P")])
+        portal.mist.failures[f"listOrgSites:{ORG_C}"] = Payloads.response(status=403, data={})
+        for client in portal.build():
+            _, batch, session_id = run_batch(client, "master-xml")
+            root = master_root(client, session_id)
+        assert batch["artifact_status"] == "ready"
+        assert (root.get("scope"), root.get("organizations"), root.get("unread"), root.get("collected")) == (
+            "msp",
+            "3",
+            "1",
+            "2",
+        )
+        unread = [org for org in root.iterfind("mh:organization", NS) if org.get("status") == "failed"]
+        assert [org.get("name") for org in unread] == ["Gamma Org"] and len(unread[0]) == 0
+        assert unread[0].get("detail") == "Mist could not list the switches of this organization."
+
     """Mist refuses a read, answers with a server error, or cannot be reached: the portal refuses plainly."""
 
     UPSTREAM = "UPSTREAM-ERROR-TEXT"  # Text that only the failed call holds. It must never reach an answer.

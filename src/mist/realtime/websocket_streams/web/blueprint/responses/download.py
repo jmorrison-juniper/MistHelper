@@ -21,6 +21,12 @@ logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep download
 class DownloadResponse:
     """Build the streamed session download response."""
 
+    BATCH_OUTPUTS = {
+        "zip": ("zip_download", "application/zip"),
+        "csv": ("csv_download", "text/csv"),
+        "xml": ("xml_download", "application/xml"),
+    }  # The reader and the media type of each batch output. The keys are the legal values of the format field.
+
     @staticmethod
     def download(session_id: str) -> Response | tuple[Response, int]:
         """Return one JSON Lines attachment."""
@@ -38,22 +44,20 @@ class DownloadResponse:
 
     @staticmethod
     def batch_zip(session_id: str) -> Response | tuple[Response, int]:
-        """Return one completed Multi Site result archive, or the combined CSV report of a hardware run."""
-        selected = request.args.get("format")  # Only two named outputs exist.
-        if set(request.args) != {"format"} or selected not in {"zip", "csv"}:  # One field with a known value.
+        """Return one completed Multi Site result archive, or a combined report of a hardware run."""
+        selected = request.args.get("format", "")  # Only three named outputs exist. A missing field is empty.
+        if set(request.args) != {"format"} or selected not in DownloadResponse.BATCH_OUTPUTS:  # Known value.
             return JsonResponse.error(  # Refuse any other query.
-                StreamRequestError("bad_request", "The batch download requires format=zip or format=csv.")
+                StreamRequestError("bad_request", "The batch download requires format=zip, format=csv, or format=xml.")
             )
+        reader_name, media_type = DownloadResponse.BATCH_OUTPUTS[selected]  # The reader and the media type.
         try:
             services = ServiceRequest.current()  # Resolve the app-scoped service bundle.
-            reader = (
-                services.artifacts.csv_download if selected == "csv" else services.artifacts.zip_download
-            )  # Pick one.
-            filename, content = reader(session_id)  # Copy a bounded pinned snapshot.
+            filename, content = getattr(services.artifacts, reader_name)(session_id)  # A bounded pinned snapshot.
             logger.emit(logging.DEBUG, "web.response.batch_download.ready", {"status": "ready"})  # Log no filename.
             return Response(  # Send the file as an attachment with a server-made name.
                 content,
-                mimetype="text/csv" if selected == "csv" else "application/zip",
+                mimetype=media_type,
                 headers={"Content-Disposition": f"attachment; filename={filename}"},
             )
         except StreamRequestError as error:  # The run is not ready, or the session is not a batch.

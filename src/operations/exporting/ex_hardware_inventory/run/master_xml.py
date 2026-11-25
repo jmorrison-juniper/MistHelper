@@ -155,6 +155,24 @@ class XmlWriter:
             else:  # A new text node.
                 children.append(data)
 
+    class Space:
+        """Decide which white space of a reply is formatting, which the writer replaces, and which is data."""
+
+        @staticmethod
+        def keeps(node: XmlWriter.Node, inherited: bool) -> bool:
+            """Return True when all white space of the element is data, because of ``xml:space="preserve"``."""
+            space = dict(node.attributes).get("xml:space")  # An explicit xml:space decides for this subtree.
+            return inherited if space is None else space == "preserve"  # Only the value preserve keeps white space.
+
+        @staticmethod
+        def formats(node: XmlWriter.Node, keep: bool) -> bool:
+            """Return True when the element holds child elements and white space only, so the writer indents it."""
+            if keep or not any(isinstance(child, XmlWriter.Node) for child in node.children):
+                return False  # The white space is data, or there is no child element to put on its own line.
+            return all(
+                isinstance(child, XmlWriter.Node) or not child.strip(XmlWriter.BLANK) for child in node.children
+            )  # Element-only content: every text node is white space.
+
     @classmethod
     def qname(cls, raw: str) -> str:
         """Return the qualified name from a name that expat reports with its prefix.
@@ -245,16 +263,13 @@ class XmlWriter:
         head += "".join(f' {name}="{XmlText.attribute(value)}"' for name, value in node.attributes)  # Attributes.
         if not node.children:  # An element with no content is written in the short form.
             return head + "/>"
-        space = dict(node.attributes).get("xml:space")  # An explicit xml:space decides for this subtree.
-        keep = preserve if space is None else space == "preserve"  # Only the value preserve keeps the white space.
-        children = [child for child in node.children if isinstance(child, cls.Node)]  # The child elements.
-        formatting = (
-            bool(children)
-            and not keep
-            and all(isinstance(child, cls.Node) or not child.strip(cls.BLANK) for child in node.children)
-        )  # Element-only content: every text node is white space.
-        if formatting:  # Put each child element on its own line, one level deeper.
-            inner = "".join(f"\n{'  ' * (depth + 1)}{cls.render(child, depth + 1, keep)}" for child in children)
+        keep = cls.Space.keeps(node, preserve)  # An explicit xml:space decides for this subtree.
+        if cls.Space.formats(node, keep):  # Put each child element on its own line, one level deeper.
+            inner = "".join(
+                f"\n{'  ' * (depth + 1)}{cls.render(child, depth + 1, keep)}"
+                for child in node.children
+                if isinstance(child, cls.Node)
+            )  # The white space between the children is formatting, so it is not copied.
             return f"{head}>{inner}\n{'  ' * depth}</{node.qname}>"
         inner = "".join(
             XmlText.text(child) if isinstance(child, str) else cls.render(child, depth + 1, keep)
@@ -301,6 +316,44 @@ class MasterXmlBuilder:
         reply: str | None  # The copied markup of a collected device.
         source: str  # The saved reply text that the markup came from.
         unread: bool  # True for an organization that Mist could not read.
+
+        @classmethod
+        def of(cls, result: TargetResult) -> MasterXmlBuilder.Entry:
+            """Classify one result like the CSV report does, copy the reply of a collected target, and name it."""
+            status, detail, reason, reply = cls._outcome(result)  # What happened to the target.
+            identity = result.identity  # The batch identity of the target.
+            device_id = cls._text(identity, "device_id", "target_id")  # The stable device key.
+            return cls(
+                cls._text(identity, "org_id"),
+                result.org_name,
+                cls._text(identity, "site_id"),
+                cls._text(identity, "site_label"),
+                device_id,
+                cls._text(identity, "label"),
+                status,
+                reason,
+                detail,
+                reply,
+                result.xml_text or "",
+                not device_id,  # An organization that Mist could not read has no device.
+            )
+
+        @staticmethod
+        def _outcome(result: TargetResult) -> tuple[str, str, str, str | None]:
+            """Return the status, the plain detail, the reason code, and the copied markup of one result."""
+            status, detail = RowFactory.classify(result)  # The same outcome as the CSV report.
+            if status != "collected":  # A device that did not collect has a reason and no markup.
+                reason = "reply_missing" if result.state == "completed" else result.reason  # The batch names the rest.
+                return status, detail, reason or "unknown", None
+            try:  # A reply that cannot be copied is a failed device, not a failed run.
+                return status, detail, "", XmlWriter.copy(result.xml_text or "", 4)  # A strict, escaping copy.
+            except ValueError:  # Not well-formed, a DTD, or too deep.
+                return "failed", RowFactory.UNREADABLE, "reply_unreadable", None  # Say so.
+
+        @staticmethod
+        def _text(identity: Mapping[str, object], *keys: str) -> str:
+            """Return the first value that the identity holds for one of the keys, as text, or an empty text."""
+            return next((str(identity[key]) for key in keys if identity.get(key)), "")  # An absent value is empty.
 
     class Output:
         """Collect the pieces of the document and stop at the size limit."""
@@ -391,7 +444,7 @@ class MasterXmlBuilder:
             ReportCheckError: When the final bytes fail a check. No bytes are handed out.
         """
         logger.info("Compiling the master XML of %d results", len(results))  # Log before the transform.
-        ordered = cls._ordered(cls._entries(results))  # Classify, copy, and order the targets.
+        ordered = cls._ordered([cls.Entry.of(result) for result in results])  # Classify, copy, and order the targets.
         text, counts = cls._render(ordered, scope, run_utc, limit_bytes)  # Write the document.
         data = text.encode("utf-8")  # The bytes that a file or a download holds.
         if len(data) > limit_bytes:  # The early check counts characters, so it can miss multi-byte text.
@@ -400,41 +453,6 @@ class MasterXmlBuilder:
         MasterXmlVerifier.verify(data, replies, counts)  # The bytes must pass every check before anyone sees them.
         logger.debug("Compiled the master XML with %d devices and %d bytes", counts["devices"], len(data))
         return cls.Document(data, replies, counts)  # The caller publishes the bytes.
-
-    @classmethod
-    def _entries(cls, results: Sequence[TargetResult]) -> list[MasterXmlBuilder.Entry]:
-        """Classify each result like the CSV report does, and copy the reply of a collected target."""
-        entries: list[MasterXmlBuilder.Entry] = []  # One entry for each result, in input order.
-        for result in results:  # Visit each target of the run.
-            status, detail = RowFactory.classify(result)  # The same outcome as the CSV report.
-            reason = (
-                "" if status == "collected" else ("reply_missing" if result.state == "completed" else result.reason)
-            )
-            reply = None  # A device that did not collect has no markup.
-            if status == "collected":  # Only a collected target has a reply to copy.
-                try:  # A reply that cannot be copied is a failed device, not a failed run.
-                    reply = XmlWriter.copy(result.xml_text or "", 4)  # A strict, escaping copy.
-                except ValueError:  # Not well-formed, a DTD, or too deep.
-                    status, detail, reason = "failed", RowFactory.UNREADABLE, "reply_unreadable"  # Say so.
-            identity = result.identity  # The batch identity of the target.
-            device_id = str(identity.get("device_id") or identity.get("target_id") or "")  # The stable device key.
-            entries.append(
-                cls.Entry(
-                    str(identity.get("org_id") or ""),
-                    result.org_name,
-                    str(identity.get("site_id") or ""),
-                    str(identity.get("site_label") or ""),
-                    device_id,
-                    str(identity.get("label") or ""),
-                    status,
-                    reason or ("" if status == "collected" else "unknown"),
-                    detail,
-                    reply,
-                    result.xml_text or "",
-                    not device_id,  # An organization that Mist could not read has no device.
-                )
-            )
-        return entries  # In input order.
 
     @staticmethod
     def _ordered(entries: Sequence[MasterXmlBuilder.Entry]) -> list[MasterXmlBuilder.Entry]:
@@ -452,17 +470,22 @@ class MasterXmlBuilder:
         )  # The sort is stable, so equal keys keep the order of the run.
 
     @classmethod
-    def _render(
-        cls, ordered: Sequence[MasterXmlBuilder.Entry], scope: str, run_utc: str, limit_bytes: int
-    ) -> tuple[str, dict[str, int]]:
-        """Write the whole document for entries that are already in order, and return it with its counts."""
+    def _counts(cls, ordered: Sequence[MasterXmlBuilder.Entry]) -> dict[str, int]:
+        """Return the counts that the root carries, and that the check compares with the document."""
         devices = [entry for entry in ordered if not entry.unread]  # An unread organization is not a device.
-        counts = {
+        return {
             "organizations": len({(entry.org_name.casefold(), entry.org_id) for entry in ordered}),
             "unread": sum(entry.unread for entry in ordered),
             "devices": len(devices),
             **{status: sum(entry.status == status for entry in devices) for status in cls.STATUSES},
-        }  # The root carries these counts, and the check compares them with the document.
+        }  # The organizations, the unread ones, the devices, and the devices of each status.
+
+    @classmethod
+    def _render(
+        cls, ordered: Sequence[MasterXmlBuilder.Entry], scope: str, run_utc: str, limit_bytes: int
+    ) -> tuple[str, dict[str, int]]:
+        """Write the whole document for entries that are already in order, and return it with its counts."""
+        counts = cls._counts(ordered)  # The root carries these counts.
         root = [("xmlns:mh", cls.NAMESPACE), ("generated", run_utc), ("scope", scope), ("command", cls.COMMAND)]
         root += [(name, str(value)) for name, value in counts.items()]  # The counts are attributes of the root.
         output = cls.Output(limit_bytes)  # Stops the build at the size limit.

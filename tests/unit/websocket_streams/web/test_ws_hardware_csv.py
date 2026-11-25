@@ -98,7 +98,7 @@ class TestCsvFormat:
 
     @pytest.mark.parametrize("output_format", ["yaml", "CSV", "", None, 3])
     def test_other_formats_are_still_refused(self, output_format: object) -> None:
-        """Only xml, json, both, and csv pass. The refusal is the established bad request."""
+        """Only the six known formats pass. The refusal is the established bad request."""
         with pytest.raises(StreamRequestError) as refusal:
             HardwareXmlPreset().parse({"preset": "ex-hardware-xml", "format": output_format, "scope_revision": 0})
         assert refusal.value.code == "bad_request"
@@ -191,9 +191,9 @@ class TestFinishStep:
         artifacts.bind_batch("run", writer)
         assert {row["org_name"] for row in rows_of(artifacts.csv_download("run")[1])} == {ORG}
 
-    @pytest.mark.parametrize("output_format", ["xml", "json", "both"])
+    @pytest.mark.parametrize("output_format", ["xml", "json", "both", "master-xml"])
     def test_the_other_formats_publish_no_csv(self, tmp_path: Path, output_format: str) -> None:
-        """Xml, json, and both write the same files as before, and no report."""
+        """Xml, json, both, and master-xml write no CSV report, and the download says that it is not ready."""
         artifacts, writer, outcomes = finished_run(tmp_path, output_format)
         writer.finish(outcomes)
         artifacts.bind_batch("run", writer)
@@ -342,6 +342,12 @@ class FakeCsvArtifacts:
             raise self.error
         return "ExHardwareInventory_20261124T000000Z.csv", b"a,b\r\n1,2\r\n"
 
+    def xml_download(self, session_id: str) -> tuple[str, bytes]:
+        """Return a master XML file, or raise the planned refusal."""
+        if self.error is not None:
+            raise self.error
+        return "ExHardwareInventory_20261124T000000Z.xml", b'<?xml version="1.0" encoding="UTF-8"?>\n<a/>\n'
+
     def zip_download(self, session_id: str) -> tuple[str, bytes]:
         """Return an archive."""
         return "websocket-batch.zip", b"zip"
@@ -365,7 +371,7 @@ def portal() -> Iterator[tuple[Any, FakeCsvArtifacts]]:
 
 
 class TestDownloadRoute:
-    """The batch download route serves zip and csv, and nothing else."""
+    """The batch download route serves zip, csv, and xml, and nothing else."""
 
     def test_format_csv_returns_a_csv_attachment(self, portal: tuple[Any, FakeCsvArtifacts]) -> None:
         """The response is text/csv with a server-made attachment name."""
@@ -377,22 +383,36 @@ class TestDownloadRoute:
         )
         assert response.get_data() == b"a,b\r\n1,2\r\n"
 
+    def test_format_xml_returns_an_xml_attachment(self, portal: tuple[Any, FakeCsvArtifacts]) -> None:
+        """The response is application/xml with a server-made attachment name and the exact bytes."""
+        client, _ = portal
+        response = client.get("/api/websockets/batches/abc123/download?format=xml")
+        assert response.status_code == 200 and response.mimetype == "application/xml"
+        assert (
+            response.headers["Content-Disposition"] == "attachment; filename=ExHardwareInventory_20261124T000000Z.xml"
+        )
+        assert response.get_data() == b'<?xml version="1.0" encoding="UTF-8"?>\n<a/>\n'
+
     def test_format_zip_still_returns_the_archive(self, portal: tuple[Any, FakeCsvArtifacts]) -> None:
         """The archive download is unchanged."""
         client, _ = portal
         response = client.get("/api/websockets/batches/abc123/download?format=zip")
         assert response.status_code == 200 and response.mimetype == "application/zip"
 
-    @pytest.mark.parametrize("query", ["", "?format=txt", "?format=csv&x=1", "?format=CSV", "?x=1"])
+    @pytest.mark.parametrize(
+        "query", ["", "?format=txt", "?format=csv&x=1", "?format=xml&x=1", "?format=CSV", "?format=XML", "?x=1"]
+    )
     def test_any_other_query_is_refused(self, portal: tuple[Any, FakeCsvArtifacts], query: str) -> None:
-        """Only format=zip and format=csv are accepted, with no other field."""
+        """Only format=zip, format=csv, and format=xml are accepted, with no other field."""
         client, _ = portal
         response = client.get("/api/websockets/batches/abc123/download" + query)
         assert response.status_code == 400 and response.get_json()["code"] == "bad_request"
+        assert response.get_json()["error"] == "The batch download requires format=zip, format=csv, or format=xml."
 
-    def test_a_report_that_is_not_ready_is_a_conflict(self, portal: tuple[Any, FakeCsvArtifacts]) -> None:
+    @pytest.mark.parametrize("output", ["csv", "xml"])
+    def test_a_report_that_is_not_ready_is_a_conflict(self, portal: tuple[Any, FakeCsvArtifacts], output: str) -> None:
         """The service refusal reaches the browser with its status."""
         client, artifacts = portal
-        artifacts.error = StreamRequestError("artifact_not_ready", "The combined CSV report is not ready.")
-        response = client.get("/api/websockets/batches/abc123/download?format=csv")
+        artifacts.error = StreamRequestError("artifact_not_ready", "The combined report is not ready.")
+        response = client.get(f"/api/websockets/batches/abc123/download?format={output}")
         assert response.status_code == 409 and response.get_json()["code"] == "artifact_not_ready"

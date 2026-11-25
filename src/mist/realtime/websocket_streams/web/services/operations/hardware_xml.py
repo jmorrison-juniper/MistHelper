@@ -306,8 +306,20 @@ class HardwareXmlPreset:
         "xml": "show chassis hardware detail | display xml | no-more",
         "json": "show chassis hardware detail | display json | no-more",
     }
-    FORMATS = frozenset({"xml", "json", "both", "csv"})
-    COMMAND_FORMATS = {"xml": ("xml",), "json": ("json",), "both": ("xml", "json"), "csv": ("xml",)}  # CSV reads XML.
+    FORMATS = frozenset({"xml", "json", "both", "csv", "master-xml", "csv-master-xml"})
+    COMMAND_FORMATS = {
+        "xml": ("xml",),
+        "json": ("json",),
+        "both": ("xml", "json"),
+        "csv": ("xml",),
+        "master-xml": ("xml",),
+        "csv-master-xml": ("xml",),
+    }  # A combined report reads the XML reply of each switch, so it runs the XML command only.
+    REPORT_KINDS = {
+        "csv": ("csv",),
+        "master-xml": ("xml",),
+        "csv-master-xml": ("csv", "xml"),
+    }  # The combined reports that a run publishes at its end. The other formats publish none.
 
     @staticmethod
     def empty_selection(values: Mapping[str, object], hardware: bool) -> None:
@@ -336,8 +348,10 @@ class HardwareXmlPreset:
             raise StreamRequestError("bad_request", "The hardware preset is not available.")  # Refuse.
         output_format = body.get("format", "xml")  # XML stays the default.
         revision = body.get("scope_revision")  # The page revision of the selection.
-        if not isinstance(output_format, str) or output_format not in self.FORMATS:  # xml, json, both, or csv.
-            raise StreamRequestError("bad_request", "Choose XML, JSON, BOTH, or CSV for hardware output.")  # Refuse.
+        if not isinstance(output_format, str) or output_format not in self.FORMATS:  # A format of the list only.
+            raise StreamRequestError(
+                "bad_request", "Choose XML, JSON, BOTH, CSV, MASTER-XML, or CSV-MASTER-XML for hardware output."
+            )  # Refuse.
         if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:  # A bool is not a revision.
             raise StreamRequestError("bad_request", "The selection revision is not valid.")  # Refuse.
         return HardwareXmlSelection(
@@ -353,6 +367,6 @@ class HardwareXmlPreset:
             "parameters": {},
             "commands": [
                 self.COMMANDS[output_format] for output_format in self.COMMAND_FORMATS[selection.output_format]
-            ],  # The CSV format runs the XML command only, and the report is compiled from the saved XML.
+            ],  # A combined report runs the XML command only, and it is compiled from the saved XML replies.
             "scope_revision": selection.scope_revision,
         }

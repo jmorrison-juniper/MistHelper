@@ -192,6 +192,8 @@
                             <option value="json">JSON (.json)</option>
                             <option value="both">XML and JSON (.xml + .json)</option>
                             <option value="csv">One combined CSV report (.csv)</option>
+                            <option value="master-xml">One combined XML file (.xml)</option>
+                            <option value="csv-master-xml">Combined CSV and XML (.csv + .xml)</option>
                         </select>
                     </div>
                 </div>
@@ -301,6 +303,8 @@
                    data-testid="ws-batch-zip-download" href="#">Download ZIP</a>
                 <a class="btn btn-sm btn-outline-secondary d-none" id="wsBatchCsvDownload"
                    data-testid="ws-batch-csv-download" href="#">Download CSV report</a>
+                <a class="btn btn-sm btn-outline-secondary d-none" id="wsBatchXmlDownload"
+                   data-testid="ws-batch-xml-download" href="#">Download combined XML</a>
             </div>
         </div>
         <div id="wsBatchTargetProgress" class="mt-3" data-testid="ws-batch-target-progress"></div>

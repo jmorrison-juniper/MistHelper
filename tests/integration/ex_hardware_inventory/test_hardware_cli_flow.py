@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import json  # Read the manifest of the run folder.
 import logging  # Prove that no log line holds the credential.
+import xml.etree.ElementTree as ET  # A standard reader, so the tests share no code with the XML writer.
 
 import pytest  # Capture the console.
 import requests  # Build the transport faults that the SDK can raise.
 
 from src.operations.exporting.ex_hardware_inventory.operation import ExHardwareInventoryReport  # Unit.
 from tests.unit.ex_hardware_inventory.support.hardware_fakes import FakeMist, Payloads  # Fakes.
+from tests.unit.ex_hardware_inventory.support.hardware_master_xml import NS, Written, infoset_of  # Readers.
 from tests.unit.ex_hardware_inventory.support.hardware_shells import make_uuid  # Invented identifiers.
 from tests.unit.ex_hardware_inventory.support.hardware_world import (
     COMMAND,
@@ -84,10 +86,47 @@ class TestOneOrganizationEndToEnd:
         self.build(world)
         world.answer = "RUN 5 TARGETS"
         ExHardwareInventoryReport.run()
-        saved = "".join(path.read_text(encoding="utf-8") for path in (world.tmp_path / "data").rglob("*.xml"))
+        replies = Written.replies(world.tmp_path / "data")
+        saved = "".join(path.read_text(encoding="utf-8") for path in replies.values())
         reported = {row["item_serial_number"] for row in world.rows() if row["item_serial_number"]}
         assert reported and all(serial in saved for serial in reported)  # Every reported serial is in a saved file.
-        assert len(list((world.tmp_path / "data").rglob("*.xml"))) == 2  # One saved reply for each collected switch.
+        assert len(replies) == 2  # One saved reply for each collected switch.
+
+    def test_the_master_xml_holds_every_outcome_and_each_reply_equals_its_saved_file(self, world: World) -> None:
+        """Five targets: two replies, two failures, and one skip. A standard reader finds the same data as the files."""
+        self.build(world)
+        world.answer = "RUN 5 TARGETS"
+        ExHardwareInventoryReport.run()
+        data_dir = world.tmp_path / "data"
+        root = Written.master(data_dir)
+        devices = {device.get("name"): device for device in root.iterfind(".//mh:device", NS)}
+        assert {name: device.get("status") for name, device in devices.items()} == {
+            "ex-01": "collected",
+            "ex-02": "failed",
+            "ex-04": "collected",
+            "ex-05": "failed",
+            "ex-06": "skipped",
+        }
+        assert devices["ex-02"].get("detail") == "The reply was not a valid chassis inventory."
+        assert devices["ex-06"].get("detail") == "The switch was offline when its turn came."
+        assert (root.get("devices"), root.get("collected"), root.get("failed"), root.get("skipped")) == (
+            "5",
+            "2",
+            "2",
+            "1",
+        )
+        replies = Written.replies(data_dir)
+        for label in ("ex-01", "ex-04"):  # Each collected switch has exactly one embedded reply.
+            (embedded,) = list(devices[label])
+            assert infoset_of(embedded) == infoset_of(ET.parse(replies[label]).getroot()), label
+
+    def test_the_credential_never_reaches_the_master_xml(self, world: World) -> None:
+        """The master XML is a file that a customer reads, so it must not hold the credential."""
+        self.build(world)
+        world.answer = "RUN 5 TARGETS"
+        ExHardwareInventoryReport.run()
+        (master,) = (world.tmp_path / "data").glob("ExHardwareInventory_*.xml")
+        assert master.stat().st_size > 0 and TOKEN not in master.read_text(encoding="utf-8")
 
     def test_only_the_fixed_command_reaches_a_switch_and_no_shell_opens_for_a_skipped_switch(
         self, world: World
@@ -250,6 +289,10 @@ class TestMspEndToEnd:
         failure = [row for row in rows if row["org_name"] == "Gamma Org"]
         assert len(failure) == 1 and failure[0]["collection_status"] == "failed" and failure[0]["device_id"] == ""
         assert lines[-1] == "Run status: partial"
+        root = Written.master(world.tmp_path / "data")  # The XML file tells the same story as the CSV report.
+        assert (root.get("scope"), root.get("organizations"), root.get("unread")) == ("msp", "3", "1")
+        unread = [org for org in root.iterfind("mh:organization", NS) if org.get("status") == "failed"]
+        assert [org.get("name") for org in unread] == ["Gamma Org"] and len(unread[0]) == 0  # No site below it.
 
     @pytest.mark.parametrize("status", [401, 404, 429, 500, 502, 503])
     def test_any_http_failure_of_one_organization_leaves_the_others_running(

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
 from src.operations.exporting.ex_hardware_inventory.report.builder import TargetResult
 from src.operations.exporting.ex_hardware_inventory.run.master_xml import MasterXmlBuilder
 from tests.unit.ex_hardware_inventory.support.hardware_replies import HardwareReplies
@@ -13,6 +16,46 @@ SITE_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"  # An invented site.
 SITE_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"  # A second invented site.
 LIMIT = 10_000_000  # A limit that no test document reaches.
 SAME = object()  # Marks "use the standard reply of this switch".
+BLANK = " \t\r\n"  # The four characters that XML calls white space.
+NS = {"mh": MasterXmlBuilder.NAMESPACE}  # The prefix map for searches in the wrapper namespace.
+
+
+def infoset_of(element: ET.Element) -> tuple[object, ...]:
+    """Return the infoset of an element tree with ElementTree, a path that the writer does not use.
+
+    White space between the children of an element that holds no other text is formatting, so it is left out.
+    All other text, and all attributes, are kept as they are.
+    """
+    children = list(element)
+    pure = (
+        bool(children)
+        and not (element.text or "").strip(BLANK)
+        and all(not (c.tail or "").strip(BLANK) for c in children)
+    )
+    text = None if pure else element.text
+    return (
+        element.tag,
+        tuple(sorted(element.attrib.items())),
+        text,
+        tuple((infoset_of(child), None if pure else child.tail) for child in children),
+    )
+
+
+class Written:
+    """Read the files that a CLI run wrote under a data folder, with readers that the tool does not use."""
+
+    @staticmethod
+    def master(data_dir: Path) -> ET.Element:
+        """Parse the one master XML file of the folder."""
+        files = sorted(data_dir.glob("ExHardwareInventory_*.xml"))
+        assert len(files) == 1, f"expected one master XML file, found {files}"
+        return ET.fromstring(files[0].read_bytes())
+
+    @staticmethod
+    def replies(data_dir: Path) -> dict[str, Path]:
+        """Return the saved replies of the private run folders, by the device label in the file name."""
+        saved = sorted((data_dir / "websocket-streams").rglob("*.xml"))
+        return {path.name.split("--", 1)[0]: path for path in saved}
 
 
 def make_result(

@@ -32,12 +32,14 @@ from src.operations.exporting.ex_hardware_inventory.run.master_xml import (
 from src.operations.exporting.ex_hardware_inventory.run.publisher import ReportHook
 from tests.unit.ex_hardware_inventory.support.hardware_master_xml import (
     LIMIT,
+    NS,
     ORG_A,
     ORG_B,
     RUN_UTC,
     SITE_A,
     SITE_B,
     change,
+    infoset_of,
     make_document,
     make_mixed,
     make_result,
@@ -45,31 +47,8 @@ from tests.unit.ex_hardware_inventory.support.hardware_master_xml import (
 )
 from tests.unit.ex_hardware_inventory.support.hardware_replies import HardwareReplies
 
-NS = {"mh": MasterXmlBuilder.NAMESPACE}  # The prefix map for XPath-like searches.
 REPLACEMENT = chr(0xFFFD)  # What the cleaner writes for a character that XML cannot hold.
 NBSP = chr(0xA0)  # A no-break space: it looks like white space, and XML calls it data.
-BLANK = " \t\r\n"  # The four characters that XML calls white space.
-
-
-def infoset_of(element: ET.Element) -> tuple[object, ...]:
-    """Return the infoset of an element tree with ElementTree, a path that the writer does not use.
-
-    White space between the children of an element that holds no other text is formatting, so it is left out.
-    All other text, and all attributes, are kept as they are.
-    """
-    children = list(element)
-    pure = (
-        bool(children)
-        and not (element.text or "").strip(BLANK)
-        and all(not (c.tail or "").strip(BLANK) for c in children)
-    )
-    text = None if pure else element.text
-    return (
-        element.tag,
-        tuple(sorted(element.attrib.items())),
-        text,
-        tuple((infoset_of(child), None if pure else child.tail) for child in children),
-    )
 
 
 class TestXmlText:

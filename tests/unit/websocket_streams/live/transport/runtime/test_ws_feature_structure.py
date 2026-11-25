@@ -472,8 +472,8 @@ class TestWebSocketFeatureStructure:
         ), f"utilities has {len(utilities_children)} child items"  # Report the exact gate failure.
         counts, scope = self._measure_feature(root)  # Run checks against the complete T091 mapping table.
         # The pin includes the CSV report step (#4920), the file replace retry (#4926), the site choice (#4927),
-        # and the report table (#4931).
-        assert counts == StructureCounts(149, 295, 917)
+        # the report table (#4931), and the combined XML file (#4933).
+        assert counts == StructureCounts(149, 296, 920)
         print("T091 mapping scope: " + " | ".join(f"{old} -> {new}" for old, new in scope))  # Print every mapping.
         print(  # Print the exact checked source counts.
             f"checked mappings={len(scope)} paths={len(self.ANALYSIS_SCOPE)} modules={counts.modules} "

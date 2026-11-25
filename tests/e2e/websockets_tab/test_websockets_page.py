@@ -353,6 +353,7 @@ class FakeWebSocketServices:
         self.batch_preview_body = body if isinstance(body, dict) else {}  # Retain the request for assertions.
         if self.batch_preview_body.get("preset") == "ex-hardware-xml":
             selected_format = self.batch_preview_body.get("format", "xml")
+            xml_only = selected_format in {"csv", "master-xml", "csv-master-xml"}  # A combined report reads XML.
             return {
                 "preview_id": "hardware-preview",
                 "expires_at": "2026-10-16T12:00:00Z",
@@ -362,7 +363,7 @@ class FakeWebSocketServices:
                 "fixed_commands": [
                     "show chassis hardware detail | display xml | no-more",
                     "show chassis hardware detail | display json | no-more",
-                ][: 1 if selected_format == "csv" else 2],
+                ][: 1 if xml_only else 2],
                 "scope": dict(self.hardware_scope),
                 "site_selection": (
                     {"mode": "selected", "count": len(self.batch_preview_body["sites"]["ids"])}
@@ -1257,11 +1258,110 @@ def test_ex_hardware_xml_output_never_offers_the_csv_link(
     assert not page.get_by_test_id("ws-batch-csv-download").is_visible()
 
 
-def finish_csv_run(page: Any, fake_services: FakeWebSocketServices, report: bytes | None = None) -> None:
-    """Start a CSV run, end it with a ready report, and wait for the table to show rows."""
+@pytest.mark.parametrize(
+    "output, expected",
+    [
+        ("master-xml", "Output: One combined XML file (.xml)"),
+        ("csv-master-xml", "Output: Combined CSV and XML (.csv + .xml)"),
+    ],
+)
+def test_ex_hardware_master_xml_output_previews_the_one_xml_command_and_names_the_files(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices, output: str, expected: str
+) -> None:
+    """The page offers both combined XML choices, sends the choice, and the review names the files."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-hardware-format").select_option(output)  # Fails when the option is missing.
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert fake_services.batch_preview_body is not None and fake_services.batch_preview_body["format"] == output
+    summary = page.get_by_test_id("ws-batch-review-summary").inner_text()
+    assert expected in summary
+    assert "display xml" in summary and "display json" not in summary  # A combined report runs the XML command only.
+
+
+def test_ex_hardware_master_xml_download_link_appears_only_when_the_file_is_ready(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The link points at the XML route, stays hidden while the run goes, and no CSV link or table appears."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "master-xml")
+    link = page.get_by_test_id("ws-batch-xml-download")
+    assert not link.is_visible()  # The file is published at the end of the run.
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="writing")
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - completed").wait_for(timeout=READY_TIMEOUT_MS)
+    assert not link.is_visible()  # The output is not final yet.
+    fake_services.batch_progress["batch1"].update(artifact_status="ready")
+    link.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert link.get_attribute("href") == "/api/websockets/batches/batch1/download?format=xml"
+    assert link.inner_text() == "Download combined XML"
+    assert not page.get_by_test_id("ws-batch-csv-download").is_visible()  # This output holds no CSV report.
+    assert not page.get_by_test_id("ws-batch-csv-preview").is_visible() and fake_services.csv_preview_calls == []
+
+
+def test_ex_hardware_master_xml_download_link_stays_hidden_when_the_output_failed(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A failed output offers no file, and the run keeps its archive."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv-master-xml")
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="failed")
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - completed").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-zip-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert not page.get_by_test_id("ws-batch-xml-download").is_visible()
+    assert not page.get_by_test_id("ws-batch-csv-download").is_visible()
+
+
+@pytest.mark.parametrize("output", ["xml", "json", "both", "csv"])
+def test_ex_hardware_other_outputs_never_offer_the_master_xml_link(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices, output: str
+) -> None:
+    """Only the two combined XML choices publish the file, so no other finished run shows the link."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, output)
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
+    page.get_by_test_id("ws-batch-zip-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.wait_for_timeout(500)  # Give a wrong link time to appear.
+    assert not page.get_by_test_id("ws-batch-xml-download").is_visible()
+
+
+def test_ex_hardware_csv_and_master_xml_output_offers_both_files_and_the_table(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The run publishes two files, so the page shows two links, and the table reads the CSV report."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services, output="csv-master-xml")
+    csv_link, xml_link = page.get_by_test_id("ws-batch-csv-download"), page.get_by_test_id("ws-batch-xml-download")
+    assert csv_link.is_visible() and xml_link.is_visible()
+    assert csv_link.get_attribute("href") == "/api/websockets/batches/batch1/download?format=csv"
+    assert xml_link.get_attribute("href") == "/api/websockets/batches/batch1/download?format=xml"
+    assert csv_rows(page).count() == 6  # The table still shows the CSV report.
+    screenshot(page, "csv-master-xml-links.png")
+
+
+def test_ex_hardware_master_xml_download_link_returns_after_a_page_reload(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The page restores the last batch, and the link shows again for its ready file."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "master-xml")
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
+    page.get_by_test_id("ws-batch-xml-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.reload(wait_until="networkidle")
+    page.get_by_test_id("ws-multi-site-tab").click()  # The page opens on the first tab.
+    link = page.get_by_test_id("ws-batch-xml-download")
+    link.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert link.get_attribute("href") == "/api/websockets/batches/batch1/download?format=xml"
+
+
+def finish_csv_run(
+    page: Any, fake_services: FakeWebSocketServices, report: bytes | None = None, output: str = "csv"
+) -> None:
+    """Start a run with a CSV report, end it with a ready report, and wait for the table to show rows."""
     if report is not None:
         fake_services.csv_report = report  # The report that the fake service publishes.
-    start_hardware_batch(page, fake_services, "csv")
+    start_hardware_batch(page, fake_services, output)
     fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
     page.get_by_test_id("ws-batch-csv-table").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
 

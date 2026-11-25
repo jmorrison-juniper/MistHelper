@@ -106,7 +106,10 @@
         progressPending: false  // Keep progress reads in order.
     };
     var activeBatchPreset = null;  // Preserve archive controls when a batch is restored after navigation.
-    var activeBatchFormat = null;  // Preserve the CSV download link when a batch is restored after navigation.
+    var activeBatchFormat = null;  // Preserve the report download links when a batch is restored after navigation.
+    var REPORTS_OF_FORMAT = {  // The combined reports that each output choice publishes at the end of a run.
+        'csv': ['csv'], 'master-xml': ['xml'], 'csv-master-xml': ['csv', 'xml']
+    };
     var CSV_PAGE_SIZE = 1000;  // Rows in one page of the report table. The server allows at most 1000.
     var CSV_FILTER_DELAY_MS = 300;  // Wait for a pause in the typing before the server filters the report.
     var csvPreview = { sessionId: null, offset: 0, text: '', revision: 0, timer: null };  // The table of the combined CSV report.
@@ -719,7 +722,8 @@
         if (preview.preset === 'ex-hardware-xml') {
             var formatNames = {
                 xml: 'XML (.xml)', json: 'JSON (.json)', both: 'XML and JSON (.xml + .json)',
-                csv: 'One combined CSV report (.csv)'
+                csv: 'One combined CSV report (.csv)', 'master-xml': 'One combined XML file (.xml)',
+                'csv-master-xml': 'Combined CSV and XML (.csv + .xml)'
             };
             summary.appendChild(make('div', '', 'Output: ' + (formatNames[preview.format] || 'Unknown')));
             var scopeLine = make('div', '', scopeText(preview.scope, preview.site_selection));  // The scope that the server decided.
@@ -866,7 +870,7 @@
             batchState.preview = null;  // The one-use preview has started a public parent session.
             batchState.sessionId = payload.session_id;  // Progress requests use the server-issued parent id.
             activeBatchPreset = preview.preset || null;  // Keep the correct download affordance for this run.
-            activeBatchFormat = preview.format || null;  // The CSV link needs the selected output.
+            activeBatchFormat = preview.format || null;  // The report links need the selected output.
             show(byId('wsBatchReview'), false);  // Do not show an old snapshot as an active preview.
             show(byId('wsBatchProgress'), true);  // Show the admitted batch state.
             show(byId('wsBatchDownload'), activeBatchPreset !== 'ex-hardware-xml');  // Hardware runs use the archive.
@@ -877,9 +881,7 @@
             byId('wsBatchZipDownload').href = '/api/websockets/batches/' +
                 encodeURIComponent(batchState.sessionId) + '/download?format=zip';  // Use the saved layout archive.
             show(byId('wsBatchZipDownload'), false);  // The final archive is unavailable while targets run.
-            byId('wsBatchCsvDownload').href = '/api/websockets/batches/' +
-                encodeURIComponent(batchState.sessionId) + '/download?format=csv';  // The combined CSV report.
-            show(byId('wsBatchCsvDownload'), false);  // The report is published at the end of the run.
+            setReportLinks(batchState.sessionId);  // The reports are published at the end of the run.
             selectSession(payload);  // Show the same parent messages in the shared output panel.
             pollBatchProgress();  // Show initial status without waiting for the next interval.
         });
@@ -943,13 +945,29 @@
         var complete = ['completed', 'failed', 'partial', 'stopped'].indexOf(batch.status) >= 0;
         byId('wsBatchStop').disabled = complete;
         show(byId('wsBatchZipDownload'), complete);  // A completed batch can create the requested layout archive.
-        var csvReady = complete && activeBatchFormat === 'csv' && batch.artifact_status === 'ready';  // The report is published.
+        var reports = reportsOfFormat(activeBatchFormat);  // The reports that this run publishes.
+        var reportsReady = complete && reports.length > 0 && batch.artifact_status === 'ready';  // All are published.
+        var csvReady = reportsReady && reports.indexOf('csv') >= 0;  // The CSV report is one of them.
         show(byId('wsBatchCsvDownload'), csvReady);
+        show(byId('wsBatchXmlDownload'), reportsReady && reports.indexOf('xml') >= 0);  // The master XML file is another.
         if (csvReady) loadCsvPreviewOnce();  // Show the table of the report once for each run.
-        var outputFinal = ['ready', 'failed'].indexOf(batch.artifact_status) >= 0;  // The report is the last file.
-        if (complete && (outputFinal || activeBatchFormat !== 'csv')) {
+        var outputFinal = ['ready', 'failed'].indexOf(batch.artifact_status) >= 0;  // The reports are the last files.
+        if (complete && (outputFinal || reports.length === 0)) {
             stopBatchProgressTimer();  // A final result needs no more progress requests.
-        }  // A CSV run keeps polling until its report is published or has failed.
+        }  // A run with reports keeps polling until they are published or have failed.
+    }
+
+    function reportsOfFormat(format) {
+        var known = Object.prototype.hasOwnProperty.call(REPORTS_OF_FORMAT, format);  // Skip inherited names.
+        return known ? REPORTS_OF_FORMAT[format] : [];  // An unknown or missing format publishes no report.
+    }
+
+    function setReportLinks(sessionId) {
+        var base = '/api/websockets/batches/' + encodeURIComponent(sessionId) + '/download?format=';  // One route.
+        byId('wsBatchCsvDownload').href = base + 'csv';  // The combined CSV report.
+        byId('wsBatchXmlDownload').href = base + 'xml';  // The combined XML file.
+        show(byId('wsBatchCsvDownload'), false);  // The next progress read decides which report is ready.
+        show(byId('wsBatchXmlDownload'), false);
     }
 
     function renderBatchTargetProgress(targets) {
@@ -1849,10 +1867,8 @@
                 encodeURIComponent(session.session_id) + '/download';  // Restore combined result access.
             byId('wsBatchZipDownload').href = '/api/websockets/batches/' +
                 encodeURIComponent(session.session_id) + '/download?format=zip';  // Restore saved layout access.
-            activeBatchFormat = session.batch ? (session.batch.format || null) : null;  // Restore the CSV link choice.
-            byId('wsBatchCsvDownload').href = '/api/websockets/batches/' +
-                encodeURIComponent(session.session_id) + '/download?format=csv';  // Restore the report link.
-            show(byId('wsBatchCsvDownload'), false);  // The next progress read decides whether the report is ready.
+            activeBatchFormat = session.batch ? (session.batch.format || null) : null;  // Restore the report link choice.
+            setReportLinks(session.session_id);  // The next progress read decides which report is ready.
             show(byId('wsBatchZipDownload'), !!session.batch &&
                 ['completed', 'failed', 'partial', 'stopped'].indexOf(session.batch.status) >= 0);
             startBatchProgressTimer();  // Poll target state for the selected batch parent.
