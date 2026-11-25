@@ -49,12 +49,21 @@ class TestMasterXmlFormats:
         assert selection.output_format == output_format and selection.scope_revision == 2
         assert preset.batch_request(selection)["commands"] == [HardwareXmlPreset.COMMANDS["xml"]]
 
-    @pytest.mark.parametrize("output_format", ["MASTER-XML", "master_xml", "xml-master", "csv-xml", "master-xml "])
-    def test_a_name_that_is_not_in_the_list_is_refused_with_the_established_error(self, output_format: str) -> None:
+    @pytest.mark.parametrize(
+        "output_format", ["MASTER-XML", "master_xml", "xml-master", "csv-xml", "master-xml ", "", None, 3]
+    )
+    def test_a_name_that_is_not_in_the_list_is_refused_with_the_established_error(self, output_format: object) -> None:
         """The refusal is the bad request that names every legal value."""
         with pytest.raises(StreamRequestError) as refusal:
             HardwareXmlPreset().parse({"preset": "ex-hardware-xml", "format": output_format, "scope_revision": 0})
         assert refusal.value.code == "bad_request" and "CSV-MASTER-XML" in str(refusal.value)
+
+    @pytest.mark.parametrize("body", [None, {}, [], "", {"preset": "ex-hardware-xml", "format": "master-xml"}])
+    def test_a_missing_or_empty_request_is_refused_and_a_missing_revision_too(self, body: object) -> None:
+        """No body, an empty body, and a body without the revision never start a master XML run."""
+        with pytest.raises(StreamRequestError) as refusal:
+            HardwareXmlPreset().parse(body)
+        assert refusal.value.code == "bad_request"
 
     def test_the_report_kinds_of_each_format_are_exactly_these(self) -> None:
         """The table that the finish step reads: the CSV formats and the XML formats publish, the others do not."""
@@ -118,6 +127,22 @@ class TestFinishStep:
         assert failed_device.get("detail") == "The shell did not show a stable prompt." and len(failed_device) == 0
         unread = [o for o in root.iterfind("mh:organization", NS) if o.get("status") == "failed"]
         assert [o.get("id") for o in unread] == ["org-2"] and unread[0].get("reason") == "discovery_failed"
+
+    @pytest.mark.parametrize("damage", [b"", b"   \n", b"<broken", b'<?xml version="1.0"?>'])
+    def test_a_saved_reply_that_was_damaged_after_the_run_is_one_failed_device_in_both_reports(
+        self, tmp_path: Path, damage: bytes
+    ) -> None:
+        """An empty or truncated file under the run folder fails its device. The other device and the CSV agree."""
+        artifacts, writer, outcomes = finished_run(tmp_path, "csv-master-xml")
+        next(tmp_path.glob("*/hardware/ex-01--*.xml")).write_bytes(damage)  # The disk lost the reply of ex-01.
+        published(artifacts, writer, outcomes)
+        root = ET.fromstring(artifacts.xml_download("run")[1])
+        devices = {d.get("name"): d for d in root.iterfind(".//mh:device", NS)}
+        assert devices["ex-01"].get("status") == "failed" and devices["ex-01"].get("reason") == "reply_unreadable"
+        assert devices["ex-01"].get("detail") == "The saved reply could not be read." and len(devices["ex-01"]) == 0
+        assert devices["ex-02"].get("status") == "collected" and len(devices["ex-02"]) == 1
+        csv_status = {row["device_name"]: row["collection_status"] for row in rows_of(artifacts.csv_download("run")[1])}
+        assert csv_status == {"ex-01": "failed", "ex-02": "collected"}  # The two reports tell the same story.
 
     @pytest.mark.parametrize("output_format", ["xml", "json", "both", "csv"])
     def test_the_other_formats_publish_no_master_xml(self, tmp_path: Path, output_format: str) -> None:
@@ -220,11 +245,12 @@ class TestXmlDownload:
             artifacts.xml_download("run")
         assert refusal.value.code == "artifact_not_ready" and "combined XML file" in str(refusal.value)
 
-    def test_an_unknown_session_is_not_a_batch(self, tmp_path: Path) -> None:
-        """A session with no bound batch gives the not-a-batch refusal."""
+    @pytest.mark.parametrize("session_id", ["unknown", "", None])
+    def test_an_unknown_empty_or_missing_session_is_not_a_batch(self, tmp_path: Path, session_id: object) -> None:
+        """A session with no bound batch gives the not-a-batch refusal, whatever the identifier is."""
         artifacts, _, _ = finished_run(tmp_path, "master-xml")
         with pytest.raises(StreamRequestError) as refusal:
-            artifacts.xml_download("unknown")
+            artifacts.xml_download(session_id)
         assert refusal.value.code == "not_batch"
 
     def test_the_download_pin_is_released_after_success_and_after_a_failed_read(self, tmp_path: Path) -> None:
@@ -260,11 +286,28 @@ class TestXmlDownload:
 class TestRestartCleanup:
     """A finished master XML survives a restart, because the manifest of a hardware run is durable."""
 
+    @staticmethod
+    def restart(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Admit a new run while no earlier owner process is alive, which makes the cleanup scan every old tree."""
+        monkeypatch.setattr(BatchArtifactStorage.Retention, "process_is_alive", staticmethod(lambda _pid: False))
+        finished_run(tmp_path)  # The admission of the new run scans the data root first.
+
     def test_a_finished_master_xml_survives_a_restart(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """A new admission removes only the runs that a dead process left behind."""
         _, writer, outcomes = finished_run(tmp_path, "csv-master-xml")
         writer.finish(outcomes)
         folder = next(tmp_path.glob("*/manifest.json")).parent
-        monkeypatch.setattr(BatchArtifactStorage.Retention, "process_is_alive", staticmethod(lambda _pid: False))
-        finished_run(tmp_path)  # The admission of the new run scans the data root first.
+        self.restart(tmp_path, monkeypatch)
         assert (folder / XML_NAME).is_file() and (folder / CSV_NAME).is_file()
+
+    @pytest.mark.parametrize("content", [b"", b"bad json", b"[]"])
+    def test_a_damaged_manifest_keeps_the_folder_and_its_master_xml(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: bytes
+    ) -> None:
+        """An empty manifest, a manifest that is not JSON, and one that is not an object prove no owner."""
+        _, writer, outcomes = finished_run(tmp_path, "master-xml")
+        writer.finish(outcomes)
+        folder = next(tmp_path.glob("*/manifest.json")).parent
+        (folder / "manifest.json").write_bytes(content)  # A damaged manifest, with no owner and no durable flag.
+        self.restart(tmp_path, monkeypatch)
+        assert (folder / XML_NAME).is_file()  # An unknown owner is not proof of an abandoned run.

@@ -12,7 +12,6 @@ Why:
 from __future__ import annotations
 
 import hashlib  # Compare each embedded reply with its source by a digest of parser events.
-import json  # Write each parser event as one unambiguous line for the digest.
 import logging  # Record each build, each check, and each file write for the operator trace.
 import re  # State the character rules of XML 1.0 and the formats of the attributes.
 import xml.etree.ElementTree as ET  # nosec B405  # Only canonicalize runs, on bytes that the strict parser read.
@@ -511,11 +510,11 @@ class MasterXmlVerifier:
     DECLARATION = b'<?xml version="1.0" encoding="UTF-8"?>\n'  # The exact first line of every file of the tool.
 
     class EventLog:
-        """Record the parser events of one document as lines, so two documents can be compared."""
+        """Record the parser events of one document, so two documents can be compared."""
 
         def __init__(self) -> None:
             """Start with no event."""
-            self.lines: list[str] = []  # One line for each event.
+            self.events: list[tuple[object, ...]] = []  # One tuple for each event: S, T, or E, then its data.
             self.pending: list[str] = []  # Pieces of the text node that is open.
             self.declared: list[tuple[str | None, str | None]] = []  # Declarations for the next element.
 
@@ -526,19 +525,19 @@ class MasterXmlVerifier:
         def start(self, name: str, attributes: list[str]) -> None:
             """Record the start of one element with its attributes and declarations."""
             if self.pending:  # Merge adjacent text events into one text node.
-                self.lines.append(json.dumps(["T", "".join(self.pending)]))  # One line for the node.
+                self.events.append(("T", "".join(self.pending)))  # One event for the node.
                 self.pending.clear()  # The node is closed.
             pairs = sorted(zip(attributes[0::2], attributes[1::2], strict=True))  # Attribute order has no meaning.
             declared = sorted(self.declared, key=lambda item: (item[0] or "", item[1] or ""))  # Nor has this order.
-            self.lines.append(json.dumps(["S", name, pairs, declared]))  # Name with prefix, attributes, namespaces.
+            self.events.append(("S", name, tuple(pairs), tuple(declared)))  # Name with prefix, attributes, namespaces.
             self.declared.clear()  # The declarations belong to this element only.
 
         def end(self, name: str) -> None:
             """Record the end of one element."""
             if self.pending:  # Merge adjacent text events into one text node.
-                self.lines.append(json.dumps(["T", "".join(self.pending)]))  # One line for the node.
+                self.events.append(("T", "".join(self.pending)))  # One event for the node.
                 self.pending.clear()  # The node is closed.
-            self.lines.append(json.dumps(["E", name]))  # The end of the element.
+            self.events.append(("E", name))  # The end of the element.
 
         def text(self, data: str) -> None:
             """Collect one piece of text."""
@@ -675,7 +674,7 @@ class MasterXmlVerifier:
             if self.log is not None:  # The end of an element of a reply.
                 self.log.end(name)  # Record it.
                 if level == 4:  # The root of the reply closed.
-                    self.digests.append(MasterXmlVerifier.Parse.fingerprint(self.log.lines))  # Digest it.
+                    self.digests.append(MasterXmlVerifier.Parse.fingerprint(self.log.events))  # Digest it.
                     self.log = None  # The reply is complete.
             elif level == 3:  # A device closed.
                 MasterXmlVerifier.Rules.device_done(self.status, self.children)  # One reply, or none.
@@ -691,8 +690,8 @@ class MasterXmlVerifier:
         """Run the strict parser over a whole document."""
 
         @staticmethod
-        def significant(lines: Sequence[str]) -> list[str]:
-            """Return the event lines without the white space that only formats element-only content.
+        def significant(events: Sequence[tuple[object, ...]]) -> list[tuple[object, ...]]:
+            """Return the events without the white space that only formats element-only content.
 
             Why:
                 The writer replaces the white space between the child elements of an element that holds no other
@@ -701,34 +700,34 @@ class MasterXmlVerifier:
                 shares no code with the writer.
 
             Args:
-                lines: The event lines of one document.
+                events: The events of one document: S for a start, T for a text node, and E for an end.
 
             Returns:
-                The lines that carry data.
+                The events that carry data.
             """
-            drop: set[int] = set()  # The indexes of the text lines that only format.
+            drop: set[int] = set()  # The indexes of the text events that only format.
             texts: list[list[tuple[int, str]]] = []  # The text nodes of each open element.
             has_child: list[bool] = []  # Whether each open element has a child element.
-            for index, line in enumerate(lines):  # Visit the events in order.
-                kind, *rest = json.loads(line)  # One event: S for start, T for text, E for end.
+            for index, (kind, *rest) in enumerate(events):  # Visit the events in order.
                 if kind == "S":  # An element opens.
                     if has_child:  # Its parent now has a child element.
                         has_child[-1] = True
                     texts.append([])  # No text yet.
                     has_child.append(False)  # No child yet.
                 elif kind == "T":  # A text node of the open element.
-                    texts[-1].append((index, rest[0]))
+                    texts[-1].append((index, str(rest[0])))
                 else:  # An element closes.
                     nodes, children = texts.pop(), has_child.pop()  # Its text nodes and its child flag.
                     if children and all(not text.strip(XmlWriter.BLANK) for _, text in nodes):  # Element-only content.
                         drop.update(position for position, _ in nodes)  # All of its text only formats.
-            return [line for index, line in enumerate(lines) if index not in drop]  # Keep the data.
+            return [event for index, event in enumerate(events) if index not in drop]  # Keep the data.
 
         @staticmethod
-        def fingerprint(lines: Sequence[str]) -> str:
+        def fingerprint(events: Sequence[tuple[object, ...]]) -> str:
             """Return the digest of the data events of one document."""
-            data = MasterXmlVerifier.Parse.significant(lines)  # Leave out the white space that only formats.
-            return hashlib.sha256("\n".join(data).encode("utf-8")).hexdigest()  # Equal events give an equal digest.
+            data = MasterXmlVerifier.Parse.significant(events)  # Leave out the white space that only formats.
+            text = "\n".join(repr(event) for event in data)  # The text form of a tuple of strings is unambiguous.
+            return hashlib.sha256(text.encode("utf-8")).hexdigest()  # Equal events give an equal digest.
 
         @staticmethod
         def walk(data: bytes) -> MasterXmlVerifier.Walker:
@@ -748,7 +747,7 @@ class MasterXmlVerifier:
                 XmlWriter.parser(log).Parse(xml_text, True)  # The same strict parser.
             except expat.ExpatError as error:  # The source is not well-formed.
                 raise ReportCheckError("A source reply is not well-formed XML.") from error  # Name the cause once.
-            return MasterXmlVerifier.Parse.fingerprint(log.lines)  # Equal events give an equal digest.
+            return MasterXmlVerifier.Parse.fingerprint(log.events)  # Equal events give an equal digest.
 
     @classmethod
     def verify(cls, data: bytes, replies: Sequence[str], counts: Mapping[str, int]) -> None:

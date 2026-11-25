@@ -49,6 +49,7 @@ from tests.unit.ex_hardware_inventory.support.hardware_replies import HardwareRe
 
 REPLACEMENT = chr(0xFFFD)  # What the cleaner writes for a character that XML cannot hold.
 NBSP = chr(0xA0)  # A no-break space: it looks like white space, and XML calls it data.
+DECLARATION_ONLY = b'<?xml version="1.0" encoding="UTF-8"?>\n'  # The first line of every file, and nothing else.
 
 
 class TestXmlText:
@@ -388,6 +389,15 @@ class TestMasterXmlBuilder:
         assert len(root) == 0 and root.get("devices") == "0" and root.get("organizations") == "0"
         assert document.replies == () and document.data.endswith(b'cancelled="0"/>\n')
 
+    @pytest.mark.parametrize("reply", ["", " ", "\n", "<?xml version='1.0'?>"])
+    def test_an_empty_or_blank_reply_is_one_failed_device_and_the_file_stays_valid(self, reply: str) -> None:
+        """A saved reply with no element is not a reply. The device fails, and the file keeps every check."""
+        document = make_document([make_result("ex-01", reply=reply), make_result("ex-02")])
+        devices = {d.get("name"): d for d in ET.fromstring(document.data).iterfind(".//mh:device", NS)}
+        assert devices["ex-01"].get("status") == "failed" and devices["ex-01"].get("reason") == "reply_unreadable"
+        assert len(devices["ex-01"]) == 0 and devices["ex-02"].get("status") == "collected"
+        assert len(document.replies) == 1  # Only the good reply is embedded and compared.
+
     def test_an_unread_organization_alone_is_one_element_with_no_site(self) -> None:
         """Mist could not read it, so it has a reason and a sentence and nothing below it."""
         root = ET.fromstring(make_document([make_unread(reason="rate_limited")]).data)
@@ -654,6 +664,12 @@ class TestMasterXmlVerifier:
         with pytest.raises(ReportCheckError):
             MasterXmlVerifier.verify(b'<?xml version="1.0" encoding="UTF-8"?>\n<root/>\n', (), {})
 
+    @pytest.mark.parametrize("data", [b"", b"\n", b"\xef\xbb\xbf", DECLARATION_ONLY])
+    def test_an_empty_file_or_a_file_with_no_element_is_refused(self, data: bytes) -> None:
+        """No bytes, a blank line, a lone byte order mark, and a declaration with no element are not documents."""
+        with pytest.raises(ReportCheckError):
+            MasterXmlVerifier.verify(data=data, replies=(), counts={})
+
     def test_the_hook_builds_the_same_checked_document_from_outcomes(self) -> None:
         """The portal path reads saved replies, classifies the outcomes, and gives checked bytes."""
         replies = {"hardware/ex-01.xml": HardwareReplies.single_switch("SW1")}
@@ -704,7 +720,7 @@ class TestMasterXmlExporter:
     def test_it_writes_one_checked_file_and_reports_its_facts(self, tmp_path: Path) -> None:
         """The path, the device count, and the byte count describe the file that the disk holds."""
         written = MasterXmlExporter(tmp_path).write(make_mixed(), "organization", self.RUN_TIME)
-        assert written is not None
+        assert isinstance(written, MasterXmlExporter.File)
         assert written.path == tmp_path / "ExHardwareInventory_20261125T184606Z.xml"
         assert written.device_count == 3 and written.byte_count == written.path.stat().st_size
         assert ET.fromstring(written.path.read_bytes()).get("devices") == "3"  # A standard reader agrees.
@@ -719,7 +735,7 @@ class TestMasterXmlExporter:
         """A second run in the same second gets a numbered name, and the first file keeps its bytes."""
         exporter = MasterXmlExporter(tmp_path)
         first = exporter.write(make_mixed(), "organization", self.RUN_TIME)
-        assert first is not None
+        assert isinstance(first, MasterXmlExporter.File)
         before = first.path.read_bytes()
         second = exporter.write(make_mixed(), "organization", self.RUN_TIME)
         third = exporter.write(make_mixed(), "organization", self.RUN_TIME)

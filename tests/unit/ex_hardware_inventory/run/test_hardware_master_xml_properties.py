@@ -15,12 +15,14 @@ import xml.dom.pulldom as pulldom
 import xml.etree.ElementTree as ET
 import xml.sax as sax
 from pathlib import Path
+from xml.parsers.expat import ExpatError
 from xml.sax.saxutils import escape, quoteattr
 
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
+from src.operations.exporting.ex_hardware_inventory.report.csv_file import ReportCheckError
 from src.operations.exporting.ex_hardware_inventory.run.master_xml import MasterXmlBuilder, MasterXmlVerifier, XmlText
 from tests.unit.ex_hardware_inventory.support.hardware_master_xml import (
     ORG_A,
@@ -78,7 +80,7 @@ class TestProperties:
         )
         document = make_document([make_result("ex-01", reply=source)])
         element = ET.fromstring(document.data).find(".//{urn:p}e")
-        assert element is not None
+        assert isinstance(element, ET.Element)
         assert (element.text or "") == text and element.get("{urn:p}a") == attribute
 
     @FEW
@@ -111,7 +113,7 @@ class TestProperties:
         document = make_document([make_result("ex-01", reply=source)])
         root = ET.fromstring(document.data)
         device = root.find(".//mh:device", NS)
-        assert device is not None
+        assert isinstance(device, ET.Element)
         if device.get("status") == "collected":
             ET.fromstring(source)  # The source must be well-formed for a standard parser too.
         assert int(root.get("collected", "-1")) + int(root.get("failed", "-1")) == 1
@@ -195,7 +197,18 @@ class TestIndependentReaders:
         etree = pytest.importorskip("lxml.etree", reason="lxml is not installed. The standard library readers ran.")
         schema = etree.XMLSchema(etree.parse(str(SCHEMA_FILE)))
         parser = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)
-        schema.assertValid(etree.fromstring(make_document().data, parser))
+        tree = etree.fromstring(make_document().data, parser)
+        assert schema.validate(tree) is True and len(schema.error_log) == 0
+
+    def test_an_empty_file_is_refused_by_the_check_and_by_every_standard_reader(self) -> None:
+        """No reader takes an empty file for a document, and the check says why instead of passing it."""
+        with pytest.raises(ReportCheckError, match="exact XML declaration"):
+            MasterXmlVerifier.verify(data=b"", replies=(), counts={})
+        for reader in (ET.fromstring, minidom.parseString):
+            with pytest.raises((ET.ParseError, ExpatError)):
+                reader(b"")
+        with pytest.raises(sax.SAXParseException):
+            sax.parseString(b"", sax.ContentHandler())
 
 
 class TestSchemaContract:
