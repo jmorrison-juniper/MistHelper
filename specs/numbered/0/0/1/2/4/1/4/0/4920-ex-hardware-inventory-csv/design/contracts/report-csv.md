@@ -32,7 +32,7 @@ The fixed columns come first, in this order:
 | `item_path` | The names of the item and its parents joined by `/`. |
 | `item_type` | The element name, for example `chassis-module`. |
 
-The item columns follow. The first seven are fixed: `item_name`, `item_version`, `item_part_number`, `item_serial_number`, `item_model_number`, `item_clei_code`, `item_description`. Every other field that any switch returned follows in sorted order, for example `item_disk_size`, `item_model`, `item_product`, `item_product_number`, `item_vendor`, and `item_attr_junos_style`.
+The item columns follow. The first seven are fixed: `item_name`, `item_version`, `item_part_number`, `item_serial_number`, `item_model_number`, `item_clei_code`, `item_description`. Every other field that any switch returned follows in sorted order, for example `item_disk_size`, `item_model`, `item_product`, `item_product_number`, `item_vendor`, and `item_attr_style`.
 
 ## Rows
 
