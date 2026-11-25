@@ -177,6 +177,21 @@ class TestXmlWriterCopy:
         source += "<r><!-- inner --><a>1</a><?pi2 x?></r><!-- end -->"
         assert XmlWriter.copy(source, 0) == "<r>\n  <a>1</a>\n</r>"
 
+    def test_a_comment_or_an_instruction_inside_text_does_not_split_the_text(self) -> None:
+        """Dropping a comment joins the text on both sides. The check counts one text node, and so does the copy."""
+        source = "<r>a<!-- note -->b<?pi x?>c<![CDATA[d]]>e</r>"
+        copied = XmlWriter.copy(source, 0)
+        assert copied == "<r>abcde</r>"  # One text node, with no trace of the dropped items.
+        assert MasterXmlVerifier.Parse.digest(copied) == MasterXmlVerifier.Parse.digest(source)
+
+    def test_a_long_text_is_one_text_node_although_the_parser_delivers_it_in_pieces(self) -> None:
+        """The parser hands out text in blocks of 8192 bytes. The copy joins them, and the check agrees."""
+        body = "line of a long description with an ampersand & a bracket <" * 800  # About 45000 characters.
+        source = f"<r><d>{body.replace('&', '&amp;').replace('<', '&lt;')}</d></r>"
+        copied = XmlWriter.copy(source, 0)
+        assert ET.fromstring(copied).find("d").text == body  # type: ignore[union-attr]  # All of it, in order.
+        assert MasterXmlVerifier.Parse.digest(copied) == MasterXmlVerifier.Parse.digest(source)
+
     def test_cdata_becomes_escaped_text_and_references_survive(self) -> None:
         """A CDATA section is text, and a character reference to a carriage return stays a reference."""
         source = "<r><![CDATA[a <b> & ]]> x &#13; y &amp; z</r>"
