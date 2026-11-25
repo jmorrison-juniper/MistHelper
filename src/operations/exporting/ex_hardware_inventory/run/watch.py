@@ -16,7 +16,10 @@ import time  # The poll loop sleeps between reads and keeps a deadline.
 from collections.abc import Mapping  # The batch rows are read-only mappings.
 from typing import TYPE_CHECKING, Any, cast  # The stack type is only needed for annotations.
 
-from src.operations.exporting.ex_hardware_inventory.report.builder import TargetResult  # One result for each target.
+from src.operations.exporting.ex_hardware_inventory.report.builder import (
+    FailureReasons,
+    TargetResult,
+)  # One result for each target, and the exact reason of a failure.
 
 if TYPE_CHECKING:  # Avoid a runtime import cycle with the batch module.
     from src.operations.exporting.ex_hardware_inventory.run.batch import BatchStack  # The services of one organization.
@@ -127,7 +130,7 @@ class RunFolder:
 
     def _result(self, run_id: str, row: Mapping[str, Any], cancelled: bool) -> TargetResult:
         """Build one target result, and give a target that never ended a final state."""
-        state, reason = str(row["state"]), str(row.get("reason_code") or "")  # What the batch recorded.
+        state, reason = str(row["state"]), FailureReasons.exact(row)  # What the batch recorded, with the exact cause.
         if state not in self.FINAL:  # A queued or running target after a stop or a timeout.
             state, reason = ("stopped", "cancelled") if cancelled else ("failed", "target_failed")  # Final.
         xml_text = self._xml(run_id, row) if state == "completed" else None  # Only a collected target has a reply.

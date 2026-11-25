@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from src.operations.exporting.ex_hardware_inventory.report.builder import ReportBuilder, TargetResult  # Units.
+import pytest  # Parametrize the outcome shapes.
+
+from src.operations.exporting.ex_hardware_inventory.report.builder import (
+    FailureReasons,
+    ReportBuilder,
+    TargetResult,
+)  # Units.
 from src.operations.exporting.ex_hardware_inventory.report.columns import ReportColumns  # The column rules.
 from tests.unit.ex_hardware_inventory.support.hardware_replies import HardwareReplies  # Synthetic replies.
 
@@ -118,6 +124,42 @@ class TestOutcomeRows:
         report = builder()  # An empty builder.
         report.add(make_result(state="failed", reason="something_new"))  # An unknown code.
         assert report.rows()[0]["collection_detail"] == "The switch returned no valid reply."  # The fallback.
+
+
+class TestExactReason:
+    """The batch gives one code to each failed format, and the report names the real cause."""
+
+    FAILED_SAVE = {"xml": {"state": "failed", "reason_code": "output_failed"}}  # The run folder refused the file.
+    INVALID_REPLY = {"xml": {"state": "failed", "reason_code": "invalid_output"}}  # The reply did not decode.
+
+    @pytest.mark.parametrize(
+        ("outcome", "expected"),
+        [
+            ({"reason_code": "format_failed", "formats": FAILED_SAVE}, "output_failed"),
+            ({"reason_code": "format_failed", "formats": INVALID_REPLY}, "format_failed"),
+            ({"reason_code": "format_failed"}, "format_failed"),
+            ({"reason_code": "format_failed", "formats": "text"}, "format_failed"),
+            ({"reason_code": "format_failed", "formats": {"xml": "text"}}, "format_failed"),
+            ({"reason_code": "completion_unproven", "formats": FAILED_SAVE}, "completion_unproven"),
+            ({"reason_code": None}, ""),
+            ({}, ""),
+        ],
+    )
+    def test_only_a_failed_save_refines_the_format_code(self, outcome: dict[str, object], expected: str) -> None:
+        """Every other shape keeps the code of the target, so the report never invents a cause."""
+        assert FailureReasons.exact(outcome) == expected
+
+    def test_each_cause_gives_its_own_plain_sentence_in_the_row(self) -> None:
+        """A failed save says so, and an invalid reply keeps its own sentence."""
+        report = builder()  # An empty builder.
+        for device, formats in (("dev-1", self.FAILED_SAVE), ("dev-2", self.INVALID_REPLY)):
+            reason = FailureReasons.exact({"reason_code": "format_failed", "formats": formats})  # The exact code.
+            report.add(make_result(device=device, state="failed", reason=reason))  # One failed target each.
+        details = {row["device_id"]: row["collection_detail"] for row in report.rows()}  # Device to sentence.
+        assert details == {
+            "dev-1": "The reply could not be saved.",
+            "dev-2": "The reply was not a valid chassis inventory.",
+        }
 
 
 class TestOrderAndKeys:

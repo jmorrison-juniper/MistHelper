@@ -41,8 +41,8 @@ class TargetResult:
     xml_text: str | None  # Present only when the target saved a reply.
 
 
-class RowFactory:
-    """Build the rows of one target."""
+class FailureReasons:
+    """Name the cause of a target that returned no valid reply."""
 
     DETAILS = {
         "cancelled": "The run was cancelled before this switch finished.",
@@ -58,6 +58,31 @@ class RowFactory:
         "rate_limited": "Mist limited the requests, so this organization was not read.",
         "target_limit": "This organization has more switches than one batch can run.",
     }  # A plain sentence for each reason code. An operator never sees a code.
+
+    @classmethod
+    def exact(cls, outcome: Mapping[str, object]) -> str:
+        """Return the most exact reason code of one target outcome.
+
+        Why:
+            The batch gives each failed format the same target code, ``format_failed``. The entry of the
+            format says more. The code ``output_failed`` means that the reply was fine but the run folder
+            could not save it. The report must not call such a reply invalid.
+
+        Args:
+            outcome: One target row of the batch, with ``reason_code`` and ``formats``.
+
+        Returns:
+            ``output_failed`` when the XML entry says that the save failed. Otherwise, the code of the target.
+        """
+        reason = str(outcome.get("reason_code") or "")  # The code of the whole target.
+        formats = outcome.get("formats")  # One entry for each format that the run asked for.
+        entry = formats.get("xml") if isinstance(formats, Mapping) else None  # This run asks for XML only.
+        saved = str(entry.get("reason_code") or "") if isinstance(entry, Mapping) else ""  # Why the format failed.
+        return saved if reason == "format_failed" and saved == "output_failed" else reason  # Refine one code only.
+
+
+class RowFactory:
+    """Build the rows of one target."""
 
     @classmethod
     def base(cls, result: TargetResult, scope: str, run_utc: str) -> dict[str, str]:
@@ -125,7 +150,7 @@ class RowFactory:
                     set(),
                 )  # Not collected.
         status = {"skipped": "skipped", "stopped": "cancelled"}.get(result.state, "failed")  # Map the batch state.
-        detail = cls.DETAILS.get(result.reason, "The switch returned no valid reply.")  # A plain sentence.
+        detail = FailureReasons.DETAILS.get(result.reason, "The switch returned no valid reply.")  # A plain sentence.
         return status, [cls.outcome(base, status, detail)], set()  # One outcome row.
 
 

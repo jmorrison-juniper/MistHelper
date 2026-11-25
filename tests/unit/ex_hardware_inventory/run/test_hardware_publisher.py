@@ -90,6 +90,21 @@ class TestCompile:
         rows = rows_of(ReportHook(read, None).compile([outcome(1)], 1_000_000))
         assert [row["collection_detail"] for row in rows] == ["The reply file is missing."]
 
+    def test_a_failed_save_is_not_called_an_invalid_reply(self) -> None:
+        """The target code is format_failed for both causes, and the XML entry tells them apart."""
+        saved = {"xml": {"state": "failed", "reason_code": "output_failed"}}  # The run folder refused the file.
+        invalid = {"xml": {"state": "failed", "reason_code": "invalid_output"}}  # The reply did not decode.
+        outcomes = [
+            {**outcome(1, "failed", "format_failed"), "formats": saved},
+            {**outcome(2, "failed", "format_failed"), "formats": invalid},
+        ]
+        rows = rows_of(ReportHook(reader({}), None).compile(outcomes, 1_000_000))
+        details = {row["device_name"]: row["collection_detail"] for row in rows}
+        assert details == {
+            "ex-01": "The reply could not be saved.",
+            "ex-02": "The reply was not a valid chassis inventory.",
+        }
+
     def test_an_organization_that_could_not_be_read_is_one_outcome_row(self) -> None:
         """The scope lists a failed organization, and the report has one row for it."""
         scope = {

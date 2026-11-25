@@ -10,6 +10,7 @@ import re  # Server-generated path labels reject traversal characters.
 import secrets  # Artifact directory names remain private and unpredictable.
 import shutil  # Delete only one verified session-owned directory.
 import threading  # Writers, downloads, and cleanup share one artifact lock.
+import time  # A refused file replace waits before the next try.
 import zipfile  # ZIP archives contain only the saved safe layout.
 from collections.abc import Iterator, Mapping  # Type streams and target identities.
 from dataclasses import dataclass, field  # Keep batch storage state explicit.
@@ -172,7 +173,7 @@ class BatchArtifactWriter:
                 try:
                     self._stage(names, contents, staged)
                     for temporary, destination, relative_name in staged:
-                        os.replace(temporary, destination)
+                        self._storage.metadata.replace(temporary, destination)  # Wait out a short file lock.
                         published.append(destination)
                         self._record.files.add(relative_name)
                     self._record.bytes_written += required_bytes
@@ -445,11 +446,35 @@ class BatchArtifactStorage:
                 temporary = record.directory / ".manifest.tmp"  # Stage one complete manifest.
                 with temporary.open("wb") as stream:
                     stream.write(encoded)  # Complete the bytes before atomic replacement.
-                os.replace(temporary, path)  # Readers never see partial metadata.
+                self.replace(temporary, path)  # Readers never see partial metadata, and a short lock cannot fail it.
             except OSError as error:
                 record.status, record.partial = "failed", True  # Preserve a failed metadata write.
                 logger.emit(logging.ERROR, "web.artifact.batch.manifest.error", {"status": type(error).__name__})
                 raise StreamRequestError("output_failed", "The batch manifest could not be saved.") from error
+
+        def replace(self, temporary: Path, destination: Path, waits: tuple[float, ...] = (0.05, 0.1, 0.2, 0.4)) -> None:
+            """Replace one file atomically, and wait out a short file lock.
+
+            Why:
+                On Windows, a sync client or a virus scanner can hold the file for a moment, and the replace then
+                fails. One refusal would fail the whole batch, so the replace waits and tries again.
+
+            Args:
+                temporary: The complete staged file.
+                destination: The final path of the file.
+                waits: The seconds to wait after each refused try. The tries are one more than the waits.
+
+            Raises:
+                PermissionError: When the last try is refused too. Any other OSError fails at the first try.
+            """
+            for wait in waits:  # Each refused try is followed by one wait.
+                try:  # Windows raises a permission error while another process holds the file.
+                    os.replace(temporary, destination)  # Readers never see partial content.
+                    return  # The first accepted try ends the loop.
+                except PermissionError:  # The other process still holds the file.
+                    logger.emit(logging.INFO, "web.artifact.replace.retry")  # The log shows why the run is slow.
+                    time.sleep(wait)  # Give the other process time to close its handle.
+            os.replace(temporary, destination)  # The last try raises its own error to the caller.
 
         def encode(self, record: BatchArtifactRecord) -> bytes:
             """Encode only safe manifest fields and enforce the reserved quota."""

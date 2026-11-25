@@ -471,6 +471,13 @@ shell could not collect this switch. See the log for the cause.` The log holds
 the HTTP status. The Multi Site action of the portal opens the same shells, so it
 needs the same role.
 
+A switch can also show the detail `The reply could not be saved.` The shell
+worked, but the run folder refused the file. On Windows, a sync client such as
+OneDrive or a virus scanner can hold a file for a short time. The run waits and
+tries again, up to five times and 0.75 second in total, so a short lock does not
+fail a switch. If the detail stays, run the menu again. You can also keep the
+`data` folder outside a synced folder.
+
 ### Watch the network from a monitoring system
 
 Menu 241 starts a metrics gateway on port 8057. The gateway reads your

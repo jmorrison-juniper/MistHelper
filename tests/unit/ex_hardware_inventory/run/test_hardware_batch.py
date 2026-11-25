@@ -270,6 +270,25 @@ class TestCancel:
         assert result.results[0].state == "failed" or result.results[0].state == "stopped"  # Final either way.
 
 
+class TestFailureReasons:
+    """The CLI reads the exact cause of a failed target from the batch row."""
+
+    def test_a_failed_save_and_an_invalid_reply_keep_their_own_reasons(self, tmp_path: Path) -> None:
+        """Both causes arrive as format_failed. The XML entry says which one it was."""
+        run, stack, _ = make_run(tmp_path)
+        stack.service.previews.append(Batches.payload([1, 2, 3]))
+        confirmed = run.preview()
+        saved = {"xml": {"state": "failed", "reason_code": "output_failed"}}  # The run folder refused the file.
+        invalid = {"xml": {"state": "failed", "reason_code": "invalid_output"}}  # The reply did not decode.
+        stack.service.rows = [
+            {**Batches.row(1, "failed", "format_failed"), "formats": saved},
+            {**Batches.row(2, "failed", "format_failed"), "formats": invalid},
+            Batches.row(3, "failed", "format_failed"),  # An older row has no format entry.
+        ]
+        result = run.run(confirmed)
+        assert [item.reason for item in result.results] == ["output_failed", "format_failed", "format_failed"]
+
+
 class TestRunFolderSafety:
     """The CLI reads only files that stay inside the run folder."""
 

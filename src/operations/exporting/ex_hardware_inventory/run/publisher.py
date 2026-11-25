@@ -16,7 +16,11 @@ import logging  # Record each compile for the operator trace.
 from collections.abc import Callable, Mapping, Sequence  # The outcomes and the scope are read-only mappings.
 from datetime import UTC, datetime  # The report carries the run end time in UTC.
 
-from src.operations.exporting.ex_hardware_inventory.report.builder import ReportBuilder, TargetResult  # Report rows.
+from src.operations.exporting.ex_hardware_inventory.report.builder import (
+    FailureReasons,
+    ReportBuilder,
+    TargetResult,
+)  # Report rows and the exact reason of a failure.
 from src.operations.exporting.ex_hardware_inventory.report.csv_file import CsvRenderer, CsvVerifier  # The file.
 
 logger = logging.getLogger(__name__)  # Name the logger after this module so log lines carry their source.
@@ -73,9 +77,9 @@ class ReportHook:
             identity = outcome.get("target")  # The redacted identity of the target.
             identity = identity if isinstance(identity, Mapping) else {}  # A bad shape gives an empty identity.
             org_id = str(identity.get("org_id") or "")  # The report names the organization of the target.
-            state, reason = str(outcome.get("state") or "failed"), str(
-                outcome.get("reason_code") or ""
-            )  # What the batch recorded.
+            state, reason = str(outcome.get("state") or "failed"), FailureReasons.exact(
+                outcome
+            )  # What the batch recorded, with the exact cause of a failed save.
             xml_text = self._reply(outcome) if state == "completed" else None  # Only a collected target has a reply.
             results.append(
                 TargetResult(identity, str(names.get(org_id) or org_id), state, reason, xml_text)
