@@ -152,6 +152,10 @@ Targets:
 - **FR-042**: When a run has no target, the tool MUST write no report and MUST say so.
 - **FR-043**: When every grant of the credential has the read-only role, the CLI MUST print one note at step 1 that Mist can refuse a switch shell for that role. The note MUST NOT block the run. A switch that Mist refuses MUST appear as one `failed` outcome row whose detail points to the log.
 - **FR-044**: When a file replace in the run folder gets a permission error, the store MUST try the replace again, up to five tries in total, with waits of 50, 100, 200, and 400 milliseconds. Any other error MUST fail at once. When a save still fails, the report detail MUST say that the reply could not be saved, and MUST NOT call the reply invalid. Issue #4926.
+- **FR-045**: The Multi Site page MUST keep the Targets card when the hardware action is on. The default MUST stay all sites, and the request for all sites MUST carry no site field. A subset MUST carry `sites: {"mode": "selected", "ids": [...]}`. The server MUST refuse an empty subset, a repeated site, an unknown site, an identifier that is not a UUID, all-site mode with identifiers, and any other shape. The preview MUST give the number of chosen sites and no site name. Issue #4927.
+- **FR-046**: The review card MUST list the four steps, MUST name the confirmation word in the label and in the placeholder of the box, and MUST give the one next action above **Start batch**. A disabled **Start batch** button MUST give the same sentence as its title. A changed choice after a preview MUST clear the preview and the word. Issue #4928.
+- **FR-047**: `python MistHelper.py --web-portal` MUST resolve the organization before it builds the portal, in the same order as the interactive mode, and MUST NOT ask when the context already holds one. Issue #4929.
+- **FR-048**: Each Mist list call of this feature that accepts a `limit` MUST pass `limit=1000`. The MSP organization list takes no limit, and the tool follows its pages.
 
 Collection:
 

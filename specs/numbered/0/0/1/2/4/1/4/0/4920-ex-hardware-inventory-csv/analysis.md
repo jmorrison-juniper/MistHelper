@@ -68,6 +68,10 @@
 | FR-042 | Yes | T021, T026 | |
 | FR-043 | Yes | T068 | Added after the live run. |
 | FR-044 | Yes | T069, T070 | Added after the second live run. |
+| FR-045 | Yes | T072 | Added after the live portal run. |
+| FR-046 | Yes | T073 | Added after the live portal run. |
+| FR-047 | Yes | T071 | Added after the live portal run. |
+| FR-048 | Yes | T074 | The audit of the list calls. |
 
 Success criteria that need build work: SC-001 (T021), SC-002 (T022), SC-003 (T052), SC-004 (T049), SC-005 (T063), SC-006 (T032), SC-007 (T010, T052), SC-008 (T037). All have a task.
 
@@ -126,12 +130,15 @@ None. Each task maps to a requirement, a story, or a gate.
 | F4 | Pylint | LOW | Four `protected-access` notes in `run/routing.py`: the router reads `_apisession` and `_org_id` of the picker. | Accepted. The score is 9.73 against a floor of 9.5. A public accessor on the picker needs a change of shared WebSocket code and a new structure count. |
 | F5 | Full-suite ratchet | LOW | The full-suite ratchet prints 18 findings in `tests/test_upgrade_portal_audit.py` and `tests/unit/test_ssh_host_key_tofu.py`. This branch does not change those files, and they match `origin/main`. | Out of scope. The required check scans only the changed files and prints 0. |
 | F6 | Second live run | HIGH | With the admin-role token, 14 of 15 switches collected. One manifest replace in a OneDrive folder got a Windows permission error. The store marked the whole batch record as failed, so the last switch was refused, and the report called its reply invalid. A loop in the same folder reproduced the error: 89 of 1500 replaces failed, and a wait of 50 ms cleared 87 of them. | Fixed in issue #4926 with FR-044 and T069. `Metadata.replace` tries up to five times and retries a permission error only. The report names a failed save. The run after the fix collected 15 of 15 (T070). |
+| F7 | Live portal run in a browser | HIGH | The local `--web-portal` mode built the portal with no organization, so the WebSockets tab was not ready. | Fixed in issue #4929 with FR-047 and T071. The launcher resolves the organization like the interactive mode. |
+| F8 | Live portal run in a browser | MEDIUM | The hardware action emptied the Targets card, so the operator could not choose sites. | Fixed in issue #4927 with FR-045 and T072. The card stays, and a subset goes to the existing site resolver. |
+| F9 | Live portal run in a browser | MEDIUM | The page did not name the confirmation word near its box, and did not say that the preview comes first. | Fixed in issue #4928 with FR-046 and T073. |
 
-Requirement changes: FR-043 is new (T068), and FR-044 is new (T069). FR-040 holds: both live runs used a read-only command on one organization. SC-005 is met live (T070): the report and the 15 saved replies hold the same 114 serial numbers, and each switch has as many rows as its reply has chassis elements.
+Requirement changes: FR-043 and FR-044 are new (T068, T069). FR-045 through FR-048 are new (T071 through T074). FR-040 holds: every live run used a read-only command on one organization. SC-005 is met live for the CLI (T070) and for the portal (T071): the report and the saved replies hold the same 114 serial numbers, and each switch has as many rows as its reply has chassis elements.
 
 Metrics after the pass:
 
-- Total requirements: 44 functional and 8 success criteria.
-- Total tasks: 70. Tasks T001 through T064 and T068 through T070 are done. T065 and T066 close with this pass and the pull request. T067 needs the owner.
+- Total requirements: 48 functional and 8 success criteria.
+- Total tasks: 74. Tasks T001 through T064, T068 through T074 are done. T065 and T066 close with this pass and the pull request. T067 needs the owner.
 - Coverage: 100 percent of functional requirements have at least one task.
 - Critical issues: 0. Open items for the owner: the MSP test.
