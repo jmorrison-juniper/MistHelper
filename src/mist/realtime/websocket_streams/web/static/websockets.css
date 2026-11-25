@@ -67,6 +67,12 @@
     overflow: auto;
 }
 
+/* The filter box keeps its own width, so the page buttons stay on its line. */
+.ws-csv-filter {
+    width: 16rem;
+    max-width: 100%;
+}
+
 .ws-csv-table {
     font-size: 0.8rem;
     white-space: nowrap;

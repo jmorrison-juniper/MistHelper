@@ -1875,6 +1875,7 @@
     }
 
     function isTerminalSession(session) {
+        if (session.mode === 'multi_site') return false;  // A batch parent holds no shell. Its targets run the shells (issue #4932).
         return session.terminal === true || session.output === 'terminal' || session.output === 'screen';  // Support new and old payloads.
     }
 

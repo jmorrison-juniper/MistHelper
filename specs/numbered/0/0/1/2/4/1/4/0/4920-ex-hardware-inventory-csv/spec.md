@@ -162,6 +162,7 @@ Targets:
 - **FR-051**: The filter `q` MUST be a plain, case-insensitive text search over every cell of the whole report, and the server MUST NOT build a pattern from it. The answer MUST give `total` (the data rows) and `matched` (the rows that match), so the page can say which rows it shows.
 - **FR-052**: The preview MUST bound its work. A cell is cut at 1000 characters, and the answer gives the number of cut cells. A report over 16 MiB gets the refusal `too_large` with a message that points to the download. A damaged report (not UTF-8, empty, or with a row of the wrong width) gets the refusal `output_failed`.
 - **FR-053**: The page MUST set every cell, every column name, and every message as plain text. A cell that holds markup MUST show as text.
+- **FR-054**: The page MUST NOT open a Multi Site batch parent as a terminal, even when the parent keeps the output name `terminal` from its shell action. It MUST read the messages of the parent like those of any other session, and it MUST send no terminal read or resize request for it. Issue #4932.
 
 Collection:
 

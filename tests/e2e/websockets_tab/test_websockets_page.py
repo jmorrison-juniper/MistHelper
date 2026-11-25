@@ -107,6 +107,7 @@ class FakeWebSocketServices:
         self.csv_report: bytes = make_csv_report()  # The combined report that the table preview reads.
         self.csv_error: StreamRequestError | None = None  # A planned refusal of the table preview.
         self.csv_preview_calls: list[dict[str, object]] = []  # Record what the browser asked for.
+        self.terminal_reads: list[str] = []  # Record each session that the page reads as a terminal.
         lifecycle = SimpleNamespace(
             start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
         )  # Group fake session lifecycle behavior.
@@ -148,6 +149,7 @@ class FakeWebSocketServices:
             self.csv_report = make_csv_report()  # Restore the small default report.
             self.csv_error = None  # Restore a working preview.
             self.csv_preview_calls.clear()  # Remove prior preview requests.
+            self.terminal_reads.clear()  # Remove prior terminal reads.
 
     def catalog_payload(self) -> dict[str, object]:
         """Return the catalog shown by the page."""
@@ -242,6 +244,7 @@ class FakeWebSocketServices:
 
     def read(self, session_id: str, after: int, _wait_seconds: float) -> dict[str, object]:
         """Return fake terminal bytes after one position."""
+        self.terminal_reads.append(session_id)  # A batch parent must never reach this route.
         with self._lock:  # Copy terminal state while the fake runner can append bytes.
             session = self._sessions[session_id]  # The browser names a visible fake session.
             data = self.terminal_data.get(session_id, b"")  # A new terminal can have no bytes.
@@ -414,16 +417,23 @@ class FakeWebSocketServices:
         payload = body if isinstance(body, dict) else {}  # Keep the fake request shape bounded.
         self.batch_start_body = dict(payload)  # Verify the start request carries only the preview reference.
         session_id = "batch1"  # Use one stable public parent id.
-        session = BrowserSession(
-            session_id, "channel", "site.stats.devices", "Multi Site: Device statistics", "json", "read"
-        )  # Keep the same public session shape as the channel runner.
+        preview = self.batch_preview_body or {}  # The real summary names the preset and the format of the run.
+        hardware = preview.get("preset") == "ex-hardware-xml"  # The hardware action opens a shell on each switch.
+        session = (
+            BrowserSession(
+                session_id, "shell", "ex.createShellSession", "Multi Site: EX hardware inventory", "terminal", "shell"
+            )
+            if hardware
+            else BrowserSession(
+                session_id, "channel", "site.stats.devices", "Multi Site: Device statistics", "json", "read"
+            )
+        )  # The hardware parent has the public shape of the real one: a shell entry with the terminal output.
         with self._lock:  # Allocate the public session and its target state together.
             self._sessions[session_id] = session  # Store the parent for session list and message reads.
             self.batch_progress[session_id] = self._new_batch_progress(
                 int(payload.get("concurrency", 1))
             )  # Model one active worker and a complete queued set.
-            preview = self.batch_preview_body or {}  # The real summary names the preset and the format of the run.
-            if preview.get("preset") == "ex-hardware-xml":
+            if hardware:
                 self.batch_progress[session_id].update(preset=preview["preset"], format=preview.get("format", "xml"))
             self.batch_targets_data[session_id] = self._new_batch_targets()  # Keep target order frozen.
         return self._batch_payload(session)  # Return one parent with additive batch state.
@@ -658,6 +668,7 @@ class FakeWebSocketServices:
         }  # Payload.
         if session.session_id in self.batch_progress:
             payload["mode"] = "multi_site"  # Mark only batch parents.
+            payload["terminal"] = False  # The real service says so: the shells run on the targets, not on the parent.
             payload["batch"] = self.batch_progress[session.session_id]  # Add batch progress to session listings.
         return payload  # Preserve the existing session payload shape.
 
@@ -1446,6 +1457,20 @@ def test_ex_hardware_csv_table_returns_after_a_page_reload(
     ).click()  # The page opens on the first tab, and the batch card is on this one.
     page.get_by_test_id("ws-batch-csv-table").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
     assert csv_rows(page).count() == 6 and len(fake_services.csv_preview_calls) == 2  # One read for each page load.
+
+
+def test_a_batch_parent_of_a_shell_action_is_not_opened_as_a_terminal(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The hardware parent keeps the terminal output name but owns no shell, so the page reads no terminal (#4932)."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv")
+    page.wait_for_timeout(1500)  # A terminal read would start at once, and it would repeat each second.
+    assert fake_services.terminal_reads == []  # The parent never reaches the terminal route.
+    page.get_by_test_id("ws-single-site-tab").click()  # The output panel of the selected session is on the first tab.
+    assert page.get_by_test_id("ws-output").is_visible()  # The message view shows the parent, as for a channel batch.
+    assert page.get_by_test_id("ws-terminal-panel").is_hidden()  # No dead terminal.
+    assert page.get_by_test_id("ws-session-state").inner_text() == "State: Live"  # The state of the session itself.
 
 
 def test_ex_hardware_concurrency_default_comes_from_the_catalog_setting(

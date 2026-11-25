@@ -9,3 +9,4 @@
 - **Changed**: The review card of the Multi Site tab lists the four steps, names the confirmation word in the label and in the box, and tells you the next step above **Start batch**. Issue #4928.
 - **Fixed**: `python MistHelper.py --web-portal` now resolves the organization before it builds the portal, so the WebSockets tab works on a workstation. Issue #4929.
 - **Added**: The progress panel of the Multi Site tab shows the combined CSV report as a table when the report is complete. You can filter the rows, and you can move through a long report. The **Download CSV report** button stays. Issue #4931.
+- **Fixed**: The page no longer opens the batch parent of a shell action as a terminal. The portal answered HTTP 409 twice, and the output panel showed `State: Connecting` for ever. The panel now shows the real state and the messages of the batch. Issue #4932.

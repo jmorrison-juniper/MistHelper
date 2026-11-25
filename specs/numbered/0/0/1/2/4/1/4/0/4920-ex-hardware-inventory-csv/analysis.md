@@ -133,12 +133,14 @@ None. Each task maps to a requirement, a story, or a gate.
 | F7 | Live portal run in a browser | HIGH | The local `--web-portal` mode built the portal with no organization, so the WebSockets tab was not ready. | Fixed in issue #4929 with FR-047 and T071. The launcher resolves the organization like the interactive mode. |
 | F8 | Live portal run in a browser | MEDIUM | The hardware action emptied the Targets card, so the operator could not choose sites. | Fixed in issue #4927 with FR-045 and T072. The card stays, and a subset goes to the existing site resolver. |
 | F9 | Live portal run in a browser | MEDIUM | The page did not name the confirmation word near its box, and did not say that the preview comes first. | Fixed in issue #4928 with FR-046 and T073. |
+| F10 | Owner request | MEDIUM | The portal offered the combined CSV report as a download only. The owner asked to read the report in the browser, as a preview or a table, like the other tools of the owner. | Done in issue #4931 with FR-049 through FR-053 and T075 through T080. The progress card shows a table with a filter and page buttons. The route reads the report through the same checked read as the download. Live: the table equals the file cell for cell. |
+| F11 | Live check of the table | MEDIUM | The page opened the batch parent of the hardware action as a terminal. The portal answered HTTP 409 `not_terminal` on the terminal read and on the resize, and the output panel showed `State: Connecting` for ever on the first tab. | Fixed in issue #4932 with FR-054 and T081. The page no longer reads a `multi_site` parent as a terminal. |
 
-Requirement changes: FR-043 and FR-044 are new (T068, T069). FR-045 through FR-048 are new (T071 through T074). FR-040 holds: every live run used a read-only command on one organization. SC-005 is met live for the CLI (T070) and for the portal (T071): the report and the saved replies hold the same 114 serial numbers, and each switch has as many rows as its reply has chassis elements.
+Requirement changes: FR-043 and FR-044 are new (T068, T069). FR-045 through FR-048 are new (T071 through T074). FR-049 through FR-054 are new (T075 through T081). FR-040 holds: every live run used a read-only command on one organization. SC-005 is met live for the CLI (T070) and for the portal (T071): the report and the saved replies hold the same 114 serial numbers, and each switch has as many rows as its reply has chassis elements.
 
 Metrics after the pass:
 
-- Total requirements: 48 functional and 8 success criteria.
-- Total tasks: 74. Tasks T001 through T064, T068 through T074 are done. T065 and T066 close with this pass and the pull request. T067 needs the owner.
+- Total requirements: 54 functional and 8 success criteria.
+- Total tasks: 81. Tasks T001 through T064, T068 through T081 are done. T065 and T066 close with this pass and the pull request. T067 needs the owner.
 - Coverage: 100 percent of functional requirements have at least one task.
 - Critical issues: 0. Open items for the owner: the MSP test.
