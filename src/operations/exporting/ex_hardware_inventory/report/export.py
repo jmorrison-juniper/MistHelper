@@ -87,11 +87,15 @@ class ReportExporter:
         )  # The CSV format is forced, whatever OUTPUT_FORMAT holds.
         try:  # The check removes the file on any failure.
             if written is not True:  # The exporter reports its own failure.
-                raise ReportCheckError("The exporter did not write the report.")
+                raise ReportCheckError(
+                    "The exporter did not write the report."
+                )  # The exporter reports its own failure.
             CsvVerifier.verify(path.read_bytes(), fieldnames, len(rows))  # Read the file back.
         except (ReportCheckError, OSError) as error:  # A missing, unreadable, or damaged file.
             path.unlink(missing_ok=True)  # No damaged file may stay under the report name.
-            logger.error("The report file failed its check and was removed (%s)", type(error).__name__)
+            logger.error(
+                "The report file failed its check and was removed (%s)", type(error).__name__
+            )  # Name the type, never the text.
             raise ReportCheckError(str(error)) from None  # One documented error for the operation.
         logger.debug("Wrote and checked the report file with %d rows", len(rows))  # Log the result.
         return ReportFile(path, len(rows))  # Hand the file to the operation.

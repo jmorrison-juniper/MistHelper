@@ -119,7 +119,11 @@ class RowFactory:
                 rows, names = cls.items(base, result.xml_text)  # One row for each hardware item.
                 return "collected", rows, names  # The device collected.
             except FlattenError:  # The file is truncated, malformed, or not a chassis reply.
-                return "failed", [cls.outcome(base, "failed", "The saved reply could not be read.")], set()
+                return (
+                    "failed",
+                    [cls.outcome(base, "failed", "The saved reply could not be read.")],
+                    set(),
+                )  # Not collected.
         status = {"skipped": "skipped", "stopped": "cancelled"}.get(result.state, "failed")  # Map the batch state.
         detail = cls.DETAILS.get(result.reason, "The switch returned no valid reply.")  # A plain sentence.
         return status, [cls.outcome(base, status, detail)], set()  # One outcome row.
@@ -150,7 +154,11 @@ class ReportBuilder:
         logger.info("Adding one target result with state %s", result.state)  # Log before the transform.
         status, rows, names = RowFactory.build(result, self._scope, self._run_utc)  # Build this target's rows.
         first = rows[0]  # Every target gives at least one row.
-        key = (first["org_name"].casefold(), first["site_name"].casefold(), first["device_name"].casefold())
+        key = (
+            first["org_name"].casefold(),
+            first["site_name"].casefold(),
+            first["device_name"].casefold(),
+        )  # The sort key of the device.
         self._devices.append(((*key, len(self._devices)), rows))  # The count keeps equal keys in input order.
         self._statuses.append(status)  # Remember the status for the summary.
         self._fields |= names  # Remember the field names for the column list.

@@ -47,6 +47,8 @@ The outcome of one target, as the report compiler reads it.
 | `TargetResult.reason` | text | The batch reason code, or empty. At most 200 characters. |
 | `TargetResult.xml_text` | text or none | The saved reply text. Present only when `state` is `completed`. At most 1 MiB. |
 
+An organization that Mist could not read gives one `TargetResult` with only `org_id` in `identity`, the state `failed`, and the reason `discovery_failed`, `rate_limited`, or `target_limit`. A confirmed switch that did not run because a new switch appeared, or because it was no longer connected, gets the state `skipped` and the reason `new_targets` or `no_longer_connected`.
+
 Mapping to `ReportRow.collection_status`: `completed` with text gives `collected`. `completed` without text gives `failed`. `failed` gives `failed`. `skipped` gives `skipped`. `stopped` gives `cancelled`.
 
 ## FlattenedItem
@@ -104,7 +106,7 @@ The one CSV file of a run.
 
 ## RunSummary
 
-The console summary of one CLI run.
+The console summary of one CLI run. The console prints these values. No object holds them.
 
 | Field | Type | Constraint |
 |-------|------|------------|

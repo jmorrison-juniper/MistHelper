@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging  # Record each prompt and its result for the operator trace.
 from collections.abc import Mapping  # The counts arrive as read-only mappings.
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING  # The type of the written file is needed for annotations only.
 
 from src.foundation.runtime.config.source_dependency_resolver import SourceDependencyResolver  # Input helper.
 from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml import HardwareXmlPreset  # Command.
@@ -80,7 +80,9 @@ class HardwareConsole:
         phrase = f"RUN {total} TARGETS"  # The phrase that starts the run.
         print(f"  Total targets: {total}")  # WHY: the phrase names this number.
         print("Step 3 of 4: Confirm")  # WHY: the operator follows the four steps on the console.
-        print("  This run opens a read-only shell on each switch and runs one command:")
+        print(
+            "  This run opens a read-only shell on each switch and runs one command:"
+        )  # WHY: the operator must know that every shell is read-only.
         print(f"    {HardwareXmlPreset.COMMANDS['xml']}")  # WHY: the operator sees the one fixed command.
         print(f"  Shells open at the same time: {concurrency}")  # WHY: the setting in use.
         logger.info("Asking the operator for the typed confirmation phrase")  # Log before the prompt.
@@ -91,7 +93,7 @@ class HardwareConsole:
         logger.debug("The typed confirmation matched=%s", confirmed)  # Log the result, never the answer.
         if not confirmed:  # Any other text, an empty answer, end of input, or an interrupt cancels the run.
             print("Cancelled. No shell was opened and no file was written.")  # WHY: tell the safe outcome.
-        return confirmed
+        return confirmed  # True only for the exact phrase.
 
     def collected(self, org_name: str, counts: Mapping[str, int]) -> None:
         """Print the step 4 line of one organization."""

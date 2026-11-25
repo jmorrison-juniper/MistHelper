@@ -165,7 +165,9 @@ class ScopeResolver:
         direct = tuple(OrganizationRef(org_id, name) for org_id, name in profile.org_grants)  # Direct grants.
         found, reasons = self.MspLists(self._apisession).organizations(profile.msp_ids)  # MSP lists, if any.
         decision = self._decide(profile, direct, found, reasons)  # MSP scope or organization scope.
-        logger.debug("Decided scope=%s with %d organizations", decision.mode, len(decision.organizations))
+        logger.debug(
+            "Decided scope=%s with %d organizations", decision.mode, len(decision.organizations)
+        )  # Counts only.
         return decision  # Hand the decision to the operation.
 
     def _decide(
@@ -176,14 +178,20 @@ class ScopeResolver:
         reasons: list[str],
     ) -> ScopeDecision:
         """Build the decision from the grants and the MSP lists."""
-        tail = " The organizations of that MSP are not in this run." if found else " The run uses one organization."
+        tail = (
+            " The organizations of that MSP are not in this run." if found else " The run uses one organization."
+        )  # Say what the failure changed.
         notes = tuple(reason + tail for reason in reasons)  # Say what each failure changed.
         if found:  # MSP scope: every listed organization and every direct grant.
             every = {ref.org_id: ref for ref in reversed((*direct, *found))}  # Reversed, so the first sight wins.
             ordered = sorted(every.values(), key=lambda ref: (ref.org_name.casefold(), ref.org_id))  # Stable.
-            return ScopeDecision("msp", profile.credential_type, profile.account_kind, tuple(ordered), notes)
+            return ScopeDecision(
+                "msp", profile.credential_type, profile.account_kind, tuple(ordered), notes
+            )  # MSP scope: every organization.
         organization = self._choose(direct)  # Organization scope: stop here when the choice is not clear.
-        return ScopeDecision("organization", profile.credential_type, profile.account_kind, (organization,), notes)
+        return ScopeDecision(
+            "organization", profile.credential_type, profile.account_kind, (organization,), notes
+        )  # Organization scope: one organization.
 
     def _choose(self, direct: tuple[OrganizationRef, ...]) -> OrganizationRef:
         """Choose the one organization of organization scope.
@@ -195,10 +203,14 @@ class ScopeResolver:
             wanted = self._configured.casefold()  # Identifiers compare without case.
             match = next((ref for ref in direct if ref.org_id.casefold() == wanted), None)  # Must be a grant.
             if match is None:  # A setting outside the grants is a mistake that must not run.
-                raise ScopeError("org_id is not one of the organizations that this credential grants.")
+                raise ScopeError(
+                    "org_id is not one of the organizations that this credential grants."
+                )  # A setting outside the grants must not run.
             return match  # The configured organization.
         if len(direct) == 1:  # The credential grants one organization.
             return direct[0]  # No setting is needed.
         if not direct:  # Nothing to run on.
-            raise ScopeError("This credential grants no organization. No shell was opened.")
-        raise ScopeError("This credential grants several organizations. Set org_id to the one to use.")
+            raise ScopeError("This credential grants no organization. No shell was opened.")  # Nothing to run on.
+        raise ScopeError(
+            "This credential grants several organizations. Set org_id to the one to use."
+        )  # The operator must choose one.

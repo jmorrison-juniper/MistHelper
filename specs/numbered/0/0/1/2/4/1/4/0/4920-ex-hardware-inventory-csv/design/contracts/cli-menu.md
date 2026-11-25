@@ -76,5 +76,9 @@ The `Left out` line appears for each organization with a count above 0. In MSP s
 | `org_id` is not among the grants | `org_id is not one of the organizations that this credential grants.` |
 | The MSP organization list is denied | `The MSP organization list is not permitted for this account (HTTP 403). The run continues with the organization of the credential.` |
 | No connected EX switch | `No connected EX switch was found. No file was written.` |
-| More than 1000 targets in one organization | `<organization name> has <count> targets. The limit is 1000 for one batch.` |
+| More than 1000 targets in one organization | `<organization name> has more than 1000 targets. The limit is 1000 for one batch.` The service gives no exact count. |
+| Mist limited the requests while the menu read an organization | `<organization name> was not read, because Mist limited the requests.` The report holds one outcome row for the organization. |
+| Mist refused or could not list the switches of an organization | `<organization name> was not read, because Mist could not list its switches. See the log for the cause.` The report holds one outcome row for the organization. |
+| No Mist session exists | `No Mist session exists. Sign in first. No shell was opened.` |
+| A confirmed organization got a new switch before its turn | `<organization name>: new switches appeared after the confirmation. Run the menu again.` The report holds one skipped row for each confirmed switch of that organization. |
 | The report check fails | `The report file failed its check and was removed. See the log for the cause.` |

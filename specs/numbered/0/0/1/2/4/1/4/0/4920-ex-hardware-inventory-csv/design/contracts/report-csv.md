@@ -38,6 +38,7 @@ The item columns follow. The first seven are fixed: `item_name`, `item_version`,
 
 - A `hardware_item` row stands for one part of a switch. A switch with a chassis, two modules, and one sub-module has four rows.
 - A `device_outcome` row stands for one attempted switch that returned no valid reply. Its item columns are empty and its `item_path` is empty.
+- A `device_outcome` row also stands for one organization that Mist could not read. Its `site_id`, `site_name`, `device_id`, and `device_name` are empty, and its detail names the cause.
 - A switch that collected has no `device_outcome` row.
 - The row order is: organization name, site name, device name, then the order of the reply. A `device_outcome` row sorts by the same keys.
 

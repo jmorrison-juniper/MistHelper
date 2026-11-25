@@ -116,12 +116,12 @@
 
 ### Tests for User Story 4
 
-- [ ] T049 [P] [US4] Write `tests/unit/ex_hardware_inventory/run/test_hardware_concurrency.py`: the peak number of open shells for limits 1, 3, and 5 with 12 targets, the default, and the warning for a bad value. Check that the CLI and the preview show the value in use.
+- [X] T049 [P] [US4] Write `tests/integration/ex_hardware_inventory/test_hardware_concurrency.py` (it needs the shared world of the integration tests): the peak number of open shells for limits 1, 3, and 5 with 12 targets, the default, and the warning for a bad value. Check that the CLI and the preview show the value in use.
 
 ### Implementation for User Story 4
 
-- [ ] T050 [US4] Pass `StreamSettings.hardware_concurrency` to the batch start in `src/operations/exporting/ex_hardware_inventory/run/batch.py`, and print it in the confirmation step of `src/operations/exporting/ex_hardware_inventory/operation.py`.
-- [ ] T051 [US4] Run the Story 4 tests. Commit and push.
+- [X] T050 [US4] Pass `StreamSettings.hardware_concurrency` to the batch start in `src/operations/exporting/ex_hardware_inventory/run/batch.py`, and print it in the confirmation step of `src/operations/exporting/ex_hardware_inventory/operation.py`.
+- [X] T051 [US4] Run the Story 4 tests. Commit and push.
 
 ## Phase 7: User Story 5 - Trust the report (Priority: P2)
 
@@ -131,23 +131,23 @@
 
 ### Tests for User Story 5
 
-- [ ] T052 [P] [US5] Write `tests/unit/ex_hardware_inventory/report/test_hardware_report_trust.py`: the outcome rows for each status, the partial marker in the summary and the manifest, a reply with a credential that adds no row, the spreadsheet guard end to end, a write failure that leaves no file, and the size refusal.
+- [X] T052 [P] [US5] Write `tests/integration/ex_hardware_inventory/test_hardware_report_trust.py` (it needs the shared world of the integration tests): the outcome rows for each status, the partial marker in the summary and the manifest, a reply with a credential that adds no row, the spreadsheet guard end to end, a write failure that leaves no file, and the size refusal.
 
 ### Implementation for User Story 5
 
-- [ ] T053 [US5] Close the gaps that T052 finds in `src/operations/exporting/ex_hardware_inventory/report/builder.py`, `report/export.py`, and `run/publisher.py`.
-- [ ] T054 [US5] Run the Story 5 tests. Commit and push.
+- [X] T053 [US5] Close the gaps that T052 finds in `src/operations/exporting/ex_hardware_inventory/report/builder.py`, `report/export.py`, and `run/publisher.py`.
+- [X] T054 [US5] Run the Story 5 tests. Commit and push.
 
 ## Phase 8: Polish and Cross-Cutting Concerns
 
-- [ ] T055 [P] Document the feature in `documentation/operator-guide.md`: a paragraph for menu 309 and a section for the new output choice. Document the variable in `deploy/.env.example` and `documentation/sample.env`.
-- [ ] T056 [P] Add the release note `changelog.d/issue-4920-ex-hardware-inventory-csv.md`.
-- [ ] T057 Regenerate the menu pages with `python scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map`. Run the second command with `--check`.
+- [X] T055 [P] Document the feature in `documentation/operator-guide.md`: a paragraph for menu 309 and a section for the new output choice. Document the variable in `deploy/.env.example` and in the settings table of `documentation/wiki/Web-Portal.md`. `documentation/sample.env` holds no WebSocket setting, so it stays unchanged.
+- [X] T056 [P] Add the release note `changelog.d/issue-4920-ex-hardware-inventory-csv.md`.
+- [X] T057 Regenerate the menu pages with `python scripts/generate_menu_wiki.py` and `python -m scripts.menu_api_map`. Run the second command with `--check`.
 - [ ] T058 Run the repository guards and compare with the baseline: the nested package guard, the domain structure guard, the endpoint catalog, the registry coverage, the destructive menu docs, the portal operation coverage, the WebSocket structure guard, and the full `tests/guardrails` folder.
 - [ ] T059 Run the local gates on every changed file: `python -m py_compile MistHelper.py`, Ruff, Black, mypy with `MYPY_PATHS`, Bandit, the complexity gate at 10, Vulture, Pylint at 9.5, pydocstyle, Interrogate at 90, `symbol-diff`, the STE gate, and the link check.
 - [ ] T060 Run the full WebSocket unit, contract, and integration tests and the new tests. Run the test quality preflight and the `test-quality-analyzer` gate on the committed tree.
-- [ ] T061 Audit every new and changed line for its inline comment, and every meaningful action for its before and after log lines (Constitution VI and VII).
-- [ ] T062 File the follow-up issues: shared admission rejects site-level requests when the ledger holds no organization, and the stale README step in the constitution. Link issue #4713.
+- [X] T061 Audit every new and changed line for its inline comment, and every meaningful action for its before and after log lines (Constitution VI and VII).
+- [X] T062 File the follow-up issues: shared admission rejects site-level requests when the ledger holds no organization (#4921, links #4713), the stale README step in the constitution (#4922), and the repeated site list read of the batch resolver (#4923).
 
 ## Phase 9: Live Validation
 

@@ -78,7 +78,7 @@ class BatchPreview:
     def from_payload(cls, payload: Mapping[str, Any], org_id: str, org_name: str) -> BatchPreview:
         """Build the preview from the payload of the service."""
         confirmation = payload.get("confirmation") or {}  # The service names the phrase for a shell batch.
-        return cls(
+        return cls(  # Copy every value, so a later change of the payload cannot reach the preview.
             org_id,
             org_name,
             str(payload["preview_id"]),
@@ -91,7 +91,9 @@ class BatchPreview:
     @classmethod
     def empty(cls, org_id: str, org_name: str, excluded: Mapping[str, int]) -> BatchPreview:
         """Build the preview of an organization that has no connected EX switch."""
-        return cls(org_id, org_name, "", "", "", (), {str(key): int(value) for key, value in excluded.items()})
+        return cls(
+            org_id, org_name, "", "", "", (), {str(key): int(value) for key, value in excluded.items()}
+        )  # No target means no stored preview.
 
 
 @dataclass(frozen=True)
@@ -122,7 +124,7 @@ class BatchRunResult:
             reason: The reason code of each result.
             state: ``skipped`` for a target that was not attempted, or ``stopped`` for a cancelled run.
         """
-        return cls(
+        return cls(  # A stopped result marks the run cancelled, and the reason names why no shell opened.
             "", state == "stopped", tuple(TargetResult(item, org_name, state, reason, None) for item in targets), reason
         )
 
@@ -141,10 +143,14 @@ class BatchStack:
         """
         self.settings = replace(settings or StreamSettings.from_environment(), shell_enabled=True)  # CLI shells.
         self.apisession, self.org_id, self.root = apisession, org_id, root  # What the run helpers need.
-        catalog = StreamCatalog(ChannelCatalog(), UtilityCatalog(), changes_enabled=False, shell_enabled=True)
+        catalog = StreamCatalog(
+            ChannelCatalog(), UtilityCatalog(), changes_enabled=False, shell_enabled=True
+        )  # The shell utility is on, and the change utilities stay off.
         picker = StreamPickerService(apisession, org_id)  # Discovery and the status re-check.
         checker = StartRequestChecker(catalog, picker, org_id)  # Builds each target request for the organization.
-        self.manager = StreamSessionManager(self.settings, RunnerFactory(apisession, settings=self.settings))
+        self.manager = StreamSessionManager(
+            self.settings, RunnerFactory(apisession, settings=self.settings)
+        )  # Owns the sessions and their shells.
         self.artifacts = SessionArtifactService(self.manager, None, root)  # The private run folders.
         self.manager.set_artifact_cleanup(self.artifacts.cleanup_expired)  # Retention removes only expired trees.
         targets = BatchTargetPickerService(picker, catalog, None)  # The catalog decides which targets exist.
@@ -153,7 +159,9 @@ class BatchStack:
     @property
     def concurrency(self) -> int:
         """Return the most shells open at the same time: the setting, capped by the shared transport capacity."""
-        return min(self.settings.hardware_concurrency, self.settings.max_sessions)
+        return min(
+            self.settings.hardware_concurrency, self.settings.max_sessions
+        )  # The shared transport capacity caps the value.
 
     def shutdown(self) -> None:
         """Stop every session and helper thread of the stack."""
@@ -195,7 +203,9 @@ class OrganizationBatchRun:
             if error.code != "bad_request" or not isinstance(excluded, dict):  # Any other refusal is a failure.
                 raise  # The operation reports it for this organization.
             logger.debug("The preview found no connected EX switch")  # Log the result.
-            return BatchPreview.empty(self._stack.org_id, self._org_name, excluded)
+            return BatchPreview.empty(
+                self._stack.org_id, self._org_name, excluded
+            )  # An organization with no connected switch.
         preview = BatchPreview.from_payload(payload, self._stack.org_id, self._org_name)  # Copy the payload.
         logger.debug("Previewed %d targets", len(preview.targets))  # Log the count only.
         return preview  # The operator confirms this snapshot.
@@ -213,13 +223,17 @@ class OrganizationBatchRun:
         with AdmissionBinding(self._stack.apisession, self._stack.org_id):  # Worker threads read site paths.
             current = self.preview() if confirmed.expired() else confirmed  # A preview lasts five minutes.
             if not current.target_keys <= confirmed.target_keys:  # A switch that the operator never saw.
-                return BatchRunResult.skipped(confirmed.targets, self._org_name, "new_targets")
+                return BatchRunResult.skipped(confirmed.targets, self._org_name, "new_targets")  # No shell opens.
             if not current.targets:  # Every confirmed switch went offline.
-                return BatchRunResult.skipped(confirmed.targets, self._org_name, "no_longer_connected")
+                return BatchRunResult.skipped(
+                    confirmed.targets, self._org_name, "no_longer_connected"
+                )  # No shell opens.
             session_id = self._start(current)  # Admit the batch with the preview phrase.
             cancelled = BatchWatcher(self._stack, session_id).wait(len(current.targets))  # Ctrl+C stops it.
             run_id, results = RunFolder(self._stack, self._org_name).collect(session_id, cancelled)  # Outcomes.
-        gone = [item for item in confirmed.targets if str(item["target_key"]) not in current.target_keys]
+        gone = [
+            item for item in confirmed.targets if str(item["target_key"]) not in current.target_keys
+        ]  # Confirmed switches that are no longer connected.
         extra = BatchRunResult.skipped(gone, self._org_name, "no_longer_connected").results  # Left out.
         logger.debug("Finished the batch with %d results and %d left out", len(results), len(extra))  # Log.
         return BatchRunResult(run_id, cancelled, results + extra)  # One result for each confirmed target.

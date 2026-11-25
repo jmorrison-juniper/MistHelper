@@ -2,7 +2,7 @@
 
 # Menu API endpoints: resource_intensive
 
-This page lists the Mist API endpoints of the 10 menu options in the `resource_intensive` category.
+This page lists the Mist API endpoints of the 11 menu options in the `resource_intensive` category.
 A menu option in this category runs for a long time, or it sends many API calls.
 
 The index page explains how to read the map: [Menu API endpoint map](README.md).
@@ -16,7 +16,7 @@ That diagram links the menu option to the classes that send the requests, and ea
 
 ```mermaid
 flowchart LR
-    root["resource_intensive:<br/>10 menu options"]
+    root["resource_intensive:<br/>11 menu options"]
     root --> f_orgs_sites["orgs/sites<br/>7 menu options"]
     root --> f_orgs_inventory["orgs/inventory<br/>6 menu options"]
     root --> f_sites_stats["sites/stats<br/>5 menu options"]
@@ -25,11 +25,11 @@ flowchart LR
     root --> f_orgs_alarms["orgs/alarms<br/>2 menu options"]
     root --> f_orgs_logs["orgs/logs<br/>2 menu options"]
     root --> f_sites_devices["sites/devices<br/>2 menu options"]
+    root --> f_msps_orgs["msps/orgs<br/>1 menu option"]
     root --> f_orgs_aamwprofiles["orgs/aamwprofiles<br/>1 menu option"]
     root --> f_orgs_admins["orgs/admins<br/>1 menu option"]
     root --> f_orgs_alarmtemplates["orgs/alarmtemplates<br/>1 menu option"]
-    root --> f_orgs_aoscx["orgs/aoscx<br/>1 menu option"]
-    root --> more["63 more families"]
+    root --> more["66 more families"]
 ```
 
 ## Menu 14
@@ -394,3 +394,50 @@ flowchart LR
 | GET | `/api/v1/orgs/{org_id}/wxtags` | [`orgs.wxtags.listOrgWxTags`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wxtags/list-org-wx-tags) | [`_LIST_OPERATIONS`](../../src/operations/wan/org_data_collector.py) | Reference |
 | GET | `/api/v1/orgs/{org_id}/wxtags/apps` | [`orgs.wxtags.getOrgApplicationList`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wxtags/get-org-application-list) | [`_GET_OPERATIONS`](../../src/operations/wan/org_data_collector.py) | Reference |
 | GET | `/api/v1/orgs/{org_id}/wxtunnels` | [`orgs.wxtunnels.listOrgWxTunnels`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/wxtunnels/list-org-wx-tunnels) | [`_LIST_OPERATIONS`](../../src/operations/wan/org_data_collector.py) | Reference |
+
+## Menu 309
+
+- Title: Collect EX switch hardware inventory into one CSV report
+- Handler: `ExHardwareInventoryReport.run`
+- Shared helpers: [`ConfigUtils`](README.md#configutils), [`DataExporter`](README.md#dataexporter), [`InputUtils`](README.md#inpututils)
+- Endpoints: 18
+
+```mermaid
+flowchart LR
+    menu["Menu 309: Collect EX<br/>switch hardware<br/>inventory..."]
+    menu --> c1["ChannelCatalog"]
+    c1 --> e1["WS<br/>/orgs/{org_id}<br/>/insights/summary"]
+    c1 --> e2["WS<br/>/orgs/{org_id}/pcaps"]
+    c1 --> e3["WS<br/>/orgs/{org_id}/stats<br/>/mxedges"]
+    c1 --> e4["WS<br/>/sites/{site_id}<br/>/assets/{asset_id}<br/>/diag"]
+    c1 --> e5["WS<br/>/sites/{site_id}<br/>/devices"]
+    c1 --> e6["WS<br/>/sites/{site_id}<br/>/devices/{device_id}<br/>/cmd"]
+    c1 --> e7["WS<br/>/sites/{site_id}<br/>/pcaps"]
+    c1 --> e8["WS<br/>/sites/{site_id}<br/>/sdkclients<br/>/{sdkclient_id}/diag"]
+    c1 --> e9["WS<br/>/sites/{site_id}<br/>/stats/clients"]
+    c1 --> e10["WS<br/>/sites/{site_id}<br/>/stats/devices"]
+    c1 --> e11["WS<br/>/sites/{site_id}<br/>/stats/maps/{map_id}<br/>/assets"]
+    c1 --> e12["WS<br/>/sites/{site_id}<br/>/stats/maps/{map_id}<br/>/clients"]
+    menu --> more["6 more endpoints in<br/>the table"]
+```
+
+| Method | Path | SDK function | Called from | Found by |
+| - | - | - | - | - |
+| GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) | [`ScopeResolver.MspLists._pages`](../../src/operations/exporting/ex_hardware_inventory/scope/resolver.py) | Call |
+| GET | `/api/v1/self` | [`self.self.getSelf`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/account/get-self) | [`ProfileReader.read`](../../src/operations/exporting/ex_hardware_inventory/scope/profile.py) | Call |
+| WS | `/orgs/{org_id}/insights/summary` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/orgs/{org_id}/pcaps` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/orgs/{org_id}/stats/mxedges` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/assets/{asset_id}/diag` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/devices` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/devices/{device_id}/cmd` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/pcaps` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/sdkclients/{sdkclient_id}/diag` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/stats/clients` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/stats/devices` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/stats/maps/{map_id}/assets` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/stats/maps/{map_id}/clients` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/stats/maps/{map_id}/discovered_assets` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/stats/maps/{map_id}/sdkclients` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/stats/maps/{map_id}/unconnected_clients` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |
+| WS | `/sites/{site_id}/stats/mxedges` | None (WebSocket channel) | [`ChannelCatalog._ROWS`](../../src/mist/realtime/websocket_streams/catalog/channels.py) | Channel |

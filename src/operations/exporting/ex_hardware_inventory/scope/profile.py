@@ -47,7 +47,9 @@ class ProfileError(ValueError):
         Returns:
             ``HTTP <status>`` for a status above 0, otherwise ``no usable answer from Mist``.
         """
-        return f"HTTP {status}" if isinstance(status, int) and status > 0 else "no usable answer from Mist"
+        return (
+            f"HTTP {status}" if isinstance(status, int) and status > 0 else "no usable answer from Mist"
+        )  # Plain words for the operator.
 
 
 @dataclass(frozen=True)

@@ -45,12 +45,16 @@ class CsvRenderer:
         """
         logger.info("Rendering %d report rows as CSV", len(rows))  # Log before the transform.
         buffer = io.StringIO(newline="")  # The CSV writer manages its own line ends.
-        writer = csv.DictWriter(buffer, fieldnames=list(fieldnames), lineterminator="\r\n", extrasaction="ignore")
+        writer = csv.DictWriter(
+            buffer, fieldnames=list(fieldnames), lineterminator="\r\n", extrasaction="ignore"
+        )  # Standard quoting with CRLF line ends.
         writer.writeheader()  # The first line names the columns.
         writer.writerows(rows)  # Standard quoting keeps awkward values intact.
         data = buffer.getvalue().encode("utf-8")  # The bytes that a writer stores.
         if len(data) > limit_bytes:  # A report over the limit must not be published.
-            raise ReportTooLarge(f"The report would hold {len(data)} bytes. The limit is {limit_bytes} bytes.")
+            raise ReportTooLarge(
+                f"The report would hold {len(data)} bytes. The limit is {limit_bytes} bytes."
+            )  # Never publish a report over the limit.
         logger.debug("Rendered %d bytes of CSV", len(data))  # Log the result size.
         return data  # Hand back the file bytes.
 
@@ -79,7 +83,9 @@ class CsvVerifier:
             raise ReportCheckError("The report header does not match its columns.")  # Refuse the file.
         body = parsed[1:]  # Every line after the header is a data row.
         if len(body) != row_count:  # A short file means a lost row.
-            raise ReportCheckError(f"The report holds {len(body)} rows. It should hold {row_count} rows.")
+            raise ReportCheckError(
+                f"The report holds {len(body)} rows. It should hold {row_count} rows."
+            )  # A short file means a lost row.
         if any(len(row) != len(fieldnames) for row in body):  # A ragged row means a damaged file.
             raise ReportCheckError("A report row has the wrong number of cells.")  # Refuse the file.
         logger.debug("The report file passed its check with %d rows", len(body))  # Log the result.

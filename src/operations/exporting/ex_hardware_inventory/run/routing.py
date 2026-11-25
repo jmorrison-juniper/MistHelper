@@ -58,28 +58,39 @@ class ScopeRouter:
             errors: dict[str, StreamRequestError] = {}  # The organizations that Mist refused.
             for ref in decision.organizations:  # One organization at a time, so the rate limit holds.
                 try:  # An MSP continues when one organization cannot be read.
-                    found = cast(list[dict[str, object]], router.services(ref.org_id)[0].sites(kind, key)["rows"])
-                except StreamRequestError as error:
+                    found = cast(
+                        list[dict[str, object]], router.services(ref.org_id)[0].sites(kind, key)["rows"]
+                    )  # Complete discovery of one organization.
+                except StreamRequestError as error:  # Mist refused, or the service refused.
                     if decision.mode != "msp":  # The only organization failed, so the preview fails.
-                        raise
+                        raise  # The only organization failed, so the preview fails.
                     errors[ref.org_id] = error  # Reported in the CSV as one outcome row.
-                    continue
+                    continue  # Go on with the next organization.
                 rows.extend(self._claim(ref.org_id, found))  # A complete page is a list.
             if errors and len(errors) == len(decision.organizations):  # Nothing is readable at all.
-                raise next(iter(errors.values()))
-            router.failed.update({org: self._code(error) for org, error in errors.items()})
-            return {"rows": rows, "total_count": len(rows), "complete": True, "reason": None if rows else "No sites."}
+                raise next(iter(errors.values()))  # The only organization failed, so the preview fails.
+            router.failed.update(
+                {org: self._code(error) for org, error in errors.items()}
+            )  # Reported in the CSV as one outcome row each.
+            return {
+                "rows": rows,
+                "total_count": len(rows),
+                "complete": True,
+                "reason": None if rows else "No sites.",
+            }  # The complete site list of every readable organization.
 
         def _claim(self, org_id: str, found: list[dict[str, object]]) -> list[dict[str, object]]:
             """Map each site to its organization and return copies of the rows."""
             for row in found:  # Each site belongs to exactly one organization.
                 self._router.site_orgs[str(row["id"])] = org_id  # The route of each later read.
-            return [dict(row) for row in found]
+            return [dict(row) for row in found]  # Copies, so the router never shares a row.
 
         @staticmethod
         def _code(error: StreamRequestError) -> str:
             """Return the reason code of a failed organization for the report."""
-            return "rate_limited" if error.code == "rate_limited" else "discovery_failed"
+            return (
+                "rate_limited" if error.code == "rate_limited" else "discovery_failed"
+            )  # One reason code for each cause.
 
     def __init__(self, picker: Any, catalog: Any) -> None:
         """Store the plain picker of the configured organization and the shared catalog.
@@ -116,7 +127,7 @@ class ScopeRouter:
             try:  # A refused profile must stop the preview with its reason.
                 resolver = ScopeResolver(self._picker._apisession, self._picker._org_id)  # The configured organization.
                 self._decision = resolver.resolve()  # The same rules as the menu.
-            except ScopeError as error:
+            except ScopeError as error:  # The sentence of the error names the fix.
                 raise StreamRequestError("picker_unavailable", str(error)) from None  # The sentence names the fix.
             self._read_at = time.monotonic()  # The decision is fresh.
             logger.debug("Read the scope: mode=%s", self._decision.mode)  # Log the mode only.
@@ -126,12 +137,14 @@ class ScopeRouter:
         """Return the target service and the request checker of one organization, built on first use."""
         if org_id not in self._services:  # Build the services of an organization once.
             configured = org_id == self._picker._org_id  # The configured organization reuses the portal picker.
-            picker = self._picker if configured else StreamPickerService(self._picker._apisession, org_id)
+            picker = (
+                self._picker if configured else StreamPickerService(self._picker._apisession, org_id)
+            )  # Another organization needs its own picker.
             self._services[org_id] = (
                 BatchTargetPickerService(picker, self._catalog, None),
                 StartRequestChecker(self._catalog, picker, org_id),
             )  # The checker injects this organization into each request.
-        return self._services[org_id]
+        return self._services[org_id]  # Cached for the next call.
 
     def summary(self, public: bool = False) -> dict[str, object]:
         """Return the scope of the run.
@@ -142,7 +155,11 @@ class ScopeRouter:
         decision = self._decision or self.decision()  # The preview just set it, so the start never reads again.
         if public:  # The browser needs counts, not names or identifiers.
             counts = (len(decision.organizations), len(self.failed))  # Organizations in scope and unread ones.
-            return {"mode": decision.mode, "organization_count": counts[0], "failed_count": counts[1]}
+            return {
+                "mode": decision.mode,
+                "organization_count": counts[0],
+                "failed_count": counts[1],
+            }  # Counts only, never names.
         return {
             "mode": decision.mode,
             "organizations": {ref.org_id: ref.org_name for ref in decision.organizations},
@@ -156,17 +173,21 @@ class ScopeAwareTargets(BatchTargetPickerService):
     def __init__(self, picker: Any | None, catalog: Any | None, reason: str | None) -> None:
         """Build the plain service, and join the router of the picker when the portal is ready."""
         super().__init__(picker, catalog, reason)  # The plain behavior stays for every other action.
-        self._router = ScopeRouter.of(picker, catalog) if picker is not None and catalog is not None else None
+        self._router = (
+            ScopeRouter.of(picker, catalog) if picker is not None and catalog is not None else None
+        )  # A not-ready portal has no router.
 
     def hardware_sites(self, kind: str, key: str) -> dict[str, object]:
         """Return the sites of every organization in scope for the hardware preview."""
         if self._router is None:  # A not-ready portal has no router, and the plain read gives its refusal.
-            return self.sites(kind, key)
-        return ScopeRouter.Discovery(self._router).sites(kind, key)
+            return self.sites(kind, key)  # The plain read gives the refusal.
+        return ScopeRouter.Discovery(self._router).sites(kind, key)  # Every organization in scope.
 
     def hardware_targets(self, site_id: str | None, kind: str, key: str, parents: dict[str, str]) -> dict[str, object]:
         """Read the targets of one site through the service of the organization that owns the site."""
-        org_id = self._router.site_orgs.get(str(site_id)) if self._router is not None else None
+        org_id = (
+            self._router.site_orgs.get(str(site_id)) if self._router is not None else None
+        )  # Known after the site discovery.
         if org_id and self._router is not None:  # The site discovery found the owner of this site.
             return self._router.services(org_id)[0].hardware_targets(site_id, kind, key, parents)  # Checks membership.
         return super().hardware_targets(site_id, kind, key, parents)  # The configured organization.
@@ -175,12 +196,12 @@ class ScopeAwareTargets(BatchTargetPickerService):
         """Check the status again through the service of the organization of the target."""
         org_id = str(identity.get("org_id") or "")  # The checker injected it into the request.
         if org_id and self._router is not None:  # Status reads are by site, so the owner service answers.
-            return self._router.services(org_id)[0].hardware_status(identity)
+            return self._router.services(org_id)[0].hardware_status(identity)  # The owner service answers.
         return super().hardware_status(identity)  # The configured organization.
 
     def scope_summary(self, public: bool = False) -> dict[str, object]:
         """Return the scope for the preview line (public) and for the report at the start of the run (full)."""
-        return self._router.summary(public) if self._router is not None else {}
+        return self._router.summary(public) if self._router is not None else {}  # The scope of the run, or nothing.
 
 
 class ScopeAwareChecker:
@@ -196,9 +217,11 @@ class ScopeAwareChecker:
         targets = body.get("targets") if isinstance(body, dict) else None  # The preview builds this mapping.
         site_id = targets.get("site_id") if isinstance(targets, dict) else None  # The site of the target.
         org_id = self._router.site_orgs.get(str(site_id)) if site_id else None  # Known after the site discovery.
-        checker = self._router.services(org_id)[1] if org_id else self._checker
+        checker = (
+            self._router.services(org_id)[1] if org_id else self._checker
+        )  # The checker of the owner organization.
         return checker.check_batch(body)  # The checker injects its organization into the request.
 
     def __getattr__(self, name: str) -> Any:
         """Give every other method of the plain checker."""
-        return getattr(self._checker, name)
+        return getattr(self._checker, name)  # The plain checker answers every other call.

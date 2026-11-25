@@ -73,7 +73,7 @@ class OrganizationPlan:
     @property
     def targets(self) -> tuple[Mapping[str, object], ...]:
         """Return the confirmed switches, or none when the organization could not be read."""
-        return self.preview.targets if self.preview is not None else ()
+        return self.preview.targets if self.preview is not None else ()  # An unread organization has no switch.
 
     @staticmethod
     def reason_for(error: Exception) -> str:
@@ -91,7 +91,9 @@ class OrganizationPlan:
 
     def unrun(self, reason: str, state: str = "skipped") -> BatchRunResult:
         """Return the result of an organization that did not run, one result for each confirmed switch."""
-        return BatchRunResult.skipped(self.targets, self.ref.org_name, reason, state)
+        return BatchRunResult.skipped(
+            self.targets, self.ref.org_name, reason, state
+        )  # One skipped or cancelled result for each confirmed switch.
 
 
 class RunCollector:
@@ -122,10 +124,12 @@ class RunCollector:
         for plan in plans:  # One organization at a time, so the rate limit holds.
             if plan.failure:  # The organization could not be read: one outcome row, no run.
                 identity = {"org_id": plan.ref.org_id}  # No site and no switch exist for this row.
-                self.builder.add(TargetResult(identity, plan.ref.org_name, "failed", plan.failure, None))
+                self.builder.add(
+                    TargetResult(identity, plan.ref.org_name, "failed", plan.failure, None)
+                )  # One outcome row for the unread organization.
             elif plan.targets:  # An organization with no switch has nothing to run.
                 cancelled = self._run_one(plan, cancelled)  # Marks the switches cancelled once cancelled.
-        return cancelled
+        return cancelled  # The caller must know whether the operator cancelled.
 
     def _run_one(self, plan: OrganizationPlan, cancelled: bool) -> bool:
         """Run one organization, or mark its switches cancelled when the run is already cancelled."""
@@ -135,23 +139,27 @@ class RunCollector:
             try:  # Ctrl+C outside the wait also cancels, and a failure here must not stop the others.
                 result = self._attempt(plan)  # Re-preview when needed, start, wait, and read.
             except KeyboardInterrupt:  # Nothing started, so every switch is cancelled.
-                result = plan.unrun("cancelled", "stopped")
+                result = plan.unrun("cancelled", "stopped")  # Nothing started, so every switch is cancelled.
         for item in result.results:  # One result for each confirmed switch.
             self.builder.add(item)  # Rows and tally.
         after = self.builder.counts()  # The tally after this organization.
-        self._console.collected(plan.ref.org_name, {name: count - before[name] for name, count in after.items()})
+        self._console.collected(
+            plan.ref.org_name, {name: count - before[name] for name, count in after.items()}
+        )  # Show the result of this organization.
         if result.reason == "new_targets":  # The organization was not run.
-            print(f"  {plan.ref.org_name}: new switches appeared after the confirmation. Run the menu again.")
+            print(
+                f"  {plan.ref.org_name}: new switches appeared after the confirmation. Run the menu again."
+            )  # WHY: the operator must run the menu again to see them.
         return cancelled or result.cancelled  # A cancelled run skips the remaining organizations.
 
     @staticmethod
     def _attempt(plan: OrganizationPlan) -> BatchRunResult:
         """Run one organization and turn a failure into skipped results that name the cause."""
         if plan.preview is None:  # Only a plan with a preview reaches this method.
-            return plan.unrun("discovery_failed")
+            return plan.unrun("discovery_failed")  # A plan with no preview cannot run.
         try:  # The service refuses, Mist refuses, or the transport fails.
             return plan.runner.run(plan.preview)  # Re-preview when needed, start, wait, and read.
-        except RECOVERABLE as error:
+        except RECOVERABLE as error:  # One organization fails alone.
             logger.error("The run failed for one organization (%s)", type(error).__name__)  # Never the text.
             return plan.unrun(plan.reason_for(error))  # Each confirmed switch is skipped with the cause.
 
@@ -162,11 +170,17 @@ class RunCollector:
             The written file, or None when no file exists.
         """
         try:  # The exporter refuses a report over the limit and removes a file that fails its check.
-            return ReportExporter().write(self.builder.rows(), self.builder.fieldnames(), self._run_time)
+            return ReportExporter().write(
+                self.builder.rows(), self.builder.fieldnames(), self._run_time
+            )  # Writes the file, reads it back, and removes a damaged file.
         except ReportTooLarge:  # FR-041: say so, and write nothing.
-            print("The report would pass the size limit of 64 MiB. No file was written.")
+            print(
+                "The report would pass the size limit of 64 MiB. No file was written."
+            )  # WHY: say why no file exists.
         except ReportCheckError:  # The exporter removed the damaged file.
-            print("The report file failed its check and was removed. See the log for the cause.")
+            print(
+                "The report file failed its check and was removed. See the log for the cause."
+            )  # WHY: say why no file exists.
         return None  # No file exists.
 
 
@@ -187,17 +201,17 @@ class ExHardwareInventoryReport:
             try:  # Ctrl+C before the shells open cancels the run safely.
                 decision = ExHardwareInventoryReport._scope(console)  # Step 1.
                 if decision is None:  # The profile could not be read, or the organization is not clear.
-                    return 0
+                    return 0  # No file was written.
                 ExHardwareInventoryReport._find(decision, console, plans)  # Step 2.
                 if not ExHardwareInventoryReport._confirmed(plans, console):  # Step 3.
-                    return 0
+                    return 0  # No file was written.
             except KeyboardInterrupt:  # The operator pressed Ctrl+C before any shell opened.
                 print("Cancelled. No shell was opened and no file was written.")  # WHY: tell the safe outcome.
-                return 0
+                return 0  # No file was written.
             return ExHardwareInventoryReport._collect(decision, plans, console)  # Step 4 and the report.
-        finally:
+        finally:  # Close every service stack, whatever ends the run.
             for plan in plans:  # Stop the helper threads of each stack.
-                plan.stack.shutdown()
+                plan.stack.shutdown()  # Stop the helper threads of the stack.
 
     @staticmethod
     def _scope(console: HardwareConsole) -> ScopeDecision | None:
@@ -205,28 +219,35 @@ class ExHardwareInventoryReport:
         apisession = SourceDependencyResolver.apisession  # The session that the menu already opened.
         if apisession is None:  # No credential, so no request can run.
             print("No Mist session exists. Sign in first. No shell was opened.")  # WHY: the operator must act.
-            return None
+            return None  # The run cannot go on.
         cached = SourceDependencyResolver.ConfigUtils.get_cached_org_id()  # A cached choice never prompts.
         configured = cached or os.environ.get("org_id") or os.environ.get("ORG_ID")  # The documented settings.
         try:  # The scope can be unclear, and the operator then needs one plain sentence.
-            decision = ScopeResolver(apisession, configured).resolve()
-        except ScopeError as error:
+            decision = ScopeResolver(
+                apisession, configured
+            ).resolve()  # The profile and the MSP lists decide the scope.
+        except ScopeError as error:  # The sentence of the error names the fix.
             print(str(error))  # WHY: the sentence names the fix.
-            return None
+            return None  # The run cannot go on.
         console.credential(decision)  # The credential, the scope, the organizations, and the notes.
-        return decision
+        return decision  # Step 2 uses the decision.
 
     @staticmethod
     def _find(decision: ScopeDecision, console: HardwareConsole, plans: list[OrganizationPlan]) -> None:
         """Step 2: preview each organization, one at a time, and keep each plan in the caller list."""
         print("Step 2 of 4: Find the connected EX switches")  # WHY: the operator follows the four steps.
-        apisession, settings = SourceDependencyResolver.apisession, StreamSettings.from_environment()
+        apisession, settings = (
+            SourceDependencyResolver.apisession,
+            StreamSettings.from_environment(),
+        )  # One session and one set of limits for each organization.
         for ref in decision.organizations:  # One organization at a time, so the rate limit holds.
             plan = OrganizationPlan.build(ref, apisession, settings)  # Own services for the organization.
             plans.append(plan)  # The caller closes it even when Ctrl+C stops this loop.
             plan.discover()  # A failure becomes a reason code, not a stop.
             excluded = plan.preview.excluded if plan.preview is not None else {}  # The left-out counts.
-            console.found(ref.org_name, len(plan.targets), excluded, plan.failure)
+            console.found(
+                ref.org_name, len(plan.targets), excluded, plan.failure
+            )  # Show the count and the left-out switches of this organization.
 
     @staticmethod
     def _confirmed(plans: Sequence[OrganizationPlan], console: HardwareConsole) -> bool:
@@ -234,7 +255,7 @@ class ExHardwareInventoryReport:
         total = sum(len(plan.targets) for plan in plans)  # The phrase names the total of all organizations.
         if total == 0:  # FR-042: no target means no run and no file.
             print("No connected EX switch was found. No file was written.")  # WHY: say so.
-            return False
+            return False  # Nothing to confirm.
         return console.confirm(total, plans[0].stack.concurrency)  # The same setting for every stack.
 
     @staticmethod
@@ -247,5 +268,7 @@ class ExHardwareInventoryReport:
         counts = collector.builder.counts()  # The tally of all organizations.
         partial = cancelled or counts["failed"] + counts["skipped"] + counts["cancelled"] > 0  # Anything missing.
         console.finished(report, partial)  # The report line and the run status.
-        logger.debug("Finished the EX hardware inventory report with %d rows", report.row_count if report else 0)
-        return report.row_count if report is not None else 0
+        logger.debug(
+            "Finished the EX hardware inventory report with %d rows", report.row_count if report else 0
+        )  # Log the result.
+        return report.row_count if report is not None else 0  # The rows written, or none.

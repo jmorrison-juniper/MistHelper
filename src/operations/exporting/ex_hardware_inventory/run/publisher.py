@@ -53,7 +53,7 @@ class ReportHook:
             ReportCheckError: When the rendered bytes do not match the rows.
         """
         logger.info("Compiling the combined CSV of %d outcomes", len(outcomes))  # Log before the transform.
-        builder = ReportBuilder(
+        builder = ReportBuilder(  # The scope and the run end time.
             str(self._scope.get("mode") or "organization"), datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         )
         for result in (*self._results(outcomes), *self._failed()):  # Switches first, then unread organizations.
@@ -73,10 +73,14 @@ class ReportHook:
             identity = outcome.get("target")  # The redacted identity of the target.
             identity = identity if isinstance(identity, Mapping) else {}  # A bad shape gives an empty identity.
             org_id = str(identity.get("org_id") or "")  # The report names the organization of the target.
-            state, reason = str(outcome.get("state") or "failed"), str(outcome.get("reason_code") or "")
+            state, reason = str(outcome.get("state") or "failed"), str(
+                outcome.get("reason_code") or ""
+            )  # What the batch recorded.
             xml_text = self._reply(outcome) if state == "completed" else None  # Only a collected target has a reply.
-            results.append(TargetResult(identity, str(names.get(org_id) or org_id), state, reason, xml_text))
-        return results
+            results.append(
+                TargetResult(identity, str(names.get(org_id) or org_id), state, reason, xml_text)
+            )  # One result for each target.
+        return results  # In manifest order.
 
     def _failed(self) -> list[TargetResult]:
         """Build one failed result for each organization that could not be read."""
@@ -92,7 +96,9 @@ class ReportHook:
     def _reply(self, outcome: Mapping[str, object]) -> str | None:
         """Read the saved XML reply of one outcome, or None when it is missing or unreadable."""
         files = outcome.get("files")  # The relative names that the run recorded.
-        name = next((str(item) for item in files if str(item).endswith(".xml")), "") if isinstance(files, list) else ""
+        name = (
+            next((str(item) for item in files if str(item).endswith(".xml")), "") if isinstance(files, list) else ""
+        )  # The one XML file of the target.
         if not name:  # Nothing was saved for this target.
             return None  # The report says that the reply is missing.
         try:  # A missing or unsafe file is not a failure of the whole report.

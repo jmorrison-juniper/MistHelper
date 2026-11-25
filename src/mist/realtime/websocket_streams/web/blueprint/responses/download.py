@@ -40,19 +40,21 @@ class DownloadResponse:
     def batch_zip(session_id: str) -> Response | tuple[Response, int]:
         """Return one completed Multi Site result archive, or the combined CSV report of a hardware run."""
         selected = request.args.get("format")  # Only two named outputs exist.
-        if set(request.args) != {"format"} or selected not in {"zip", "csv"}:
-            return JsonResponse.error(
+        if set(request.args) != {"format"} or selected not in {"zip", "csv"}:  # One field with a known value.
+            return JsonResponse.error(  # Refuse any other query.
                 StreamRequestError("bad_request", "The batch download requires format=zip or format=csv.")
             )
         try:
             services = ServiceRequest.current()  # Resolve the app-scoped service bundle.
-            reader = services.artifacts.csv_download if selected == "csv" else services.artifacts.zip_download
+            reader = (
+                services.artifacts.csv_download if selected == "csv" else services.artifacts.zip_download
+            )  # Pick one.
             filename, content = reader(session_id)  # Copy a bounded pinned snapshot.
-            logger.emit(logging.DEBUG, "web.response.batch_download.ready", {"status": "ready"})
-            return Response(
+            logger.emit(logging.DEBUG, "web.response.batch_download.ready", {"status": "ready"})  # Log no filename.
+            return Response(  # Send the file as an attachment with a server-made name.
                 content,
                 mimetype="text/csv" if selected == "csv" else "application/zip",
                 headers={"Content-Disposition": f"attachment; filename={filename}"},
             )
-        except StreamRequestError as error:
-            return JsonResponse.error(error)
+        except StreamRequestError as error:  # The run is not ready, or the session is not a batch.
+            return JsonResponse.error(error)  # Keep the standard error shape.

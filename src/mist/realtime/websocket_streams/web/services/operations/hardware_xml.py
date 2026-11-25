@@ -296,17 +296,17 @@ class HardwareXmlPreset:
 
     def parse(self, body: object) -> HardwareXmlSelection:
         """Validate the exact preset request and default to XML."""
-        if not isinstance(body, Mapping) or set(body) - {"preset", "format", "scope_revision"}:
-            raise StreamRequestError("bad_request", "The hardware preset request has an unknown field.")
-        if body.get("preset") != self.NAME:
-            raise StreamRequestError("bad_request", "The hardware preset is not available.")
-        output_format = body.get("format", "xml")
-        revision = body.get("scope_revision")
-        if not isinstance(output_format, str) or output_format not in self.FORMATS:
-            raise StreamRequestError("bad_request", "Choose XML, JSON, BOTH, or CSV for hardware output.")
-        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
-            raise StreamRequestError("bad_request", "The selection revision is not valid.")
-        return HardwareXmlSelection(output_format, revision)
+        if not isinstance(body, Mapping) or set(body) - {"preset", "format", "scope_revision"}:  # Exact fields only.
+            raise StreamRequestError("bad_request", "The hardware preset request has an unknown field.")  # Refuse.
+        if body.get("preset") != self.NAME:  # Only the one server-owned preset exists.
+            raise StreamRequestError("bad_request", "The hardware preset is not available.")  # Refuse.
+        output_format = body.get("format", "xml")  # XML stays the default.
+        revision = body.get("scope_revision")  # The page revision of the selection.
+        if not isinstance(output_format, str) or output_format not in self.FORMATS:  # xml, json, both, or csv.
+            raise StreamRequestError("bad_request", "Choose XML, JSON, BOTH, or CSV for hardware output.")  # Refuse.
+        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:  # A bool is not a revision.
+            raise StreamRequestError("bad_request", "The selection revision is not valid.")  # Refuse.
+        return HardwareXmlSelection(output_format, revision)  # The checked selection.
 
     def batch_request(self, selection: HardwareXmlSelection) -> dict[str, object]:
         """Build the existing shell batch request without browser-controlled targets."""

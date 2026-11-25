@@ -272,6 +272,7 @@ sessions. This repairs two defects in the Mist software kit path.
 | `PORTAL_WS_BUFFER_MB` | `8` | Megabytes that each session keeps, 1 to 64 |
 | `PORTAL_WS_MAX_STREAM_MINUTES` | `30` | Minutes before a session stops, 1 to 240 |
 | `PORTAL_WS_TERMINAL_HISTORY_KB` | `1024` | KiB of terminal output bytes per session, 256 to 8192 |
+| `PORTAL_WS_HARDWARE_CONCURRENCY` | `3` | Shells that the EX hardware inventory action opens at the same time, 1 to 5 |
 
 ## API Endpoints
 

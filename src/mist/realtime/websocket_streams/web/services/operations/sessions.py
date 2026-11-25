@@ -336,14 +336,16 @@ class _BatchServiceComponents:
 
             def _discover(self, values: Mapping[str, object]) -> list[dict[str, object]]:
                 """Require complete organization site discovery."""
-                if self.picker is None:
-                    raise StreamRequestError("not_ready", self.reason or "The WebSocket engine is not ready.")
+                if self.picker is None:  # A not-ready portal has no picker.
+                    raise StreamRequestError(
+                        "not_ready", self.reason or "The WebSocket engine is not ready."
+                    )  # Refuse.
                 preset = values.get("preset") == HardwareXmlPreset.NAME  # The hardware preset may span an MSP.
                 reader = getattr(self.picker, "hardware_sites", self.picker.sites) if preset else self.picker.sites
                 response = reader(str(values["kind"]), str(values["key"]))  # Scope-aware only for the hardware preset.
-                rows = response.get("rows")
-                if response.get("complete") is not True or not isinstance(rows, list):
-                    raise StreamRequestError("picker_incomplete", "Site discovery did not complete.")
+                rows = response.get("rows")  # The complete site list.
+                if response.get("complete") is not True or not isinstance(rows, list):  # No partial discovery.
+                    raise StreamRequestError("picker_incomplete", "Site discovery did not complete.")  # Refuse.
                 return [row for row in rows if isinstance(row, dict)]  # Ignore malformed rows as before.
 
             def _choose(self, rows: list[dict[str, object]], selector: Mapping[str, object]) -> list[dict[str, object]]:
@@ -913,23 +915,25 @@ class WebSocketBatchService:
     def start(self, body: object) -> dict[str, object]:
         """Atomically consume one preview and admit one public batch session."""
         self._input.require_ready()  # Refuse before a preview or session can change.
-        preview_id, phrase, concurrency, output = self._input.start_values(body)
-        with self._lock:
-            record = self._previews.admission(preview_id, phrase)
-            self._previews.validate_fingerprint(record)
+        preview_id, phrase, concurrency, output = self._input.start_values(body)  # Validate the start fields first.
+        with self._lock:  # Consume the preview and admit the batch as one step.
+            record = self._previews.admission(preview_id, phrase)  # Scope, expiry, single use, and phrase.
+            self._previews.validate_fingerprint(record)  # The stored snapshot must be unchanged.
             if record.output_format is not None:
                 scope = getattr(self._input.picker, "scope_summary", None)  # The organizations of the run.
                 output.update(preset=HardwareXmlPreset.NAME, format=record.output_format, scope=scope and scope())
-            writer = self._artifacts.prepare_batch(record.targets, output)
-            parent = _BatchServiceComponents.Previews.ParentRequest.create(
+            writer = self._artifacts.prepare_batch(record.targets, output)  # Create the private run folder.
+            parent = _BatchServiceComponents.Previews.ParentRequest.create(  # One parent request owns the plan.
                 record, concurrency, output, writer, self._input.picker
             )
-            try:
-                payload = cast(dict[str, object], self._manager.start(parent))
+            try:  # A refused admission must not leave a run folder.
+                payload = cast(dict[str, object], self._manager.start(parent))  # Start the worker threads.
             except StreamRequestError:
                 writer.discard()  # A checked admission refusal created no parent session.
                 raise
-            _BatchServiceComponents.Previews.Admission.bind(payload, record, writer, self._artifacts)
+            _BatchServiceComponents.Previews.Admission.bind(
+                payload, record, writer, self._artifacts
+            )  # Bind the folder.
         return payload  # Preserve the established public session response.
 
     def summary(self, session_id: str) -> dict[str, object]:

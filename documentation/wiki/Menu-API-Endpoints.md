@@ -2,7 +2,7 @@
 
 # Menu API endpoint map
 
-This map shows the Mist API endpoints that each of the 308 MistHelper menu options can call.
+This map shows the Mist API endpoints that each of the 309 MistHelper menu options can call.
 The count includes menu 0, which closes MistHelper.
 The menu reference does not count menu 0 as an actionable entry.
 Use the map to find the endpoint that does a task, and to find the code that sends the request.
@@ -66,7 +66,7 @@ pie showData
     "destructive" : 50
     "interactive" : 33
     "websocket" : 22
-    "resource_intensive" : 10
+    "resource_intensive" : 11
     "continuous_loop" : 1
 ```
 
@@ -79,7 +79,7 @@ pie showData
 | `destructive` | 50 | 47 | [destructive](Menu-API-Endpoints-Destructive) |
 | `interactive` | 33 | 31 | [interactive](Menu-API-Endpoints-Interactive) |
 | `websocket` | 22 | 22 | [websocket](Menu-API-Endpoints-Websocket) |
-| `resource_intensive` | 10 | 10 | [resource_intensive](Menu-API-Endpoints-Resource-Intensive) |
+| `resource_intensive` | 11 | 11 | [resource_intensive](Menu-API-Endpoints-Resource-Intensive) |
 | `continuous_loop` | 1 | 1 | [continuous_loop](Menu-API-Endpoints-Continuous-Loop) |
 
 ## Find a menu option
@@ -394,6 +394,7 @@ pie showData
 | [306](Menu-API-Endpoints-Destructive#menu-306) | DESTRUCTIVE: Restore organization and site firmware policies from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run) | `destructive` | 7 |
 | [307](Menu-API-Endpoints-Safe#menu-307) | Export AP warning and error codes across all sites | `safe` | 7 |
 | [308](Menu-API-Endpoints-Safe#menu-308) | Export cross-org subscription, entitlement, and stock inventory report | `safe` | 8 |
+| [309](Menu-API-Endpoints-Resource-Intensive#menu-309) | Collect EX switch hardware inventory into one CSV report | `resource_intensive` | 18 |
 
 ## Menu options with no endpoint
 
@@ -431,7 +432,7 @@ The map finds no Mist API request for 19 menu options.
 | 15 | GET | `/api/v1/orgs/{org_id}/stats/devices` | [`orgs.stats.listOrgDevicesStats`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/stats/devices/list-org-devices-stats) |
 | 15 | GET | `/api/v1/sites/{site_id}/devices/{device_id}` | [`sites.devices.getSiteDevice`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/devices/get-site-device) |
 | 12 | GET | `/api/v1/sites/{site_id}/stats/ports/search` | [`sites.stats.searchSiteSwOrGwPorts`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/stats/ports/search-site-sw-or-gw-ports) |
-| 10 | GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) |
+| 11 | GET | `/api/v1/msps/{msp_id}/orgs` | [`msps.orgs.listMspOrgs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/msps/orgs/list-msp-orgs) |
 | 10 | GET | `/api/v1/orgs/{org_id}/deviceprofiles` | [`orgs.deviceprofiles.listOrgDeviceProfiles`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/device-profiles/list-org-device-profiles) |
 | 10 | GET | `/api/v1/sites/{site_id}/setting` | [`sites.setting.getSiteSetting`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/setting/get-site-setting) |
 | 9 | GET | `/api/v1/orgs/{org_id}` | [`orgs.orgs.getOrg`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/get-org) |
@@ -447,7 +448,7 @@ The map finds no Mist API request for 19 menu options.
 | 6 | GET | `/api/v1/orgs/{org_id}/devices/versions` | [`orgs.devices.listOrgAvailableDeviceVersions`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/utilities/upgrade/list-org-available-device-versions) |
 | 6 | GET | `/api/v1/orgs/{org_id}/logs/search` | [`orgs.logs.listOrgAuditLogs`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/logs/list-org-audit-logs) |
 | 6 | GET | `/api/v1/orgs/{org_id}/tickets` | [`orgs.tickets.listOrgTickets`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/orgs/tickets/list-org-tickets) |
-| 6 | GET | `/api/v1/sites/{site_id}/sle/{scope}/{scope_id}/metric/{metric}/classifier/{classifier}/summary-trend` | [`sites.sle.getSiteSleClassifierSummaryTrend`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/sites/sles/get-site-sle-classifier-summary-trend) |
+| 6 | GET | `/api/v1/self` | [`self.self.getSelf`](https://www.juniper.net/documentation/us/en/software/mist/api/http/api/self/account/get-self) |
 
 ## Shared helpers
 

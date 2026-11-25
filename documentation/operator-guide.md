@@ -395,6 +395,72 @@ After session expiry, access the files through the mounted `data/` directory.
 The portal download requires a retained session.
 Automatic cleanup does not remove hardware runs. Review disk usage and archive retained runs through your storage process.
 
+### Collect EX chassis hardware as one CSV report
+
+In the WebSockets tab, select **Multi Site**, choose **Collect EX hardware
+inventory**, and choose **One combined CSV report (.csv)**. The action runs only
+`show chassis hardware detail | display xml | no-more` on each connected EX
+switch. The portal keeps the saved XML replies and compiles them into one file.
+
+The preview shows a scope line before you confirm. In one-organization scope,
+the line says so. In MSP scope, the line gives the number of organizations that
+the login can reach, and the number that Mist could not read. The portal uses
+the same scope rules as menu 309.
+
+Type the confirmation phrase, then select **Start batch**. The progress panel
+shows **Download CSV report** when the report is complete. The report file is
+`hardware/inventory.csv` in the run directory. The archive holds it too. If the
+report fails, the XML files stay, and the progress panel shows the output state
+`failed`.
+
+Set `PORTAL_WS_HARDWARE_CONCURRENCY` to limit the shells that open at the same
+time. The range is 1 through 5, and the default is 3. The page takes its default
+from this setting. A value outside the range gives the default and one warning
+in the log.
+
+### Collect EX hardware inventory from the command line (menu 309)
+
+Run `python MistHelper.py --menu 309`, or choose 309 in the menu. The menu
+works in four steps.
+
+1. **Check the credential.** The menu reads the profile of the credential and
+   chooses the scope. An organization token uses one organization. A login with
+   an MSP grant and a working MSP list uses every organization that it can
+   reach. If the MSP list is denied, the menu says so once and uses one
+   organization.
+2. **Find the connected EX switches.** The menu gives the number of connected EX
+   switches in each organization. It also gives the number that it left out,
+   with the reason: offline, unknown status, other device types, or a repeated
+   chassis.
+3. **Confirm.** The menu shows the one read-only command and the number of shells
+   that open at the same time. Type `RUN <count> TARGETS` to start. Press Enter to
+   cancel. An empty answer, end of input, or Ctrl+C cancels the run.
+4. **Collect.** The menu runs one organization at a time and prints the result of
+   each one.
+
+If the credential grants several organizations and you are not in MSP scope, set
+`org_id` to the one to use. The menu stops with a plain sentence when the choice
+is not clear. Each organization runs as one batch of 1000 switches or fewer.
+
+The menu writes one file, `data/ExHardwareInventory_<UTC time>.csv`. The file
+holds one row for each hardware item of each switch that returned a valid reply.
+A switch that returned no valid reply gives one outcome row with the status
+(`failed`, `skipped`, or `cancelled`) and the reason. An organization that Mist
+could not read gives one outcome row with empty site and switch columns. Press
+Ctrl+C during the run to stop it. The file then marks the unfinished switches
+`cancelled`, and the run status is `partial`.
+
+A text value can start with `=`, `+`, `-`, `@`, a tab, or a carriage return.
+The menu adds a leading apostrophe, so a spreadsheet does not run the value as a
+formula. The menu reads the file back after it writes it. It removes a file that
+does not match its rows. The rows also go to the configured database backends, with the
+key `org_id`, `device_id`, and `item_path`. The saved XML replies stay under
+`data/websocket-streams/<run id>/`.
+
+The menu is a `resource_intensive` operation. The `--test` and `--testinteractive`
+sweeps skip it. A large MSP run is slow, because each site costs about three
+reads, and the shared limit is 5000 requests an hour for each credential.
+
 ### Watch the network from a monitoring system
 
 Menu 241 starts a metrics gateway on port 8057. The gateway reads your

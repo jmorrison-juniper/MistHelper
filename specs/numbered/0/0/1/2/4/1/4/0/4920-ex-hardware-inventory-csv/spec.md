@@ -138,7 +138,7 @@ Scope:
 - **FR-004**: If the tool cannot read the profile, it MUST stop before it opens any shell and MUST state the reason. A refused profile MUST NOT count as "no access" without a message.
 - **FR-005**: In organization scope, the tool MUST use only one organization. That organization is the configured `org_id` when the grants include it. When no `org_id` is set and the grants name one organization, it is that one. In every other case, the tool MUST stop and tell the operator to set `org_id`. In MSP scope, the tool MUST use every organization that the login can access: the organizations of the MSP lists and the direct grants, without repeats.
 - **FR-006**: If the MSP organization list is denied with HTTP 403 or fails in any other way, the tool MUST say so once and continue in organization scope.
-- **FR-007**: A failure in one organization MUST NOT stop the other organizations. The failure MUST appear in the report.
+- **FR-007**: A failure in one organization MUST NOT stop the other organizations. The failure MUST appear in the report. An organization that Mist could not read appears as one outcome row with empty site and switch columns.
 
 Targets:
 

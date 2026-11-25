@@ -4,7 +4,8 @@ Why:
     The shared request ledger rejects a site request when it holds no organization,
     and the CLI session never sets one. The batch worker threads cannot read a
     context variable, so the run sets the organization on the ledger itself and
-    restores it afterward. The Mist SDK also prints its own error lines for a
+    restores it afterward. Issue #4921 tracks the ledger defect, and this class goes away when it is fixed.
+    The Mist SDK also prints its own error lines for a
     refused call, and a refusal such as the MSP list is an expected answer here.
     One mute keeps those lines out of the operator console for that one call.
 """

@@ -1,0 +1,5 @@
+### Collect EX switch hardware inventory into one CSV report (menu 309)
+
+- **Added**: Menu 309 reads the profile of the credential and chooses one organization or every organization of an MSP. It previews the connected EX switches and asks for the typed phrase `RUN <count> TARGETS`. It then runs `show chassis hardware detail | display xml | no-more` on each switch and writes one CSV report with one row for each hardware item. A switch with no valid reply, and an organization that Mist could not read, appear as outcome rows. Issue #4920.
+- **Added**: The Multi Site action **Collect EX hardware inventory** offers the output **One combined CSV report**. The preview shows the scope line, and the progress panel offers a download link when the report is complete. An MSP login covers every organization. Issue #4920.
+- **Added**: The variable `PORTAL_WS_HARDWARE_CONCURRENCY` (default 3, range 1 to 5) limits the open shells of both actions. Issue #4920.
