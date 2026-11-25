@@ -58,8 +58,9 @@ Organizations sort by name without case, then by identifier. Sites and devices s
 ## The replies
 
 - A reply keeps its elements, attributes, text, namespace addresses, and prefixes. A reader that compares the events of a parser finds no difference between the reply in the file and its source.
-- The tool drops the XML declaration, the comments, and the processing instructions of a reply. It keeps the white space of the reply, with line feeds as line ends.
-- The tool writes attributes in the order of the source, with double quotes, and it writes an empty element in the short form, `<name/>`.
+- The tool drops the XML declaration, the comments, and the processing instructions of a reply.
+- White space that only formats an element is replaced by the indent of the file. That is the white space between the child elements of an element that holds no other text. All other white space is data and stays as it is. This includes all white space below `xml:space="preserve"`.
+- The tool indents each level with two spaces. It writes attributes in the order of the source, with double quotes, and it writes an empty element in the short form, `<name/>`.
 - A reply with a DTD, an entity declaration, or more than 100 levels of nesting never enters the file. Its device has the status `failed` and the detail `The saved reply could not be read.`
 
 ## Characters
@@ -70,7 +71,7 @@ Organizations sort by name without case, then by identifier. Sites and devices s
 
 ## Checks before the file is published
 
-Each check runs on the final bytes. A failed check stops the publication.
+Each check runs on the final bytes. A second pass reads the bytes again with code that does not write XML. A failed check stops the publication, and no file stays.
 
 1. The bytes are valid UTF-8, with no byte order mark and the exact first line.
 2. The text holds only characters that the XML 1.0 character rules allow.
@@ -78,17 +79,38 @@ Each check runs on the final bytes. A failed check stops the publication.
 4. The root and its descendants have the names, the attributes, and the order of this contract.
 5. The counts on the root equal the counts in the document, and they equal the counts of the run.
 6. Each collected device holds exactly one element. Each other device holds none.
-7. The events of each embedded reply equal the events of its source. The events are the elements, the attributes, the namespace declarations, the prefixes, and the text.
+7. The events of each embedded reply equal the events of its source. The events are the elements, the attributes, the namespace declarations, the prefixes, and the text. Formatting white space and the order of attributes do not count as a difference.
 8. A standard canonicalizer reads the whole document without error.
+9. In the CLI, the tool reads the file back from the disk, and the disk must hold exactly the checked bytes. The portal downloads the published file, so the bytes that the operator receives are the bytes that were checked.
+
+## Front ends
+
+| Front end | When the file is written | Name |
+|-----------|--------------------------|------|
+| CLI menu 309 | Each run that has a result writes the CSV report and the master XML. The two are independent: a refusal of one does not stop the other. | `data/ExHardwareInventory_<stamp>.xml`, next to the CSV report. |
+| Portal, output `One combined XML file` (`master-xml`) | At the end of the run. | `hardware/inventory.xml` in the run folder. |
+| Portal, output `Combined CSV and XML` (`csv-master-xml`) | At the end of the run, together with the CSV report. Both files appear, or neither does. | `hardware/inventory.csv` and `hardware/inventory.xml`. |
+
+Both front ends call the same builder. For the same run they write the same file, apart from the time in `generated`.
 
 ## Limits
 
 - The file stays within the saved-output limit of the run, 64 MiB. In the portal, the replies and the CSV report use part of that limit first.
 - A reply stays within the existing limit of 1 MiB, and within 100 levels of nesting.
+- A file that passes the limit is not written. The CLI says so in one sentence, and the portal marks the output as failed and keeps the saved replies.
 
 ## Schema
 
-`documentation/schemas/ex-hardware-inventory.xsd` is an XML Schema 1.0 document for the wrapper elements. It accepts any reply under a collected device, because no public schema covers each Junos release. The schema accepts each file that the tool writes.
+`documentation/schemas/ex-hardware-inventory.xsd` is an XML Schema 1.0 document for the wrapper elements. It accepts any reply under a collected device, because no public schema covers each Junos release. The schema accepts each file that the tool writes. A strict validator can report one warning for each element of a reply, because the reply is under a wildcard that is processed in the lax mode. Those are warnings, not errors.
+
+## Independent validation
+
+The unit tests read the document with four standard library readers and a safe parser, and they pin the schema to the constants of the code. The live checks of issue #4933 also read the files of one real run with these readers, which the tool does not use:
+
+- libxml2 through `lxml`, with recovery off and with the schema.
+- `xmlschema` with the schema.
+- The .NET `XmlReader` with character checks, no DTD, and the schema, then `XmlDocument` and LINQ to XML.
+- The canonical form of libxml2 equals the canonical form of the standard library for the same file.
 
 ## Example
 

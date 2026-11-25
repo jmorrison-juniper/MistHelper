@@ -397,7 +397,7 @@ flowchart LR
 
 ## Menu 309
 
-- Title: Collect EX switch hardware inventory into one CSV report
+- Title: Collect EX switch hardware inventory into one CSV report and one XML file
 - Handler: `ExHardwareInventoryReport.run`
 - Shared helpers: [`ConfigUtils`](Menu-API-Endpoints#configutils), [`DataExporter`](Menu-API-Endpoints#dataexporter), [`InputUtils`](Menu-API-Endpoints#inpututils)
 - Endpoints: 18

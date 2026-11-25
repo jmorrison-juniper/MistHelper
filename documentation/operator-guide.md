@@ -395,12 +395,21 @@ After session expiry, access the files through the mounted `data/` directory.
 The portal download requires a retained session.
 Automatic cleanup does not remove hardware runs. Review disk usage and archive retained runs through your storage process.
 
-### Collect EX chassis hardware as one CSV report
+### Collect EX chassis hardware as one CSV report or one XML file
 
 In the WebSockets tab, select **Multi Site**, choose **Collect EX hardware
-inventory**, and choose **One combined CSV report (.csv)**. The action runs only
+inventory**, and choose one of the combined outputs:
+
+| Output | Files that the run publishes |
+|--------|------------------------------|
+| **One combined CSV report (.csv)** | `hardware/inventory.csv` |
+| **One combined XML file (.xml)** | `hardware/inventory.xml` |
+| **Combined CSV and XML (.csv + .xml)** | Both files, together |
+
+The action runs only
 `show chassis hardware detail | display xml | no-more` on each connected EX
-switch. The portal keeps the saved XML replies and compiles them into one file.
+switch. The portal keeps the saved XML replies and compiles them into the file
+or files that you chose.
 
 The preview shows a scope line before you confirm. In one-organization scope,
 the line says so. In MSP scope, the line gives the number of organizations that
@@ -430,13 +439,25 @@ of the choices after the preview clears the preview, so you click **Preview
 targets** again. The line above **Start batch** always tells you the next step.
 
 Type the confirmation phrase, then select **Start batch**. The progress panel
-shows **Download CSV report** when the report is complete. The report file is
-`hardware/inventory.csv` in the run directory. The archive holds it too. If the
-report fails, the XML files stay, and the progress panel shows the output state
-`failed`.
+shows **Download CSV report** when the report is complete, and **Download
+combined XML** when the XML file is complete. The report file is
+`hardware/inventory.csv` in the run directory, and the XML file is
+`hardware/inventory.xml`. The archive holds both. The portal publishes the two
+files together, so you never see one without the other. If a file fails, the
+portal publishes none of them, the XML files of the switches stay, and the
+progress panel shows the output state `failed`.
+
+The combined XML file is one XML document for the whole run. It holds the reply
+of each switch that collected, grouped by organization and site. A switch that
+returned no valid reply, and an organization that Mist could not read, appear as
+elements with a status and a reason, so no target is missing. Other programs can
+read the file as standard XML 1.0 with namespaces. The tool checks the file
+before it publishes it, and it publishes no file that fails a check. The
+reference page `documentation/ex-hardware-master-xml.md` describes the structure
+and shows how to check the file with common tools.
 
 When the report is complete, the progress panel also shows it as a table. The
-table lists the columns and the rows of the file, in the same order as the file.
+table appears for the outputs that hold the CSV report. The table lists the columns and the rows of the file, in the same order as the file.
 The line above the table gives the rows that you see, for example `Rows 1 to 297
 of 297.` Type text in **Filter rows** to find a row. The filter looks in every
 cell of the whole report, and it ignores case. The table shows up to 1000 rows
@@ -474,13 +495,23 @@ If the credential grants several organizations and you are not in MSP scope, set
 `org_id` to the one to use. The menu stops with a plain sentence when the choice
 is not clear. Each organization runs as one batch of 1000 switches or fewer.
 
-The menu writes one file, `data/ExHardwareInventory_<UTC time>.csv`. The file
+The menu writes two files for each run. The first is
+`data/ExHardwareInventory_<UTC time>.csv`. The file
 holds one row for each hardware item of each switch that returned a valid reply.
 A switch that returned no valid reply gives one outcome row with the status
 (`failed`, `skipped`, or `cancelled`) and the reason. An organization that Mist
 could not read gives one outcome row with empty site and switch columns. Press
 Ctrl+C during the run to stop it. The file then marks the unfinished switches
 `cancelled`, and the run status is `partial`.
+
+The second file is `data/ExHardwareInventory_<UTC time>.xml`, next to the CSV
+report. It is one XML document that holds the reply of each switch that
+collected, and one element for each other switch and for each organization that
+Mist could not read. The menu prints one line for it, `Master XML: <path> (<count>
+devices)`. The menu reads the file back from the disk and checks it again. It
+removes a file that fails a check, says so in one sentence, and keeps the CSV
+report. The two files are independent. The structure of the XML file and a way
+to check it with other tools are in `documentation/ex-hardware-master-xml.md`.
 
 A text value can start with `=`, `+`, `-`, `@`, a tab, or a carriage return.
 The menu adds a leading apostrophe, so a spreadsheet does not run the value as a

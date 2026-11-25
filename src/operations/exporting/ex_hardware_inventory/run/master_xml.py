@@ -857,7 +857,7 @@ class MasterXmlExporter:
             MasterXmlVerifier.verify(written, document.replies, document.counts)  # Check what the disk holds.
         except (ReportCheckError, OSError) as error:  # A missing, unreadable, or damaged file.
             path.unlink(missing_ok=True)  # No damaged file may stay under the report name.
-            logger.error("The master XML file failed its check and was removed (%s)", type(error).__name__)
+            logger.error("The master XML file failed its check and was removed (%s: %s)", type(error).__name__, error)
             raise ReportCheckError(str(error)) from None  # One documented error for the operation.
         logger.debug("Wrote and checked the master XML file with %d bytes", len(written))  # Log the result.
         return self.File(path, document.counts["devices"], len(written))  # Hand the file to the operation.

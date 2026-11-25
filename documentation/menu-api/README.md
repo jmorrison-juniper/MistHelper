@@ -394,7 +394,7 @@ pie showData
 | [306](destructive.md#menu-306) | DESTRUCTIVE: Restore organization and site firmware policies from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run) | `destructive` | 7 |
 | [307](safe.md#menu-307) | Export AP warning and error codes across all sites | `safe` | 7 |
 | [308](safe.md#menu-308) | Export cross-org subscription, entitlement, and stock inventory report | `safe` | 8 |
-| [309](resource-intensive.md#menu-309) | Collect EX switch hardware inventory into one CSV report | `resource_intensive` | 18 |
+| [309](resource-intensive.md#menu-309) | Collect EX switch hardware inventory into one CSV report and one XML file | `resource_intensive` | 18 |
 
 ## Menu options with no endpoint
 

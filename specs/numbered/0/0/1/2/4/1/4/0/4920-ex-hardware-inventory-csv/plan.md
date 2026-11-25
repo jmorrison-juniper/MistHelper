@@ -12,11 +12,13 @@ Add one command that finds the scope of the Mist credential, runs the fixed comm
 
 The plan reuses the working collector of issue #4769. The CLI drives the portal batch service layer, which needs no Flask object. That layer already owns discovery, the status re-check, the typed confirmation, bounded concurrency, and durable artifacts. A new report compiler reads the saved per-switch XML files and builds the CSV. The portal publishes it from the artifact finish step. The CLI writes it through the standard exporter. A scope resolver reads the profile, names the credential type, and chooses organization scope or MSP scope. One setting, `PORTAL_WS_HARDWARE_CONCURRENCY`, limits the open shells for both front ends. All new code lives in one new package, `src/operations/exporting/ex_hardware_inventory/`, plus narrow edits to existing files.
 
+The customer requirement of 2026-11-25 (issue #4933) adds a second file, the master XML. One new module, `run/master_xml.py`, builds it from the same results as the CSV report. A strict namespace-aware parser (`xml.parsers.expat`, in the standard library) drives the copy of each reply, so the escaping and the namespace declarations have one owner. A second pass that writes nothing reads the final bytes and compares each embedded reply with its source. The CLI writes the file next to the CSV report and reads it back. The portal adds two output choices, publishes the file in the same atomic step as the CSV report, and offers one more download route. The format and its checks are in `design/contracts/report-xml.md`.
+
 ## Technical Context
 
 **Language/Version**: Python 3.15 (`pyproject.toml` requires `>=3.15`)
 
-**Primary Dependencies**: `mistapi` 0.64.x for REST, the owned WebSocket transport that issues #4259 and #4769 already use (no new transport), Flask for the portal only, and the standard `xml.etree.ElementTree` and `csv` modules. No new dependency.
+**Primary Dependencies**: `mistapi` 0.64.x for REST, the owned WebSocket transport that issues #4259 and #4769 already use (no new transport), Flask for the portal only, and the standard `xml.etree.ElementTree`, `xml.parsers.expat`, and `csv` modules. No new dependency. The live checks of the master XML use `lxml` and `xmlschema` in a throwaway environment outside the repository.
 
 **Storage**: Files under `data/`. The CLI report goes through `DataExporter.write_with_format_selection` with the CSV format forced, so the SQLite and ArangoDB and Redis backends also receive the rows. The portal keeps its durable run folder under `data/websocket-streams/<run id>/`.
 
@@ -82,6 +84,7 @@ specs/numbered/0/0/1/2/4/1/4/0/4920-ex-hardware-inventory-csv/
     contracts/
       cli-menu.md
       report-csv.md
+      report-xml.md
       portal.md
     checklists/
       requirements.md
@@ -112,9 +115,12 @@ src/operations/exporting/ex_hardware_inventory/
     __init__.py
     batch.py                # BatchPreview, BatchRunResult, BatchStack, OrganizationBatchRun
     watch.py                # BatchWatcher (poll and stop), RunFolder (read outcomes and replies)
-    publisher.py            # ReportHook (portal finish step)
+    publisher.py            # OutcomeResults, ReportHook (portal finish step: CSV and master XML)
     routing.py              # ScopeRouter, ScopeAwareTargets, ScopeAwareChecker (portal MSP)
+    master_xml.py           # XmlText, XmlWriter, MasterXmlBuilder, MasterXmlVerifier, MasterXmlExporter (issue #4933)
 ```
+
+`documentation/schemas/ex-hardware-inventory.xsd` holds the schema of the wrapper elements, and `documentation/ex-hardware-master-xml.md` is the reference page for the format.
 
 Existing files with narrow edits (no new method in a class at its limit, no new module in a full directory):
 
@@ -123,14 +129,14 @@ MistHelper.py                                                     # import and M
 src/foundation/support/utils/operation_registry.py                # entry 309
 src/foundation/support/refactors/endpoint_primary_key_strategies.py   # ExHardwareInventory
 src/mist/realtime/websocket_streams/live/sessions/settings.py     # hardware_concurrency
-src/mist/realtime/websocket_streams/web/services/operations/hardware_xml.py   # csv format
-src/mist/realtime/websocket_streams/web/services/operations/artifacts.py     # finish step hook
+src/mist/realtime/websocket_streams/web/services/operations/hardware_xml.py   # csv, master-xml, csv-master-xml formats
+src/mist/realtime/websocket_streams/web/services/operations/artifacts.py     # finish step hook, report downloads
 src/mist/realtime/websocket_streams/web/services/operations/sessions.py       # limits, scope in preview
 src/mist/realtime/websocket_streams/web/services/assembly/collaborators.py    # scope-aware collaborators
 src/mist/realtime/websocket_streams/web/blueprint/routes/sessions.py          # csv download branch
-src/mist/realtime/websocket_streams/web/blueprint/responses/download.py       # csv response
-src/mist/realtime/websocket_streams/web/templates/websockets_page.html        # output choice, link
-src/mist/realtime/websocket_streams/web/static/websockets.js                  # choice, download, default
+src/mist/realtime/websocket_streams/web/blueprint/responses/download.py       # csv and xml responses
+src/mist/realtime/websocket_streams/web/templates/websockets_page.html        # output choices, links
+src/mist/realtime/websocket_streams/web/static/websockets.js                  # choices, downloads, default
 ```
 
 Tests:
@@ -162,7 +168,8 @@ Documentation and release: `documentation/operator-guide.md`, `deploy/.env.examp
 4. **Story 3**: the Multi Site output choice, the finish step, the download, and MSP scope in the portal.
 5. **Story 4**: the concurrency setting in the page and the preview.
 6. **Story 5**: outcome rows, cancellation, spreadsheet safety, and the file check.
-7. **Polish**: documentation, generators, guards, the full local gates, and the live smoke test.
+7. **Story 6**: the master XML: the builder and the checks, the CLI file, the portal output choices, the atomic publication, the download, the page link, and the schema.
+8. **Polish**: documentation, generators, guards, the full local gates, and the live smoke test.
 
 ## Complexity Tracking
 
@@ -188,3 +195,5 @@ New design that needs a reason.
 - **MSP scope in the portal**: it needs scope-aware collaborators. If the structure limits block the wiring, the plan delivers the CLI MSP run and the portal CSV for organization scope, and it reports the gap in the pull request.
 - **Real replies differ from the tracked fixtures**: tests use synthetic replies with the real shape. A local check runs the flattener on retained real files and prints counts only.
 - **Request volume**: each site costs at least three reads. The pull request notes the cost for large MSPs.
+- **A customer parser that is stricter than the checks of the tool** (issue #4933): the file passes a second pass that writes nothing, the canonicalizer of the standard library, and, in the live checks, libxml2, `xmlschema`, and the .NET reader with the schema. The tests add hostile names, hostile replies, and generated text. A reader that needs a DTD is out of scope, because the file forbids one.
+- **Size**: the file holds the replies, so it is about as large as the saved replies. In the portal it shares the 64 MiB limit with them and with the CSV report, so a very large run can fail the output. The saved replies stay and the archive stays available.

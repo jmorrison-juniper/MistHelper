@@ -21,6 +21,7 @@ import pytest  # Fixtures, parametrization, and errors.
 from src.mist.realtime.websocket_streams.intake.fields.error import StreamRequestError  # Contract errors.
 from src.mist.realtime.websocket_streams.web.services.operations.artifacts import BatchArtifactStorage
 from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml import HardwareXmlPreset
+from src.operations.exporting.ex_hardware_inventory.report.csv_file import ReportCheckError  # A sentence without data.
 from src.operations.exporting.ex_hardware_inventory.run.master_xml import MasterXmlBuilder
 from src.operations.exporting.ex_hardware_inventory.run.publisher import ReportHook  # Make one compile fail.
 from tests.unit.websocket_streams.web.test_ws_hardware_csv import SCOPE, finished_run, rows_of
@@ -132,6 +133,26 @@ class TestFinishStep:
         artifacts, writer, outcomes = finished_run(tmp_path, "csv")
         manifest = published(artifacts, writer, outcomes)
         assert CSV_NAME in manifest["files"] and XML_NAME not in manifest["files"]
+
+    def test_the_log_names_the_failed_check_of_a_report_and_never_the_text_of_another_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A report error holds a sentence without data, so the log carries it. Any other error logs its kind only."""
+        for error, logged, hidden in (
+            (ReportCheckError("Embedded reply 3 differs from its source."), "Embedded reply 3 differs", ""),
+            (ValueError("SECRET-TEXT-OF-ANOTHER-ERROR"), "ValueError", "SECRET-TEXT-OF-ANOTHER-ERROR"),
+        ):
+            caplog.clear()
+            artifacts, writer, outcomes = finished_run(tmp_path, "master-xml")
+
+            def explode(*_args: object, _error: Exception = error, **_kwargs: object) -> bytes:
+                """Fail with the planned error."""
+                raise _error
+
+            monkeypatch.setattr(ReportHook, "compile_xml", explode)
+            with caplog.at_level("ERROR"), pytest.raises(StreamRequestError):
+                writer.finish(outcomes)
+            assert logged in caplog.text and (not hidden or hidden not in caplog.text)
 
     def test_one_report_that_does_not_fit_fails_the_run_and_publishes_neither(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

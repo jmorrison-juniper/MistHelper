@@ -40,7 +40,8 @@ from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml im
 from src.operations.exporting.ex_hardware_inventory.report.csv_file import (
     CsvPreviewer,
     ReportCheckError,
-)  # Read one page of the published report for the table view (issue #4931).
+    ReportTooLarge,
+)  # Read one page of the published report for the table view (issue #4931), and name the report errors.
 from src.operations.exporting.ex_hardware_inventory.run.publisher import (
     ReportHook,
 )  # Compile the combined CSV from the saved replies (issue #4920).
@@ -693,7 +694,10 @@ class BatchArtifactStorage:
                 )  # All reports appear, or none does.
             except (ValueError, OSError, StreamRequestError) as error:
                 record.status, record.partial = "failed", True  # The summary then reports a failed output.
-                logger.emit(logging.ERROR, "web.artifact.report.error", {"status": type(error).__name__})
+                cause = str(error) if isinstance(error, ReportCheckError | ReportTooLarge) else ""  # No content.
+                logger.emit(
+                    logging.ERROR, "web.artifact.report.error", {"status": type(error).__name__, "detail": cause}
+                )  # The sentence of a report error names the check and holds no data of a reply.
 
         def _compile(self, record: BatchArtifactRecord) -> list[tuple[str, bytes]]:
             """Return the file name and the checked bytes of each report, within the quota that the replies left."""

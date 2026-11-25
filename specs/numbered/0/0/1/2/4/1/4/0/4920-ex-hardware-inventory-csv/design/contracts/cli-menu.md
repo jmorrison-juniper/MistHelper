@@ -5,7 +5,7 @@ This contract describes what an operator sees and what the menu returns. Console
 ## Identity
 
 - Number: 309
-- Title: `Collect EX switch hardware inventory into one CSV report`
+- Title: `Collect EX switch hardware inventory into one CSV report and one XML file`
 - Registry category: `resource_intensive`
 - Skip reason: `Opens a shell on every connected EX switch - resource intensive, requires a typed confirmation`
 - Handler: `ExHardwareInventoryReport.run`, a static method with no required parameter.
@@ -44,10 +44,11 @@ Step 3 of 4: Confirm
 Step 4 of 4: Collect
   <organization name>: collected <count>, failed <count>, skipped <count>, cancelled <count>
 Report: <path> (<row count> rows)
+Master XML: <path> (<device count> devices)
 Run status: <complete or partial>
 ```
 
-The `Left out` line appears for each organization with a count above 0. In MSP scope the menu prints one `Step 2` line for each organization and one total. The run status is `partial` when the operator cancelled or any target did not collect. A run with no target prints `No connected EX switch was found. No file was written.` and no `Report` line.
+The `Left out` line appears for each organization with a count above 0. In MSP scope the menu prints one `Step 2` line for each organization and one total. The run status is `partial` when the operator cancelled or any target did not collect. A run with no target prints `No connected EX switch was found. No file was written.` and no `Report` line and no `Master XML` line. A file that was not written has no line, and the menu says why in one sentence (see the error messages).
 
 ## Confirmation
 
@@ -65,6 +66,7 @@ The `Left out` line appears for each organization with a count above 0. In MSP s
 
 - The menu returns the number of report rows. It returns 0 when it wrote no report.
 - The report file name is `ExHardwareInventory_<YYYYMMDDTHHMMSSZ>.csv`. The menu forces the CSV format for this file, whatever `OUTPUT_FORMAT` holds. The database backends still receive the rows.
+- The menu also writes the master XML as `ExHardwareInventory_<YYYYMMDDTHHMMSSZ>.xml`, next to the report, with the same stamp and the same suffix when the name is taken. The structure and the checks are in `report-xml.md`. The two files are independent: a refusal of one does not stop the other, and the return value counts the rows of the report only.
 - The run folder of each organization stays under `data/websocket-streams/<run id>/` with the saved XML and the manifest.
 
 ## Error messages
@@ -84,3 +86,6 @@ The `Left out` line appears for each organization with a count above 0. In MSP s
 | Mist refuses or cannot open the shell of a switch | The report holds one `failed` outcome row with the detail `The shell could not collect this switch. See the log for the cause.` The log holds the HTTP status. A live test with a read-only organization token got HTTP 403 for 15 of 15 shells. |
 | A confirmed organization got a new switch before its turn | `<organization name>: new switches appeared after the confirmation. Run the menu again.` The report holds one skipped row for each confirmed switch of that organization. |
 | The report check fails | `The report file failed its check and was removed. See the log for the cause.` |
+| The report would pass the size limit | `The report would pass the size limit of 64 MiB. No file was written.` |
+| The master XML check fails | `The master XML file failed its check and was removed. See the log for the cause.` The CSV report stays. |
+| The master XML would pass the size limit | `The master XML would pass the size limit of 64 MiB. No XML file was written.` The CSV report stays. |

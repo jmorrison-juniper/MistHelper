@@ -73,7 +73,7 @@ Steps:
 1. Check that step 1 names one organization and the scope `organization`.
 2. Check that step 2 shows the number of connected EX switches that you expect.
 3. Type the phrase that the menu shows.
-4. Wait for the summary line and the report path.
+4. Wait for the summary line, the report path, and the `Master XML:` path.
 5. Open the report. Check that the number of distinct `device_id` values equals the collected count.
 6. Compare the serial numbers: the set of `item_serial_number` values in the report must equal the set of `serial-number` values in the saved XML files of the run folder.
 7. Search the report, the run folder, and the log for the token. Expect zero matches.
@@ -87,3 +87,32 @@ python -m pytest tests/unit/ex_hardware_inventory/run/test_hardware_routing.py -
 ```
 
 Expected: the scope-aware picker returns the sites of all organizations. The checker builds each request for the right organization. One preview holds targets from several organizations and shows the organization count. The owner tests live MSP scope later.
+
+## Scenario 9: The master XML (no network)
+
+```powershell
+python -m pytest tests/unit/ex_hardware_inventory/run/test_hardware_master_xml.py tests/unit/ex_hardware_inventory/run/test_hardware_master_xml_properties.py -q
+python -m pytest tests/unit/websocket_streams/web/test_ws_hardware_master_xml.py tests/unit/websocket_streams/web/test_ws_hardware_csv.py -q
+python -m pytest tests/integration/ex_hardware_inventory -q
+python -m pytest tests/e2e/websockets_tab/test_websockets_page.py -q -k "master_xml or ex_hardware"
+```
+
+Expected: the document has the exact form of `contracts/report-xml.md`, byte for byte. Hostile names, hostile replies, and generated text never break it. The standard library readers, a safe parser, and the canonicalizer read it, and the schema file matches the code. The CLI writes the file next to the CSV report and removes it when a check fails. The portal publishes the file with the CSV report in one step, or publishes neither, and `format=xml` returns `application/xml`. The page shows the **Download combined XML** link only for the two outputs that hold the file.
+
+The `lxml` test skips when `lxml` is not installed. It prints its reason.
+
+## Scenario 10: Check a live master XML with other readers
+
+Run a live scenario 7 first. Then check the file with readers that the tool does not use. Create a throwaway environment outside the repository, for example with `uv venv` and `uv pip install lxml xmlschema`. The commands for libxml2, `lxml`, and the .NET reader are in `documentation/ex-hardware-master-xml.md`.
+
+Check these points. The live run of issue #4933 used a throwaway script for each group. The scripts stay outside the repository, and they print counts only.
+
+1. The bytes: the exact first line, no byte order mark, one final line feed, strict UTF-8, and only characters that XML 1.0 allows.
+2. Four readers accept the file and agree on the number of elements: the expat reader of ElementTree, SAX with namespaces, minidom, and libxml2 through `lxml` with recovery off.
+3. The canonical form of libxml2 (C14N 2.0) equals the canonical form of the standard library for the same file.
+4. The schema accepts the file in libxml2, in `xmlschema`, and in the .NET `XmlReader`, which also checks characters and refuses a DTD. Then `XmlDocument` and LINQ to XML load it.
+5. Each embedded reply equals its saved file apart from formatting white space, and the serial numbers of the file equal the serial numbers of the saved replies.
+6. The devices and statuses equal the devices and statuses of the CSV report, and the token is not in the file.
+7. A control run: nine corrupted copies of the file (a control character, a wrong count, a changed serial number, an undeclared prefix, a missing required attribute, two root elements, no declaration, a truncated file, and a DTD) must each fail at least one check.
+
+Expected: every check passes for the real file, and every corrupted copy fails.

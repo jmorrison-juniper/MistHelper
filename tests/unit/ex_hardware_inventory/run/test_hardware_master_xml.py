@@ -759,7 +759,7 @@ class TestMasterXmlExporter:
         assert list(tmp_path.iterdir()) == []  # No damaged file stays under the report name.
 
     def test_a_failed_check_of_the_file_that_the_disk_holds_removes_it(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         """The second check reads the file again. When it fails, the file goes and the error is documented."""
         calls: list[int] = []
@@ -773,9 +773,10 @@ class TestMasterXmlExporter:
             real(*args, **kwargs)  # type: ignore[arg-type]
 
         monkeypatch.setattr(MasterXmlVerifier, "verify", verify_once_then_refuse)
-        with pytest.raises(ReportCheckError, match="changed on the disk"):
+        with caplog.at_level("ERROR"), pytest.raises(ReportCheckError, match="changed on the disk"):
             MasterXmlExporter(tmp_path).write(make_mixed(), "organization", self.RUN_TIME)
         assert len(calls) == 2 and list(tmp_path.iterdir()) == []
+        assert "ReportCheckError: The file changed on the disk." in caplog.text  # The log names the failed check.
 
     def test_an_unreadable_file_becomes_the_documented_error_and_leaves_nothing(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

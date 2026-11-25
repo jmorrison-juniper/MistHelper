@@ -342,7 +342,7 @@ never runs in an automated test pass.
 | 306 | DESTRUCTIVE: Restore organization and site firmware policies from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run) | Destructive | `lambda: RestoreMenu(api=_build_policy_api(), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, stopped=ConfigUtils.check_stop_signal, dry_run=getattr(globals().get('args', None), 'dry_run', False), data_directory=Path(os.environ.get('DATA_DIR', 'data')))).run()` |
 | 307 | Export AP warning and error codes across all sites | Safe org exports | `ApWarningReport.run` |
 | 308 | Export cross-org subscription, entitlement, and stock inventory report | Safe org exports | `CrossOrgSubscriptionInventoryReport.run` |
-| 309 | Collect EX switch hardware inventory into one CSV report | Resource intensive | `ExHardwareInventoryReport.run` |
+| 309 | Collect EX switch hardware inventory into one CSV report and one XML file | Resource intensive | `ExHardwareInventoryReport.run` |
 
 ### Endpoint family sub-menus (259-268)
 

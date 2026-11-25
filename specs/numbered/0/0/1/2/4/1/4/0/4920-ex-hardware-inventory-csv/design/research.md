@@ -104,3 +104,22 @@ Each decision lists what the plan chose, why, and what else the team considered.
 - It does not change the admission design or the shared MSP detector (issue #4713).
 - It does not add a README menu table. Issue #4916 removed menu text from the README.
 - It does not add live MSP validation.
+- It does not convert the Junos XML to another vocabulary, and it does not merge the JSON replies into the master XML (issue #4933).
+
+## R15. How the master XML stays valid (issue #4933)
+
+- **Decision**: The builder does not concatenate strings that it did not escape. A strict, namespace-aware expat parser reads each reply and builds a small tree. One renderer writes that tree with one set of escapers. Each wrapper value goes through a cleaner that replaces each character that XML 1.0 forbids or discourages with U+FFFD, then through the attribute escaper. The wrapper elements use one namespace address and the prefix `mh`.
+- **Rationale**: A string copy of a reply carries every defect of the reply into the master file, and one bad byte then breaks the whole file for the customer system. A parser-driven copy turns each defect into a refused reply, and the device shows the status `failed`. Writing the tree with one escaper gives the escaping and the namespace declarations one owner.
+- **Alternatives rejected**: `xml.etree.ElementTree` as the writer renames the prefixes (`ns0`) and cannot keep the prefixes of the reply, so it fails the rule that the reply keeps its prefixes. `xml.dom.minidom` reads a DTD and can expand an entity. `lxml` is not in the lock, and a new dependency is a change of its own.
+- **Decision (second pass)**: A verifier that shares no output code with the writer reads the final bytes. It checks the bytes, the characters, a strict parse, the structure, the counts, and the equality of the events of each embedded reply with the events of its source, then it runs the standard canonicalizer. The CLI also reads the file back from the disk.
+- **Rationale**: A bug in the writer cannot hide from a reader that writes nothing. The event comparison is the exact meaning of "the file holds the reply".
+- **Decision (white space)**: White space between the child elements of an element that holds no other text is formatting, and the writer replaces it with the indent of the file. All other white space is data and stays, as does all white space below `xml:space="preserve"`.
+- **Rationale**: One indented tree is easier for a person to read, and no reader that follows the rules of XML sees a difference in the data.
+- **Decision (portal)**: The two new outputs reuse the atomic publication that the CSV report uses, and the finish step compiles each report within the quota that is left. If any report fails, none is published.
+- **Rationale**: A run that lists one report without the other would force the operator to guess which file is complete.
+- **Decision (validation)**: The live runs check the files with readers that the tool does not use: libxml2, `xmlschema`, and the .NET reader with the schema, besides the standard library. A control run of corrupted copies proves that the checks can fail.
+
+## R16. Validation that was not possible, and what covers the gap
+
+- The customer parsers are not known. The schema accepts every file that the tool writes, and the live checks used four independent stacks. A parser that needs a DTD, or that rejects a namespace prefix on the wrapper elements, is outside this contract.
+- No public schema covers each Junos release, so the schema leaves the reply under a lax wildcard.
