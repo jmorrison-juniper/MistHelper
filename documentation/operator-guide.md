@@ -463,12 +463,13 @@ reads, and the shared limit is 5000 requests an hour for each credential.
 
 The credential must have a role that can open a switch shell. In a live test, an
 organization token with the read-only role found 15 connected EX switches, and
-Mist refused the shell of each one with HTTP 403. The menu then gave one `failed`
-outcome row for each switch and no hardware row. The menu prints a note at step 1
-when every grant of the credential has the read-only role. Each failed switch has
-the detail `The shell could not collect this switch. See the log for the cause.`
-The log holds the HTTP status. The Multi Site action of the portal opens the same
-shells, so it needs the same role.
+Mist refused the shell of each one with HTTP 403 and the detail `shell access not
+allowed for this user`. The menu then gave one `failed` outcome row for each
+switch and no hardware row. The menu prints a note at step 1 when every grant of
+the credential has the read-only role. Each failed switch has the detail `The
+shell could not collect this switch. See the log for the cause.` The log holds
+the HTTP status. The Multi Site action of the portal opens the same shells, so it
+needs the same role.
 
 ### Watch the network from a monitoring system
 

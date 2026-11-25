@@ -149,6 +149,7 @@ Targets:
 - **FR-012**: When the turn of a target comes, the tool MUST check its status again. A switch that is no longer connected MUST get a skipped outcome and not a command failure.
 - **FR-013**: The tool MUST refuse a batch with more than 1000 targets. It MUST NOT cut the list. The CLI runs one batch for each organization, so the limit applies to each organization. The portal runs one batch for the whole preview, so the limit applies to the whole run.
 - **FR-042**: When a run has no target, the tool MUST write no report and MUST say so.
+- **FR-043**: When every grant of the credential has the read-only role, the CLI MUST print one note at step 1 that Mist can refuse a switch shell for that role. The note MUST NOT block the run. A switch that Mist refuses MUST appear as one `failed` outcome row whose detail points to the log.
 
 Collection:
 

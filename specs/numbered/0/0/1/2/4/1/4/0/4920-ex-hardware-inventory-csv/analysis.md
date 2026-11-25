@@ -66,6 +66,7 @@
 | FR-040 | Yes | T063 | |
 | FR-041 | Yes | T012, T016, T041, T052 | |
 | FR-042 | Yes | T021, T026 | |
+| FR-043 | Yes | T068 | Added after the live run. |
 
 Success criteria that need build work: SC-001 (T021), SC-002 (T022), SC-003 (T052), SC-004 (T049), SC-005 (T063), SC-006 (T032), SC-007 (T010, T052), SC-008 (T037). All have a task.
 
@@ -109,3 +110,26 @@ None. Each task maps to a requirement, a story, or a gate.
 - Ambiguity count: 1 (accepted).
 - Duplication count: 0.
 - Critical issues: 0.
+
+## Convergence After Implementation
+
+**Date**: 2026-11-25
+
+**Method**: A second pass compared the specification, the plan, the tasks, and the contracts with the code, the tests, the gate results, and the live run on the test organization. Each finding below has its resolution.
+
+| ID | Source | Severity | Summary | Resolution |
+|----|--------|----------|---------|------------|
+| F1 | Full guardrail run | HIGH | The symbol preservation guard counted the removed `BatchTargetPickerService` import of the service factory as a lost name. The factory now builds `ScopeAwareTargets`, a subclass. | Fixed. A reviewed removal entry in `INTENTIONAL_SYMBOL_REMOVALS` names the module, the symbol, and the reason. No other module imports the name from the factory. |
+| F2 | Live run | HIGH | The configured token is an organization token with the read-only role. Mist refused each of the 15 shell sessions with HTTP 403 (`shell access not allowed for this user`). Every switch then failed with a generic detail, and nothing told the operator why. | Fixed for the message. FR-043 and T068 add the step 1 note, the detail points to the log, and the guide, the contract, and the release note say it. The success path stays unproven live, because it needs a credential with a role that can open a shell. |
+| F3 | Test quality ratchet | MEDIUM | The ratchet reported 20 findings in the new tests: three weak assertions, eight numeric edge cases, and nine failure modes. | Fixed with real tests and no baseline edit: HTTP 4xx and 5xx on four reads, three transport faults, restart cleanup with an empty and a damaged manifest, and limits of 0 and -1. The helper `uuid` is now `make_uuid`, the documented fixture-builder prefix. |
+| F4 | Pylint | LOW | Four `protected-access` notes in `run/routing.py`: the router reads `_apisession` and `_org_id` of the picker. | Accepted. The score is 9.73 against a floor of 9.5. A public accessor on the picker needs a change of shared WebSocket code and a new structure count. |
+| F5 | Full-suite ratchet | LOW | The full-suite ratchet prints 18 findings in `tests/test_upgrade_portal_audit.py` and `tests/unit/test_ssh_host_key_tofu.py`. This branch does not change those files, and they match `origin/main`. | Out of scope. The required check scans only the changed files and prints 0. |
+
+Requirement changes: FR-043 is new (T068). FR-040 holds: the live run used a read-only command on one organization. SC-005 is not met live. The report holds no serial number, because no shell opened, so the comparison with the saved replies has no data.
+
+Metrics after the pass:
+
+- Total requirements: 43 functional and 8 success criteria.
+- Total tasks: 68. Tasks T001 through T064 and T068 are done. T065 and T066 close with this pass and the pull request. T067 needs the owner.
+- Coverage: 100 percent of functional requirements have at least one task.
+- Critical issues: 0. Open items for the owner: one live run with a credential that can open a shell, and the MSP test.
