@@ -137,8 +137,19 @@ class TestFinishStep:
         assert root.get("scope") == "organization" and isinstance(organization, ET.Element)
         assert organization.get("name") == organization.get("id") == next(iter(SCOPE["organizations"]))
 
+    def test_an_empty_scope_is_an_organization_run_with_the_identifier_as_the_organization_name(
+        self, tmp_path: Path
+    ) -> None:
+        """A stored scope with no mode and no organization names behaves like a missing scope."""
+        artifacts, writer, outcomes = finished_run(tmp_path, "master-xml", scope={})
+        assert published(artifacts, writer, outcomes)["status"] == "ready"
+        root = ET.fromstring(artifacts.xml_download("run")[1])
+        organization = root.find("mh:organization", NS)
+        assert root.get("scope") == "organization" and isinstance(organization, ET.Element)
+        assert organization.get("name") == organization.get("id") == next(iter(SCOPE["organizations"]))
+
     def test_an_empty_stored_format_publishes_no_report_and_fails_nothing(self, tmp_path: Path) -> None:
-        """The finish step reads the stored format. An empty value names no report, so it gives no report and no error."""
+        """The finish step reads the stored format. An empty value names no report: no report, no error."""
         artifacts, writer, outcomes = finished_run(tmp_path, "")
         manifest = published(artifacts, writer, outcomes)
         assert manifest["status"] == "ready" and not {CSV_NAME, XML_NAME} & set(manifest["files"])
