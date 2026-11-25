@@ -545,8 +545,8 @@ class TestMenuText:
             (
                 "MistHelper.py",
                 309,
-                "7598f2a966c3c5054fa221c63a53feb4dd8181762f0096fb81ffa86390bb8d88",
-            ),  # Preserve the command-line source identity across Python AST changes.
+                "7f83e65239b0e830f971f8f24892256714c190fc928efdc76bd1ad77dcfe935d",
+            ),  # Preserve the command-line source identity across Python AST changes. Issue #4933 renamed menu 309.
             (
                 "web_portal/menu_registry.py",
                 192,
