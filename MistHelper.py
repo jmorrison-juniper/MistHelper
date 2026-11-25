@@ -577,6 +577,7 @@ from src.operations.execution.firmware_policy.cli import (  # Menu 305 configure
 from src.operations.execution.firmware_policy.recovery.cli import RestoreMenu
 from src.operations.execution.firmware_policy.sdk import PolicyApi  # Keep all menu 305 requests in the SDK boundary.
 from src.operations.exporting.ap_warning_report.operation import ApWarningReport
+from src.operations.exporting.ex_hardware_inventory.operation import ExHardwareInventoryReport
 from src.operations.exporting.export.const_definitions_exporter import (
     ConstDefinitionsExporter,  # Cat B (1013 SC-001 position 17) -- re-export
 )
@@ -4831,6 +4832,14 @@ menu_actions: dict[str, Any] = {
         category=OperationRegistry.skip_category("307"),
         destructive=False,
         supports_fast=False,
+    ),
+    "309": GlobalImportManager.MenuEntry(  # Use named fields for menu 309.
+        menu_id="309",  # Store key for drift checks.
+        handler=ExHardwareInventoryReport.run,
+        title="Collect EX switch hardware inventory into one CSV report",
+        category=OperationRegistry.skip_category("309"),  # Read the safety class.
+        destructive=False,  # The command is read-only, and a typed phrase starts the run.
+        supports_fast=False,  # Shell concurrency is bounded by PORTAL_WS_HARDWARE_CONCURRENCY.
     ),
     "238": GlobalImportManager.MenuEntry(  # Use named fields for menu 238.
         menu_id="238",  # Store key for drift checks.

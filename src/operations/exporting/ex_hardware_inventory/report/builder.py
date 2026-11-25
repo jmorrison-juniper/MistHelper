@@ -52,6 +52,11 @@ class RowFactory:
         "format_failed": "The reply was not a valid chassis inventory.",
         "target_failed": "The shell could not collect this switch.",
         "output_failed": "The reply could not be saved.",
+        "new_targets": "New switches appeared after the confirmation, so this organization was not run.",
+        "no_longer_connected": "The switch was no longer connected when the run started.",
+        "discovery_failed": "Mist could not list the switches of this organization.",
+        "rate_limited": "Mist limited the requests, so this organization was not read.",
+        "target_limit": "This organization has more switches than one batch can run.",
     }  # A plain sentence for each reason code. An operator never sees a code.
 
     @classmethod

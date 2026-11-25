@@ -22,7 +22,7 @@
 - [X] T002 Record the guardrail baseline on the untouched worktree: 1193 pass and 23 fail. Keep the failing test identifiers outside the repository for the final comparison.
 - [X] T003 Create the empty package files `src/operations/exporting/ex_hardware_inventory/__init__.py`, `src/operations/exporting/ex_hardware_inventory/scope/__init__.py`, `src/operations/exporting/ex_hardware_inventory/report/__init__.py`, and `src/operations/exporting/ex_hardware_inventory/run/__init__.py`.
 - [X] T004 [P] Add the synthetic reply builders in `tests/unit/ex_hardware_inventory/support/hardware_replies.py`. Cover a single switch, a two-member virtual chassis, disk and USB modules, a default namespace on `chassis-inventory`, `junos:style` on `chassis`, `cli/banner`, one-space version fields, and empty serial fields. Invent every value.
-- [ ] T005 [P] Add the fake Mist session, the fake ledger adapter, and the fake batch service in `tests/unit/ex_hardware_inventory/support/hardware_fakes.py`.
+- [X] T005 [P] Add the fake Mist session, the fake ledger adapter, and the fake batch service in `tests/unit/ex_hardware_inventory/support/hardware_fakes.py`.
 
 ## Phase 2: Foundational
 
@@ -49,20 +49,20 @@
 
 ### Tests for User Story 1
 
-- [ ] T018 [P] [US1] Write `tests/unit/ex_hardware_inventory/scope/test_hardware_session.py`: `AdmissionBinding` sets and restores the ledger organization, reaches the ledger through the mounted adapter, and does nothing when no ledger exists. `SdkErrorMute` hides SDK error records only inside its block.
-- [ ] T019 [P] [US1] Write `tests/unit/ex_hardware_inventory/run/test_hardware_batch.py`: preview, confirmation phrase, start, polling, the subset rule, an expired preview that previews again, and a new target that stops the organization.
-- [ ] T020 [P] [US1] Write `tests/unit/ex_hardware_inventory/report/test_hardware_export.py`: the exporter call with the CSV format forced and explicit field names, the UTC-stamped name, the file check, and the removal of a file that fails the check.
-- [ ] T021 [P] [US1] Write `tests/unit/ex_hardware_inventory/test_hardware_operation.py`: a wrong phrase, end of input, an interrupt, the right phrase, no target, the summary lines, the return value, and the registry and menu entry facts.
-- [ ] T022 [P] [US1] Write `tests/integration/ex_hardware_inventory/test_hardware_cli_flow.py`: the whole CLI flow against the real `WebSocketBatchService` with fake collaborators and a fake shell that returns synthetic replies.
+- [X] T018 [P] [US1] Write `tests/unit/ex_hardware_inventory/scope/test_hardware_session.py`: `AdmissionBinding` sets and restores the ledger organization, reaches the ledger through the mounted adapter, and does nothing when no ledger exists. `SdkErrorMute` hides SDK error records only inside its block.
+- [X] T019 [P] [US1] Write `tests/unit/ex_hardware_inventory/run/test_hardware_batch.py`: preview, confirmation phrase, start, polling, the subset rule, an expired preview that previews again, and a new target that stops the organization.
+- [X] T020 [P] [US1] Write `tests/unit/ex_hardware_inventory/report/test_hardware_export.py`: the exporter call with the CSV format forced and explicit field names, the UTC-stamped name, the file check, and the removal of a file that fails the check.
+- [X] T021 [P] [US1] Write `tests/unit/ex_hardware_inventory/test_hardware_operation.py`: a wrong phrase, end of input, an interrupt, the right phrase, no target, the summary lines, the return value, and the registry and menu entry facts.
+- [X] T022 [P] [US1] Write `tests/integration/ex_hardware_inventory/test_hardware_cli_flow.py`: the whole CLI flow against the real `WebSocketBatchService` with fake collaborators and a fake shell that returns synthetic replies.
 
 ### Implementation for User Story 1
 
-- [ ] T023 [US1] Implement `AdmissionBinding` and `SdkErrorMute` in `src/operations/exporting/ex_hardware_inventory/scope/session.py`.
-- [ ] T024 [US1] Implement `BatchStack`, `BatchRunResult`, and `OrganizationBatchRun` in `src/operations/exporting/ex_hardware_inventory/run/batch.py`. Build the service stack with the shell flag on and the concurrency from `StreamSettings.hardware_concurrency`. Read each run folder through its manifest.
-- [ ] T025 [US1] Implement `ReportExporter` in `src/operations/exporting/ex_hardware_inventory/report/export.py`, per data-model.md `ReportFile.name`, `ReportFile.row_count`, and `ReportFile.partial`. When the name already exists, add a numeric suffix so no earlier report is overwritten.
-- [ ] T026 [US1] Implement `ExHardwareInventoryReport` in `src/operations/exporting/ex_hardware_inventory/operation.py`: the console steps of the menu contract, the typed phrase through `InputUtils.safe_input`, and the summary, per data-model.md `RunSummary.organizations`, `RunSummary.targets`, `RunSummary.counts`, and `RunSummary.report_path`.
-- [ ] T027 [US1] Register menu 309: import the class and add the `MenuEntry` in `MistHelper.py`, and add the entry `309` with the category `resource_intensive` in `src/foundation/support/utils/operation_registry.py`.
-- [ ] T028 [US1] Update the menu expectations: `tests/unit/test_menu_entry_metadata.py`, `tests/unit/ap_warning_report/test_menu.py`, and the two count lines in `.github/copilot-instructions.md`. Re-pin `tests/guardrails/test_endpoint_catalog.py` after the last edit of `MistHelper.py`.
+- [X] T023 [US1] Implement `AdmissionBinding` and `SdkErrorMute` in `src/operations/exporting/ex_hardware_inventory/scope/session.py`.
+- [X] T024 [US1] Implement `BatchPreview`, `BatchRunResult`, `BatchStack`, and `OrganizationBatchRun` in `src/operations/exporting/ex_hardware_inventory/run/batch.py`, and `BatchWatcher` and `RunFolder` in `src/operations/exporting/ex_hardware_inventory/run/watch.py`. Build the service stack with the shell flag on and the concurrency from `StreamSettings.hardware_concurrency`. Read each run folder through its manifest.
+- [X] T025 [US1] Implement `ReportExporter` in `src/operations/exporting/ex_hardware_inventory/report/export.py`, per data-model.md `ReportFile.name`, `ReportFile.row_count`, and `ReportFile.partial`. When the name already exists, add a numeric suffix so no earlier report is overwritten.
+- [X] T026 [US1] Implement `ExHardwareInventoryReport` in `src/operations/exporting/ex_hardware_inventory/operation.py` and `HardwareConsole` in `src/operations/exporting/ex_hardware_inventory/console.py`: the console steps of the menu contract, the typed phrase through `InputUtils.safe_input`, and the summary, per data-model.md `RunSummary.organizations`, `RunSummary.targets`, `RunSummary.counts`, and `RunSummary.report_path`.
+- [X] T027 [US1] Register menu 309: import the class and add the `MenuEntry` in `MistHelper.py`, and add the entry `309` with the category `resource_intensive` in `src/foundation/support/utils/operation_registry.py`.
+- [X] T028 [US1] Update the menu expectations: `tests/unit/test_menu_entry_metadata.py`, `tests/unit/ap_warning_report/test_menu.py`, and the two count lines in `.github/copilot-instructions.md`. Re-pin `tests/guardrails/test_endpoint_catalog.py` after the last edit of `MistHelper.py`.
 - [ ] T029 [US1] Run the Story 1 tests and the menu guards. Commit and push.
 
 ## Phase 4: User Story 2 - Find the scope and run for an MSP (Priority: P1)
@@ -73,15 +73,15 @@
 
 ### Tests for User Story 2
 
-- [ ] T030 [P] [US2] Write `tests/unit/ex_hardware_inventory/scope/test_hardware_profile.py`: `getSelf` answers 200, 401, 403, 429, 5xx, and a transport fault. The account kind follows `email`. The credential type follows the session.
-- [ ] T031 [P] [US2] Write `tests/unit/ex_hardware_inventory/scope/test_hardware_resolver.py`: an organization token, an MSP login with a good list, HTTP 403 and other failures of the list, a failed later page, several grants with and without `org_id`, an `org_id` outside the grants, and the union of direct and MSP organizations without repeats.
-- [ ] T032 [P] [US2] Write `tests/unit/ex_hardware_inventory/run/test_hardware_batch_msp.py`: the organization loop, a failing organization, a discovery error such as HTTP 429 that is reported and does not stop the loop, the per-organization subset rule, the total phrase, and a cancel in the middle.
+- [X] T030 [P] [US2] Write `tests/unit/ex_hardware_inventory/scope/test_hardware_profile.py`: `getSelf` answers 200, 401, 403, 429, 5xx, and a transport fault. The account kind follows `email`. The credential type follows the session.
+- [X] T031 [P] [US2] Write `tests/unit/ex_hardware_inventory/scope/test_hardware_resolver.py`: an organization token, an MSP login with a good list, HTTP 403 and other failures of the list, a failed later page, several grants with and without `org_id`, an `org_id` outside the grants, and the union of direct and MSP organizations without repeats.
+- [X] T032 [P] [US2] Write the MSP loop tests in `tests/unit/ex_hardware_inventory/test_hardware_operation.py` (class `TestMspScope`) and in the integration test (class `TestMspEndToEnd`), not in a separate `run/test_hardware_batch_msp.py`: the organization loop, a failing organization, a discovery error such as HTTP 429 that is reported and does not stop the loop, the per-organization subset rule, the total phrase, and a cancel in the middle.
 
 ### Implementation for User Story 2
 
-- [ ] T033 [US2] Implement `CredentialProfile` and `ProfileReader` in `src/operations/exporting/ex_hardware_inventory/scope/profile.py`, per data-model.md `ScopeDecision.credential_type` and `ScopeDecision.account_kind`. Require status 200.
-- [ ] T034 [US2] Implement `OrganizationRef`, `ScopeDecision`, `ScopeError`, and `ScopeResolver` in `src/operations/exporting/ex_hardware_inventory/scope/resolver.py`, per data-model.md `OrganizationRef.org_id`, `OrganizationRef.org_name`, `OrganizationRef.msp_id`, `OrganizationRef.source`, `ScopeDecision.mode`, `ScopeDecision.organizations`, and `ScopeDecision.notes`. Mute the SDK error lines for the MSP list and log one warning.
-- [ ] T035 [US2] Wire the scope and the organization loop into `src/operations/exporting/ex_hardware_inventory/operation.py` and `src/operations/exporting/ex_hardware_inventory/run/batch.py`. Preview every organization first, ask once, preview each organization again just before it starts, and bind the ledger organization for each run. A discovery error of one organization, such as HTTP 429, is reported for that organization and the loop goes on.
+- [X] T033 [US2] Implement `CredentialProfile` and `ProfileReader` in `src/operations/exporting/ex_hardware_inventory/scope/profile.py`, per data-model.md `ScopeDecision.credential_type` and `ScopeDecision.account_kind`. Require status 200.
+- [X] T034 [US2] Implement `OrganizationRef`, `ScopeDecision`, `ScopeError`, and `ScopeResolver` in `src/operations/exporting/ex_hardware_inventory/scope/resolver.py`, per data-model.md `OrganizationRef.org_id`, `OrganizationRef.org_name`, `OrganizationRef.msp_id`, `OrganizationRef.source`, `ScopeDecision.mode`, `ScopeDecision.organizations`, and `ScopeDecision.notes`. Mute the SDK error lines for the MSP list and log one warning.
+- [X] T035 [US2] Wire the scope and the organization loop into `src/operations/exporting/ex_hardware_inventory/operation.py` and `src/operations/exporting/ex_hardware_inventory/run/batch.py`. Preview every organization first, ask once, preview each organization again just before it starts, and bind the ledger organization for each run. A discovery error of one organization, such as HTTP 429, is reported for that organization and the loop goes on.
 - [ ] T036 [US2] Run the Story 2 tests. Commit and push.
 
 ## Phase 5: User Story 3 - Run the same action from the Multi Site tab (Priority: P1)

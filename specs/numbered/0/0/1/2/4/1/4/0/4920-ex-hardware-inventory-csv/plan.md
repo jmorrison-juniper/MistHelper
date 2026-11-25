@@ -94,7 +94,8 @@ specs/numbered/0/0/1/2/4/1/4/0/4920-ex-hardware-inventory-csv/
 ```text
 src/operations/exporting/ex_hardware_inventory/
   __init__.py
-  operation.py              # ExHardwareInventoryReport: menu 309, prompts, summary
+  operation.py              # ExHardwareInventoryReport, OrganizationPlan, RunCollector: menu 309 flow
+  console.py                # HardwareConsole: the console lines and the typed phrase
   scope/
     __init__.py
     profile.py              # CredentialProfile, ProfileReader (getSelf, status checked)
@@ -109,7 +110,8 @@ src/operations/exporting/ex_hardware_inventory/
     export.py               # ReportExporter (DataExporter, file check)
   run/
     __init__.py
-    batch.py                # BatchStack, OrganizationBatchRun
+    batch.py                # BatchPreview, BatchRunResult, BatchStack, OrganizationBatchRun
+    watch.py                # BatchWatcher (poll and stop), RunFolder (read outcomes and replies)
     publisher.py            # ReportHook (portal finish step)
     routing.py              # ScopeAwarePicker, ScopeAwareChecker (portal MSP)
 ```
