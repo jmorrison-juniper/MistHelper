@@ -58,7 +58,7 @@ One hardware item that the flattener reads from one reply.
 | `FlattenedItem.level` | integer | 0 or more. The chassis is 0. |
 | `FlattenedItem.path` | text | The item names joined by `/`, for example `Chassis/FPC 0/PIC 1/Xcvr 3`. A repeated name under one parent gets the suffix `#2`, `#3`, and so on. Unique within one device. At most 512 characters. |
 | `FlattenedItem.item_type` | text | The local element name, for example `chassis-module`. |
-| `FlattenedItem.fields` | mapping | Every non-item child element as a name and text. A nested non-item child adds its leaf values as `parent_child`. Every attribute adds `attr_<name>`. A name uses `_` for `-` and `:`. Text is trimmed. |
+| `FlattenedItem.fields` | mapping | Every non-item child element as a name and text. A nested non-item child adds its leaf values as `parent_child`. A repeated name gets the suffix `_2`, `_3`, and so on, so no value is lost. Every attribute adds `attr_<local name>`. The parser drops the namespace prefix, so `junos:style` gives `attr_style`. A name uses `_` for each run of other characters. Text is trimmed. A field whose column would take the name of a fixed column gets the suffix `_field`, for example `item_path_field`. |
 
 A device also holds `cli_banner`, the trimmed text of `cli/banner`, at most 64 characters.
 

@@ -28,9 +28,9 @@
 
 **Purpose**: The setting, the natural key, and the report compiler. Every story needs them.
 
-- [ ] T006 [P] Extend `tests/unit/websocket_streams/live/sessions/test_ws_stream_settings.py` with cases for `PORTAL_WS_HARDWARE_CONCURRENCY`: unset, 1, 5, 0, 6, text, and the new `limits_payload` key.
-- [ ] T007 Add `hardware_concurrency` to `StreamSettings`, to `from_environment`, and to `limits_payload` in `src/mist/realtime/websocket_streams/live/sessions/settings.py`, per data-model.md `StreamSettings.hardware_concurrency`.
-- [ ] T008 [P] Add the strategy `ExHardwareInventory` as `composite_pk` in `src/foundation/support/refactors/endpoint_primary_key_strategies.py` and a case in `tests/unit/export/test_pk_strategies.py`, per data-model.md `ReportRow.org_id`, `ReportRow.device_id`, and `ReportRow.item_path`.
+- [X] T006 [P] Extend `tests/unit/websocket_streams/live/sessions/test_ws_stream_settings.py` with cases for `PORTAL_WS_HARDWARE_CONCURRENCY`: unset, 1, 5, 0, 6, text, and the new `limits_payload` key.
+- [X] T007 Add `hardware_concurrency` to `StreamSettings`, to `from_environment`, and to `limits_payload` in `src/mist/realtime/websocket_streams/live/sessions/settings.py`, per data-model.md `StreamSettings.hardware_concurrency`.
+- [X] T008 [P] Add the strategy `ExHardwareInventory` as `composite_pk` in `src/foundation/support/refactors/endpoint_primary_key_strategies.py` and a case in `tests/unit/export/test_pk_strategies.py`, per data-model.md `ReportRow.org_id`, `ReportRow.device_id`, and `ReportRow.item_path`.
 - [X] T009 [P] Write `tests/unit/ex_hardware_inventory/report/test_hardware_flatten.py`: levels, the `#2` path suffix, local-name matching across namespace versions, attributes, trimmed and empty values, the banner, a virtual chassis, disk and USB modules, and a malformed reply.
 - [X] T010 [P] Write `tests/unit/ex_hardware_inventory/report/test_hardware_columns.py`: the fixed column order, the preferred item field order, the sorted extras, and the spreadsheet guard for each leading character and for the exempt columns.
 - [X] T011 [P] Write `tests/unit/ex_hardware_inventory/report/test_hardware_report_builder.py`: the state mapping, collected and outcome rows, the stable row order, the run time on every row, and unique natural keys.

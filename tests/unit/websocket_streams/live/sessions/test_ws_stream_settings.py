@@ -23,7 +23,8 @@ class TestStreamSettings:
             "max_sessions": 5,
             "idle_seconds": 120,
             "capture_seconds": 3600,
-        }  # The public payload is stable.
+            "hardware_concurrency": 3,
+        }  # The public payload is stable, and it now names the hardware action concurrency.
 
     def test_flags_accept_enabled_and_disabled_values(self) -> None:
         """Accept each documented flag value."""
@@ -99,4 +100,33 @@ class TestTerminalHistorySetting:
             "max_sessions": 5,
             "idle_seconds": 120,
             "capture_seconds": 3600,
-        }  # The catalog route sends the same keys as before.
+            "hardware_concurrency": 3,
+        }  # The catalog route sends the same keys as before, plus the hardware concurrency.
+
+
+class TestHardwareConcurrencySetting:
+    """Verify the hardware action concurrency setting of issue #4920."""
+
+    def test_default_is_three(self) -> None:
+        """Use three open shells when the variable is absent."""
+        settings = StreamSettings.from_environment({})  # Build settings from an empty source.
+        assert settings.hardware_concurrency == 3  # The default matches the Multi Site batch default.
+
+    @pytest.mark.parametrize(("raw", "expected"), [("1", 1), ("5", 5), (" 4 ", 4), ("3", 3)])
+    def test_values_inside_the_range_are_used(self, raw: str, expected: int) -> None:
+        """Accept each value from 1 through 5, with or without spaces."""
+        settings = StreamSettings.from_environment({"PORTAL_WS_HARDWARE_CONCURRENCY": raw})  # Set one value.
+        assert settings.hardware_concurrency == expected  # The value is used as given.
+
+    @pytest.mark.parametrize("raw", ["0", "6", "-1", "lots", "1e3", "2.5"])
+    def test_bad_values_warn_once_and_use_the_default(self, raw: str, caplog: pytest.LogCaptureFixture) -> None:
+        """Use the default of three and name the variable for a value outside 1 through 5 or a non-number."""
+        caplog.set_level(logging.WARNING)  # Capture warnings from settings parsing.
+        settings = StreamSettings.from_environment({"PORTAL_WS_HARDWARE_CONCURRENCY": raw})  # Set one bad value.
+        assert settings.hardware_concurrency == 3  # A bad value cannot change the limit.
+        assert caplog.text.count("PORTAL_WS_HARDWARE_CONCURRENCY") == 1  # One warning that names the variable.
+
+    def test_payload_publishes_the_value_in_use(self) -> None:
+        """The page reads the value in use from the limits payload."""
+        settings = StreamSettings.from_environment({"PORTAL_WS_HARDWARE_CONCURRENCY": "5"})  # Set a valid value.
+        assert settings.limits_payload()["hardware_concurrency"] == 5  # The payload shows the value.
