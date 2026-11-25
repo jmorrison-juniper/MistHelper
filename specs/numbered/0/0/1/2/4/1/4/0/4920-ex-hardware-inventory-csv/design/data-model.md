@@ -114,6 +114,21 @@ The console summary of one CLI run. The console prints these values. No object h
 | `RunSummary.targets` | integer | The number of confirmed targets. |
 | `RunSummary.counts` | mapping | `collected`, `failed`, `skipped`, `cancelled`, each an integer. |
 | `RunSummary.report_path` | text | The path of the file. Empty when no row exists. |
+| `RunSummary.master_path` | text | The path of the master XML. Empty when the file was not written. |
+
+## MasterXmlFile
+
+The one master XML file of a run (issue #4933). The structure and the checks are in `contracts/report-xml.md`.
+
+| Field | Type | Constraint |
+|-------|------|------------|
+| `MasterXmlFile.path` | path | CLI: `ExHardwareInventory_<YYYYMMDDTHHMMSSZ>.xml` under `data/`, with the stem of the CSV report when one exists. Portal: `hardware/inventory.xml` in the run folder. |
+| `MasterXmlFile.device_count` | integer | The number of `mh:device` elements. It equals the `devices` attribute of the root. |
+| `MasterXmlFile.byte_count` | integer | At most the remaining quota of the run. The limit is 64 MiB. |
+| `MasterXmlEntry.status` | enum | `collected`, `failed`, `skipped`, or `cancelled`. It equals the `collection_status` of the CSV rows of the same target. |
+| `MasterXmlEntry.reason`, `MasterXmlEntry.detail` | text | Present for each status but `collected`. The reason is a code that can be empty. The detail is a plain sentence. |
+| `MasterXmlEntry.reply` | markup | Present only when the status is `collected`. It is the copied reply, which has exactly one root element. |
+| `MasterXmlEntry.unread` | boolean | True for an organization that Mist could not read. It has no device and no site. |
 
 ## Relationships
 
@@ -122,3 +137,5 @@ The console summary of one CLI run. The console prints these values. No object h
 - A collected `TargetResult` yields one device banner and one or more `FlattenedItem` values.
 - Each `FlattenedItem` and each non-collected `TargetResult` becomes one `ReportRow`.
 - All `ReportRow` values of a run go into one `ReportFile`.
+- Each `TargetResult` and each unread organization also becomes one `MasterXmlEntry`. All entries of a run go into one `MasterXmlFile`.
+- `RowFactory.classify` gives the status and the detail of a `TargetResult` for both files, so the two files never disagree.

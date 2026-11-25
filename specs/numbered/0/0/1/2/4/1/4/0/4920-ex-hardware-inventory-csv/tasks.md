@@ -174,6 +174,24 @@
 - [ ] T066 Open the pull request with the template, the gate results, and the file list. Wait for every check and for CodeQL with `gh pr checks <number> --watch`. Do not add `auto-merge`. Leave the merge to the owner.
 - [ ] T067 After the owner merges, verify the merge commit on `main`, the issue state, and the container build.
 
+## Phase 11: User Story 6 - One master XML file (Priority: P1)
+
+The customer added this requirement on 2026-11-25 (issue #4933, FR-055 through FR-069, SC-009 through SC-012). One pull request holds this phase and the earlier phases, so T066 and T067 cover it too.
+
+- [X] T082 [US6] Add `RowFactory.classify` to `report/builder.py` and refactor `RowFactory.build` to call it (FR-059). One place decides the status and the plain detail of a target, so the CSV report and the master XML never disagree. `ReportBuilder.results` keeps each result for the XML. A test builds both files from the same results and compares the statuses.
+- [X] T083 [US6] Add `run/master_xml.py` with `XmlText` (the character rules and the escapers), `XmlWriter` (a strict namespace-aware expat copy of each reply that keeps elements, attributes, text, namespace addresses, and prefixes, and replaces only formatting white space with the indent of the file), and `MasterXmlBuilder` (the wrapper elements, the order, and the counts). FR-056 through FR-060, FR-062, and FR-064.
+- [X] T084 [US6] Add `MasterXmlVerifier` (FR-061). A second pass that writes no XML checks the exact declaration, strict UTF-8, the character rules, a strict parse that refuses a DTD, the structure, the counts of the root against the document and the run, the event digest of each embedded reply against its source, and the standard canonicalizer. A document that fails any check is never handed out.
+- [X] T085 [US6] Add `MasterXmlExporter` for the CLI (FR-063): a unique UTC-stamped name that takes the stem of the CSV report, exclusive creation, a read-back of the disk, a second check of the bytes that were read, and removal of the file on any failure.
+- [X] T086 [US6] Add `documentation/schemas/ex-hardware-inventory.xsd` (FR-067) and the contract tests that pin its namespace, its attributes, and its enumerations to the constants of the code. The reply sits under a lax wildcard, because no public schema covers each Junos release.
+- [X] T087 [US6] Write the file from menu 309 (FR-055, FR-069): `MasterXmlStep` in `operation.py`, the `Master XML:` line in the console, the new title in `MistHelper.py`, and one sentence for each refusal (the size limit and a failed check). The CSV report stays when the XML fails, and the XML stays when the CSV fails. The menu identity pin of `tests/guardrails/test_endpoint_catalog.py` moved with a comment that names issue #4933.
+- [X] T088 [US6] Publish the file from the portal (FR-055, FR-063, FR-065, FR-068). `HardwareXmlPreset` gets the formats `master-xml` and `csv-master-xml` and the table `REPORT_KINDS`. `Reports.publish` compiles each report within the quota that is left and publishes all of them in one atomic step. `ReportDownload` serves `csv_download` and `xml_download` with the same pin, checked path, and size limit. The route accepts `format=xml` and answers `application/xml`. A failed report sets the output to `failed` and publishes none.
+- [X] T089 [US6] Add the controls to the page (FR-066): two output options, the **Download combined XML** link, and `setReportLinks`, which also restores the links after a reload. The table stays for the outputs that hold the CSV. Ten browser tests cover the options, the link, the failed output, the other outputs, the pair, and a reload. The WebSocket structure pin moved from (149, 295, 917) to (149, 296, 920) with a comment that names issue #4933.
+- [X] T090 [US6] Bring every function of the new module to a cyclomatic complexity of 10 or less. The first run of the complexity gate found three functions at 16, 14, and 11. `XmlWriter.Space`, `MasterXmlBuilder.Entry.of`, and `MasterXmlBuilder._counts` took the branches. The event log keeps tuples, so the verifier has no JSON round trip.
+- [X] T091 [US6] Test the file. The unit and property tests (`test_hardware_master_xml.py` with 169 cases, `test_hardware_master_xml_properties.py` with 12 tests that generate hostile text, and `test_ws_hardware_master_xml.py` with 49 cases) cover the exact form of the document, each refusal, the character rules, namespaces, size, the exporter on the disk, the finish step, the quota to the byte, the download, and a restart. The integration tests run the real CLI flow and the real portal routes with fake Mist calls and fake shells, and they compare each embedded reply with its saved file. The log of a failed report carries a sentence that holds no data of a reply.
+- [X] T092 [US6] Prove that the tests can fail. A run of 52 small faults in a copy of the tree (the character escapers, the DTD refusal, the depth limit, the white space rules, the sort, the verifier checks, the exporter, the CLI step, the finish step, the route, the page, and the template) was caught by the tests for 45 faults at the first run. Seven faults were not caught: the `xml:space` rule in two places, the case folding at the three sort levels, the byte limit for multi-byte text, and the numbered name of the XML file. Each now has a test that fails without the code, and a second run caught all seven.
+- [X] T093 [US6] Check live, read-only, on the one test organization. Result: menu 309 collected 15 of 15 switches and wrote a 105370-byte XML file with 1830 elements, 114 serial numbers, and the same 297 rows in the CSV report. The Multi Site action, with the choice **Combined CSV and XML** in a Playwright browser, published both files and the table showed 297 rows. The download of the XML equals the saved file byte for byte. A second portal run with the choice **One combined XML file** published the XML only, with no CSV link and no table, and the link came back after a reload. The files of the two front ends are canonically equal apart from the run time. Readers that the tool does not use accepted each file: ElementTree (expat), SAX with namespaces, minidom, the standard canonicalizer, libxml2 through `lxml` 6.1.3 with recovery off, `xmlschema` 4.3.2, the .NET `XmlReader` with the schema (0 errors), `XmlDocument`, and LINQ to XML. The canonical form of libxml2 equals the canonical form of the standard library. Each embedded reply equals its saved reply apart from formatting, and the 114 serial numbers equal those of the 15 saved replies. A control run of nine corrupted copies (a control character, a wrong count, a changed serial number, an undeclared prefix, a missing attribute, two roots, no declaration, a truncated file, and a DTD) failed at least one check each, and the two that the .NET reader should catch failed there too. A file that was built offline from the 15 real replies of an older run passes the same checks. The token is in none of 54 files and no log.
+- [X] T094 [US6] Document the format and the choices (FR-067): `documentation/ex-hardware-master-xml.md`, the operator guide, the contracts, the quickstart, the research notes, the data model, the plan, the release note, and the generated menu pages.
+
 ## Dependencies and Execution Order
 
 ### Phase Dependencies
@@ -188,6 +206,7 @@
 - **Polish (Phase 8)**: needs the stories that ship.
 - **Live validation (Phase 9)**: needs Phase 8.
 - **Delivery (Phase 10)**: needs Phase 9. T067 needs the owner.
+- **Story 6 (Phase 11)**: needs Stories 1, 3, and 5, because it reuses the results, the finish step, and the page. It was added after the first delivery steps, so T066 and T067 cover it.
 
 ### Parallel Opportunities
 
@@ -222,7 +241,8 @@ Task T012: File tests in tests/unit/ex_hardware_inventory/report/test_hardware_c
 2. Story 2: scope detection and the MSP loop.
 3. Story 3: the portal output and MSP scope.
 4. Stories 4 and 5: the concurrency page default and the trust rules.
-5. Polish, live validation, and the pull request.
+5. Story 6: the master XML (T082 through T094).
+6. Polish, live validation, and the pull request.
 
 ### Guard Rules
 

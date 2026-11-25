@@ -72,8 +72,29 @@
 | FR-046 | Yes | T073 | Added after the live portal run. |
 | FR-047 | Yes | T071 | Added after the live portal run. |
 | FR-048 | Yes | T074 | The audit of the list calls. |
+| FR-049 | Yes | T075, T078, T080 | Added after the owner request (issue #4931). |
+| FR-050 | Yes | T075, T076, T077 | |
+| FR-051 | Yes | T075 | |
+| FR-052 | Yes | T075, T076 | |
+| FR-053 | Yes | T078, T080 | |
+| FR-054 | Yes | T081 | Added after the live check of the table (issue #4932). |
+| FR-055 | Yes | T087, T088, T093 | Added after the customer request (issue #4933). |
+| FR-056 | Yes | T083, T084, T093 | |
+| FR-057 | Yes | T083, T086 | |
+| FR-058 | Yes | T083, T084 | |
+| FR-059 | Yes | T082, T083 | |
+| FR-060 | Yes | T083, T091 | |
+| FR-061 | Yes | T084, T091, T092 | |
+| FR-062 | Yes | T083, T091 | |
+| FR-063 | Yes | T085, T088 | |
+| FR-064 | Yes | T083, T085, T088, T091 | |
+| FR-065 | Yes | T088, T093 | |
+| FR-066 | Yes | T089, T093 | |
+| FR-067 | Yes | T086, T094 | |
+| FR-068 | Yes | T088, T091 | |
+| FR-069 | Yes | T087, T094 | |
 
-Success criteria that need build work: SC-001 (T021), SC-002 (T022), SC-003 (T052), SC-004 (T049), SC-005 (T063), SC-006 (T032), SC-007 (T010, T052), SC-008 (T037). All have a task.
+Success criteria that need build work: SC-001 (T021), SC-002 (T022), SC-003 (T052), SC-004 (T049), SC-005 (T063), SC-006 (T032), SC-007 (T010, T052), SC-008 (T037), SC-009 (T091), SC-010 (T093), SC-011 (T093), SC-012 (T092). All have a task.
 
 ## Constrained-Field Coverage
 
@@ -135,12 +156,17 @@ None. Each task maps to a requirement, a story, or a gate.
 | F9 | Live portal run in a browser | MEDIUM | The page did not name the confirmation word near its box, and did not say that the preview comes first. | Fixed in issue #4928 with FR-046 and T073. |
 | F10 | Owner request | MEDIUM | The portal offered the combined CSV report as a download only. The owner asked to read the report in the browser, as a preview or a table, like the other tools of the owner. | Done in issue #4931 with FR-049 through FR-053 and T075 through T080. The progress card shows a table with a filter and page buttons. The route reads the report through the same checked read as the download. Live: the table equals the file cell for cell. |
 | F11 | Live check of the table | MEDIUM | The page opened the batch parent of the hardware action as a terminal. The portal answered HTTP 409 `not_terminal` on the terminal read and on the resize, and the output panel showed `State: Connecting` for ever on the first tab. | Fixed in issue #4932 with FR-054 and T081. The page no longer reads a `multi_site` parent as a terminal. |
+| F12 | Customer request | HIGH | The customer added a requirement on 2026-11-25: one XML file that holds the XML of all the switches, valid to the XML standard so that other programs read it with no repair. The tool had the CSV report and one XML file for each switch. | Done in issue #4933 with FR-055 through FR-069, SC-009 through SC-012, and T082 through T094. A strict builder, a second verifier that writes nothing, and a read-back of the file make the file valid or absent. Live: nine readers that the tool does not use accepted the files of both front ends, and the 114 serial numbers equal those of the saved replies. |
+| F13 | Complexity gate | MEDIUM | The first run of `radon cc` on the new module found three functions at cyclomatic complexity 16, 14, and 11, against a limit of 10. | Fixed in T090. `XmlWriter.Space`, `MasterXmlBuilder.Entry.of`, and `MasterXmlBuilder._counts` took the branches, and the tests did not change. |
+| F14 | Test quality ratchet | MEDIUM | The ratchet reported 13 findings in the three new test files: four weak `is not None` assertions, one test with no `assert`, and edge cases and failure modes (an empty input, a None input, an empty body, malformed JSON). | Fixed with tests that exercise the real behavior and no baseline edit: an empty file, an empty and a damaged saved reply, a damaged manifest after a restart, an empty scope, and a missing scope. The verifier no longer uses JSON, so the module needs no malformed-JSON test. |
+| F15 | Fault injection | MEDIUM | A run of 52 small faults found seven that the tests did not catch (T092): the `xml:space` rule in two places, the case folding at the three sort levels, the byte limit for multi-byte text, and the numbered name of the XML file. | Fixed with seven tests that fail without the code. A second run caught all seven. |
+| F16 | Full guardrail run | LOW | Three failures that the baseline of 23 does not hold. One was real: the menu identity pin of `test_endpoint_catalog.py` hashes the menu block, so the new title of menu 309 changed it. Two were `e2e_timeout_budget` timing tests that measure real pytest runs, and they failed while other work loaded the machine. | The pin has the new digest and a comment that names issue #4933. The two timing tests pass alone (7 passed). |
 
-Requirement changes: FR-043 and FR-044 are new (T068, T069). FR-045 through FR-048 are new (T071 through T074). FR-049 through FR-054 are new (T075 through T081). FR-040 holds: every live run used a read-only command on one organization. SC-005 is met live for the CLI (T070) and for the portal (T071): the report and the saved replies hold the same 114 serial numbers, and each switch has as many rows as its reply has chassis elements.
+Requirement changes: FR-043 and FR-044 are new (T068, T069). FR-045 through FR-048 are new (T071 through T074). FR-049 through FR-054 are new (T075 through T081). FR-055 through FR-069 are new (T082 through T094). FR-040 holds: every live run used a read-only command on one organization. SC-005 is met live for the CLI (T070) and for the portal (T071): the report and the saved replies hold the same 114 serial numbers, and each switch has as many rows as its reply has chassis elements. SC-009 through SC-012 are met (T091, T093, T092).
 
 Metrics after the pass:
 
-- Total requirements: 54 functional and 8 success criteria.
-- Total tasks: 81. Tasks T001 through T064, T068 through T081 are done. T065 and T066 close with this pass and the pull request. T067 needs the owner.
+- Total requirements: 69 functional and 12 success criteria.
+- Total tasks: 94. Tasks T001 through T064 and T068 through T094 are done. T065 and T066 close with this pass and the pull request. T067 needs the owner.
 - Coverage: 100 percent of functional requirements have at least one task.
-- Critical issues: 0. Open items for the owner: the MSP test.
+- Critical issues: 0. Open items for the owner: the MSP test, and a run of the master XML in MSP scope. The customer parsers are not known, so the file was checked with the readers that the tool does not use.
