@@ -10,7 +10,7 @@ import logging  # Prove that a bad value gives one warning that names the variab
 
 import pytest  # Parametrize and capture.
 
-from tests.unit.ex_hardware_inventory.support.hardware_shells import uuid  # Invented identifiers.
+from tests.unit.ex_hardware_inventory.support.hardware_shells import make_uuid  # Invented identifiers.
 from tests.unit.ex_hardware_inventory.support.hardware_world import ORG_A, SITE_1, World, run_menu  # Shared world.
 
 
@@ -20,7 +20,7 @@ def twelve_switches(world: World) -> None:
     world.mist.add(
         ORG_A,
         (SITE_1, "Site One"),
-        [(uuid(100 + index), f"ex-{index:02d}", "switch", "EX4100-48P") for index in range(1, 13)],
+        [(make_uuid(100 + index), f"ex-{index:02d}", "switch", "EX4100-48P") for index in range(1, 13)],
     )
     world.shells.hold_seconds = 0.2  # Each shell holds long enough for the others to open.
     world.answer = "RUN 12 TARGETS"

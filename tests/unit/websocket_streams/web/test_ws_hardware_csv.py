@@ -15,7 +15,10 @@ from typing import Any  # Doubles have no public type.
 import pytest  # Fixtures, parametrization, and errors.
 
 from src.mist.realtime.websocket_streams.intake.fields.error import StreamRequestError  # Contract errors.
-from src.mist.realtime.websocket_streams.web.services.operations.artifacts import SessionArtifactService  # Unit.
+from src.mist.realtime.websocket_streams.web.services.operations.artifacts import (
+    BatchArtifactStorage,
+    SessionArtifactService,
+)  # Unit and its retention.
 from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml import (
     HardwareXmlPreset,
     HardwareXmlSupport,
@@ -276,6 +279,54 @@ class TestCsvDownload:
         artifacts.bind_batch("run", writer)
         artifacts.csv_download("run")
         assert writer._record.pins == 0
+
+
+class TestRestartCleanup:
+    """A new admission removes only the runs that a dead process left behind, and never a finished report."""
+
+    @staticmethod
+    def run_folder(tmp_path: Path) -> Path:
+        """Return the one run folder under the data root."""
+        return next(tmp_path.glob("*/manifest.json")).parent
+
+    @staticmethod
+    def admit_after_restart(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Admit a new run while no earlier owner process is alive, which makes the cleanup scan every old tree."""
+        monkeypatch.setattr(BatchArtifactStorage.Retention, "process_is_alive", staticmethod(lambda _pid: False))
+        finished_run(tmp_path)  # The admission of the new run scans the data root first.
+
+    def test_a_finished_report_survives_a_restart(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The manifest of a hardware run is durable, so the report stays after the owner process is gone."""
+        _, writer, outcomes = finished_run(tmp_path)
+        writer.finish(outcomes)
+        folder = self.run_folder(tmp_path)
+        self.admit_after_restart(tmp_path, monkeypatch)
+        assert (folder / CSV_NAME).is_file() and len(list(folder.rglob("*.xml"))) == 2
+
+    def test_a_run_that_is_not_durable_is_removed_after_a_restart(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The control case: the same run with durable false is removed, so the flag keeps the report."""
+        _, writer, outcomes = finished_run(tmp_path)
+        writer.finish(outcomes)
+        folder = self.run_folder(tmp_path)
+        manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+        manifest["durable"] = False  # The only change to the manifest.
+        (folder / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        self.admit_after_restart(tmp_path, monkeypatch)
+        assert not folder.exists()
+
+    @pytest.mark.parametrize("content", [b"", b"bad json", b"[]"])
+    def test_an_unreadable_manifest_keeps_the_folder_and_its_report(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: bytes
+    ) -> None:
+        """An empty manifest, a manifest that is not JSON, and one that is not an object prove no owner."""
+        _, writer, outcomes = finished_run(tmp_path)
+        writer.finish(outcomes)
+        folder = self.run_folder(tmp_path)
+        (folder / "manifest.json").write_bytes(content)  # A damaged manifest, with no owner and no durable flag.
+        self.admit_after_restart(tmp_path, monkeypatch)
+        assert (folder / CSV_NAME).is_file()  # An unknown owner is not proof of an abandoned run.
 
 
 class FakeCsvArtifacts:

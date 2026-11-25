@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch  # Record the exporter call.
 import pytest  # Check the documented errors.
 
 from src.operations.exporting.ex_hardware_inventory.report.csv_file import ReportCheckError, ReportTooLarge  # Errors.
-from src.operations.exporting.ex_hardware_inventory.report.export import ReportExporter  # Unit.
+from src.operations.exporting.ex_hardware_inventory.report.export import ReportExporter, ReportFile  # Unit.
 
 RUN = datetime(2026, 11, 24, 23, 15, 7, tzinfo=UTC)  # An invented run time.
 FIELDS = ["org_id", "device_name", "item_description"]  # A small column list.
@@ -64,7 +64,7 @@ class TestWrite:
         monkeypatch.setenv("MISTHELPER_STANDALONE", "true")  # No database backend in a unit test.
         monkeypatch.setenv("OUTPUT_FORMAT", "sqlite")  # The override must win over the global setting.
         result = ReportExporter(tmp_path).write(ROWS, FIELDS, RUN)  # The real DataExporter.
-        assert result is not None  # A file was written.
+        assert isinstance(result, ReportFile) and result.row_count == len(ROWS)  # A file with every row was written.
         with result.path.open(newline="", encoding="utf-8") as handle:  # Read it back.
             cells = list(csv.reader(handle))
         assert cells == [FIELDS] + [[row[name] for name in FIELDS] for row in ROWS]  # Header and rows.
@@ -99,11 +99,12 @@ class TestNoFileCases:
         mock.assert_not_called()  # No call.
         assert list(tmp_path.iterdir()) == []  # No file, no folder content.
 
-    def test_a_report_over_the_limit_is_refused_before_any_write(self, tmp_path: Path) -> None:
-        """A report that would pass the limit raises and writes nothing."""
+    @pytest.mark.parametrize("limit_bytes", [20, 0, -1])
+    def test_a_report_over_the_limit_is_refused_before_any_write(self, tmp_path: Path, limit_bytes: int) -> None:
+        """A report that would pass the limit raises and writes nothing, and a limit of zero or less passes none."""
         mock = Mock()  # Must stay unused.
         exporter = ReportExporter(tmp_path)
-        with patch.object(ReportExporter, "LIMIT_BYTES", 20), patch(TARGET, runtime(mock)):
+        with patch.object(ReportExporter, "LIMIT_BYTES", limit_bytes), patch(TARGET, runtime(mock)):
             with pytest.raises(ReportTooLarge):
                 exporter.write(ROWS, FIELDS, RUN)
         mock.assert_not_called()  # No call.

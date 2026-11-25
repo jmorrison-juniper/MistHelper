@@ -32,7 +32,7 @@ PROMPT = "mist@ex>"  # A prompt that the batch runner accepts.
 BAD_REPLY = "<rpc-reply><not-a-chassis/></rpc-reply>"  # A reply with no chassis inventory.
 
 
-def uuid(number: int) -> str:
+def make_uuid(number: int) -> str:
     """Return an invented identifier that passes the UUID rule of the service."""
     return f"00000000-0000-4000-8000-{number:012d}"
 
@@ -124,7 +124,7 @@ class FakeOrganization:
         self.devices: dict[str, list[dict[str, Any]]] = {}  # Site identifier to the device records.
         self.statuses: dict[str, list[str]] = {}  # Device identifier to its statuses in call order.
         self.log: list[tuple[str, str, str | None]] = []  # Each call: name, organization or site, ledger organization.
-        self.failures: dict[str, Any] = {}  # A call name, or ``listOrgSites:<org id>``, to a replacement answer.
+        self.failures: dict[str, Any] = {}  # A call name, or ``listOrgSites:<org id>``, to an answer or an exception.
         self._ledger = ledger
         self._seen: dict[str, int] = {}  # How many status calls each device has had.
         monkeypatch.setattr(mistapi.api.v1.orgs.sites, "listOrgSites", self._list_sites)
@@ -156,23 +156,30 @@ class FakeOrganization:
         """Return a good SDK page."""
         return SimpleNamespace(status_code=200, data=rows, next=None)
 
+    @staticmethod
+    def _answer(failure: Any, good: Any) -> Any:
+        """Raise a planned transport fault, return a planned answer, or return the good page."""
+        if isinstance(failure, Exception):  # A planned fault such as a connection error or a timeout.
+            raise failure
+        return failure or good
+
     def _list_sites(self, session: Any, org_id: str, **_kwargs: Any) -> Any:
         """Answer the organization site list."""
         failure = self._note("listOrgSites", org_id, f"listOrgSites:{org_id}")
-        return failure or self._page(
-            [{"id": site_id, "name": name} for site_id, name in self.org_sites.get(org_id, [])]
+        return self._answer(
+            failure, self._page([{"id": site_id, "name": name} for site_id, name in self.org_sites.get(org_id, [])])
         )
 
     def _list_devices(self, session: Any, site_id: str, **_kwargs: Any) -> Any:
         """Answer the device list of one site."""
         failure = self._note("listSiteDevices", site_id)
-        return failure or self._page(list(self.devices.get(site_id, [])))
+        return self._answer(failure, self._page(list(self.devices.get(site_id, []))))
 
     def _list_stats(self, session: Any, site_id: str, **_kwargs: Any) -> Any:
         """Answer the device status of one site. Each call advances each device to its next status."""
         failure = self._note("listSiteDevicesStats", site_id)
-        if failure:
-            return failure
+        if failure:  # A planned answer or fault replaces the good page, and the devices do not advance.
+            return self._answer(failure, None)
         rows = []
         for device in self.devices.get(site_id, []):
             planned = self.statuses.get(device["id"], ["connected"])

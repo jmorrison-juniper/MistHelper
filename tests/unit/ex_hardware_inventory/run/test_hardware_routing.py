@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace  # A session double with a credential.
 
 import pytest  # Fixtures, parametrization, and errors.
+import requests  # Build the transport faults that the SDK can raise.
 
 from src.mist.realtime.websocket_streams.catalog.channels import ChannelCatalog  # The shared catalog parts.
 from src.mist.realtime.websocket_streams.catalog.registry.stream_catalog import StreamCatalog
@@ -18,11 +19,14 @@ from src.operations.exporting.ex_hardware_inventory.run.routing import (
     ScopeRouter,
 )  # Units.
 from tests.unit.ex_hardware_inventory.support.hardware_fakes import FakeMist, Payloads  # Profile and MSP fakes.
-from tests.unit.ex_hardware_inventory.support.hardware_shells import FakeOrganization, uuid  # Site and device fakes.
+from tests.unit.ex_hardware_inventory.support.hardware_shells import (
+    FakeOrganization,
+    make_uuid,
+)  # Site and device fakes.
 
-ORG_A, ORG_B = uuid(1), uuid(2)  # Invented organizations.
-SITE_A, SITE_B = uuid(11), uuid(12)  # Invented sites.
-MSP = uuid(9)  # An invented MSP.
+ORG_A, ORG_B = make_uuid(1), make_uuid(2)  # Invented organizations.
+SITE_A, SITE_B = make_uuid(11), make_uuid(12)  # Invented sites.
+MSP = make_uuid(9)  # An invented MSP.
 KIND, KEY = "shell", "ex.createShellSession"  # The EX shell operation of the preset.
 SESSION = SimpleNamespace(_apitoken=["SYNTHETIC-TOKEN-VALUE"], _cloud_uri="api.mist.com")  # A session double.
 
@@ -34,8 +38,8 @@ class Portal:
         """Build the fakes and the portal collaborators for the configured organization A."""
         self.mist = FakeMist(monkeypatch, profile, msp_pages)  # getSelf, listMspOrgs, get_next.
         self.org = FakeOrganization(monkeypatch)  # listOrgSites, listSiteDevices, listSiteDevicesStats.
-        self.org.add(ORG_A, (SITE_A, "Site A"), [(uuid(101), "ex-01", "switch", "EX4100-48P")])
-        self.org.add(ORG_B, (SITE_B, "Site B"), [(uuid(201), "ex-02", "switch", "EX4100-48P")])
+        self.org.add(ORG_A, (SITE_A, "Site A"), [(make_uuid(101), "ex-01", "switch", "EX4100-48P")])
+        self.org.add(ORG_B, (SITE_B, "Site B"), [(make_uuid(201), "ex-02", "switch", "EX4100-48P")])
         self.catalog = StreamCatalog(ChannelCatalog(), UtilityCatalog(), changes_enabled=False, shell_enabled=True)
         self.picker = StreamPickerService(SESSION, ORG_A)  # The portal picker of the configured organization.
         self.targets = ScopeAwareTargets(self.picker, self.catalog, None)
@@ -80,19 +84,32 @@ class TestOrganizationScope:
             "failed": {},
         }
 
-    def test_the_only_organization_that_fails_fails_the_preview(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """In organization scope a discovery failure is the failure of the preview."""
+    @pytest.mark.parametrize(
+        ("status", "code"),
+        [
+            (401, "picker_request_failed"),
+            (403, "picker_request_failed"),
+            (404, "picker_request_failed"),
+            (429, "picker_request_failed"),
+            (500, "picker_service_failed"),
+            (503, "picker_service_failed"),
+        ],
+    )
+    def test_the_only_organization_that_fails_fails_the_preview(
+        self, monkeypatch: pytest.MonkeyPatch, status: int, code: str
+    ) -> None:
+        """In organization scope a discovery failure is the failure of the preview, with the code of its family."""
         portal = Portal(monkeypatch, Payloads.profile([Payloads.org_grant(ORG_A, "Alpha Org")]))
-        portal.org.failures["listOrgSites"] = Payloads.response(403, {})
+        portal.org.failures["listOrgSites"] = Payloads.response(status=status, data={})
         with pytest.raises(StreamRequestError) as refusal:
             portal.targets.hardware_sites(KIND, KEY)
-        assert refusal.value.code == "picker_request_failed"
+        assert refusal.value.code == code
 
     def test_a_target_is_checked_for_the_configured_organization(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The request that the checker builds carries the configured organization."""
         portal = Portal(monkeypatch, Payloads.profile([Payloads.org_grant(ORG_A, "Alpha Org")]))
         portal.targets.hardware_sites(KIND, KEY)
-        assert portal.check(SITE_A, uuid(101)).target("org_id") == ORG_A
+        assert portal.check(SITE_A, make_uuid(101)).target("org_id") == ORG_A
 
     def test_the_plain_site_read_does_not_read_the_profile(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Other actions use the plain read: the configured organization only, and no profile call."""
@@ -124,8 +141,8 @@ class TestMspScope:
         portal = Portal(monkeypatch, msp_profile(), msp_pages())
         portal.targets.hardware_sites(KIND, KEY)
         found = portal.targets.hardware_targets(SITE_B, KIND, KEY, {})
-        assert [row["id"] for row in found["rows"]] == [uuid(201)] and found["rows"][0]["status"] == "connected"
-        identity = {"org_id": ORG_B, "site_id": SITE_B, "device_id": uuid(201)}
+        assert [row["id"] for row in found["rows"]] == [make_uuid(201)] and found["rows"][0]["status"] == "connected"
+        identity = {"org_id": ORG_B, "site_id": SITE_B, "device_id": make_uuid(201)}
         assert portal.targets.hardware_status(identity) == "connected"
         assert {key for name, key, _ in portal.org.calls("listSiteDevicesStats")} == {SITE_B}
 
@@ -133,13 +150,16 @@ class TestMspScope:
         """The checker injects organization B for a site of B and organization A for a site of A."""
         portal = Portal(monkeypatch, msp_profile(), msp_pages())
         portal.targets.hardware_sites(KIND, KEY)
-        assert portal.check(SITE_B, uuid(201)).target("org_id") == ORG_B
-        assert portal.check(SITE_A, uuid(101)).target("org_id") == ORG_A
+        assert portal.check(SITE_B, make_uuid(201)).target("org_id") == ORG_B
+        assert portal.check(SITE_A, make_uuid(101)).target("org_id") == ORG_A
 
-    def test_a_failed_organization_is_recorded_and_the_others_are_read(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Organization B is refused: the sites of A remain, and B is in the failed list with its reason."""
+    @pytest.mark.parametrize("status", [403, 404, 429, 500, 503])
+    def test_a_failed_organization_is_recorded_and_the_others_are_read(
+        self, monkeypatch: pytest.MonkeyPatch, status: int
+    ) -> None:
+        """Organization B fails with each HTTP status: the sites of A remain, and B is listed with its reason."""
         portal = Portal(monkeypatch, msp_profile(), msp_pages())
-        portal.org.failures[f"listOrgSites:{ORG_B}"] = Payloads.response(403, {})
+        portal.org.failures[f"listOrgSites:{ORG_B}"] = Payloads.response(status=status, data={})
         response = portal.targets.hardware_sites(KIND, KEY)
         assert [row["id"] for row in response["rows"]] == [SITE_A]
         assert portal.targets.scope_summary()["failed"] == {ORG_B: "discovery_failed"}
@@ -148,18 +168,35 @@ class TestMspScope:
     def test_a_second_preview_starts_with_a_clean_failed_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A failure of the first preview does not stay when the second preview reads every organization."""
         portal = Portal(monkeypatch, msp_profile(), msp_pages())
-        portal.org.failures[f"listOrgSites:{ORG_B}"] = Payloads.response(403, {})
+        portal.org.failures[f"listOrgSites:{ORG_B}"] = Payloads.response(status=403, data={})
         portal.targets.hardware_sites(KIND, KEY)
         del portal.org.failures[f"listOrgSites:{ORG_B}"]
         portal.targets.hardware_sites(KIND, KEY)
         assert portal.targets.scope_summary()["failed"] == {}
 
-    def test_when_every_organization_fails_the_preview_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("status", [403, 500])
+    def test_when_every_organization_fails_the_preview_fails(
+        self, monkeypatch: pytest.MonkeyPatch, status: int
+    ) -> None:
         """Nothing readable at all is a failure, not an empty preview."""
         portal = Portal(monkeypatch, msp_profile(), msp_pages())
-        portal.org.failures["listOrgSites"] = Payloads.response(500, {})
+        portal.org.failures["listOrgSites"] = Payloads.response(status=status, data={})
         with pytest.raises(StreamRequestError):
             portal.targets.hardware_sites(KIND, KEY)
+
+    @pytest.mark.parametrize(
+        "fault",
+        [requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout],
+    )
+    def test_a_transport_fault_isolates_the_organization_like_an_http_error(
+        self, monkeypatch: pytest.MonkeyPatch, fault: type[Exception]
+    ) -> None:
+        """A refused connection and a timeout on organization B fail only B."""
+        portal = Portal(monkeypatch, msp_profile(), msp_pages())
+        portal.org.failures[f"listOrgSites:{ORG_B}"] = fault("no route")  # The SDK call raises.
+        response = portal.targets.hardware_sites(KIND, KEY)
+        assert [row["id"] for row in response["rows"]] == [SITE_A]
+        assert portal.targets.scope_summary()["failed"] == {ORG_B: "discovery_failed"}
 
     def test_a_rate_limited_organization_has_its_own_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The reason code of a rate limit is rate_limited."""
@@ -186,13 +223,27 @@ class TestMspScope:
 class TestScopeErrors:
     """A scope that is not clear stops the preview with the sentence of the menu."""
 
-    def test_a_refused_profile_stops_the_preview(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """HTTP 401 on the profile gives the contract sentence as the refusal."""
-        portal = Portal(monkeypatch, Payloads.response(401, {}))
+    @pytest.mark.parametrize("status", [401, 403, 404, 429, 500, 503])
+    def test_a_refused_profile_stops_the_preview(self, monkeypatch: pytest.MonkeyPatch, status: int) -> None:
+        """Each HTTP error on the profile gives the contract sentence as the refusal."""
+        portal = Portal(monkeypatch, Payloads.response(status=status, data={}))
         with pytest.raises(StreamRequestError) as refusal:
             portal.targets.hardware_sites(KIND, KEY)
         assert refusal.value.code == "picker_unavailable"
-        assert refusal.value.message == "The Mist profile could not be read (HTTP 401). No shell was opened."
+        assert refusal.value.message == f"The Mist profile could not be read (HTTP {status}). No shell was opened."
+
+    @pytest.mark.parametrize("fault", [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout])
+    def test_a_transport_fault_on_the_profile_stops_the_preview(
+        self, monkeypatch: pytest.MonkeyPatch, fault: type[Exception]
+    ) -> None:
+        """A profile read that raises gives the sentence for no usable answer, and no error text."""
+        portal = Portal(monkeypatch, fault("UPSTREAM-ERROR-TEXT"))
+        with pytest.raises(StreamRequestError) as refusal:
+            portal.targets.hardware_sites(KIND, KEY)
+        assert refusal.value.code == "picker_unavailable"
+        assert refusal.value.message == (
+            "The Mist profile could not be read (no usable answer from Mist). No shell was opened."
+        )
 
     def test_a_setting_outside_the_grants_stops_the_preview(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The configured organization must be a grant."""
@@ -257,4 +308,4 @@ class TestWiring:
     def test_a_target_with_an_unknown_site_uses_the_plain_checker(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Before any site discovery, the checker behaves as the plain checker."""
         portal = Portal(monkeypatch, Payloads.profile([Payloads.org_grant(ORG_A, "Alpha Org")]))
-        assert portal.check(SITE_A, uuid(101)).target("org_id") == ORG_A
+        assert portal.check(SITE_A, make_uuid(101)).target("org_id") == ORG_A

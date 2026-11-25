@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path  # Build the run folder under the pytest temporary folder.
 from types import SimpleNamespace  # A ledger double.
+from unittest.mock import patch  # Count the calls that reach the manager.
 
 import pytest  # Parametrize and check errors.
 
@@ -338,10 +339,12 @@ class TestStack:
         assert stack.settings.shell_enabled is True  # The CLI opens shells.
 
     def test_shutdown_is_safe_to_repeat(self) -> None:
-        """Two shutdown calls raise nothing."""
+        """The second shutdown call stops nothing again, because the manager ignores a repeat."""
         stack = BatchStack(SimpleNamespace(), Batches.ORG, Path("unused"), StreamSettings())
-        stack.shutdown()
-        stack.shutdown()
+        with patch.object(stack.manager, "stop_all", wraps=stack.manager.stop_all) as stop_all:  # The real stop runs.
+            stack.shutdown()
+            stack.shutdown()
+        stop_all.assert_called_once_with("The portal is shutting down.")  # Only the first call stopped the sessions.
 
 
 def test_skipped_results_keep_the_identity_and_the_reason() -> None:

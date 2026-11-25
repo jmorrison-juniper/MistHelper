@@ -11,22 +11,23 @@ import io  # Wrap the report text for the CSV reader.
 import json  # Read the manifest.
 import time  # Poll the batch until it ends.
 import zipfile  # Check the archive entries.
-from collections.abc import Iterator  # Type the fixture.
+from collections.abc import Callable, Iterator  # Type the fixture and the hook between the preview and the start.
 from io import BytesIO  # Wrap the archive bytes.
 from pathlib import Path  # Test output stays under the pytest temporary folder.
 from typing import Any  # The Flask client has no public type.
 
 import pytest  # Fixtures and parametrization.
+import requests  # Build the transport faults that the SDK can raise.
 
 from src.mist.realtime.websocket_streams.live.sessions.manager import factory as manager_factory  # The shell seam.
 from src.mist.realtime.websocket_streams.live.sessions.manager.factory import BatchRunner  # Patch the timers.
 from tests.unit.ex_hardware_inventory.support.hardware_fakes import FakeMist, Payloads, ledger_session  # Fakes.
-from tests.unit.ex_hardware_inventory.support.hardware_shells import FakeOrganization, FakeShells, uuid  # Fakes.
+from tests.unit.ex_hardware_inventory.support.hardware_shells import FakeOrganization, FakeShells, make_uuid  # Fakes.
 from web_portal.app import WebPortalApp  # The real portal app.
 from web_portal.menu_registry import build_static_menu_actions  # Normal menu actions.
 
-ORG_A, ORG_B, ORG_C = uuid(1), uuid(2), uuid(3)  # Invented organizations.
-SITE_1, SITE_2, SITE_3 = uuid(11), uuid(12), uuid(13)  # Invented sites.
+ORG_A, ORG_B, ORG_C = make_uuid(1), make_uuid(2), make_uuid(3)  # Invented organizations.
+SITE_1, SITE_2, SITE_3 = make_uuid(11), make_uuid(12), make_uuid(13)  # Invented sites.
 TOKEN = "SYNTHETIC-TOKEN-VALUE"  # A fake credential that must never appear in an answer.
 COMMAND = "show chassis hardware detail | display xml | no-more"  # The one fixed command.
 
@@ -63,8 +64,8 @@ class Portal:
         ]
         FakeMist(
             self.monkeypatch,
-            Payloads.profile([Payloads.msp_grant(uuid(9))], email="user@example.invalid"),
-            {uuid(9): [Payloads.response(200, listing)]},
+            Payloads.profile([Payloads.msp_grant(make_uuid(9))], email="user@example.invalid"),
+            {make_uuid(9): [Payloads.response(200, listing)]},
         )
 
     def build(self) -> Iterator[Any]:
@@ -89,17 +90,29 @@ def wait_final(client: Any, session_id: str, seconds: float = 30.0) -> dict[str,
     raise AssertionError("The batch did not end in time.")
 
 
-def run_batch(client: Any, output_format: str = "csv", concurrency: int | None = None) -> tuple[dict, dict, str]:
-    """Preview, start, and wait. Return the preview, the final batch summary, and the session identifier."""
-    preview = client.post(
+def request_preview(client: Any, output_format: str = "csv") -> Any:
+    """Post the preview request of the hardware preset and return the raw answer."""
+    return client.post(
         "/api/websockets/batches/previews",
         json={"preset": "ex-hardware-xml", "format": output_format, "scope_revision": 0},
     )
+
+
+def run_batch(
+    client: Any,
+    output_format: str = "csv",
+    concurrency: int | None = None,
+    before_start: Callable[[], None] | None = None,
+) -> tuple[dict, dict, str]:
+    """Preview, start, and wait. Return the preview, the final batch summary, and the session identifier."""
+    preview = request_preview(client, output_format)
     assert preview.status_code == 201, preview.get_data(as_text=True)
     body = preview.get_json()
     start = {"preview_id": body["preview_id"], "confirmation": body["confirmation"]["phrase"]}
     if concurrency is not None:
         start["concurrency"] = concurrency
+    if before_start is not None:  # The operator reads the preview, and then Mist can change.
+        before_start()
     started = client.post("/api/websockets/batches", json=start)
     assert started.status_code == 201, started.get_data(as_text=True)
     session_id = started.get_json()["session_id"]
@@ -128,15 +141,15 @@ class TestOrganizationScope:
         portal.mist.add(
             ORG_A,
             (SITE_1, "Site One"),
-            [(uuid(101), "ex-01", "switch", "EX4100-48P"), (uuid(102), "ex-02", "switch", "EX4100-48P")],
+            [(make_uuid(101), "ex-01", "switch", "EX4100-48P"), (make_uuid(102), "ex-02", "switch", "EX4100-48P")],
         )
         portal.mist.add(
             ORG_A,
             (SITE_2, "Site Two"),
-            [(uuid(201), "ex-03", "switch", "EX4100-48P"), (uuid(202), "ex-04", "switch", "EX4100-48P")],
+            [(make_uuid(201), "ex-03", "switch", "EX4100-48P"), (make_uuid(202), "ex-04", "switch", "EX4100-48P")],
         )
-        portal.shells.behavior[uuid(102)] = "bad_xml"
-        portal.shells.behavior[uuid(202)] = "silent"
+        portal.shells.behavior[make_uuid(102)] = "bad_xml"
+        portal.shells.behavior[make_uuid(202)] = "silent"
 
     def test_the_csv_output_runs_end_to_end_and_the_download_works(self, portal: Portal) -> None:
         """The preview shows the scope, the run publishes the CSV, and the download returns it."""
@@ -201,13 +214,10 @@ class TestOrganizationScope:
 
     def test_a_refused_profile_stops_the_preview_with_a_plain_reason(self, portal: Portal) -> None:
         """HTTP 401 on the profile means no preview, no shell, and the sentence of the menu."""
-        FakeMist(portal.monkeypatch, Payloads.response(401, {}))
+        FakeMist(portal.monkeypatch, Payloads.response(status=401, data={}))
         self.build_sites_only(portal)
         for client in portal.build():
-            response = client.post(
-                "/api/websockets/batches/previews",
-                json={"preset": "ex-hardware-xml", "format": "csv", "scope_revision": 0},
-            )
+            response = request_preview(client)
             assert response.status_code == 503
             assert response.get_json()["error"] == "The Mist profile could not be read (HTTP 401). No shell was opened."
         assert portal.shells.opened == 0
@@ -215,22 +225,113 @@ class TestOrganizationScope:
     @staticmethod
     def build_sites_only(portal: Portal) -> None:
         """Add one site so that a refused profile is the only reason for the refusal."""
-        portal.mist.add(ORG_A, (SITE_1, "Site One"), [(uuid(101), "ex-01", "switch", "EX4100-48P")])
+        portal.mist.add(ORG_A, (SITE_1, "Site One"), [(make_uuid(101), "ex-01", "switch", "EX4100-48P")])
+
+
+class TestMistFailures:
+    """Mist refuses a read, answers with a server error, or cannot be reached: the portal refuses plainly."""
+
+    UPSTREAM = "UPSTREAM-ERROR-TEXT"  # Text that only the failed call holds. It must never reach an answer.
+
+    def build(self, portal: Portal) -> None:
+        """Script one organization token with one connected switch."""
+        portal.org_token()
+        portal.mist.add(ORG_A, (SITE_1, "Site One"), [(make_uuid(101), "ex-01", "switch", "EX4100-48P")])
+
+    def refused(self, portal: Portal) -> tuple[int, dict[str, Any], str]:
+        """Post the preview, and return the status, the JSON body, and the raw text of the answer."""
+        for client in portal.build():
+            response = request_preview(client)
+            return response.status_code, response.get_json(), response.get_data(as_text=True)
+        raise AssertionError("The portal client was not built.")
+
+    @pytest.mark.parametrize("call", ["listOrgSites", "listSiteDevices"])
+    @pytest.mark.parametrize(
+        ("status", "code", "expected"),
+        [
+            (401, "picker_request_failed", 502),
+            (403, "picker_request_failed", 502),
+            (404, "picker_request_failed", 502),
+            (429, "picker_request_failed", 502),
+            (500, "picker_service_failed", 503),
+            (502, "picker_service_failed", 503),
+            (503, "picker_service_failed", 503),
+        ],
+    )
+    def test_an_http_error_on_a_discovery_read_refuses_the_preview(
+        self, portal: Portal, call: str, status: int, code: str, expected: int
+    ) -> None:
+        """A 4xx answer of Mist is a refused request, a 5xx answer is an unavailable service, and no shell opens."""
+        self.build(portal)
+        portal.mist.failures[call] = Payloads.response(status=status, data={"detail": self.UPSTREAM})
+        answer, body, text = self.refused(portal)
+        assert answer == expected and body["code"] == code and body["upstream_status"] == status
+        assert self.UPSTREAM not in text and TOKEN not in text  # The error body of Mist never reaches the browser.
+        assert portal.shells.opened == 0
+
+    @pytest.mark.parametrize("status", [403, 503])
+    def test_an_http_error_on_the_status_read_refuses_the_preview(self, portal: Portal, status: int) -> None:
+        """The status read has its own plain sentence for every HTTP error."""
+        self.build(portal)
+        portal.mist.failures["listSiteDevicesStats"] = Payloads.response(status=status, data={"detail": self.UPSTREAM})
+        answer, body, text = self.refused(portal)
+        assert answer == 503 and body["error"] == "The portal could not read current device status."
+        assert self.UPSTREAM not in text and portal.shells.opened == 0
+
+    @pytest.mark.parametrize(
+        "fault",
+        [requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout],
+    )
+    def test_a_transport_fault_on_a_site_read_refuses_the_preview(self, portal: Portal, fault: type[Exception]) -> None:
+        """A refused connection and a timeout give a 503 with a plain sentence, and the error text stays out."""
+        self.build(portal)
+        portal.mist.failures["listOrgSites"] = fault(self.UPSTREAM)  # The SDK call raises instead of answering.
+        answer, body, text = self.refused(portal)
+        assert answer == 503 and body == {
+            "code": "picker_service_failed",
+            "error": "The portal could not list sites from Mist.",
+        }
+        assert self.UPSTREAM not in text and portal.shells.opened == 0
+
+    @pytest.mark.parametrize("fault", [requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout])
+    def test_a_transport_fault_on_the_profile_read_refuses_the_preview(
+        self, portal: Portal, fault: type[Exception]
+    ) -> None:
+        """The scope cannot be decided when Mist cannot be reached, so no shell opens."""
+        FakeMist(portal.monkeypatch, fault(self.UPSTREAM))  # The profile read raises.
+        portal.mist.add(ORG_A, (SITE_1, "Site One"), [(make_uuid(101), "ex-01", "switch", "EX4100-48P")])
+        answer, body, text = self.refused(portal)
+        assert answer == 503 and body["code"] == "picker_unavailable"
+        assert body["error"] == "The Mist profile could not be read (no usable answer from Mist). No shell was opened."
+        assert self.UPSTREAM not in text and portal.shells.opened == 0
+
+    def test_a_server_error_at_dispatch_skips_every_switch_and_opens_no_shell(self, portal: Portal) -> None:
+        """Mist fails after the operator confirmed: the batch ends, and each switch is an outcome row."""
+        self.build(portal)
+        portal.mist.add(ORG_A, (SITE_2, "Site Two"), [(make_uuid(201), "ex-02", "switch", "EX4100-48P")])
+        broken = {"listSiteDevicesStats": Payloads.response(status=503, data={"detail": self.UPSTREAM})}
+        for client in portal.build():
+            _, batch, session_id = run_batch(client, before_start=lambda: portal.mist.failures.update(broken))
+            rows = report_rows(client, session_id)
+        assert batch["artifact_status"] == "ready" and portal.shells.opened == 0
+        assert {row["record_type"] for row in rows} == {"device_outcome"}  # No hardware item without a shell.
+        assert {row["collection_status"] for row in rows} == {"skipped"}
+        assert self.UPSTREAM not in json.dumps(rows)
 
 
 class TestMspScope:
     """An MSP login runs every organization from the portal, and a failed organization is a row."""
 
-    def build(self, portal: Portal) -> None:
-        """Script A (two switches), B (one switch), and C (refused by Mist)."""
+    def build(self, portal: Portal, status: int = 403) -> None:
+        """Script A (two switches), B (one switch), and C (failed by Mist with the status)."""
         portal.msp_login()
         portal.mist.add(
             ORG_A,
             (SITE_1, "Site One"),
-            [(uuid(101), "ex-01", "switch", "EX4100-48P"), (uuid(102), "ex-02", "switch", "EX4100-48P")],
+            [(make_uuid(101), "ex-01", "switch", "EX4100-48P"), (make_uuid(102), "ex-02", "switch", "EX4100-48P")],
         )
-        portal.mist.add(ORG_B, (SITE_2, "Site Two"), [(uuid(201), "ex-03", "switch", "EX4100-48P")])
-        portal.mist.failures[f"listOrgSites:{ORG_C}"] = Payloads.response(403, {})
+        portal.mist.add(ORG_B, (SITE_2, "Site Two"), [(make_uuid(201), "ex-03", "switch", "EX4100-48P")])
+        portal.mist.failures[f"listOrgSites:{ORG_C}"] = Payloads.response(status=status, data={})
 
     def test_one_batch_covers_every_organization_and_reports_the_failed_one(self, portal: Portal) -> None:
         """The preview counts three organizations and one unread. The report has all of them."""
@@ -250,7 +351,20 @@ class TestMspScope:
             failed = [row for row in rows if row["org_name"] == "Gamma Org"]
             assert len(failed) == 1 and failed[0]["collection_status"] == "failed" and failed[0]["device_id"] == ""
             assert failed[0]["collection_detail"] == "Mist could not list the switches of this organization."
-        assert {device for device, _ in portal.shells.commands} == {uuid(101), uuid(102), uuid(201)}
+        assert {device for device, _ in portal.shells.commands} == {make_uuid(101), make_uuid(102), make_uuid(201)}
+
+    @pytest.mark.parametrize("status", [401, 404, 429, 500, 502, 503])
+    def test_any_http_failure_of_one_organization_leaves_the_others_running(self, portal: Portal, status: int) -> None:
+        """Gamma Org fails with each HTTP status, and Alpha Org and Beta Org still give their hardware rows."""
+        self.build(portal, status)
+        for client in portal.build():
+            preview, batch, session_id = run_batch(client)
+            rows = report_rows(client, session_id)
+        assert preview["scope"] == {"mode": "msp", "organization_count": 3, "failed_count": 1}
+        assert batch["artifact_status"] == "ready"
+        failed = [row for row in rows if row["org_name"] == "Gamma Org"]
+        assert [row["collection_status"] for row in failed] == ["failed"]  # One outcome row for the unread one.
+        assert {row["org_name"] for row in rows if row["record_type"] == "hardware_item"} == {"Alpha Org", "Beta Org"}
 
     def test_the_organizations_are_read_in_order_and_no_other_organization_is_read(self, portal: Portal) -> None:
         """The first three site reads are A, B, and C. The later reads are the site checks of A and B."""

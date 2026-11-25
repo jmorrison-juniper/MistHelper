@@ -12,10 +12,11 @@ import json  # Read the manifest of the run folder.
 import logging  # Prove that no log line holds the credential.
 
 import pytest  # Capture the console.
+import requests  # Build the transport faults that the SDK can raise.
 
 from src.operations.exporting.ex_hardware_inventory.operation import ExHardwareInventoryReport  # Unit.
 from tests.unit.ex_hardware_inventory.support.hardware_fakes import FakeMist, Payloads  # Fakes.
-from tests.unit.ex_hardware_inventory.support.hardware_shells import uuid  # Invented identifiers.
+from tests.unit.ex_hardware_inventory.support.hardware_shells import make_uuid  # Invented identifiers.
 from tests.unit.ex_hardware_inventory.support.hardware_world import (
     COMMAND,
     ORG_A,
@@ -39,15 +40,18 @@ class TestOneOrganizationEndToEnd:
             ORG_A,
             (SITE_2, "Site Two"),
             [
-                (uuid(201), "ex-04", "switch", "EX4100-48P"),
-                (uuid(202), "ex-05", "switch", "EX4100-48P"),
-                (uuid(203), "ex-06", "switch", "EX4100-48P"),
-                (uuid(204), "srx-01", "gateway", "SRX345"),
+                (make_uuid(201), "ex-04", "switch", "EX4100-48P"),
+                (make_uuid(202), "ex-05", "switch", "EX4100-48P"),
+                (make_uuid(203), "ex-06", "switch", "EX4100-48P"),
+                (make_uuid(204), "srx-01", "gateway", "SRX345"),
             ],
         )
-        world.mist.statuses[uuid(203)] = ["connected", "disconnected"]  # Connected at the preview, offline at dispatch.
-        world.shells.behavior[uuid(102)] = "bad_xml"
-        world.shells.behavior[uuid(202)] = "silent"
+        world.mist.statuses[make_uuid(203)] = [
+            "connected",
+            "disconnected",
+        ]  # Connected at the preview, offline at dispatch.
+        world.shells.behavior[make_uuid(102)] = "bad_xml"
+        world.shells.behavior[make_uuid(202)] = "silent"
 
     def test_the_report_holds_each_outcome_and_the_console_is_plain(
         self, world: World, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
@@ -95,7 +99,7 @@ class TestOneOrganizationEndToEnd:
         assert world.shells.opened == 4  # ex-06 was skipped before its shell opened.
         assert {command for _, command in world.shells.commands} == {COMMAND}  # The one fixed command.
         assert sorted(device for device, _ in world.shells.commands) == sorted(
-            [uuid(101), uuid(102), uuid(201), uuid(202)]
+            [make_uuid(101), make_uuid(102), make_uuid(201), make_uuid(202)]
         )  # One command for each shell.
         assert world.shells.open == 0  # Every shell closed.
 
@@ -148,8 +152,8 @@ class TestSafeOutcomes:
     ) -> None:
         """Only offline switches: no question, no shell, no file."""
         world.org_token()
-        world.mist.add(ORG_A, (SITE_1, "Site One"), [(uuid(101), "ex-01", "switch", "EX4100-48P")])
-        world.mist.statuses[uuid(101)] = ["disconnected"]
+        world.mist.add(ORG_A, (SITE_1, "Site One"), [(make_uuid(101), "ex-01", "switch", "EX4100-48P")])
+        world.mist.statuses[make_uuid(101)] = ["disconnected"]
         result, lines = run_menu(capsys)
         assert result == 0 and world.prompts == []
         assert lines[-1] == "No connected EX switch was found. No file was written."
@@ -158,17 +162,17 @@ class TestSafeOutcomes:
 class TestMspEndToEnd:
     """An MSP login runs every organization, and a failed organization does not stop the others."""
 
-    def build(self, world: World) -> None:
-        """Script an MSP with a good organization, a second good one, and a third that Mist refuses."""
-        org_c = uuid(3)
+    def build(self, world: World, status: int = 403) -> None:
+        """Script an MSP with a good organization, a second good one, and a third that Mist fails with the status."""
+        org_c = make_uuid(3)
         FakeMist(
             world.monkeypatch,
-            Payloads.profile([Payloads.msp_grant(uuid(9))], email="user@example.invalid"),
+            Payloads.profile([Payloads.msp_grant(make_uuid(9))], email="user@example.invalid"),
             {
-                uuid(9): [
+                make_uuid(9): [
                     Payloads.response(
-                        200,
-                        [
+                        status=200,
+                        data=[
                             {"id": ORG_A, "name": "Alpha Org"},
                             {"id": ORG_B, "name": "Beta Org"},
                             {"id": org_c, "name": "Gamma Org"},
@@ -177,13 +181,13 @@ class TestMspEndToEnd:
                 ]
             },
         )
-        world.mist.add(ORG_A, (SITE_1, "Site One"), [(uuid(101), "ex-01", "switch", "EX4100-48P")])
+        world.mist.add(ORG_A, (SITE_1, "Site One"), [(make_uuid(101), "ex-01", "switch", "EX4100-48P")])
         world.mist.add(
             ORG_B,
             (SITE_2, "Site Two"),
-            [(uuid(201), "ex-02", "switch", "EX4100-48P"), (uuid(202), "ex-03", "switch", "EX4100-48P")],
+            [(make_uuid(201), "ex-02", "switch", "EX4100-48P"), (make_uuid(202), "ex-03", "switch", "EX4100-48P")],
         )
-        world.mist.failures[f"listOrgSites:{org_c}"] = Payloads.response(403, {"detail": "refused"})
+        world.mist.failures[f"listOrgSites:{org_c}"] = Payloads.response(status=status, data={"detail": "refused"})
 
     def test_one_phrase_one_report_and_the_failed_organization_is_a_row(
         self, world: World, capsys: pytest.CaptureFixture[str]
@@ -203,6 +207,20 @@ class TestMspEndToEnd:
         assert len(failure) == 1 and failure[0]["collection_status"] == "failed" and failure[0]["device_id"] == ""
         assert lines[-1] == "Run status: partial"
 
+    @pytest.mark.parametrize("status", [401, 404, 429, 500, 502, 503])
+    def test_any_http_failure_of_one_organization_leaves_the_others_running(
+        self, world: World, capsys: pytest.CaptureFixture[str], status: int
+    ) -> None:
+        """Gamma Org fails with each HTTP status, and Alpha Org and Beta Org still give their hardware rows."""
+        self.build(world, status)
+        world.answer = "RUN 3 TARGETS"
+        result, lines = run_menu(capsys)
+        rows = world.rows()
+        assert result == len(rows) and lines[-1] == "Run status: partial"
+        failure = [row for row in rows if row["org_name"] == "Gamma Org"]
+        assert [row["collection_status"] for row in failure] == ["failed"]  # One outcome row for the unread one.
+        assert {row["org_name"] for row in rows if row["record_type"] == "hardware_item"} == {"Alpha Org", "Beta Org"}
+
     def test_the_ledger_organization_follows_the_organization_being_read(self, world: World) -> None:
         """A site read of each organization ran with that organization in the ledger."""
         self.build(world)
@@ -211,3 +229,82 @@ class TestMspEndToEnd:
         by_site = {site: org for _, site, org in world.mist.calls("listSiteDevices")}
         assert by_site[SITE_1] == ORG_A and by_site[SITE_2] == ORG_B  # Each read had its own organization.
         assert world.ledger.org_id is None  # Restored.
+
+
+class TestMistFailures:
+    """Mist refuses a read, answers with a server error, or cannot be reached: the run stays safe and plain."""
+
+    NOT_READ = "  Alpha Org was not read, because Mist could not list its switches. See the log for the cause."
+    EMPTY = "No connected EX switch was found. No file was written."  # The last line when nothing could be read.
+    UPSTREAM = "UPSTREAM-ERROR-TEXT"  # Text that only the failed call holds. It must never reach a reader.
+
+    @staticmethod
+    def run_unread(capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> tuple[int, list[str], str]:
+        """Run the menu and return its result, its console lines, and everything that a reader can see."""
+        caplog.set_level(logging.DEBUG)  # Capture every log line to prove that no error text leaks.
+        result, lines = run_menu(capsys)
+        return result, lines, "\n".join(lines) + caplog.text  # The console and the log.
+
+    def check_nothing_ran(self, world: World, shown: str) -> None:
+        """Prove that no shell opened, no report exists, and neither the error text nor the credential leaked."""
+        assert world.shells.opened == 0 and world.ledger.org_id is None  # Nothing ran and the ledger is clean.
+        assert not list((world.tmp_path / "data").glob("*.csv"))  # No report.
+        assert self.UPSTREAM not in shown and TOKEN not in shown  # Neither the error text nor the credential leaks.
+
+    @pytest.mark.parametrize("call", ["listOrgSites", "listSiteDevices", "listSiteDevicesStats"])
+    @pytest.mark.parametrize("status", [401, 403, 404, 429, 500, 502, 503])
+    def test_an_http_error_on_a_discovery_read_leaves_the_organization_unread(
+        self,
+        world: World,
+        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
+        call: str,
+        status: int,
+    ) -> None:
+        """Each 4xx and 5xx answer to each discovery read gives the plain sentence."""
+        world.org_token()
+        world.mixed_site_one()
+        world.mist.failures[call] = Payloads.response(status=status, data={"detail": self.UPSTREAM})
+        result, lines, shown = self.run_unread(capsys, caplog)
+        assert result == 0 and self.NOT_READ in lines and lines[-1] == self.EMPTY
+        self.check_nothing_ran(world, shown)
+
+    @pytest.mark.parametrize(
+        "fault",
+        [requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout],
+    )
+    def test_a_transport_fault_leaves_the_organization_unread(
+        self,
+        world: World,
+        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
+        fault: type[Exception],
+    ) -> None:
+        """A refused connection and a timeout give the same plain sentence, and the error text stays out."""
+        world.org_token()
+        world.mixed_site_one()
+        world.mist.failures["listOrgSites"] = fault(self.UPSTREAM)  # The SDK call raises instead of answering.
+        result, lines, shown = self.run_unread(capsys, caplog)
+        assert result == 0 and self.NOT_READ in lines and lines[-1] == self.EMPTY
+        self.check_nothing_ran(world, shown)
+
+    def test_a_server_error_when_the_status_is_read_again_runs_no_shell(
+        self, world: World, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Mist fails after the operator confirmed: no shell opens, and each switch is an outcome row."""
+        world.org_token()
+        world.mixed_site_one()
+        world.answer = "RUN 2 TARGETS"
+        world.before_answer = lambda: world.mist.failures.update(
+            {"listSiteDevicesStats": Payloads.response(status=503, data={"detail": self.UPSTREAM})}
+        )  # The preview worked, and the read at dispatch fails.
+        result, lines = run_menu(capsys)
+        rows = world.rows()
+        assert result == len(rows) and lines[-1] == "Run status: partial"
+        assert world.shells.opened == 0 and world.ledger.org_id is None  # No shell opened and the ledger is clean.
+        assert {row["collection_status"] for row in rows} == {"skipped"}  # Both switches are outcome rows.
+        assert {row["record_type"] for row in rows} == {"device_outcome"}
+        assert {row["collection_detail"] for row in rows} == {
+            "Mist reported no status for the switch when its turn came."
+        }  # The plain cause, with no text from Mist.
+        assert self.UPSTREAM not in json.dumps(rows)  # The error body of Mist never reaches the report.

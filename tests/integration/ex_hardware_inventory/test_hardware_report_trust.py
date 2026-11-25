@@ -11,7 +11,7 @@ import pytest  # Parametrize and patch.
 from src.operations.exporting.ex_hardware_inventory.report.export import ReportExporter  # The size limit.
 from src.operations.exporting.ex_hardware_inventory.run.watch import BatchWatcher  # Simulate a cancel.
 from tests.unit.ex_hardware_inventory.support.hardware_replies import HardwareReplies, ReplyItem  # Replies.
-from tests.unit.ex_hardware_inventory.support.hardware_shells import uuid  # Invented identifiers.
+from tests.unit.ex_hardware_inventory.support.hardware_shells import make_uuid  # Invented identifiers.
 from tests.unit.ex_hardware_inventory.support.hardware_world import ORG_A, SITE_1, World, run_menu  # Shared world.
 
 SECRET = "SYNTHETIC-SECRET-VALUE"  # A value that must never reach the report.
@@ -23,7 +23,7 @@ def two_switches(world: World) -> None:
     world.mist.add(
         ORG_A,
         (SITE_1, "Site One"),
-        [(uuid(101), "ex-01", "switch", "EX4100-48P"), (uuid(102), "ex-02", "switch", "EX4100-48P")],
+        [(make_uuid(101), "ex-01", "switch", "EX4100-48P"), (make_uuid(102), "ex-02", "switch", "EX4100-48P")],
     )
     world.answer = "RUN 2 TARGETS"
 
@@ -44,7 +44,7 @@ class TestNoCredentialInTheReport:
     ) -> None:
         """The decoder refuses the reply. The switch gets an outcome row, and no file holds the secret."""
         two_switches(world)
-        world.shells.replies[uuid(101)] = reply_with(f"api_token={SECRET}")
+        world.shells.replies[make_uuid(101)] = reply_with(f"api_token={SECRET}")
         _, lines = run_menu(capsys)
         rows = world.rows()
         refused = [row for row in rows if row["device_name"] == "ex-01"]
@@ -68,7 +68,7 @@ class TestNoFormulaInTheReport:
     ) -> None:
         """The description of the chassis keeps its text, with a leading apostrophe."""
         two_switches(world)
-        world.shells.replies[uuid(101)] = reply_with(text)
+        world.shells.replies[make_uuid(101)] = reply_with(text)
         run_menu(capsys)
         chassis = [row for row in world.rows() if row["device_name"] == "ex-01" and row["item_level"] == "0"]
         assert chassis and chassis[0]["item_description"] == "'" + text
@@ -91,12 +91,17 @@ class TestWriteFailures:
         assert not list((world.tmp_path / "data").glob("ExHardwareInventory_*.csv"))
         assert len(list((world.tmp_path / "data" / "websocket-streams").rglob("*.xml"))) == 2
 
+    @pytest.mark.parametrize("limit_bytes", [100, 0, -1])
     def test_a_report_over_the_size_limit_is_refused_and_the_replies_stay(
-        self, world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+        self,
+        world: World,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        limit_bytes: int,
     ) -> None:
-        """A report that would pass the limit writes no file."""
+        """A report that would pass the limit writes no file, and a limit of zero or less passes no report."""
         two_switches(world)
-        monkeypatch.setattr(ReportExporter, "LIMIT_BYTES", 100)
+        monkeypatch.setattr(ReportExporter, "LIMIT_BYTES", limit_bytes)
         result, lines = run_menu(capsys)
         assert result == 0 and "The report would pass the size limit of 64 MiB. No file was written." in lines
         assert not list((world.tmp_path / "data").glob("ExHardwareInventory_*.csv"))
@@ -114,7 +119,7 @@ class TestCancelledRun:
         world.mist.add(
             ORG_A,
             (SITE_1, "Site One"),
-            [(uuid(100 + index), f"ex-{index:02d}", "switch", "EX4100-48P") for index in range(1, 7)],
+            [(make_uuid(100 + index), f"ex-{index:02d}", "switch", "EX4100-48P") for index in range(1, 7)],
         )
         world.shells.hold_seconds = 0.4  # The first shell is still busy when the interrupt comes.
         world.answer = "RUN 6 TARGETS"

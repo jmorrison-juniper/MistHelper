@@ -8,6 +8,7 @@ Why:
 from __future__ import annotations
 
 import csv
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,10 +21,10 @@ from src.operations.exporting.ex_hardware_inventory.operation import ExHardwareI
 from src.operations.exporting.ex_hardware_inventory.run import batch as batch_module
 from src.operations.exporting.ex_hardware_inventory.run.watch import BatchWatcher
 from tests.unit.ex_hardware_inventory.support.hardware_fakes import FakeMist, Payloads, ledger_session
-from tests.unit.ex_hardware_inventory.support.hardware_shells import FakeOrganization, FakeShells, uuid
+from tests.unit.ex_hardware_inventory.support.hardware_shells import FakeOrganization, FakeShells, make_uuid
 
-ORG_A, ORG_B = uuid(1), uuid(2)  # Invented organizations.
-SITE_1, SITE_2, SITE_3 = uuid(11), uuid(12), uuid(13)  # Invented sites.
+ORG_A, ORG_B = make_uuid(1), make_uuid(2)  # Invented organizations.
+SITE_1, SITE_2, SITE_3 = make_uuid(11), make_uuid(12), make_uuid(13)  # Invented sites.
 TOKEN = "SYNTHETIC-TOKEN-VALUE"  # A fake credential that must never appear in any output.
 COMMAND = "show chassis hardware detail | display xml | no-more"  # The one fixed command.
 
@@ -46,6 +47,7 @@ class World:
         self.shells = FakeShells()
         self.mist = FakeOrganization(monkeypatch, self.ledger)
         self.answer = ""  # What the operator types.
+        self.before_answer: Callable[[], None] | None = None  # Changes the world between the preview and the answer.
         self.prompts: list[str] = []
         monkeypatch.setattr(batch_module, "RunnerFactory", self.shells.factory())
         resolver = SimpleNamespace(
@@ -58,8 +60,10 @@ class World:
         self.monkeypatch = monkeypatch
 
     def _ask(self, prompt: str, **_kwargs: object) -> str:
-        """Record the prompt and answer like the operator."""
+        """Record the prompt, let the test change the world, and answer like the operator."""
         self.prompts.append(prompt)
+        if self.before_answer is not None:  # The operator reads the preview, and then Mist can change.
+            self.before_answer()
         return self.answer
 
     def org_token(self, org_id: str = ORG_A, name: str = "Alpha Org") -> FakeMist:
@@ -72,13 +76,13 @@ class World:
             ORG_A,
             (SITE_1, "Site One"),
             [
-                (uuid(101), "ex-01", "switch", "EX4100-48P"),
-                (uuid(102), "ex-02", "switch", "EX4100-24P"),
-                (uuid(103), "ex-03", "switch", "EX4100-48P"),
-                (uuid(104), "ap-01", "ap", "AP45"),
+                (make_uuid(101), "ex-01", "switch", "EX4100-48P"),
+                (make_uuid(102), "ex-02", "switch", "EX4100-24P"),
+                (make_uuid(103), "ex-03", "switch", "EX4100-48P"),
+                (make_uuid(104), "ap-01", "ap", "AP45"),
             ],
         )
-        self.mist.statuses[uuid(103)] = ["disconnected"]  # Offline at the preview.
+        self.mist.statuses[make_uuid(103)] = ["disconnected"]  # Offline at the preview.
 
     def rows(self) -> list[dict[str, str]]:
         """Read the one report file under data/."""
