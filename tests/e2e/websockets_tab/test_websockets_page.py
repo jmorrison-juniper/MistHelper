@@ -21,8 +21,13 @@ from typing import Any  # Type Playwright objects without importing private type
 
 import pytest  # Use fixtures and Playwright integration.
 
+from src.mist.realtime.websocket_streams.intake.fields.error import StreamRequestError  # The fake report can refuse.
 from src.mist.realtime.websocket_streams.live.sessions.buffer.message import StreamMessage
 from src.mist.realtime.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake keeps real records.
+from src.operations.exporting.ex_hardware_inventory.report.csv_file import (
+    CsvPreviewer,
+    CsvRenderer,
+)  # The fake report uses the real renderer and the real page reader.
 
 logger = logging.getLogger(__name__)  # Keep this test module visible in logs.
 
@@ -45,6 +50,22 @@ PING_OUTPUT_CHUNKS = (
     "estinations, 1 routes (1 active, 0 holddown, 0 hidden)\nNext ",
     "line stays complete.\n",
 )  # The fake cloud splits one word and one line at unstable message boundaries.
+CSV_COLUMNS = ["org_name", "site_name", "device_name", "item_type", "item_serial_number"]  # The fake report columns.
+
+
+def make_csv_report(rows: int = 6) -> bytes:
+    """Render a fake combined report with one row for each invented switch."""
+    items = [
+        {
+            "org_name": "Alpha Org",
+            "site_name": "HQ" if index % 2 else "Branch",
+            "device_name": f"ex-{index:03d}",
+            "item_type": ("Chassis", "FPC", "Fan")[index % 3],
+            "item_serial_number": f"SN{index:05d}",
+        }
+        for index in range(1, rows + 1)
+    ]
+    return CsvRenderer.render(items, CSV_COLUMNS, 50_000_000)  # The same bytes that a real run publishes.
 
 
 @dataclass
@@ -83,6 +104,9 @@ class FakeWebSocketServices:
         self.batch_targets_data: dict[str, list[dict[str, object]]] = {}  # Store a frozen target list.
         self.hardware_scope: dict[str, object] = dict(DEFAULT_HARDWARE_SCOPE)  # The scope line of the hardware preview.
         self.hardware_concurrency: int | None = None  # The catalog default for the hardware action.
+        self.csv_report: bytes = make_csv_report()  # The combined report that the table preview reads.
+        self.csv_error: StreamRequestError | None = None  # A planned refusal of the table preview.
+        self.csv_preview_calls: list[dict[str, object]] = []  # Record what the browser asked for.
         lifecycle = SimpleNamespace(
             start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
         )  # Group fake session lifecycle behavior.
@@ -98,7 +122,7 @@ class FakeWebSocketServices:
         )  # Group fake session behavior.
         self.catalog = SimpleNamespace(payload=self.catalog_payload)  # Group fake catalog behavior.
         self.artifacts = SimpleNamespace(
-            delete=self.delete_session, download=self.download_session
+            delete=self.delete_session, download=self.download_session, csv_preview=self.csv_preview
         )  # Group fake artifact behavior.
         self.terminal = self  # Expose direct fake terminal behavior.
         self.pickers = SimpleNamespace(
@@ -121,6 +145,9 @@ class FakeWebSocketServices:
             self.batch_targets_data.clear()  # Remove prior frozen target lists.
             self.hardware_scope = dict(DEFAULT_HARDWARE_SCOPE)  # Restore the one-organization scope line.
             self.hardware_concurrency = None  # Restore the page default.
+            self.csv_report = make_csv_report()  # Restore the small default report.
+            self.csv_error = None  # Restore a working preview.
+            self.csv_preview_calls.clear()  # Remove prior preview requests.
 
     def catalog_payload(self) -> dict[str, object]:
         """Return the catalog shown by the page."""
@@ -253,6 +280,13 @@ class FakeWebSocketServices:
         with self._lock:  # Copy while timer threads can write.
             count = len(self._sessions[session_id].messages)  # Count messages for the stream.
         return "fake-session.jsonl", iter([f'{{"count":{count}}}\n'])  # Safe JSON Lines.
+
+    def csv_preview(self, session_id: str, offset: int, limit: int, text: str) -> dict[str, object]:
+        """Return one page of the fake report with the real page reader, or the planned refusal."""
+        self.csv_preview_calls.append({"session_id": session_id, "offset": offset, "limit": limit, "text": text})
+        if self.csv_error is not None:  # A story can plan a refusal, like a report that is too large.
+            raise self.csv_error
+        return CsvPreviewer.page(self.csv_report, offset, limit, text)  # The same answer as the portal service.
 
     def devices(self, _site_id: str) -> dict[str, object]:
         """Return one EX device for utility stories."""
@@ -1210,6 +1244,208 @@ def test_ex_hardware_xml_output_never_offers_the_csv_link(
     fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
     page.get_by_test_id("ws-batch-zip-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
     assert not page.get_by_test_id("ws-batch-csv-download").is_visible()
+
+
+def finish_csv_run(page: Any, fake_services: FakeWebSocketServices, report: bytes | None = None) -> None:
+    """Start a CSV run, end it with a ready report, and wait for the table to show rows."""
+    if report is not None:
+        fake_services.csv_report = report  # The report that the fake service publishes.
+    start_hardware_batch(page, fake_services, "csv")
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
+    page.get_by_test_id("ws-batch-csv-table").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+
+
+def csv_rows(page: Any) -> Any:
+    """Return the body rows of the report table."""
+    return page.get_by_test_id("ws-batch-csv-table").locator("tbody tr")
+
+
+def test_ex_hardware_csv_table_shows_the_report_and_keeps_the_download(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """When the report is ready, the table lists its columns and every row, and the page asks for a full page."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    headers = page.get_by_test_id("ws-batch-csv-table").locator("thead th")
+    assert headers.all_inner_texts() == CSV_COLUMNS
+    assert csv_rows(page).count() == 6
+    assert csv_rows(page).first.locator("td").all_inner_texts() == ["Alpha Org", "HQ", "ex-001", "FPC", "SN00001"]
+    assert page.get_by_test_id("ws-batch-csv-status").inner_text() == "Rows 1 to 6 of 6."
+    assert page.get_by_test_id("ws-batch-csv-download").is_visible()  # The file stays one click away.
+    assert page.get_by_test_id("ws-batch-csv-previous").is_disabled()  # One page holds the whole report.
+    assert page.get_by_test_id("ws-batch-csv-next").is_disabled()
+    assert fake_services.csv_preview_calls == [{"session_id": "batch1", "offset": 0, "limit": 1000, "text": ""}]
+    screenshot(page, "csv-table-report.png")
+
+
+def test_ex_hardware_csv_table_waits_for_the_report(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The table stays hidden, and asks nothing, until the output is ready."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv")
+    panel = page.get_by_test_id("ws-batch-csv-preview")
+    assert not panel.is_visible()  # The run is still going.
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="writing")
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - completed").wait_for(timeout=READY_TIMEOUT_MS)
+    page.wait_for_timeout(500)  # Give a wrong request time to arrive.
+    assert not panel.is_visible() and fake_services.csv_preview_calls == []  # The report is not final.
+    fake_services.batch_progress["batch1"].update(artifact_status="ready")
+    panel.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert len(fake_services.csv_preview_calls) == 1
+
+
+@pytest.mark.parametrize("output, artifact_status", [("csv", "failed"), ("xml", "ready")])
+def test_ex_hardware_csv_table_never_shows_for_a_failed_output_or_another_format(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices, output: str, artifact_status: str
+) -> None:
+    """A failed CSV output and the XML output have no report, so the page shows no table and asks for none."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, output)
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status=artifact_status)
+    page.get_by_test_id("ws-batch-zip-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.wait_for_timeout(500)  # Give a wrong request time to arrive.
+    assert not page.get_by_test_id("ws-batch-csv-preview").is_visible() and fake_services.csv_preview_calls == []
+
+
+def test_ex_hardware_csv_filter_asks_the_server_after_a_pause_and_shows_the_matching_rows(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The filter runs on the server over the whole report, and clearing it brings every row back."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    box = page.get_by_test_id("ws-batch-csv-filter")
+    status = page.get_by_test_id("ws-batch-csv-status")
+    box.press_sequentially("EX-002", delay=30)  # Six keys in a quick row.
+    status.get_by_text("that match the filter").wait_for(timeout=READY_TIMEOUT_MS)
+    assert status.inner_text() == "Rows 1 to 1 of 1 that match the filter. The report has 6 rows."
+    assert csv_rows(page).count() == 1 and csv_rows(page).first.locator("td").nth(2).inner_text() == "ex-002"
+    asked = [call["text"] for call in fake_services.csv_preview_calls]
+    assert asked[0] == "" and asked[-1] == "EX-002" and len(asked) < 1 + len("EX-002")  # A pause, not each key.
+    box.fill("")  # An empty filter shows the whole report again.
+    status.get_by_text("Rows 1 to 6 of 6.").wait_for(timeout=READY_TIMEOUT_MS)
+    assert csv_rows(page).count() == 6
+
+
+def test_ex_hardware_csv_filter_with_no_match_says_so(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A filter with no match gives no rows and one plain sentence that names the report size."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    page.get_by_test_id("ws-batch-csv-filter").fill("no-such-switch")
+    status = page.get_by_test_id("ws-batch-csv-status")
+    status.get_by_text("No row matches the filter.").wait_for(timeout=READY_TIMEOUT_MS)
+    assert status.inner_text() == "No row matches the filter. The report has 6 rows."
+    assert csv_rows(page).count() == 0
+
+
+def test_ex_hardware_csv_table_pages_through_a_large_report(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A report of 1500 rows shows 1000 rows, then the last 500 rows, and the buttons follow the position."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services, make_csv_report(1500))
+    status = page.get_by_test_id("ws-batch-csv-status")
+    previous, following = page.get_by_test_id("ws-batch-csv-previous"), page.get_by_test_id("ws-batch-csv-next")
+    assert status.inner_text() == "Rows 1 to 1000 of 1500." and csv_rows(page).count() == 1000
+    assert previous.is_disabled() and following.is_enabled()
+    following.click()
+    status.get_by_text("Rows 1001 to 1500 of 1500.").wait_for(timeout=READY_TIMEOUT_MS)
+    assert csv_rows(page).count() == 500 and previous.is_enabled() and following.is_disabled()
+    previous.click()
+    status.get_by_text("Rows 1 to 1000 of 1500.").wait_for(timeout=READY_TIMEOUT_MS)
+    assert [call["offset"] for call in fake_services.csv_preview_calls] == [0, 1000, 0]
+
+
+def test_ex_hardware_csv_table_shows_markup_in_a_cell_as_text(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A switch controls its text, so a cell with markup must show as text and must not run."""
+    hostile = '<img src=x onerror="window.cellScriptRan = 1"><b>bold</b>'
+    report = CsvRenderer.render(
+        [{"org_name": hostile, "site_name": "HQ", "device_name": "ex-001", "item_type": "Chassis"}],
+        CSV_COLUMNS,
+        1_000_000,
+    )
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services, report)
+    table = page.get_by_test_id("ws-batch-csv-table")
+    assert csv_rows(page).first.locator("td").first.text_content() == hostile  # The raw text is on the page.
+    assert table.locator("img").count() == 0 and table.locator("b").count() == 0  # No element came from the text.
+    page.wait_for_timeout(300)  # An image error handler would have run by now.
+    assert page.evaluate("window.cellScriptRan") is None
+
+
+def test_ex_hardware_csv_table_cuts_a_long_cell_and_says_so(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A cell of 1500 characters keeps 1000, and the status line names the cut and the download."""
+    report = CsvRenderer.render(
+        [{"org_name": "Alpha Org", "site_name": "x" * 1500, "device_name": "ex-001"}], CSV_COLUMNS, 1_000_000
+    )
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services, report)
+    assert len(csv_rows(page).first.locator("td").nth(1).text_content() or "") == 1000
+    status = page.get_by_test_id("ws-batch-csv-status").inner_text()
+    assert status == "Rows 1 to 1 of 1. 1 cell is cut at 1000 characters here. The download has the full text."
+
+
+def test_ex_hardware_csv_table_gives_each_column_a_name_for_a_screen_reader(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The scroll box is a named, focusable region, and each column name is a column header."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    region = page.get_by_role("region", name="Combined CSV report")
+    assert region.is_visible() and region.get_attribute("tabindex") == "0"  # A keyboard can scroll it.
+    assert page.locator('[data-testid="ws-batch-csv-table"] th[scope="col"]').count() == len(CSV_COLUMNS)
+
+
+def test_ex_hardware_csv_table_shows_a_refusal_in_plain_words_and_keeps_the_download(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A report that is too large gets the sentence of the server, no rows, and the download stays."""
+    message = "The report is too large to show here. Download the CSV report."
+    fake_services.csv_error = StreamRequestError("too_large", message)
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv")
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
+    status = page.get_by_test_id("ws-batch-csv-status")
+    status.get_by_text(message).wait_for(timeout=READY_TIMEOUT_MS)
+    assert status.evaluate("element => element.classList.contains('text-danger')")  # The refusal stands out.
+    assert csv_rows(page).count() == 0 and page.get_by_test_id("ws-batch-csv-next").is_disabled()
+    assert page.get_by_test_id("ws-batch-csv-download").is_visible()
+
+
+def test_ex_hardware_csv_table_recovers_after_a_refusal(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A refused filter shows the reason. The next filter, after the fault ends, shows the rows again."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    fake_services.csv_error = StreamRequestError("output_failed", "The saved report cannot be shown as a table.")
+    box, status = page.get_by_test_id("ws-batch-csv-filter"), page.get_by_test_id("ws-batch-csv-status")
+    box.fill("ex")
+    status.get_by_text("The saved report cannot be shown as a table.").wait_for(timeout=READY_TIMEOUT_MS)
+    fake_services.csv_error = None  # The fault ends.
+    box.fill("")
+    status.get_by_text("Rows 1 to 6 of 6.").wait_for(timeout=READY_TIMEOUT_MS)
+    assert csv_rows(page).count() == 6 and not status.evaluate("element => element.classList.contains('text-danger')")
+
+
+def test_ex_hardware_csv_table_returns_after_a_page_reload(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The page restores the last batch, and the table loads again for its ready report."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    page.reload(wait_until="networkidle")
+    page.get_by_test_id(
+        "ws-multi-site-tab"
+    ).click()  # The page opens on the first tab, and the batch card is on this one.
+    page.get_by_test_id("ws-batch-csv-table").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert csv_rows(page).count() == 6 and len(fake_services.csv_preview_calls) == 2  # One read for each page load.
 
 
 def test_ex_hardware_concurrency_default_comes_from_the_catalog_setting(

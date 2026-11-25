@@ -82,6 +82,7 @@ class SecretGuardServices:
             download=self.download_session,
             manifest=self.batch_manifest,
             zip_download=self.batch_zip,
+            csv_preview=self.batch_csv_preview,
         )  # Group artifact behavior.
         self.terminal = SecretGuardTerminal()  # Expose direct terminal behavior.
         self.pickers = SimpleNamespace(
@@ -147,6 +148,10 @@ class SecretGuardServices:
     def batch_manifest(self, _session_id: str) -> dict[str, object]:
         """Return one safe artifact manifest."""
         return {"status": "ready", "partial": False, "files": [], "targets": []}
+
+    def batch_csv_preview(self, *_args: object) -> dict[str, object]:
+        """Return one safe page of the report table."""
+        return {"columns": ["a"], "rows": [["ok"]], "offset": 0, "limit": 10, "total": 1, "matched": 1, "cut_cells": 0}
 
     def batch_zip(self, _session_id: str) -> tuple[str, bytes]:
         """Return one safe bounded archive answer."""
@@ -236,6 +241,7 @@ def test_websocket_routes_do_not_leak_secrets(portal_client: Any) -> None:
         portal_client.get("/api/websockets/batches/abc123/targets?after=0&limit=10"),
         portal_client.get("/api/websockets/batches/abc123/artifacts"),
         portal_client.get("/api/websockets/batches/abc123/download?format=zip"),
+        portal_client.get("/api/websockets/batches/abc123/csv-preview?offset=0&limit=10"),
         portal_client.get("/api/websockets/batches/sites?kind=channel&key=site.stats.devices"),
         portal_client.get(f"/api/websockets/batches/sites/{SITE_ID}/targets?kind=channel&key=site.stats.devices"),
         portal_client.get("/api/websockets/batches/targets?kind=channel&key=org.stats"),

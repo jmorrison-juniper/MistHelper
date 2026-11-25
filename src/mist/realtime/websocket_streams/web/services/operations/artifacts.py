@@ -12,7 +12,7 @@ import shutil  # Delete only one verified session-owned directory.
 import threading  # Writers, downloads, and cleanup share one artifact lock.
 import time  # A refused file replace waits before the next try.
 import zipfile  # ZIP archives contain only the saved safe layout.
-from collections.abc import Iterator, Mapping  # Type streams and target identities.
+from collections.abc import Callable, Iterator, Mapping  # Type streams, target identities, and the report read.
 from dataclasses import dataclass, field  # Keep batch storage state explicit.
 from datetime import UTC, datetime, timedelta  # Artifact expiry uses UTC ISO 8601.
 from io import BytesIO  # Bound archive construction to the output quota.
@@ -37,6 +37,10 @@ from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml im
     HardwareXmlPreset,
     HardwareXmlSupport,
 )  # Keep raw hardware files outside the generic JSONL redaction pipeline.
+from src.operations.exporting.ex_hardware_inventory.report.csv_file import (
+    CsvPreviewer,
+    ReportCheckError,
+)  # Read one page of the published report for the table view (issue #4931).
 from src.operations.exporting.ex_hardware_inventory.run.publisher import (
     ReportHook,
 )  # Compile the combined CSV from the saved replies (issue #4920).
@@ -766,6 +770,7 @@ class SessionArtifactService:
         self.bind_batch = self._bindings.bind_batch  # Expose the atomic public binding operation.
         self.manifest = self._bindings.manifest  # Expose the safe public summary operation.
         self.cleanup_expired = self._bindings.cleanup_expired  # The manager calls the retention owner directly.
+        self.csv_preview = self.Preview(self.csv_download)  # The table reads only what the download holds.
 
     def delete(self, session_id: str) -> dict[str, object]:
         """Delete one ended session."""
@@ -835,3 +840,28 @@ class SessionArtifactService:
             with record.lock:
                 record.pins -= 1  # Release the cleanup pin after the read.
         return f"ExHardwareInventory_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.csv", data  # Server-made name.
+
+    class Preview:
+        """Return one page of the published combined CSV as table data (issue #4931)."""
+
+        BYTE_LIMIT = 16 * 1024 * 1024  # A larger report is a download, because each page request parses the file.
+
+        def __init__(self, read_report: Callable[[str], tuple[str, bytes]]) -> None:
+            """Bind the checked report read, so a preview gives the same refusals as a download."""
+            self._read_report = read_report  # Unknown, not a batch, and not ready stay refusals of one owner.
+
+        def __call__(self, session_id: str, offset: int, limit: int, text: str) -> dict[str, object]:
+            """Read the report, then return the requested page of its rows."""
+            logger.emit(logging.INFO, "web.artifact.preview.start")  # Log no filter text and no position.
+            _name, data = self._read_report(session_id)  # The pinned, size-checked read of the download.
+            if len(data) > self.BYTE_LIMIT:  # Refuse before the parse, with a way forward for the operator.
+                raise StreamRequestError("too_large", "The report is too large to show here. Download the CSV report.")
+            try:  # A damaged file gets one plain refusal, and the download stays available.
+                page = CsvPreviewer.page(data, offset, limit, text)
+            except ReportCheckError as error:
+                logger.emit(logging.ERROR, "web.artifact.preview.error", {"status": type(error).__name__})
+                raise StreamRequestError("output_failed", "The saved report cannot be shown as a table.") from error
+            logger.emit(
+                logging.DEBUG, "web.artifact.preview.finish", {"count": page["matched"], "byte_count": len(data)}
+            )  # Counts only.
+            return page

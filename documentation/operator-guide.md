@@ -435,6 +435,16 @@ shows **Download CSV report** when the report is complete. The report file is
 report fails, the XML files stay, and the progress panel shows the output state
 `failed`.
 
+When the report is complete, the progress panel also shows it as a table. The
+table lists the columns and the rows of the file, in the same order as the file.
+The line above the table gives the rows that you see, for example `Rows 1 to 297
+of 297.` Type text in **Filter rows** to find a row. The filter looks in every
+cell of the whole report, and it ignores case. The table shows up to 1000 rows
+at one time. If the report has more rows, use **Previous rows** and **Next
+rows**. The table cuts a cell at 1000 characters, and the line above the table
+says when it does. The download has the full text. If the report is too large
+to show, the panel says so, and **Download CSV report** still works.
+
 Set `PORTAL_WS_HARDWARE_CONCURRENCY` to limit the shells that open at the same
 time. The range is 1 through 5, and the default is 3. The page takes its default
 from this setting. A value outside the range gives the default and one warning

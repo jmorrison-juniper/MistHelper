@@ -107,6 +107,9 @@
     };
     var activeBatchPreset = null;  // Preserve archive controls when a batch is restored after navigation.
     var activeBatchFormat = null;  // Preserve the CSV download link when a batch is restored after navigation.
+    var CSV_PAGE_SIZE = 1000;  // Rows in one page of the report table. The server allows at most 1000.
+    var CSV_FILTER_DELAY_MS = 300;  // Wait for a pause in the typing before the server filters the report.
+    var csvPreview = { sessionId: null, offset: 0, text: '', revision: 0, timer: null };  // The table of the combined CSV report.
 
     function byId(id) {
         return document.getElementById(id);  // Find one fixed page element.
@@ -189,6 +192,9 @@
         byId('wsBatchConfirmation').addEventListener('input', updateBatchStart);  // Require the exact preview phrase.
         byId('wsBatchStart').addEventListener('click', startBatch);  // Admit only the reviewed server preview.
         byId('wsBatchStop').addEventListener('click', stopBatch);  // Stop the public parent session.
+        byId('wsBatchCsvFilter').addEventListener('input', changeCsvFilter);  // The server filters the whole report.
+        byId('wsBatchCsvPrevious').addEventListener('click', function() { moveCsvPage(-1); });  // Show the earlier rows.
+        byId('wsBatchCsvNext').addEventListener('click', function() { moveCsvPage(1); });  // Show the later rows.
         renderBatchNextStep();  // Show the first instruction before the operator clicks anything.
     }
 
@@ -937,7 +943,9 @@
         var complete = ['completed', 'failed', 'partial', 'stopped'].indexOf(batch.status) >= 0;
         byId('wsBatchStop').disabled = complete;
         show(byId('wsBatchZipDownload'), complete);  // A completed batch can create the requested layout archive.
-        show(byId('wsBatchCsvDownload'), complete && activeBatchFormat === 'csv' && batch.artifact_status === 'ready');
+        var csvReady = complete && activeBatchFormat === 'csv' && batch.artifact_status === 'ready';  // The report is published.
+        show(byId('wsBatchCsvDownload'), csvReady);
+        if (csvReady) loadCsvPreviewOnce();  // Show the table of the report once for each run.
         var outputFinal = ['ready', 'failed'].indexOf(batch.artifact_status) >= 0;  // The report is the last file.
         if (complete && (outputFinal || activeBatchFormat !== 'csv')) {
             stopBatchProgressTimer();  // A final result needs no more progress requests.
@@ -962,6 +970,113 @@
             }
             container.appendChild(row);  // Add the target in frozen preview order.
         });
+    }
+
+    function resetCsvPreview() {
+        window.clearTimeout(csvPreview.timer);  // A pending filter belongs to the earlier run.
+        csvPreview.revision += 1;  // Drop the answer of a read that is still running.
+        csvPreview.sessionId = null;  // The next ready report loads again.
+        csvPreview.offset = 0;  // Start at the first row.
+        csvPreview.text = '';  // Clear the filter of the earlier run.
+        byId('wsBatchCsvFilter').value = '';  // Show the empty filter.
+        clearNode(byId('wsBatchCsvTable'));  // Remove the rows of the earlier run.
+        setCsvStatus('', false);  // Remove the count line of the earlier run.
+        show(byId('wsBatchCsvPreview'), false);  // Hide the table until a report is ready.
+    }
+
+    function loadCsvPreviewOnce() {
+        if (csvPreview.sessionId === batchState.sessionId) return;  // The progress timer calls this each second.
+        csvPreview.sessionId = batchState.sessionId;  // Remember the run that the table shows.
+        loadCsvPreview(0);  // Read the first page of the report.
+    }
+
+    function csvPreviewUrl(sessionId, offset) {
+        return '/api/websockets/batches/' + encodeURIComponent(sessionId) + '/csv-preview?offset=' + offset +
+            '&limit=' + CSV_PAGE_SIZE + '&q=' + encodeURIComponent(csvPreview.text);  // The server filters the whole report.
+    }
+
+    function loadCsvPreview(offset) {
+        var sessionId = batchState.sessionId;  // Keep the answer tied to this run.
+        if (!sessionId) return;  // No run means no report.
+        csvPreview.revision += 1;  // A newer read replaces an older one that is still running.
+        var revision = csvPreview.revision;  // Fence this read.
+        show(byId('wsBatchCsvPreview'), true);  // Show the panel with its loading line.
+        setCsvStatus('Loading the report rows.', false);
+        apiJson(csvPreviewUrl(sessionId, offset)).then(function(payload) {
+            if (revision !== csvPreview.revision || sessionId !== batchState.sessionId) return;  // Drop a stale answer.
+            if (payload.error || !Array.isArray(payload.columns) || !Array.isArray(payload.rows)) {
+                renderCsvPreviewError(payload.error);  // A refusal leaves the download available.
+                return;
+            }
+            csvPreview.offset = payload.offset;  // The page buttons move from here.
+            renderCsvPreview(payload);  // Draw the table.
+        });
+    }
+
+    function setCsvStatus(text, isError) {
+        setText('wsBatchCsvStatus', text);  // Plain text keeps report data out of the markup.
+        byId('wsBatchCsvStatus').classList.toggle('text-danger', !!isError);  // Show a refusal in the alert color.
+    }
+
+    function renderCsvPreviewError(message) {
+        clearNode(byId('wsBatchCsvTable'));  // Show no rows of an earlier answer next to an error.
+        byId('wsBatchCsvPrevious').disabled = true;  // There is no page to move to.
+        byId('wsBatchCsvNext').disabled = true;
+        setCsvStatus(message || 'The report rows could not be read.', true);
+    }
+
+    function renderCsvPreview(payload) {
+        var table = byId('wsBatchCsvTable');  // One table holds one page of the report.
+        clearNode(table);  // Replace the earlier page.
+        var header = make('tr');  // The row of column names.
+        payload.columns.forEach(function(name) {
+            var cell = make('th', '', name);  // The name comes from the file, so it is text.
+            cell.scope = 'col';  // Tell a screen reader that the cell names a column.
+            header.appendChild(cell);
+        });
+        table.appendChild(make('thead')).appendChild(header);
+        var body = table.appendChild(make('tbody'));  // The rows of the page.
+        payload.rows.forEach(function(values) { body.appendChild(csvRow(values)); });
+        byId('wsBatchCsvPrevious').disabled = payload.offset === 0;  // The first page has no earlier rows.
+        byId('wsBatchCsvNext').disabled = payload.offset + payload.rows.length >= payload.matched;
+        setCsvStatus(csvStatusText(payload), false);
+    }
+
+    function csvRow(values) {
+        var row = make('tr');  // One row of the report.
+        values.forEach(function(value) {
+            var cell = make('td', '', value);  // The value is device text. textContent keeps it from running as markup.
+            if (value.length > 30) cell.title = value;  // A clipped cell shows its full text on hover.
+            row.appendChild(cell);
+        });
+        return row;
+    }
+
+    function csvStatusText(payload) {
+        var first = payload.rows.length ? payload.offset + 1 : 0;  // People count rows from 1.
+        var last = payload.offset + payload.rows.length;  // The last row of this page.
+        var text = 'Rows ' + first + ' to ' + last + ' of ' + payload.matched + '.';  // The plain case, with no filter.
+        if (payload.total === 0) text = 'The report has no rows.';
+        else if (payload.matched === 0) text = 'No row matches the filter. The report has ' + payload.total + ' rows.';
+        else if (csvPreview.text) text = 'Rows ' + first + ' to ' + last + ' of ' + payload.matched +
+            ' that match the filter. The report has ' + payload.total + ' rows.';
+        if (payload.cut_cells) {
+            var cells = payload.cut_cells === 1 ? '1 cell is' : payload.cut_cells + ' cells are';  // Plain grammar for one cell.
+            text += ' ' + cells + ' cut at 1000 characters here. The download has the full text.';
+        }
+        return text;
+    }
+
+    function changeCsvFilter() {
+        window.clearTimeout(csvPreview.timer);  // Wait for a pause in the typing.
+        csvPreview.timer = window.setTimeout(function() {
+            csvPreview.text = byId('wsBatchCsvFilter').value.trim();  // The server trims the text too.
+            loadCsvPreview(0);  // A new filter starts at its first matching row.
+        }, CSV_FILTER_DELAY_MS);
+    }
+
+    function moveCsvPage(direction) {
+        loadCsvPreview(Math.max(0, csvPreview.offset + direction * CSV_PAGE_SIZE));  // Move by one whole page.
     }
 
     function stopBatch() {
@@ -1723,6 +1838,7 @@
         state.selectedSession = session;  // The message panel shows this session.
         if (session.mode === 'multi_site') {
             batchState.sessionId = session.session_id;  // Restore progress when the session list selects a batch.
+            resetCsvPreview();  // The table of an earlier run does not belong to this batch.
             activeBatchPreset = session.batch && session.batch.preset === 'ex-hardware-xml'
                 ? 'ex-hardware-xml' : null;  // Retain the specialized archive mode across session selection.
             show(byId('wsBatchProgress'), true);  // Keep batch controls available after a page reload.

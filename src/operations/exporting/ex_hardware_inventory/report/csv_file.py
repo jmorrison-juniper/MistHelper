@@ -1,10 +1,12 @@
-"""Render the report rows as CSV bytes and check a written file.
+"""Render the report rows as CSV bytes, check a written file, and read a page of it.
 
 Why:
     Both front ends need the same file format: UTF-8 text, one header row, and
     standard quoting. The check exists because the standard exporter does not
     write atomically. After a write, the check proves that the header and the row
     count match what the run produced, so a partial file never passes as a report.
+    The page reader exists because the portal shows the report as a table. It reads
+    the same bytes as the download, so the table and the file never differ.
 """
 
 from __future__ import annotations
@@ -89,3 +91,75 @@ class CsvVerifier:
         if any(len(row) != len(fieldnames) for row in body):  # A ragged row means a damaged file.
             raise ReportCheckError("A report row has the wrong number of cells.")  # Refuse the file.
         logger.debug("The report file passed its check with %d rows", len(body))  # Log the result.
+
+
+class CsvPreviewer:
+    """Read one page of rows from CSV bytes for a table view."""
+
+    CELL_LIMIT = 1000  # The most characters that one cell keeps in a preview.
+
+    @classmethod
+    def page(cls, data: bytes, offset: int, limit: int, text: str = "") -> dict[str, object]:
+        """Return the columns and one page of the rows that hold a filter text.
+
+        Why:
+            The portal shows the report as a table. A filter over the whole file,
+            and not over one page, keeps the row counts true.
+
+        Args:
+            data: The file bytes.
+            offset: The number of matching rows to skip.
+            limit: The most rows in the page.
+            text: A plain text that one cell must hold, with case ignored. Empty text matches each row.
+
+        Returns:
+            The columns, the page of rows, the data row count, the matching row count, and the cut cell count.
+
+        Raises:
+            ValueError: When the offset is below 0 or the limit is below 1.
+            ReportCheckError: When the file is not valid UTF-8 CSV, is empty, or has a row of the wrong width.
+        """
+        if offset < 0 or limit < 1:  # A negative slice would read from the end of the list.
+            raise ValueError("The page offset must be 0 or more, and the page limit must be 1 or more.")
+        logger.info("Reading a page of up to %d rows at offset %d from %d bytes", limit, offset, len(data))
+        columns, rows = cls._read(data)  # One parse gives the header and the data rows.
+        needle = text.strip().casefold()  # A plain, case-insensitive match never builds a pattern from the text.
+        matched = [row for row in rows if cls._holds(row, needle)]  # The filter runs over the whole report.
+        shown, cut = cls._cut(matched[offset : offset + limit])  # Only the rows of this page leave the server.
+        logger.debug("Read %d of %d matching rows from %d data rows", len(shown), len(matched), len(rows))
+        return {
+            "columns": columns,
+            "rows": shown,
+            "offset": offset,
+            "limit": limit,
+            "total": len(rows),
+            "matched": len(matched),
+            "cut_cells": cut,
+        }  # The portal sends this answer as JSON.
+
+    @classmethod
+    def _cut(cls, window: list[list[str]]) -> tuple[list[list[str]], int]:
+        """Return the rows with each cell cut at the limit, and the number of cells that lost text."""
+        cut = sum(len(cell) > cls.CELL_LIMIT for row in window for cell in row)  # Count the cells that lose text.
+        return [
+            [cell[: cls.CELL_LIMIT] for cell in row] for row in window
+        ], cut  # A huge cell never makes a huge answer.
+
+    @staticmethod
+    def _read(data: bytes) -> tuple[list[str], list[list[str]]]:
+        """Return the header and the data rows, or raise when the bytes are not a report."""
+        try:  # A broken file must give one documented error.
+            parsed = list(csv.reader(io.StringIO(data.decode("utf-8"), newline="")))  # Read with the same rules.
+        except (UnicodeDecodeError, csv.Error) as error:  # The bytes are not valid UTF-8 CSV.
+            raise ReportCheckError("The report file is not valid UTF-8 CSV.") from error  # Name the cause once.
+        if not parsed:  # An empty file has no header, so it is no report.
+            raise ReportCheckError("The report file is empty.")  # Refuse the file.
+        columns, rows = parsed[0], parsed[1:]  # The first line names the columns.
+        if any(len(row) != len(columns) for row in rows):  # A ragged row means a damaged file.
+            raise ReportCheckError("A report row has the wrong number of cells.")  # Refuse the file.
+        return columns, rows  # The caller filters and pages these rows.
+
+    @staticmethod
+    def _holds(row: Sequence[str], needle: str) -> bool:
+        """Return true when there is no filter, or when one cell holds the filter text."""
+        return not needle or any(needle in cell.casefold() for cell in row)  # A plain text search, never a pattern.

@@ -126,6 +126,7 @@ An operator opens the CSV in a spreadsheet and sends it to a colleague. The repo
 - The output folder is not writable, or the report name already exists.
 - Two organizations hold devices with the same host name or the same serial number.
 - The CLI and the portal run this action at the same time.
+- The operator wants to read the report in the browser. The live test of 2026-11-25 showed that the portal offered only a download. The page shows a table with a filter and page buttons (FR-049 through FR-053). The report can be over the preview limit, or a cell can hold markup.
 
 ## Requirements *(mandatory)*
 
@@ -156,6 +157,11 @@ Targets:
 - **FR-046**: The review card MUST list the four steps, MUST name the confirmation word in the label and in the placeholder of the box, and MUST give the one next action above **Start batch**. A disabled **Start batch** button MUST give the same sentence as its title. A changed choice after a preview MUST clear the preview and the word. Issue #4928.
 - **FR-047**: `python MistHelper.py --web-portal` MUST resolve the organization before it builds the portal, in the same order as the interactive mode, and MUST NOT ask when the context already holds one. Issue #4929.
 - **FR-048**: Each Mist list call of this feature that accepts a `limit` MUST pass `limit=1000`. The MSP organization list takes no limit, and the tool follows its pages.
+- **FR-049**: When a run publishes the combined CSV report, the Multi Site page MUST show the report as a table in the batch progress card, and MUST keep the **Download CSV report** button. The table MUST stay hidden for the other output formats, while the report is not ready, and when the output failed. Issue #4931.
+- **FR-050**: The route `GET /api/websockets/batches/<id>/csv-preview` MUST return the column names and one page of rows. It MUST read the report through the same checked read as the download, so it gives the same refusals. It MUST accept only the fields `offset`, `limit`, and `q`. The offset is a whole number from 0. The limit is a whole number from 1, the default is 1000, and a larger value becomes 1000. The text `q` has 100 characters or fewer.
+- **FR-051**: The filter `q` MUST be a plain, case-insensitive text search over every cell of the whole report, and the server MUST NOT build a pattern from it. The answer MUST give `total` (the data rows) and `matched` (the rows that match), so the page can say which rows it shows.
+- **FR-052**: The preview MUST bound its work. A cell is cut at 1000 characters, and the answer gives the number of cut cells. A report over 16 MiB gets the refusal `too_large` with a message that points to the download. A damaged report (not UTF-8, empty, or with a row of the wrong width) gets the refusal `output_failed`.
+- **FR-053**: The page MUST set every cell, every column name, and every message as plain text. A cell that holds markup MUST show as text.
 
 Collection:
 

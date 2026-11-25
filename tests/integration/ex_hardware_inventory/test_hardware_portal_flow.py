@@ -181,6 +181,36 @@ class TestOrganizationScope:
                 assert "hardware/inventory.csv" in zipped.namelist() and "manifest.json" in zipped.namelist()
             assert TOKEN not in json.dumps(manifest) + json.dumps(preview)
 
+    def test_the_table_preview_shows_the_same_rows_as_the_download(self, portal: Portal) -> None:
+        """The preview route and the download read one file, so the table and the CSV never differ (issue #4931)."""
+        self.build(portal)
+        for client in portal.build():
+            _, _, session_id = run_batch(client)
+            rows = report_rows(client, session_id)
+            url = f"/api/websockets/batches/{session_id}/csv-preview"
+            response = client.get(url)
+            page = response.get_json()
+            assert response.status_code == 200 and response.mimetype == "application/json"
+            assert page["total"] == page["matched"] == len(rows) and page["limit"] == 1000 and page["cut_cells"] == 0
+            assert [dict(zip(page["columns"], row, strict=True)) for row in page["rows"]] == rows
+            wanted = [row for row in rows if any("ex-04" in cell.casefold() for cell in row.values())]
+            filtered = client.get(f"{url}?q=EX-04").get_json()
+            assert filtered["matched"] == len(wanted) > 0 and filtered["total"] == len(rows)
+            assert [dict(zip(filtered["columns"], row, strict=True)) for row in filtered["rows"]] == wanted
+            second = client.get(f"{url}?offset=1&limit=1").get_json()
+            assert [dict(zip(second["columns"], row, strict=True)) for row in second["rows"]] == rows[1:2]
+            assert TOKEN not in response.get_data(as_text=True)
+
+    def test_the_table_preview_refuses_an_unknown_run_and_a_bad_query_before_any_read(self, portal: Portal) -> None:
+        """An identifier that no batch owns gives a refusal, and a bad position gives HTTP 400."""
+        self.build(portal)
+        for client in portal.build():
+            unknown = client.get("/api/websockets/batches/no-such-run/csv-preview")
+            assert unknown.status_code in {404, 409} and unknown.get_json()["code"] in {"not_found", "not_batch"}
+            _, _, session_id = run_batch(client)
+            bad = client.get(f"/api/websockets/batches/{session_id}/csv-preview?offset=-1")
+            assert bad.status_code == 400 and bad.get_json()["code"] == "bad_request"
+
     def test_only_the_fixed_command_reaches_a_switch_and_the_peak_stays_within_the_limit(self, portal: Portal) -> None:
         """Every shell gets the one command, and the open shells never pass the default of three."""
         self.build(portal)
@@ -244,6 +274,8 @@ class TestOrganizationScope:
             assert "hardware/inventory.csv" not in manifest["files"]
             refusal = client.get(f"/api/websockets/batches/{session_id}/download?format=csv")
             assert refusal.status_code == 409 and refusal.get_json()["code"] == "artifact_not_ready"
+            table = client.get(f"/api/websockets/batches/{session_id}/csv-preview")  # No report, so no table.
+            assert table.status_code == 409 and table.get_json()["code"] == "artifact_not_ready"
 
     def test_the_hardware_concurrency_setting_reaches_the_page_and_the_limit(
         self, portal: Portal, monkeypatch: pytest.MonkeyPatch
