@@ -198,3 +198,37 @@ class TestBatchRecord:
         assert left == ["manifest.json"]  # The staged file and the published file are gone.
         assert writer._record.status == "writing" and writer._record.partial is True
         assert waits == WAITS
+
+
+class TestManifestOnDisk:
+    """A reader of the run folder sees a complete manifest, whatever a crash or a lock did before."""
+
+    @pytest.mark.parametrize("damaged", [b"", b"{bad json"])
+    def test_an_empty_or_malformed_manifest_is_replaced_by_a_valid_one_after_a_short_lock(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, waits: list[float], damaged: bytes
+    ) -> None:
+        """A crash can leave an empty or damaged file. The next write replaces it, even when a lock delays it."""
+        service, writer, _ = make_run(tmp_path)
+        path = tmp_path / writer.artifact_id / "manifest.json"
+        path.write_bytes(damaged)  # What an earlier crash left behind.
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(path.read_bytes())  # The premise: this file is not JSON.
+        locked = LockedReplace(refusals=1)
+        monkeypatch.setattr(os, "replace", locked)
+        service._storage.metadata.write(writer._record)
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        assert manifest["status"] == "writing" and manifest["run_id"] == writer.artifact_id
+        assert locked.calls == 2 and waits == WAITS[:1]
+
+    def test_a_lock_that_stays_leaves_the_last_complete_manifest_in_place(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, waits: list[float]
+    ) -> None:
+        """The replace is atomic, so a refused replace never leaves a partial manifest for a reader."""
+        service, writer, _ = make_run(tmp_path)
+        path = tmp_path / writer.artifact_id / "manifest.json"
+        before = path.read_bytes()
+        assert json.loads(before)["status"] == "writing"  # The admission wrote a complete manifest.
+        monkeypatch.setattr(os, "replace", LockedReplace(refusals=99))
+        with pytest.raises(StreamRequestError):
+            service._storage.metadata.write(writer._record)
+        assert path.read_bytes() == before and waits == WAITS  # The reader still sees the last complete file.
