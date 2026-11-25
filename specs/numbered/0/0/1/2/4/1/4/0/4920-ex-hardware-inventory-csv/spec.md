@@ -109,6 +109,22 @@ An operator opens the CSV in a spreadsheet and sends it to a colleague. The repo
 3. **Given** a text value that begins with `=`, `+`, `-`, or `@`, **When** the tool writes it, **Then** a spreadsheet does not read it as a formula.
 4. **Given** a write failure, **When** the tool saves the report, **Then** no partial file appears under the final name.
 
+### User Story 6 - Get one master XML file that other programs can read (Priority: P1)
+
+A customer system reads the hardware of every EX switch. The system wants one XML file, not one file for each switch. The file must meet the XML standard in every detail, so that any conforming parser reads it with no repair.
+
+**Why this priority**: The customer added this requirement on 2026-11-25. A file that one parser reads and another parser refuses causes silent data loss in the customer system.
+
+**Independent Test**: Run mocked collections with replies that hold namespaces, special characters, and hostile names. Check each file with the checks of the tool, and with parsers that the tool does not use.
+
+**Acceptance Scenarios**:
+
+1. **Given** a run in which at least one switch collected, **When** the run ends, **Then** the CLI writes one XML file next to the CSV report, and the portal publishes one XML file when the operator chose that output.
+2. **Given** the file, **When** any conforming XML 1.0 parser with namespace support reads it, **Then** the parser reports no error.
+3. **Given** a switch reply, **When** the tool puts it in the file, **Then** the file holds the same elements, attributes, text, namespace addresses, and prefixes as the reply.
+4. **Given** a switch with no valid reply, and an organization that Mist could not read, **When** the tool writes the file, **Then** each one appears as an element with its status and its reason, so no target is missing.
+5. **Given** a check that fails, **When** the tool is about to publish the file, **Then** it publishes no XML file, says so, and keeps the CSV report and the saved replies.
+
 ### Edge Cases
 
 - The organization has no EX switch, no connected EX switch, or no site.
@@ -127,6 +143,10 @@ An operator opens the CSV in a spreadsheet and sends it to a colleague. The repo
 - Two organizations hold devices with the same host name or the same serial number.
 - The CLI and the portal run this action at the same time.
 - The operator wants to read the report in the browser. The live test of 2026-11-25 showed that the portal offered only a download. The page shows a table with a filter and page buttons (FR-049 through FR-053). The report can be over the preview limit, or a cell can hold markup.
+- A reply holds a DTD, an entity declaration, or more than 100 levels of nesting (FR-062).
+- A name from Mist holds a control character, a markup character, or a character that XML 1.0 forbids (FR-060).
+- Two replies bind the same prefix to different namespace addresses, a reply root declares a default namespace, or a reply declares `xmlns=""`.
+- A run has only failed targets, or the master XML would pass the size limit (FR-064).
 
 ## Requirements *(mandatory)*
 
@@ -200,6 +220,24 @@ Portal:
 - **FR-035**: Each new control MUST carry a stable test identifier. A browser test MUST cover the new output choice.
 - **FR-036**: The existing XML, JSON, and both outputs MUST keep their behavior.
 
+Master XML:
+
+- **FR-055**: A run that has at least one target result MUST be able to write one master XML file. The CLI MUST write it on every run, next to the CSV report, with the same UTC stamp and the extension `.xml`. The portal MUST offer it through the output choices `master-xml` (one combined XML file) and `csv-master-xml` (the combined CSV report and the combined XML file). Issue #4933.
+- **FR-056**: The file MUST be one XML 1.0 document in UTF-8 with the declaration `<?xml version="1.0" encoding="UTF-8"?>` and no byte order mark. It MUST be well-formed and MUST follow Namespaces in XML 1.0. It MUST hold no DTD, no entity declaration, and no external reference.
+- **FR-057**: The file MUST use the structure of `design/contracts/report-xml.md`: the root element `hardware-inventory`, then the elements `organization`, `site`, and `device`, in the namespace `urn:misthelper:ex-hardware-inventory:1`. The root MUST carry the run time in UTC, the scope, the fixed command, and the counts.
+- **FR-058**: A collected device MUST hold exactly one child element, which is the reply of the switch. The reply MUST keep its elements, attributes, text, namespace addresses, and prefixes. The tool MAY drop the XML declaration, the comments, and the processing instructions of the reply.
+- **FR-059**: A device with no valid reply MUST be an element with the status `failed`, `skipped`, or `cancelled`, a reason code, and a plain sentence. An organization that Mist could not read MUST be an element with the status `failed` and no site. The statuses MUST equal the statuses of the CSV report for the same run.
+- **FR-060**: The tool MUST write the identifiers, the names, and the reasons of its own elements so that the file stays valid. It MUST escape each markup character. It MUST replace each character that XML 1.0 forbids, and each character that XML 1.0 discourages, with U+FFFD.
+- **FR-061**: The tool MUST check the final bytes before it publishes them: strict UTF-8, the character rules of XML 1.0, a strict parse that knows namespaces and refuses a DTD, the declared structure, the counts on the root, and the equality of each embedded reply with its source. The equality check compares the events of the parser: elements, attributes, namespaces, prefixes, and text. A file that fails a check MUST NOT be published.
+- **FR-062**: The tool MUST refuse a reply that holds a DTD, an entity declaration, or more than 100 levels of nesting. The device MUST then show the status `failed` and the detail `The saved reply could not be read.`
+- **FR-063**: The portal MUST publish the master XML in the same atomic step as the CSV report when the operator chose both. The CLI MUST write the file under a unique UTC-stamped name under `data/`, read it back, check the bytes that it read, and remove the file when a check fails.
+- **FR-064**: The tool MUST keep the master XML within the saved-output limit of the run (64 MiB). It MUST NOT publish a file over the limit, and it MUST say so.
+- **FR-065**: The portal MUST list `hardware/inventory.xml` in the manifest, put it in the archive, and offer `GET /api/websockets/batches/<id>/download?format=xml` with the media type `application/xml`. The download name is `ExHardwareInventory_<UTC>.xml`.
+- **FR-066**: The page MUST show a **Download combined XML** link when the output holds the XML and is ready. The CSV link and the table MUST keep their rules for the outputs that hold the CSV. Each new control MUST carry a stable test identifier, and a browser test MUST cover it.
+- **FR-067**: The repository MUST hold a schema for the wrapper elements, `documentation/schemas/ex-hardware-inventory.xsd`, and a reference page for the format, `documentation/ex-hardware-master-xml.md`. The schema MUST accept each file that the tool writes.
+- **FR-068**: The XML, JSON, both, and CSV outputs of the portal MUST keep their behavior and their bytes.
+- **FR-069**: The title of menu 309 MUST name both outputs, and the generated menu pages MUST show the title.
+
 Safety and observability:
 
 - **FR-037**: The tool MUST NOT print, log, or save the token, a WebSocket address, or any other credential.
@@ -221,6 +259,7 @@ Safety and observability:
 - **Hardware item**: One part of a switch: the chassis, a module, a sub-module, or a deeper part. It carries the fields that the switch returns.
 - **Outcome**: The result for one target: collected, failed, skipped, or cancelled, with a reason.
 - **Report**: The one CSV file of a run.
+- **Master XML**: The one XML file of a run. It holds the reply of each collected switch, and one element for each other target.
 
 ## Success Criteria *(mandatory)*
 
@@ -234,6 +273,10 @@ Safety and observability:
 - **SC-006**: In a mocked MSP run with one failing organization, the report holds complete data for every other organization.
 - **SC-007**: A spreadsheet opens the report and runs no cell as a formula.
 - **SC-008**: The XML, JSON, and both outputs of issue #4769 stay byte-identical to their earlier output for the same input.
+- **SC-009**: In a mocked run with every kind of reply that the tests hold (plain, namespaced, escaped, large, and hostile), 100 percent of the files that the tool publishes pass every check of FR-061.
+- **SC-010**: Readers that the tool does not use read each file of the live runs with no error: the SAX and DOM readers of the Python standard library, and the .NET reader of Windows. The .NET reader also validates the file against the schema.
+- **SC-011**: In a live run on the test organization, the file holds the reply of each collected switch, and the set of serial numbers in the file equals the set of serial numbers in the saved replies.
+- **SC-012**: A file that a fault injection makes invalid is never published. Each injected fault is caught by a check.
 
 ## Assumptions
 
@@ -248,6 +291,8 @@ Safety and observability:
 - Live validation uses the one test organization of the configured token. The owner tests MSP scope later.
 - Tests use mocked Mist responses and a fake WebSocket. They need no production credential.
 - The 1000-target limit, the concurrency default of 3, and the concurrency range of 1 through 5 come from the existing Multi Site batch limits.
+- The customer reads the master XML with programs that follow XML 1.0 and Namespaces in XML 1.0. No program needs a DTD. The schema serves the programs that validate.
+- The master XML keeps the vocabulary of Junos unchanged. It adds only the wrapper elements of this feature.
 
 ## Non-Goals
 
@@ -257,3 +302,5 @@ Safety and observability:
 - Running a live MSP validation in this change.
 - Replacing the XML, JSON, or both outputs of issue #4769.
 - Scheduling or repeating the run.
+- Converting the Junos XML to another vocabulary, or merging the JSON replies into the master XML.
+- Validating the Junos elements against a Junos schema. No public schema covers each release.

@@ -4836,7 +4836,7 @@ menu_actions: dict[str, Any] = {
     "309": GlobalImportManager.MenuEntry(  # Use named fields for menu 309.
         menu_id="309",  # Store key for drift checks.
         handler=ExHardwareInventoryReport.run,
-        title="Collect EX switch hardware inventory into one CSV report",
+        title="Collect EX switch hardware inventory into one CSV report and one XML file",
         category=OperationRegistry.skip_category("309"),  # Read the safety class.
         destructive=False,  # The command is read-only, and a typed phrase starts the run.
         supports_fast=False,  # Shell concurrency is bounded by PORTAL_WS_HARDWARE_CONCURRENCY.

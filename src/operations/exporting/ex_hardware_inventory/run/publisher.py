@@ -1,13 +1,12 @@
-"""Compile the combined CSV report of a portal hardware run from its saved replies.
+"""Compile the combined reports of a portal hardware run from its saved replies.
 
 Why:
-    The Multi Site action saves one XML reply for each connected switch and ends
-    with a manifest. The CSV output needs one more file at the end of the run. The
-    run finish step of the artifact service owns the run folder and its quota, so
-    this module takes only what it needs: a function that reads one saved reply,
-    and the scope of the run. It returns the bytes of the report, and the artifact
-    service decides where to publish them. That keeps the report code free of any
-    portal storage detail, and the portal code free of any report detail.
+    The Multi Site action saves one XML reply for each connected switch and ends with a manifest. The report
+    outputs need more files at the end of the run: the combined CSV, the master XML, or both. The run finish
+    step of the artifact service owns the run folder and its quota, so this module takes only what it needs:
+    a function that reads one saved reply, and the scope of the run. It returns the bytes of each report, and
+    the artifact service decides where to publish them. That keeps the report code free of any portal storage
+    detail, and the portal code free of any report detail.
 """
 
 from __future__ import annotations
@@ -22,51 +21,36 @@ from src.operations.exporting.ex_hardware_inventory.report.builder import (
     TargetResult,
 )  # Report rows and the exact reason of a failure.
 from src.operations.exporting.ex_hardware_inventory.report.csv_file import CsvRenderer, CsvVerifier  # The file.
+from src.operations.exporting.ex_hardware_inventory.run.master_xml import MasterXmlBuilder  # The master XML.
 
 logger = logging.getLogger(__name__)  # Name the logger after this module so log lines carry their source.
 
 
-class ReportHook:
-    """Turn the final outcomes of a hardware run into the bytes of the combined CSV."""
+class OutcomeResults:
+    """Read the saved replies of a run and give one result for each target and each unread organization."""
 
-    def __init__(self, read_reply: Callable[[str], str], scope: Mapping[str, object] | None = None) -> None:
+    def __init__(self, read_reply: Callable[[str], str], scope: Mapping[str, object]) -> None:
         """Store the reply reader and the scope.
 
         Args:
             read_reply: Returns the saved XML text for one recorded file name. It raises OSError,
                 UnicodeDecodeError, or ValueError when the file is missing or unsafe to read.
-            scope: ``mode`` (organization or msp), ``organizations`` (identifier to name), and ``failed``
-                (identifier to reason code of an organization that could not be read). None means
-                organization scope with no name.
+            scope: ``organizations`` (identifier to name) and ``failed`` (identifier to reason code of an
+                organization that could not be read). An empty mapping means no name and no failure.
         """
         self._read_reply = read_reply  # The artifact service checks each path before it reads.
-        self._scope: Mapping[str, object] = scope or {}  # An absent scope is an organization run.
+        self._scope = scope  # The scope that the service stored with the run.
 
-    def compile(self, outcomes: Sequence[Mapping[str, object]], limit_bytes: int) -> bytes:
-        """Build the CSV bytes.
+    def build(self, outcomes: Sequence[Mapping[str, object]]) -> list[TargetResult]:
+        """Return the results of a run: the switches first, then the organizations that Mist could not read.
 
         Args:
             outcomes: The final target outcomes of the run: target identity, state, reason code, and files.
-            limit_bytes: The most bytes that the file may hold.
 
         Returns:
-            The bytes of the report.
-
-        Raises:
-            ReportTooLarge: When the file would pass the limit.
-            ReportCheckError: When the rendered bytes do not match the rows.
+            One result for each outcome, in manifest order, then one for each unread organization.
         """
-        logger.info("Compiling the combined CSV of %d outcomes", len(outcomes))  # Log before the transform.
-        builder = ReportBuilder(  # The scope and the run end time.
-            str(self._scope.get("mode") or "organization"), datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        )
-        for result in (*self._results(outcomes), *self._failed()):  # Switches first, then unread organizations.
-            builder.add(result)  # One or more rows for each result.
-        rows, names = builder.rows(), builder.fieldnames()  # Ordered, guarded rows with every column present.
-        data = CsvRenderer.render(rows, names, limit_bytes)  # Refuses a report over the limit.
-        CsvVerifier.verify(data, names, len(rows))  # A rendered report must read back as the same rows.
-        logger.debug("Compiled the combined CSV with %d rows and %d bytes", len(rows), len(data))  # Log the size.
-        return data  # The artifact service publishes it.
+        return [*self._results(outcomes), *self._failed()]  # Switches first, then unread organizations.
 
     def _results(self, outcomes: Sequence[Mapping[str, object]]) -> list[TargetResult]:
         """Build one result for each target outcome."""
@@ -108,5 +92,67 @@ class ReportHook:
         try:  # A missing or unsafe file is not a failure of the whole report.
             return self._read_reply(name)  # The artifact service checks the path and the size.
         except (OSError, UnicodeDecodeError, ValueError):  # The file is gone, is not UTF-8, or is not safe.
-            logger.warning("A saved reply could not be read for the combined CSV")  # Log without the name.
+            logger.warning("A saved reply could not be read for a combined report")  # Log without the name.
             return None  # The report says that the reply is missing.
+
+
+class ReportHook:
+    """Turn the final outcomes of a hardware run into the bytes of the combined CSV or the master XML."""
+
+    def __init__(self, read_reply: Callable[[str], str], scope: Mapping[str, object] | None = None) -> None:
+        """Store the reply reader and the scope.
+
+        Args:
+            read_reply: Returns the saved XML text for one recorded file name. It raises OSError,
+                UnicodeDecodeError, or ValueError when the file is missing or unsafe to read.
+            scope: ``mode`` (organization or msp), ``organizations`` (identifier to name), and ``failed``
+                (identifier to reason code of an organization that could not be read). None means
+                organization scope with no name.
+        """
+        self._scope: Mapping[str, object] = scope or {}  # An absent scope is an organization run.
+        self._outcomes = OutcomeResults(read_reply, self._scope)  # Both reports read the same results.
+        self._run_utc = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")  # One time for each report of the run.
+
+    def compile(self, outcomes: Sequence[Mapping[str, object]], limit_bytes: int) -> bytes:
+        """Build the CSV bytes.
+
+        Args:
+            outcomes: The final target outcomes of the run: target identity, state, reason code, and files.
+            limit_bytes: The most bytes that the file may hold.
+
+        Returns:
+            The bytes of the report.
+
+        Raises:
+            ReportTooLarge: When the file would pass the limit.
+            ReportCheckError: When the rendered bytes do not match the rows.
+        """
+        logger.info("Compiling the combined CSV of %d outcomes", len(outcomes))  # Log before the transform.
+        builder = ReportBuilder(str(self._scope.get("mode") or "organization"), self._run_utc)  # Scope and time.
+        for result in self._outcomes.build(outcomes):  # Switches first, then unread organizations.
+            builder.add(result)  # One or more rows for each result.
+        rows, names = builder.rows(), builder.fieldnames()  # Ordered, guarded rows with every column present.
+        data = CsvRenderer.render(rows, names, limit_bytes)  # Refuses a report over the limit.
+        CsvVerifier.verify(data, names, len(rows))  # A rendered report must read back as the same rows.
+        logger.debug("Compiled the combined CSV with %d rows and %d bytes", len(rows), len(data))  # Log the size.
+        return data  # The artifact service publishes it.
+
+    def compile_xml(self, outcomes: Sequence[Mapping[str, object]], limit_bytes: int) -> bytes:
+        """Build the master XML bytes, and check them.
+
+        Args:
+            outcomes: The final target outcomes of the run: target identity, state, reason code, and files.
+            limit_bytes: The most bytes that the file may hold.
+
+        Returns:
+            The bytes of the file. They passed every check of the master XML.
+
+        Raises:
+            ReportTooLarge: When the file would pass the limit.
+            ReportCheckError: When the final bytes fail a check.
+        """
+        logger.info("Compiling the master XML of %d outcomes", len(outcomes))  # Log before the transform.
+        mode = str(self._scope.get("mode") or "organization")  # The scope of the run.
+        document = MasterXmlBuilder.compile(self._outcomes.build(outcomes), mode, self._run_utc, limit_bytes)
+        logger.debug("Compiled the master XML with %d bytes", len(document.data))  # Log the size.
+        return document.data  # The artifact service publishes it.

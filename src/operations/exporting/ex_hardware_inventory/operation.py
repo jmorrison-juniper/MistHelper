@@ -1,4 +1,4 @@
-"""Menu 309: collect the hardware inventory of every connected EX switch into one CSV report.
+"""Menu 309: collect the hardware inventory of every connected EX switch into one CSV report and one XML file.
 
 Why:
     A network operations center needs one file that lists the hardware of every
@@ -6,9 +6,10 @@ Why:
     This menu finds the scope of the credential (one organization, or every
     organization of an MSP), previews the connected switches, asks for a typed
     phrase, runs the fixed read-only command on each switch through the verified
-    collector of the Multi Site tab, and writes one CSV report. A switch that
-    returned no valid reply, and an organization that could not be read, appear
-    in the report as outcome rows, so the report never hides a missing switch.
+    collector of the Multi Site tab, and writes one CSV report and one master XML
+    file that holds the reply of each switch. A switch that returned no valid
+    reply, and an organization that could not be read, appear in both files, so
+    the files never hide a missing switch.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ from src.operations.exporting.ex_hardware_inventory.run.batch import (
     BatchStack,
     OrganizationBatchRun,
 )  # The batch driver.
+from src.operations.exporting.ex_hardware_inventory.run.master_xml import MasterXmlExporter  # The XML file.
 from src.operations.exporting.ex_hardware_inventory.scope.resolver import (
     OrganizationRef,
     ScopeDecision,
@@ -184,8 +186,40 @@ class RunCollector:
         return None  # No file exists.
 
 
+class MasterXmlStep:
+    """Write the master XML file next to the CSV report, and say so when a limit or a check stops it."""
+
+    @staticmethod
+    def write(
+        results: Sequence[TargetResult], scope: str, run_time: datetime, report: ReportFile | None
+    ) -> MasterXmlExporter.File | None:
+        """Write the master XML file of the run.
+
+        Why:
+            The customer reads one XML file that holds the reply of each switch. The file must be valid or
+            absent, so the exporter checks it and removes it when a check fails, and this step tells the
+            operator in plain words which of the two happened.
+
+        Args:
+            results: One result for each attempted target, and one for each organization that Mist could not read.
+            scope: ``organization`` or ``msp``.
+            run_time: The run start in UTC.
+            report: The CSV file of the same run, or None. The XML file takes its name.
+
+        Returns:
+            The written file, or None when no file exists.
+        """
+        try:  # The exporter refuses a file over the limit and removes a file that fails its check.
+            return MasterXmlExporter().write(results, scope, run_time, report.path if report else None)
+        except ReportTooLarge:  # FR-064: say so, and write nothing.
+            print("The master XML would pass the size limit of 64 MiB. No XML file was written.")  # WHY: say why.
+        except ReportCheckError:  # The exporter removed the damaged file.
+            print("The master XML file failed its check and was removed. See the log for the cause.")  # WHY: say why.
+        return None  # No file exists.
+
+
 class ExHardwareInventoryReport:
-    """Menu 309: one CSV report of the hardware inventory of every connected EX switch."""
+    """Menu 309: one CSV report and one master XML file of the hardware inventory of every connected EX switch."""
 
     @staticmethod
     def run() -> int:
@@ -260,14 +294,16 @@ class ExHardwareInventoryReport:
 
     @staticmethod
     def _collect(decision: ScopeDecision, plans: Sequence[OrganizationPlan], console: HardwareConsole) -> int:
-        """Step 4: run each organization, write the report, and print the summary."""
+        """Step 4: run each organization, write the report and the master XML, and print the summary."""
         print("Step 4 of 4: Collect")  # WHY: the operator follows the four steps.
-        collector = RunCollector(decision.mode, datetime.now(UTC).replace(microsecond=0), console)  # UTC.
-        cancelled = collector.run_all(plans)  # The tally and the rows fill as each organization ends.
+        run_time = datetime.now(UTC).replace(microsecond=0)  # UTC. It names the files and stamps every row.
+        collector = RunCollector(decision.mode, run_time, console)  # The tally and the rows fill as each ends.
+        cancelled = collector.run_all(plans)  # Each organization runs in turn.
         report = collector.write()  # One CSV file, or none.
+        master = MasterXmlStep.write(collector.builder.results, decision.mode, run_time, report)  # One XML file.
         counts = collector.builder.counts()  # The tally of all organizations.
         partial = cancelled or counts["failed"] + counts["skipped"] + counts["cancelled"] > 0  # Anything missing.
-        console.finished(report, partial)  # The report line and the run status.
+        console.finished(report, partial, master)  # The file lines and the run status.
         logger.debug(
             "Finished the EX hardware inventory report with %d rows", report.row_count if report else 0
         )  # Log the result.

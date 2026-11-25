@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import csv  # Read the report the way a spreadsheet would.
+import xml.etree.ElementTree as ET  # A standard reader, so the tests share no code with the XML writer.
+from collections import Counter  # Compare the statuses of the two files as multisets.
 from pathlib import Path  # Test output stays under the pytest temporary folder.
 from types import SimpleNamespace  # Resolver doubles.
 from typing import Any  # Doubles have no public type.
@@ -19,6 +21,7 @@ from src.operations.exporting.ex_hardware_inventory.operation import ExHardwareI
 from src.operations.exporting.ex_hardware_inventory.report.builder import TargetResult  # One result per switch.
 from src.operations.exporting.ex_hardware_inventory.report.csv_file import ReportCheckError, ReportTooLarge
 from src.operations.exporting.ex_hardware_inventory.run.batch import BatchPreview, BatchRunResult  # Values.
+from src.operations.exporting.ex_hardware_inventory.run.master_xml import MasterXmlBuilder  # The namespace.
 from src.operations.exporting.ex_hardware_inventory.scope.resolver import (
     OrganizationRef,
     ScopeDecision,
@@ -125,6 +128,7 @@ class TestOneOrganization:
         )
         result, lines = run_menu(capsys)
         report = sorted((harness.tmp_path / "data").glob("ExHardwareInventory_*.csv"))[0]
+        master = report.with_suffix(".xml")  # The master XML shares the name of the report.
         assert lines[:4] == [
             HEADER_1,
             "  Credential: API token (organization token)",
@@ -147,8 +151,9 @@ class TestOneOrganization:
             HEADER_4,
             "  Alpha: collected 2, failed 1, skipped 0, cancelled 0",
             f"Report: {Path('data') / report.name} ({result} rows)",
+            f"Master XML: {Path('data') / master.name} (3 devices)",
             "Run status: partial",
-        ]  # Step 4, the report line, and the status.
+        ]  # Step 4, the report line, the master XML line, and the status.
         assert result == len(harness.report_rows()) and result > 3  # Item rows for two switches plus one outcome.
         harness.prompt.assert_called_once()  # One typed confirmation.
         assert harness.prompt.call_args.kwargs == {"context": "ex_hardware_confirmation"}  # The documented context.
@@ -440,6 +445,165 @@ class TestReportFailures:
         assert not any(line.startswith("Report:") for line in lines)  # No report line without a file.
 
 
+class TestMasterXml:
+    """The run writes one master XML file next to the CSV report, and the two files tell the same story."""
+
+    NS = {"mh": MasterXmlBuilder.NAMESPACE}  # The prefix map for the wrapper elements.
+
+    @staticmethod
+    def master_files(harness: Harness) -> list[Path]:
+        """Return the master XML files under data/."""
+        return sorted((harness.tmp_path / "data").glob("ExHardwareInventory_*.xml"))
+
+    def master_root(self, harness: Harness) -> ET.Element:
+        """Parse the one master XML file with a standard reader, so the test shares no code with the writer."""
+        files = self.master_files(harness)
+        assert len(files) == 1, f"expected one master XML file, found {files}"
+        return ET.fromstring(files[0].read_bytes())
+
+    def test_the_file_shares_the_report_name_and_holds_the_reply_of_each_collected_switch(
+        self, harness: Harness
+    ) -> None:
+        """Two collected switches and one failed switch: three devices, two replies, and every serial number."""
+        harness.answer = "RUN 3 TARGETS"
+        harness.script.previews[ORG_A] = preview_of(ORG_A, "Alpha", [1, 2, 3])
+        harness.script.runs[ORG_A] = result_of(
+            ORG_A, "Alpha", {1: ("completed", ""), 2: ("completed", ""), 3: ("failed", "completion_unproven")}
+        )
+        ExHardwareInventoryReport.run()
+        report = sorted((harness.tmp_path / "data").glob("ExHardwareInventory_*.csv"))[0]
+        root = self.master_root(harness)
+        assert self.master_files(harness) == [report.with_suffix(".xml")]  # Same folder, same stem.
+        assert (root.get("scope"), root.get("devices"), root.get("collected"), root.get("failed")) == (
+            "organization",
+            "3",
+            "2",
+            "1",
+        )
+        expected = {
+            text for name in ("SW1", "SW2") for text in self.serials(ET.fromstring(HardwareReplies.single_switch(name)))
+        }
+        found = set(self.serials(root))
+        assert found == expected and {"SW1-CH", "SW2-CH"} <= found  # Every serial number of the two replies.
+        assert not any(text.startswith("SW3") for text in found)  # The failed switch has no reply in the file.
+
+    @staticmethod
+    def serials(root: ET.Element) -> list[str]:
+        """Return the serial-number texts below an element, whatever the namespace of the reply is."""
+        return [e.text or "" for e in root.iter() if e.tag.rsplit("}", 1)[-1] == "serial-number"]
+
+    def test_the_statuses_of_the_two_files_agree_for_an_msp_run(self, harness: Harness) -> None:
+        """One skipped switch and one unread organization appear in the XML the way the CSV report shows them."""
+        harness.scope = decision((ORG_A, "Alpha"), (ORG_B, "Beta"), mode="msp")
+        harness.script.previews[ORG_A] = preview_of(ORG_A, "Alpha", [1, 2, 3])
+        harness.script.previews[ORG_B] = StreamRequestError("rate_limited", "Slow down.")
+        harness.script.runs[ORG_A] = result_of(
+            ORG_A, "Alpha", {1: ("completed", ""), 2: ("failed", "completion_unproven"), 3: ("skipped", "offline")}
+        )
+        harness.answer = "RUN 3 TARGETS"
+        ExHardwareInventoryReport.run()
+        root = self.master_root(harness)
+        from_csv = {  # Every row of a device carries the one status of the device.
+            (row["org_name"], row["device_id"], row["collection_status"]) for row in harness.report_rows()
+        }
+        from_xml = {
+            (organization.get("name"), device.get("id"), device.get("status"))
+            for organization in root.iterfind("mh:organization", self.NS)
+            for device in organization.iterfind(".//mh:device", self.NS)
+        }
+        from_xml |= {  # The unread organization has no device. The CSV report gives it one outcome row.
+            (organization.get("name"), "", organization.get("status"))
+            for organization in root.iterfind("mh:organization", self.NS)
+            if organization.get("status") == "failed"
+        }
+        assert from_csv == from_xml and len(from_xml) == 4  # Three switches and one organization.
+        assert (root.get("scope"), root.get("organizations"), root.get("unread")) == ("msp", "2", "1")
+
+    def test_a_cancelled_run_marks_the_cancelled_switches_in_the_xml(self, harness: Harness) -> None:
+        """The operator stopped the run, and the XML says so for each switch that did not finish."""
+        harness.answer = "RUN 3 TARGETS"
+        harness.script.previews[ORG_A] = preview_of(ORG_A, "Alpha", [1, 2, 3])
+        harness.script.runs[ORG_A] = result_of(
+            ORG_A,
+            "Alpha",
+            {1: ("completed", ""), 2: ("stopped", "cancelled"), 3: ("stopped", "cancelled")},
+            cancelled=True,
+        )
+        ExHardwareInventoryReport.run()
+        devices = self.master_root(harness).iterfind(".//mh:device", self.NS)
+        assert Counter(device.get("status") for device in devices) == Counter({"collected": 1, "cancelled": 2})
+
+    @pytest.mark.parametrize(
+        ("error", "sentence"),
+        [
+            (
+                ReportTooLarge("too big"),
+                "The master XML would pass the size limit of 64 MiB. No XML file was written.",
+            ),
+            (
+                ReportCheckError("damaged"),
+                "The master XML file failed its check and was removed. See the log for the cause.",
+            ),
+        ],
+    )
+    def test_a_master_xml_that_cannot_be_written_is_said_and_the_csv_report_stays(
+        self,
+        harness: Harness,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        error: Exception,
+        sentence: str,
+    ) -> None:
+        """The XML refusal is one plain sentence. The CSV report, the rows, and the status are not affected."""
+
+        def refuse(*_args: object, **_kwargs: object) -> None:
+            """Raise the planned error."""
+            raise error
+
+        monkeypatch.setattr(operation_module.MasterXmlExporter, "write", refuse)
+        harness.answer = "RUN 1 TARGETS"
+        harness.script.previews[ORG_A] = preview_of(ORG_A, "Alpha", [1])
+        harness.script.runs[ORG_A] = result_of(ORG_A, "Alpha", {1: ("completed", "")})
+        result, lines = run_menu(capsys)
+        assert result == len(harness.report_rows()) and result > 0  # The CSV report was written.
+        assert sentence in lines and lines[-1] == "Run status: complete"
+        assert not any(line.startswith("Master XML:") for line in lines)  # No line without a file.
+        assert self.master_files(harness) == []
+
+    def test_a_report_that_cannot_be_written_does_not_stop_the_master_xml(
+        self, harness: Harness, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The two files are independent. The XML file takes a name from the run time when no CSV file exists."""
+
+        def refuse(*_args: object, **_kwargs: object) -> None:
+            """Refuse the CSV report."""
+            raise ReportTooLarge("too big")
+
+        monkeypatch.setattr(operation_module.ReportExporter, "write", refuse)
+        harness.answer = "RUN 1 TARGETS"
+        harness.script.previews[ORG_A] = preview_of(ORG_A, "Alpha", [1])
+        harness.script.runs[ORG_A] = result_of(ORG_A, "Alpha", {1: ("completed", "")})
+        result, lines = run_menu(capsys)
+        (master,) = self.master_files(harness)
+        assert result == 0 and master.name.startswith("ExHardwareInventory_") and master.suffix == ".xml"
+        assert f"Master XML: {Path('data') / master.name} (1 devices)" in lines
+
+    def test_a_run_that_collects_no_reply_still_writes_a_valid_master_xml(self, harness: Harness) -> None:
+        """Every switch failed. The file lists the switches with their reasons and holds no reply."""
+        harness.answer = "RUN 2 TARGETS"
+        harness.script.previews[ORG_A] = preview_of(ORG_A, "Alpha", [1, 2])
+        harness.script.runs[ORG_A] = result_of(
+            ORG_A, "Alpha", {1: ("failed", "completion_unproven"), 2: ("skipped", "offline")}
+        )
+        ExHardwareInventoryReport.run()
+        root = self.master_root(harness)
+        assert sorted(device.get("status") or "" for device in root.iterfind(".//mh:device", self.NS)) == [
+            "failed",
+            "skipped",
+        ]
+        assert self.serials(root) == []  # No reply was embedded.
+
+
 class TestMenuRegistration:
     """Menu 309 is wired to the operation and skipped by the sweeps."""
 
@@ -447,7 +611,7 @@ class TestMenuRegistration:
         """The handler, the title, and the flags match the contract."""
         entry = MistHelper.menu_actions["309"]
         assert entry.handler is ExHardwareInventoryReport.run
-        assert entry.title == "Collect EX switch hardware inventory into one CSV report"
+        assert entry.title == "Collect EX switch hardware inventory into one CSV report and one XML file"
         assert entry.destructive is False and entry.supports_fast is False
 
     def test_the_sweeps_skip_menu_309_and_say_why(self) -> None:

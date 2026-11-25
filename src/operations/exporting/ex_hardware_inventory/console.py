@@ -21,6 +21,7 @@ from src.operations.exporting.ex_hardware_inventory.scope.resolver import ScopeD
 
 if TYPE_CHECKING:  # Avoid a runtime import for a type that only annotates.
     from src.operations.exporting.ex_hardware_inventory.report.export import ReportFile  # The written file.
+    from src.operations.exporting.ex_hardware_inventory.run.master_xml import MasterXmlExporter  # The XML file.
 
 logger = logging.getLogger(__name__)  # Name the logger after this module so log lines carry their source.
 
@@ -102,8 +103,16 @@ class HardwareConsole:
             f"skipped {counts['skipped']}, cancelled {counts['cancelled']}"
         )  # WHY: the operator sees the result of each organization as it ends.
 
-    def finished(self, report: ReportFile | None, partial: bool) -> None:
-        """Print the report line and the run status."""
+    def finished(self, report: ReportFile | None, partial: bool, master: MasterXmlExporter.File | None = None) -> None:
+        """Print the file lines and the run status.
+
+        Args:
+            report: The CSV report that the run wrote, or None.
+            partial: True when the operator cancelled or any target did not collect.
+            master: The master XML file that the run wrote, or None.
+        """
         if report is not None:  # A run with no row writes no file, so it has no report line.
             print(f"Report: {report.path} ({report.row_count} rows)")  # WHY: the operator needs the file path.
+        if master is not None:  # The XML file can be absent when its check failed.
+            print(f"Master XML: {master.path} ({master.device_count} devices)")  # WHY: the operator needs this path.
         print(f"Run status: {'partial' if partial else 'complete'}")  # WHY: a partial run must be visible.

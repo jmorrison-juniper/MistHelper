@@ -84,6 +84,29 @@ class FailureReasons:
 class RowFactory:
     """Build the rows of one target."""
 
+    MISSING = "The reply file is missing."  # A completed target whose reply file is gone.
+    UNREADABLE = "The saved reply could not be read."  # A saved reply that is truncated, malformed, or not a chassis.
+
+    @classmethod
+    def classify(cls, result: TargetResult) -> tuple[str, str]:
+        """Return the report status and the plain detail of one target, before any reply is read.
+
+        Why:
+            The CSV report and the master XML must give the same status to the same target. One place decides
+            it, and each report then reads the reply in its own way.
+
+        Args:
+            result: The outcome and the saved reply of one target.
+
+        Returns:
+            ``collected`` with an empty detail for a completed target that has a reply text. Otherwise
+            ``failed``, ``skipped``, or ``cancelled`` with a plain sentence.
+        """
+        if result.state == "completed":  # The batch says that the target finished.
+            return ("failed", cls.MISSING) if result.xml_text is None else ("collected", "")  # A reply must exist.
+        status = {"skipped": "skipped", "stopped": "cancelled"}.get(result.state, "failed")  # Map the batch state.
+        return status, FailureReasons.DETAILS.get(result.reason, "The switch returned no valid reply.")  # A sentence.
+
     @classmethod
     def base(cls, result: TargetResult, scope: str, run_utc: str) -> dict[str, str]:
         """Return the columns that every row of one target shares."""
@@ -137,21 +160,14 @@ class RowFactory:
     def build(cls, result: TargetResult, scope: str, run_utc: str) -> tuple[str, list[dict[str, str]], set[str]]:
         """Return the report status, the rows, and the field names for one target."""
         base = cls.base(result, scope, run_utc)  # The shared identity columns.
-        if result.state == "completed" and result.xml_text is None:  # A completed target must have saved a reply.
-            return "failed", [cls.outcome(base, "failed", "The reply file is missing.")], set()  # Not collected.
-        if result.state == "completed" and result.xml_text is not None:  # The normal collected case.
-            try:  # A saved reply can still be unreadable.
-                rows, names = cls.items(base, result.xml_text)  # One row for each hardware item.
-                return "collected", rows, names  # The device collected.
-            except FlattenError:  # The file is truncated, malformed, or not a chassis reply.
-                return (
-                    "failed",
-                    [cls.outcome(base, "failed", "The saved reply could not be read.")],
-                    set(),
-                )  # Not collected.
-        status = {"skipped": "skipped", "stopped": "cancelled"}.get(result.state, "failed")  # Map the batch state.
-        detail = FailureReasons.DETAILS.get(result.reason, "The switch returned no valid reply.")  # A plain sentence.
-        return status, [cls.outcome(base, status, detail)], set()  # One outcome row.
+        status, detail = cls.classify(result)  # The one decision that every report shares.
+        if status != "collected":  # The target gives one outcome row and no hardware row.
+            return status, [cls.outcome(base, status, detail)], set()  # Not collected.
+        try:  # A saved reply can still be unreadable.
+            rows, names = cls.items(base, result.xml_text or "")  # One row for each hardware item.
+        except FlattenError:  # The file is truncated, malformed, or not a chassis reply.
+            return "failed", [cls.outcome(base, "failed", cls.UNREADABLE)], set()  # Not collected.
+        return "collected", rows, names  # The device collected.
 
 
 class ReportBuilder:
@@ -166,6 +182,7 @@ class ReportBuilder:
         """
         self._scope = scope  # Every row repeats the scope.
         self._run_utc = run_utc  # Every row repeats the run time.
+        self.results: list[TargetResult] = []  # Every result that was added, in order, for the master XML.
         self._fields: set[str] = set()  # The union of item field names.
         self._statuses: list[str] = []  # One report status for each target.
         self._devices: list[tuple[tuple[str, str, str, int], list[dict[str, str]]]] = []  # Sort key and rows.
@@ -177,6 +194,7 @@ class ReportBuilder:
             result: The outcome and the saved reply of one target.
         """
         logger.info("Adding one target result with state %s", result.state)  # Log before the transform.
+        self.results.append(result)  # Keep the result itself, because the master XML embeds the reply.
         status, rows, names = RowFactory.build(result, self._scope, self._run_utc)  # Build this target's rows.
         first = rows[0]  # Every target gives at least one row.
         key = (
