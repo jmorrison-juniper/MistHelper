@@ -6938,11 +6938,15 @@ def _launch_web_portal(
     portal_config = loader.load_config()  # Preserve the existing behavior during the compliance refactor.
     port = portal_config["web_port"]  # Preserve the existing behavior during the compliance refactor.
     host = _resolve_web_portal_host()  # Loopback on a workstation, all interfaces in a container, WEB_HOST wins
+    org_id = (
+        MainEntrypoint.context.org_id or ConfigUtils.get_cached_or_prompted_org_id()
+    )  # The other modes resolve it first, and the WebSockets tab needs it (issue #4929).
+    MainEntrypoint.context.org_id = org_id  # Keep one organization for every part of the portal.
 
     app = WebPortalApp.create_app(  # Construct Flask app with shared API session + menu registry
         apisession=MainEntrypoint.context.apisession,
         menu_actions=menu_actions,
-        org_id=MainEntrypoint.context.org_id,
+        org_id=org_id,
     )
 
     _run_web_portal_server(app, host, port, args.debug)  # Dispatch to container/local runner

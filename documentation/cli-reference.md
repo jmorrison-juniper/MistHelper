@@ -25,7 +25,7 @@ With `-M` it runs one operation and exits, which suits a scheduled job.
 | `--live-run` | Explicitly permit a destructive operation after its typed confirmation |
 | `--tui` | Launch Terminal User Interface mode for visual API navigation |
 | `--login` | Use interactive login (email and password) instead of API token. This enables MSP-level API access. |
-| `--web-portal` | Launch the web portal interface on port 8055 (or WEB_PORT env var) |
+| `--web-portal` | Launch the web portal interface on port 8055 (or WEB_PORT env var). The portal needs an organization. It uses `org_id` from the environment or `.env`, or it asks you to choose one at start. |
 | `--capture-portal` | Launch the upgrade capture portal on port 8056 (or CAPTURE_PORT env var). Same as menu 239. |
 | `--metrics-gateway` | Serve Mist Cloud health to a monitoring system on port 8057 (or METRICS_PORT env var). Same as menu 241. |
 | `--metrics-snmp` | Answer Net-SNMP `pass_persist` requests on standard input. Start this from `snmpd.conf`, not by hand. |
