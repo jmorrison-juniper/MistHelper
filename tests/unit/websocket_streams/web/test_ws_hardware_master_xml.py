@@ -128,6 +128,27 @@ class TestFinishStep:
         unread = [o for o in root.iterfind("mh:organization", NS) if o.get("status") == "failed"]
         assert [o.get("id") for o in unread] == ["org-2"] and unread[0].get("reason") == "discovery_failed"
 
+    def test_a_missing_scope_still_publishes_with_the_identifier_as_the_organization_name(self, tmp_path: Path) -> None:
+        """A run with no stored scope is an organization run, and the name of the organization is its identifier."""
+        artifacts, writer, outcomes = finished_run(tmp_path, "master-xml", scope=None)
+        assert published(artifacts, writer, outcomes)["status"] == "ready"
+        root = ET.fromstring(artifacts.xml_download("run")[1])
+        organization = root.find("mh:organization", NS)
+        assert root.get("scope") == "organization" and isinstance(organization, ET.Element)
+        assert organization.get("name") == organization.get("id") == next(iter(SCOPE["organizations"]))
+
+    @pytest.mark.parametrize("stored_format", ["", "unknown", "MASTER-XML"])
+    def test_an_empty_or_unknown_stored_format_publishes_no_report_and_fails_nothing(
+        self, tmp_path: Path, stored_format: str
+    ) -> None:
+        """The finish step reads the stored format. A value that names no report gives no report and no error."""
+        artifacts, writer, outcomes = finished_run(tmp_path, stored_format)
+        manifest = published(artifacts, writer, outcomes)
+        assert manifest["status"] == "ready" and not {CSV_NAME, XML_NAME} & set(manifest["files"])
+        with pytest.raises(StreamRequestError) as refusal:
+            artifacts.xml_download("run")
+        assert refusal.value.code == "artifact_not_ready"
+
     @pytest.mark.parametrize("damage", [b"", b"   \n", b"<broken", b'<?xml version="1.0"?>'])
     def test_a_saved_reply_that_was_damaged_after_the_run_is_one_failed_device_in_both_reports(
         self, tmp_path: Path, damage: bytes
