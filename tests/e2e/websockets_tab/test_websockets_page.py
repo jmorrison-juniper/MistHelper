@@ -32,6 +32,7 @@ READY_TIMEOUT_MS = 15000  # Bound every browser wait.
 # The container mounts data/, so the screenshots stay in the test-artifacts/ folder instead.
 ARTIFACT_DIR = Path(__file__).resolve().parents[3] / "test-artifacts" / "websockets"  # Git ignores this folder.
 ORG_ID = "99999999-8888-7777-6666-555555555555"  # Fake organization identifier.
+DEFAULT_HARDWARE_SCOPE = {"mode": "organization", "organization_count": 1, "failed_count": 0}  # One organization.
 SITE_ID = "11111111-2222-3333-4444-555555555555"  # First fake site identifier.
 SITE_ID_2 = "22222222-3333-4444-5555-666666666666"  # Second fake site identifier.
 DEVICE_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"  # Fake device identifier.
@@ -80,6 +81,8 @@ class FakeWebSocketServices:
         self.batch_start_body: dict[str, object] | None = None  # Keep the admitted preview-only request.
         self.batch_progress: dict[str, dict[str, object]] = {}  # Store target progress by public parent.
         self.batch_targets_data: dict[str, list[dict[str, object]]] = {}  # Store a frozen target list.
+        self.hardware_scope: dict[str, object] = dict(DEFAULT_HARDWARE_SCOPE)  # The scope line of the hardware preview.
+        self.hardware_concurrency: int | None = None  # The catalog default for the hardware action.
         lifecycle = SimpleNamespace(
             start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
         )  # Group fake session lifecycle behavior.
@@ -116,6 +119,8 @@ class FakeWebSocketServices:
             self.batch_start_body = None  # Remove the previous batch admission request.
             self.batch_progress.clear()  # Remove prior parent progress.
             self.batch_targets_data.clear()  # Remove prior frozen target lists.
+            self.hardware_scope = dict(DEFAULT_HARDWARE_SCOPE)  # Restore the one-organization scope line.
+            self.hardware_concurrency = None  # Restore the page default.
 
     def catalog_payload(self) -> dict[str, object]:
         """Return the catalog shown by the page."""
@@ -123,7 +128,8 @@ class FakeWebSocketServices:
             "ready": True,
             "reason": None,
             "flags": {},
-            "limits": {"max_sessions": 2, "idle_seconds": 120, "capture_seconds": 3600},
+            "limits": {"max_sessions": 2, "idle_seconds": 120, "capture_seconds": 3600}
+            | ({"hardware_concurrency": self.hardware_concurrency} if self.hardware_concurrency else {}),
             "channels": [self._channel(), self._device_command_channel()],
             "utilities": self._utilities(),
         }  # Catalog.
@@ -319,7 +325,8 @@ class FakeWebSocketServices:
                 "fixed_commands": [
                     "show chassis hardware detail | display xml | no-more",
                     "show chassis hardware detail | display json | no-more",
-                ],
+                ][: 1 if selected_format == "csv" else 2],
+                "scope": dict(self.hardware_scope),
                 "operation": {
                     "kind": "shell",
                     "key": "ex.createShellSession",
@@ -376,6 +383,9 @@ class FakeWebSocketServices:
             self.batch_progress[session_id] = self._new_batch_progress(
                 int(payload.get("concurrency", 1))
             )  # Model one active worker and a complete queued set.
+            preview = self.batch_preview_body or {}  # The real summary names the preset and the format of the run.
+            if preview.get("preset") == "ex-hardware-xml":
+                self.batch_progress[session_id].update(preset=preview["preset"], format=preview.get("format", "xml"))
             self.batch_targets_data[session_id] = self._new_batch_targets()  # Keep target order frozen.
         return self._batch_payload(session)  # Return one parent with additive batch state.
 
@@ -965,3 +975,111 @@ def test_ex_hardware_preset_selects_formats_and_starts_preview_bound_batch(
         "concurrency": 3,
         "output": {"group_by": "site", "mode": "combined"},
     }  # Start carries the reviewed reference, required phrase, and existing scheduler choices only.
+
+
+def start_hardware_batch(page: Any, fake_services: FakeWebSocketServices, output: str) -> None:
+    """Select the hardware preset with one output, preview it, confirm the phrase, and start the batch."""
+    page.get_by_test_id("ws-multi-site-tab").click()  # Open the batch workflow.
+    page.get_by_test_id("ws-batch-ex-hardware").check()  # Select the named server-owned preset.
+    page.get_by_test_id("ws-batch-hardware-format").select_option(output)  # Choose the output.
+    page.get_by_test_id("ws-batch-preview").click()  # Resolve the choice through the fake service.
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-confirmation").fill("RUN 2 TARGETS")  # Confirm the shell-safe target count.
+    page.get_by_test_id("ws-batch-start").click()  # Admit only the reviewed snapshot.
+    page.get_by_test_id("ws-batch-progress").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+
+
+def test_ex_hardware_csv_output_names_the_scope_and_runs_the_fixed_xml_command(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The CSV choice previews one XML command and an MSP scope line with the unread organization count."""
+    open_page(page, websocket_portal)  # Load the local mocked Operations portal.
+    fake_services.hardware_scope = {"mode": "msp", "organization_count": 3, "failed_count": 1}  # An MSP login.
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-hardware-format").select_option("csv")  # The new output choice.
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert fake_services.batch_preview_body == {
+        "preset": "ex-hardware-xml",
+        "format": "csv",
+        "scope_revision": 2,
+    }  # The browser sends only the preset and the output. The check and the choice each bump the revision.
+    assert page.get_by_test_id("ws-batch-scope-summary").inner_text() == (
+        "Scope: MSP, 3 organizations; all sites; EX switches only. 1 organization could not be read."
+    )  # The scope line shows the decision of the server.
+    summary = page.get_by_test_id("ws-batch-review-summary").inner_text()
+    assert "Output: One combined CSV report (.csv)" in summary  # The review names the output.
+    assert "display xml" in summary and "display json" not in summary  # CSV runs the XML command only.
+
+
+def test_ex_hardware_one_organization_scope_line(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """An organization token shows the one-organization scope line."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert page.get_by_test_id("ws-batch-scope-summary").inner_text() == (
+        "Scope: One organization; all sites; EX switches only."
+    )
+
+
+def test_ex_hardware_csv_download_link_appears_only_when_the_report_is_ready(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The link points at the CSV route, stays hidden while the run goes, and hides again when the output failed."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv")
+    link = page.get_by_test_id("ws-batch-csv-download")
+    assert not link.is_visible()  # The report is published at the end of the run.
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="writing")
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - completed").wait_for(timeout=READY_TIMEOUT_MS)
+    assert not link.is_visible()  # The output is not final yet.
+    fake_services.batch_progress["batch1"].update(artifact_status="ready")
+    link.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert link.get_attribute("href") == "/api/websockets/batches/batch1/download?format=csv"
+
+
+def test_ex_hardware_csv_download_link_stays_hidden_when_the_output_failed(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A failed output offers no report, and the run keeps its archive."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv")
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="failed")
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - completed").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-zip-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert not page.get_by_test_id("ws-batch-csv-download").is_visible()
+
+
+def test_ex_hardware_xml_output_never_offers_the_csv_link(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A finished XML run keeps its archive only."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "xml")
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
+    page.get_by_test_id("ws-batch-zip-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert not page.get_by_test_id("ws-batch-csv-download").is_visible()
+
+
+def test_ex_hardware_concurrency_default_comes_from_the_catalog_setting(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The page takes the shell limit of the hardware action from the catalog, and the start carries it."""
+    fake_services.hardware_concurrency = 2  # The server setting in use.
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    assert page.get_by_test_id("ws-batch-concurrency").input_value() == "2"
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-confirmation").fill("RUN 2 TARGETS")
+    page.get_by_test_id("ws-batch-start").click()
+    page.get_by_test_id("ws-batch-progress").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert fake_services.batch_start_body is not None and fake_services.batch_start_body["concurrency"] == 2
+    page.get_by_test_id("ws-batch-ex-hardware").uncheck()  # Leaving the action restores the generic default.
+    assert page.get_by_test_id("ws-batch-concurrency").input_value() == "3"

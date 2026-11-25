@@ -2,6 +2,8 @@
 
 from __future__ import annotations  # Keep Flask annotations lazy.
 
+from typing import Any  # The service bundle crosses package boundaries.
+
 from flask import Response, request  # Read methods and type responses.
 
 from src.mist.realtime.websocket_streams.intake.fields.error import StreamRequestError  # Query refusals share JSON.
@@ -53,7 +55,9 @@ class BatchSessionRoutes:
         """Create one read-only Multi Site target preview."""
         services = ServiceRequest.current()  # Resolve the app-scoped service bundle.
         body = request.get_json(silent=True)  # The batch service validates the exact request shape.
-        return JsonResponse.call(lambda: services.sessions.batches.preview(body), 201)  # Do not start work.
+        return JsonResponse.call(
+            lambda: PreviewScope.add(services, body, services.sessions.batches.preview(body)), 201
+        )  # Do not start work.
 
     @staticmethod
     def batch_start() -> Response | tuple[Response, int]:
@@ -89,6 +93,24 @@ class BatchSessionRoutes:
         return JsonResponse.call(
             lambda: services.artifacts.manifest(session_id)
         )  # Expose only the safe server-owned manifest.
+
+
+class PreviewScope:
+    """Add the scope line to the preview of the hardware action (issue #4920)."""
+
+    @staticmethod
+    def add(services: Any, body: object, payload: dict[str, object]) -> dict[str, object]:
+        """Return the preview with the scope counts when the preset is the hardware action.
+
+        Args:
+            services: The app-scoped service bundle.
+            body: The preview request body.
+            payload: The preview that the batch service built.
+        """
+        if not isinstance(body, dict) or body.get("preset") != "ex-hardware-xml":  # Other previews stay unchanged.
+            return payload
+        summary = getattr(services.pickers.batch, "scope_summary", None)  # Only the scope-aware targets have it.
+        return payload | ({"scope": summary(True)} if callable(summary) else {})  # Counts, never names.
 
 
 class TargetPageQuery:

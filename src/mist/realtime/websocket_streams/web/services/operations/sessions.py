@@ -338,7 +338,9 @@ class _BatchServiceComponents:
                 """Require complete organization site discovery."""
                 if self.picker is None:
                     raise StreamRequestError("not_ready", self.reason or "The WebSocket engine is not ready.")
-                response = self.picker.sites(str(values["kind"]), str(values["key"]))
+                preset = values.get("preset") == HardwareXmlPreset.NAME  # The hardware preset may span an MSP.
+                reader = getattr(self.picker, "hardware_sites", self.picker.sites) if preset else self.picker.sites
+                response = reader(str(values["kind"]), str(values["key"]))  # Scope-aware only for the hardware preset.
                 rows = response.get("rows")
                 if response.get("complete") is not True or not isinstance(rows, list):
                     raise StreamRequestError("picker_incomplete", "Site discovery did not complete.")
@@ -916,9 +918,8 @@ class WebSocketBatchService:
             record = self._previews.admission(preview_id, phrase)
             self._previews.validate_fingerprint(record)
             if record.output_format is not None:
-                output.update(
-                    {"preset": HardwareXmlPreset.NAME, "format": record.output_format}
-                )  # Preserve the selected format in the immutable artifact plan.
+                scope = getattr(self._input.picker, "scope_summary", None)  # The organizations of the run.
+                output.update(preset=HardwareXmlPreset.NAME, format=record.output_format, scope=scope and scope())
             writer = self._artifacts.prepare_batch(record.targets, output)
             parent = _BatchServiceComponents.Previews.ParentRequest.create(
                 record, concurrency, output, writer, self._input.picker

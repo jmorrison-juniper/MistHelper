@@ -113,7 +113,7 @@ src/operations/exporting/ex_hardware_inventory/
     batch.py                # BatchPreview, BatchRunResult, BatchStack, OrganizationBatchRun
     watch.py                # BatchWatcher (poll and stop), RunFolder (read outcomes and replies)
     publisher.py            # ReportHook (portal finish step)
-    routing.py              # ScopeAwarePicker, ScopeAwareChecker (portal MSP)
+    routing.py              # ScopeRouter, ScopeAwareTargets, ScopeAwareChecker (portal MSP)
 ```
 
 Existing files with narrow edits (no new method in a class at its limit, no new module in a full directory):

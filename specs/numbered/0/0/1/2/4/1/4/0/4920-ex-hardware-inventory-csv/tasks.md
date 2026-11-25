@@ -63,7 +63,7 @@
 - [X] T026 [US1] Implement `ExHardwareInventoryReport` in `src/operations/exporting/ex_hardware_inventory/operation.py` and `HardwareConsole` in `src/operations/exporting/ex_hardware_inventory/console.py`: the console steps of the menu contract, the typed phrase through `InputUtils.safe_input`, and the summary, per data-model.md `RunSummary.organizations`, `RunSummary.targets`, `RunSummary.counts`, and `RunSummary.report_path`.
 - [X] T027 [US1] Register menu 309: import the class and add the `MenuEntry` in `MistHelper.py`, and add the entry `309` with the category `resource_intensive` in `src/foundation/support/utils/operation_registry.py`.
 - [X] T028 [US1] Update the menu expectations: `tests/unit/test_menu_entry_metadata.py`, `tests/unit/ap_warning_report/test_menu.py`, and the two count lines in `.github/copilot-instructions.md`. Re-pin `tests/guardrails/test_endpoint_catalog.py` after the last edit of `MistHelper.py`.
-- [ ] T029 [US1] Run the Story 1 tests and the menu guards. Commit and push.
+- [X] T029 [US1] Run the Story 1 tests and the menu guards. Commit and push.
 
 ## Phase 4: User Story 2 - Find the scope and run for an MSP (Priority: P1)
 
@@ -82,7 +82,7 @@
 - [X] T033 [US2] Implement `CredentialProfile` and `ProfileReader` in `src/operations/exporting/ex_hardware_inventory/scope/profile.py`, per data-model.md `ScopeDecision.credential_type` and `ScopeDecision.account_kind`. Require status 200.
 - [X] T034 [US2] Implement `OrganizationRef`, `ScopeDecision`, `ScopeError`, and `ScopeResolver` in `src/operations/exporting/ex_hardware_inventory/scope/resolver.py`, per data-model.md `OrganizationRef.org_id`, `OrganizationRef.org_name`, `OrganizationRef.msp_id`, `OrganizationRef.source`, `ScopeDecision.mode`, `ScopeDecision.organizations`, and `ScopeDecision.notes`. Mute the SDK error lines for the MSP list and log one warning.
 - [X] T035 [US2] Wire the scope and the organization loop into `src/operations/exporting/ex_hardware_inventory/operation.py` and `src/operations/exporting/ex_hardware_inventory/run/batch.py`. Preview every organization first, ask once, preview each organization again just before it starts, and bind the ledger organization for each run. A discovery error of one organization, such as HTTP 429, is reported for that organization and the loop goes on.
-- [ ] T036 [US2] Run the Story 2 tests. Commit and push.
+- [X] T036 [US2] Run the Story 2 tests. Commit and push.
 
 ## Phase 5: User Story 3 - Run the same action from the Multi Site tab (Priority: P1)
 
@@ -92,21 +92,21 @@
 
 ### Tests for User Story 3
 
-- [ ] T037 [P] [US3] Write `tests/unit/websocket_streams/web/test_ws_hardware_csv.py`: the preset accepts `csv`, the fixed command list holds only the XML command, the finish step publishes `hardware/inventory.csv`, the manifest lists it, a compile failure sets the artifact status to failed and keeps the XML files, the download route, and the quota refusal. Add a regression case: the XML, JSON, and both runs write the same files as before this change.
-- [ ] T038 [P] [US3] Write `tests/unit/ex_hardware_inventory/run/test_hardware_publisher.py`: `ReportHook` with fake read and publish callables, including every error converted to the output failure.
-- [ ] T039 [P] [US3] Write `tests/unit/ex_hardware_inventory/run/test_hardware_routing.py`: the scope-aware picker returns the sites of all organizations, routes reads by site, and delegates in organization scope. The scope-aware checker builds each request for the right organization.
-- [ ] T040 [P] [US3] Add a browser test in `tests/e2e/websockets_tab/test_websockets_page.py`: the output choice, the scope line, the preview, the start request, and the download link.
+- [X] T037 [P] [US3] Write `tests/unit/websocket_streams/web/test_ws_hardware_csv.py`: the preset accepts `csv`, the fixed command list holds only the XML command, the finish step publishes `hardware/inventory.csv`, the manifest lists it, a compile failure sets the artifact status to failed and keeps the XML files, the download route, and the quota refusal. Add a regression case: the XML, JSON, and both runs write the same files as before this change.
+- [X] T038 [P] [US3] Write `tests/unit/ex_hardware_inventory/run/test_hardware_publisher.py`: `ReportHook` with fake read and publish callables, including every error converted to the output failure.
+- [X] T039 [P] [US3] Write `tests/unit/ex_hardware_inventory/run/test_hardware_routing.py`: the scope-aware picker returns the sites of all organizations, routes reads by site, and delegates in organization scope. The scope-aware checker builds each request for the right organization.
+- [X] T040 [P] [US3] Add a browser test in `tests/e2e/websockets_tab/test_websockets_page.py`: the output choice, the scope line, the preview, the start request, and the download link.
 
 ### Implementation for User Story 3
 
-- [ ] T041 [US3] Implement `ReportHook` in `src/operations/exporting/ex_hardware_inventory/run/publisher.py`, per data-model.md `ReportFile.name`, `ReportFile.size_bytes`, and `ReportFile.partial`. It takes callables, so it imports no artifact internals.
-- [ ] T042 [US3] Add the `csv` format to `src/mist/realtime/websocket_streams/web/services/operations/hardware_xml.py`: the format set and the command list in `batch_request`.
-- [ ] T043 [US3] Call the hook from the finish step in `src/mist/realtime/websocket_streams/web/services/operations/artifacts.py`, with no new method. Convert every error to `StreamRequestError("output_failed", ...)`.
-- [ ] T044 [US3] Add the `format=csv` branch to `src/mist/realtime/websocket_streams/web/blueprint/routes/sessions.py` and `src/mist/realtime/websocket_streams/web/blueprint/responses/download.py`.
-- [ ] T045 [US3] Add the `scope` object, the `org_name` target field, and the settings-based concurrency limit to the preview in `src/mist/realtime/websocket_streams/web/services/operations/sessions.py`.
-- [ ] T046 [US3] Implement `ScopeAwarePicker` and `ScopeAwareChecker` in `src/operations/exporting/ex_hardware_inventory/run/routing.py`. Wire them with the smallest edit in `src/mist/realtime/websocket_streams/web/services/assembly/collaborators.py`.
-- [ ] T047 [US3] Add the output choice, the scope line, the download link, and the default concurrency to `src/mist/realtime/websocket_streams/web/templates/websockets_page.html` and `src/mist/realtime/websocket_streams/web/static/websockets.js`. Use the `data-testid` values of the portal contract.
-- [ ] T048 [US3] Run the Story 3 tests and the WebSocket structure guard. Update the pinned counts only if an edit changes them. Commit and push.
+- [X] T041 [US3] Implement `ReportHook` in `src/operations/exporting/ex_hardware_inventory/run/publisher.py`, per data-model.md `ReportFile.name`, `ReportFile.size_bytes`, and `ReportFile.partial`. It takes callables, so it imports no artifact internals.
+- [X] T042 [US3] Add the `csv` format to `src/mist/realtime/websocket_streams/web/services/operations/hardware_xml.py`: the format set and the command list in `batch_request`.
+- [X] T043 [US3] Call the hook from the finish step in `src/mist/realtime/websocket_streams/web/services/operations/artifacts.py`. The storage class holds five methods, so the publication lives in a new nested class `Reports`, and the saved files are read through the new `Files.read_bytes`. A failure marks the artifact failed, keeps the XML files, and the finish step raises `StreamRequestError("output_failed", ...)`. `SessionArtifactService.csv_download` serves the report.
+- [X] T044 [US3] Add the `format=csv` branch to `src/mist/realtime/websocket_streams/web/blueprint/routes/sessions.py` and `src/mist/realtime/websocket_streams/web/blueprint/responses/download.py`.
+- [X] T045 [US3] Store the scope with the run in `src/mist/realtime/websocket_streams/web/services/operations/sessions.py` (the report names the organizations from it), and add the `scope` counts to the preview in the route `src/mist/realtime/websocket_streams/web/blueprint/routes/sessions.py` (class `PreviewScope`), because the preview function is at its complexity limit. The page reads the concurrency default from the catalog limit `hardware_concurrency`, so no change of the preview limits is needed. The report takes the organization name from the stored scope, so no `org_name` target field exists.
+- [X] T046 [US3] Implement `ScopeAwarePicker` and `ScopeAwareChecker` in `src/operations/exporting/ex_hardware_inventory/run/routing.py`. Wire them with the smallest edit in `src/mist/realtime/websocket_streams/web/services/assembly/collaborators.py`.
+- [X] T047 [US3] Add the output choice, the scope line, the download link, and the default concurrency to `src/mist/realtime/websocket_streams/web/templates/websockets_page.html` and `src/mist/realtime/websocket_streams/web/static/websockets.js`. Use the `data-testid` values of the portal contract.
+- [X] T048 [US3] Run the Story 3 tests and the WebSocket structure guard. Update the pinned counts only if an edit changes them. Commit and push.
 
 ## Phase 6: User Story 4 - Limit concurrency with an environment variable (Priority: P2)
 

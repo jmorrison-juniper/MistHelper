@@ -105,6 +105,7 @@
         progressPending: false  // Keep progress reads in order.
     };
     var activeBatchPreset = null;  // Preserve archive controls when a batch is restored after navigation.
+    var activeBatchFormat = null;  // Preserve the CSV download link when a batch is restored after navigation.
 
     function byId(id) {
         return document.getElementById(id);  // Find one fixed page element.
@@ -196,7 +197,13 @@
         show(byId('wsBatchCatalogOperation'), !selected);  // Hide arbitrary command and operation fields.
         show(byId('wsBatchGenericTargets'), !selected);  // Hide site and target selectors for all-org scope.
         show(byId('wsBatchGenericOutput'), !selected);  // Hide generic JSONL layout choices.
+        byId('wsBatchConcurrency').value = selected ? hardwareConcurrency() : '3';  // Use the server setting for this action.
         invalidateBatchPreview();  // A changed action invalidates every earlier preview.
+    }
+
+    function hardwareConcurrency() {
+        var limits = (state.catalog && state.catalog.limits) || {};  // The catalog publishes the value in use.
+        return String(limits.hardware_concurrency || 3);  // The documented default is three shells.
     }
 
     function wireScopeTabs() {
@@ -652,9 +659,14 @@
         summary.appendChild(make('div', '', preview.target_count + ' target(s)'));  // Report exact server count.
         summary.appendChild(make('div', 'text-muted', 'Preview expires ' + preview.expires_at));  // Explain snapshot age.
         if (preview.preset === 'ex-hardware-xml') {
-            var formatNames = { xml: 'XML (.xml)', json: 'JSON (.json)', both: 'XML and JSON (.xml + .json)' };
+            var formatNames = {
+                xml: 'XML (.xml)', json: 'JSON (.json)', both: 'XML and JSON (.xml + .json)',
+                csv: 'One combined CSV report (.csv)'
+            };
             summary.appendChild(make('div', '', 'Output: ' + (formatNames[preview.format] || 'Unknown')));
-            summary.appendChild(make('div', '', 'Scope: All sites in the configured organization; EX switches only.'));
+            var scopeLine = make('div', '', scopeText(preview.scope));  // Show the scope that the server decided.
+            scopeLine.dataset.testid = 'ws-batch-scope-summary';
+            summary.appendChild(scopeLine);
             (preview.fixed_commands || []).forEach(function(command) {
                 summary.appendChild(make('div', 'font-monospace small', 'Command: ' + command));
             });
@@ -696,6 +708,17 @@
         byId('wsBatchConfirmation').value = '';  // No earlier confirmation applies to this preview.
         byId('wsBatchStart').dataset.confirmation = confirmation.phrase || '';  // Keep exact text for comparison.
         updateBatchStart();  // Enable start only after preview and confirmation checks pass.
+    }
+
+    function scopeText(scope) {
+        if (!scope) return 'Scope: All sites in the configured organization; EX switches only.';  // Older answer shape.
+        var count = Number(scope.organization_count || 0);  // The server counts the organizations in scope.
+        var text = scope.mode === 'msp'
+            ? 'Scope: MSP, ' + count + ' organization' + (count === 1 ? '' : 's') + '; all sites; EX switches only.'
+            : 'Scope: One organization; all sites; EX switches only.';  // The two scopes of the menu.
+        var failed = Number(scope.failed_count || 0);  // Organizations that Mist could not read.
+        if (failed) text += ' ' + failed + ' organization' + (failed === 1 ? '' : 's') + ' could not be read.';
+        return text;  // Plain text only.
     }
 
     function appendBatchParameters(summary) {
@@ -761,6 +784,7 @@
             batchState.preview = null;  // The one-use preview has started a public parent session.
             batchState.sessionId = payload.session_id;  // Progress requests use the server-issued parent id.
             activeBatchPreset = preview.preset || null;  // Keep the correct download affordance for this run.
+            activeBatchFormat = preview.format || null;  // The CSV link needs the selected output.
             show(byId('wsBatchReview'), false);  // Do not show an old snapshot as an active preview.
             show(byId('wsBatchProgress'), true);  // Show the admitted batch state.
             show(byId('wsBatchDownload'), activeBatchPreset !== 'ex-hardware-xml');  // Hardware runs use the archive.
@@ -771,6 +795,9 @@
             byId('wsBatchZipDownload').href = '/api/websockets/batches/' +
                 encodeURIComponent(batchState.sessionId) + '/download?format=zip';  // Use the saved layout archive.
             show(byId('wsBatchZipDownload'), false);  // The final archive is unavailable while targets run.
+            byId('wsBatchCsvDownload').href = '/api/websockets/batches/' +
+                encodeURIComponent(batchState.sessionId) + '/download?format=csv';  // The combined CSV report.
+            show(byId('wsBatchCsvDownload'), false);  // The report is published at the end of the run.
             selectSession(payload);  // Show the same parent messages in the shared output panel.
             pollBatchProgress();  // Show initial status without waiting for the next interval.
         });
@@ -834,9 +861,11 @@
         var complete = ['completed', 'failed', 'partial', 'stopped'].indexOf(batch.status) >= 0;
         byId('wsBatchStop').disabled = complete;
         show(byId('wsBatchZipDownload'), complete);  // A completed batch can create the requested layout archive.
-        if (complete) {
+        show(byId('wsBatchCsvDownload'), complete && activeBatchFormat === 'csv' && batch.artifact_status === 'ready');
+        var outputFinal = ['ready', 'failed'].indexOf(batch.artifact_status) >= 0;  // The report is the last file.
+        if (complete && (outputFinal || activeBatchFormat !== 'csv')) {
             stopBatchProgressTimer();  // A final result needs no more progress requests.
-        }
+        }  // A CSV run keeps polling until its report is published or has failed.
     }
 
     function renderBatchTargetProgress(targets) {
@@ -1628,6 +1657,10 @@
                 encodeURIComponent(session.session_id) + '/download';  // Restore combined result access.
             byId('wsBatchZipDownload').href = '/api/websockets/batches/' +
                 encodeURIComponent(session.session_id) + '/download?format=zip';  // Restore saved layout access.
+            activeBatchFormat = session.batch ? (session.batch.format || null) : null;  // Restore the CSV link choice.
+            byId('wsBatchCsvDownload').href = '/api/websockets/batches/' +
+                encodeURIComponent(session.session_id) + '/download?format=csv';  // Restore the report link.
+            show(byId('wsBatchCsvDownload'), false);  // The next progress read decides whether the report is ready.
             show(byId('wsBatchZipDownload'), !!session.batch &&
                 ['completed', 'failed', 'partial', 'stopped'].indexOf(session.batch.status) >= 0);
             startBatchProgressTimer();  // Poll target state for the selected batch parent.

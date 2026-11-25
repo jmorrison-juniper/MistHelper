@@ -273,7 +273,8 @@ class HardwareXmlPreset:
         "xml": "show chassis hardware detail | display xml | no-more",
         "json": "show chassis hardware detail | display json | no-more",
     }
-    FORMATS = frozenset({"xml", "json", "both"})
+    FORMATS = frozenset({"xml", "json", "both", "csv"})
+    COMMAND_FORMATS = {"xml": ("xml",), "json": ("json",), "both": ("xml", "json"), "csv": ("xml",)}  # CSV reads XML.
 
     @staticmethod
     def empty_selection(values: Mapping[str, object], hardware: bool) -> None:
@@ -302,7 +303,7 @@ class HardwareXmlPreset:
         output_format = body.get("format", "xml")
         revision = body.get("scope_revision")
         if not isinstance(output_format, str) or output_format not in self.FORMATS:
-            raise StreamRequestError("bad_request", "Choose XML, JSON, or BOTH for hardware output.")
+            raise StreamRequestError("bad_request", "Choose XML, JSON, BOTH, or CSV for hardware output.")
         if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
             raise StreamRequestError("bad_request", "The selection revision is not valid.")
         return HardwareXmlSelection(output_format, revision)
@@ -314,10 +315,7 @@ class HardwareXmlPreset:
             "selection": {"sites": {"mode": "all"}, "resources": {"mode": "all"}},
             "parameters": {},
             "commands": [
-                self.COMMANDS[output_format]
-                for output_format in (
-                    ("xml", "json") if selection.output_format == "both" else (selection.output_format,)
-                )
-            ],
+                self.COMMANDS[output_format] for output_format in self.COMMAND_FORMATS[selection.output_format]
+            ],  # The CSV format runs the XML command only, and the report is compiled from the saved XML.
             "scope_revision": selection.scope_revision,
         }

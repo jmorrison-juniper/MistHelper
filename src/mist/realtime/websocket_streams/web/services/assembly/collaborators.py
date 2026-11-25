@@ -75,8 +75,14 @@ class WebSocketCollaboratorFactory:
     def _checker(catalog: Any, picker: Any, org_id: str) -> Any:
         """Build the start request checker."""
         from src.mist.realtime.websocket_streams.intake.start_request.checker import StartRequestChecker  # Load checks.
+        from src.operations.exporting.ex_hardware_inventory.run.routing import (
+            ScopeAwareChecker,
+            ScopeRouter,
+        )  # Route an MSP hardware target to its own organization (issue #4920).
 
-        return StartRequestChecker(catalog, picker, org_id)  # Preserve targets, parameters, and confirmations.
+        return ScopeAwareChecker(
+            StartRequestChecker(catalog, picker, org_id), ScopeRouter.of(picker, catalog)
+        )  # Preserve targets, parameters, and confirmations.
 
 
 class WebSocketManagerFactory:

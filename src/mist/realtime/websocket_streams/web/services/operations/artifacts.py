@@ -36,8 +36,13 @@ from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml im
     HardwareXmlPreset,
     HardwareXmlSupport,
 )  # Keep raw hardware files outside the generic JSONL redaction pipeline.
+from src.operations.exporting.ex_hardware_inventory.run.publisher import (
+    ReportHook,
+)  # Compile the combined CSV from the saved replies (issue #4920).
 
 logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep artifact fields safe and bounded.
+
+REPORT_NAME = "hardware/inventory.csv"  # The combined CSV of a hardware run, relative to its run folder.
 
 
 @dataclass(slots=True)
@@ -217,6 +222,7 @@ class BatchArtifactStorage:
         self.results = self.Results(self)  # Serialize all result writes under the record lock.
         self.retention = self.Retention(self.files)  # Delete only verified, unowned trees.
         self.streams = self.Streams(self.files)  # Downloads share the same path checks.
+        self.reports = self.Reports(self)  # Compile the combined CSV at the end of a hardware run.
 
     def prepare(self, targets: tuple[BatchTargetRequest, ...], output: Mapping[str, object]) -> BatchArtifactWriter:
         """Create one private output tree before public session admission."""
@@ -244,6 +250,8 @@ class BatchArtifactStorage:
         with record.lock:
             record.outcomes = [self.metadata.codec.outcome(item) for item in outcomes]  # Remove private metadata.
             record.partial = record.partial or any(item.get("state") != "completed" for item in outcomes)
+            if record.status != "failed" and record.output.get("format") == "csv":
+                self.reports.publish(record)  # A failure sets the failed status and keeps the saved replies.
             if record.status != "failed":
                 record.status = "ready"  # The manifest write must succeed before completion.
             self.metadata.write(record)  # Persist state within the reserved metadata limit.
@@ -319,6 +327,13 @@ class BatchArtifactStorage:
             except OSError as error:
                 logger.emit(logging.ERROR, "web.artifact.batch.cleanup.error", {"status": type(error).__name__})
                 raise StreamRequestError("cleanup_pending", "The batch output could not be removed.") from error
+
+        def read_bytes(self, record: BatchArtifactRecord, relative: Path, limit: int) -> bytes:
+            """Read one saved file under a size limit, after the same link and containment checks."""
+            path = self.safe_file(record, relative)  # Reject links and traversal before any read.
+            if path.stat().st_size > limit:  # A missing file raises OSError, and a large file is refused.
+                raise StreamRequestError("output_failed", "The saved file exceeds its size limit.")
+            return path.read_bytes()  # Return the exact saved bytes.
 
         class Layout:
             """Derive saved output names only from frozen target identities."""
@@ -632,6 +647,28 @@ class BatchArtifactStorage:
             stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")  # Use a server-generated UTC name.
             return f"websocket-batch-{stamp}.zip", output.getvalue()  # Return a completed in-memory snapshot.
 
+    @dataclass
+    class Reports:
+        """Compile the combined CSV of a hardware run and publish it next to the saved replies."""
+
+        storage: BatchArtifactStorage  # Share the quota, the checked paths, and the atomic publication.
+
+        def publish(self, record: BatchArtifactRecord) -> None:
+            """Compile the CSV from the saved replies and publish it, or fail the run and keep the replies."""
+            scope = record.output.get("scope")  # The service stores the organizations of the run at the start.
+            hook = ReportHook(
+                lambda name: self.storage.files.read_bytes(record, Path(name), self.storage.owner.RECORD_LIMIT).decode(
+                    "utf-8"
+                ),
+                scope if isinstance(scope, Mapping) else None,
+            )  # The hook reads each saved reply only through the checked path.
+            try:  # Any failure keeps the XML files and marks the artifact failed.
+                data = hook.compile(record.outcomes, self.storage.owner.OUTPUT_LIMIT - record.bytes_written)
+                BatchArtifactWriter.Hardware.Publication(self.storage, record).commit((REPORT_NAME,), [data], len(data))
+            except (ValueError, OSError, StreamRequestError) as error:
+                record.status, record.partial = "failed", True  # The summary then reports a failed output.
+                logger.emit(logging.ERROR, "web.artifact.report.error", {"status": type(error).__name__})
+
 
 class BatchSessionBindings:
     """Own public session bindings, manifest summaries, and retention cleanup."""
@@ -754,3 +791,22 @@ class SessionArtifactService:
         finally:
             with record.lock:
                 record.pins -= 1  # Release the cleanup pin after the snapshot is complete.
+
+    def csv_download(self, session_id: str) -> tuple[str, bytes]:
+        """Return the published combined CSV of one completed hardware run."""
+        self._storage.require_ready()  # A not-ready portal cannot create downloads.
+        self._manager.session(session_id)  # Reject unknown or expired parents before file access.
+        writer = self._bindings.writer(session_id)  # Single Site sessions have no report.
+        if writer is None:
+            raise StreamRequestError("not_batch", "The session is not a Multi Site batch.")
+        record = writer._record  # The private record owns completion state and pins.
+        with record.lock:
+            if not record.complete or REPORT_NAME not in record.files:  # Only the CSV output publishes a report.
+                raise StreamRequestError("artifact_not_ready", "The combined CSV report is not ready.")
+            record.pins += 1  # Pin the files while the report is read.
+        try:
+            data = self._storage.files.read_bytes(record, Path(REPORT_NAME), self.OUTPUT_LIMIT)  # Checked path.
+        finally:
+            with record.lock:
+                record.pins -= 1  # Release the cleanup pin after the read.
+        return f"ExHardwareInventory_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.csv", data  # Server-made name.
