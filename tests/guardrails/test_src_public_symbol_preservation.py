@@ -103,6 +103,10 @@ INTENTIONAL_SYMBOL_REMOVALS: dict[str, set[str]] = {
     # organization path. The site fallback import and its status constant are
     # removed on purpose, and the matching unit tests are removed in the same change.
     "src/mist/intelligence/reports/client_fingerprint_census/client.py": {"_HTTP_NOT_FOUND", "insights"},
+    # Issue #4920 builds the portal batch target service as ScopeAwareTargets, a subclass of
+    # BatchTargetPickerService, so the service factory no longer imports the base class.
+    # No other module imports the name from the factory.
+    "src/mist/realtime/websocket_streams/web/services/assembly/factory.py": {"BatchTargetPickerService"},
 }  # Record each reviewed module-level removal, so the guard reports only an unapproved loss.
 
 
