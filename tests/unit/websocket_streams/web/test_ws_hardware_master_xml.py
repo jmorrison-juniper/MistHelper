@@ -137,11 +137,20 @@ class TestFinishStep:
         assert root.get("scope") == "organization" and isinstance(organization, ET.Element)
         assert organization.get("name") == organization.get("id") == next(iter(SCOPE["organizations"]))
 
-    @pytest.mark.parametrize("stored_format", ["", "unknown", "MASTER-XML"])
-    def test_an_empty_or_unknown_stored_format_publishes_no_report_and_fails_nothing(
+    def test_an_empty_stored_format_publishes_no_report_and_fails_nothing(self, tmp_path: Path) -> None:
+        """The finish step reads the stored format. An empty value names no report, so it gives no report and no error."""
+        artifacts, writer, outcomes = finished_run(tmp_path, "")
+        manifest = published(artifacts, writer, outcomes)
+        assert manifest["status"] == "ready" and not {CSV_NAME, XML_NAME} & set(manifest["files"])
+        with pytest.raises(StreamRequestError) as refusal:
+            artifacts.xml_download("run")
+        assert refusal.value.code == "artifact_not_ready"
+
+    @pytest.mark.parametrize("stored_format", ["unknown", "MASTER-XML"])
+    def test_an_unknown_stored_format_publishes_no_report_and_fails_nothing(
         self, tmp_path: Path, stored_format: str
     ) -> None:
-        """The finish step reads the stored format. A value that names no report gives no report and no error."""
+        """A value that names no report gives no report and no error, so an old run folder never breaks the finish."""
         artifacts, writer, outcomes = finished_run(tmp_path, stored_format)
         manifest = published(artifacts, writer, outcomes)
         assert manifest["status"] == "ready" and not {CSV_NAME, XML_NAME} & set(manifest["files"])
