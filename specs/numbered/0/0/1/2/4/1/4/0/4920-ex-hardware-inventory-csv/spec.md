@@ -118,6 +118,7 @@ An operator opens the CSV in a spreadsheet and sends it to a colleague. The repo
 - A switch reply is empty, truncated, malformed, larger than the limit, or holds a credential.
 - A virtual chassis has several members, or two switches share one host name.
 - The token cannot open a shell on a device (HTTP 403 on shell creation). The live test of 2026-11-24 met this case: an organization token with the read-only role got HTTP 403 for each of 15 connected switches. The tool notes the read-only role at step 1 and gives each switch one `failed` outcome row.
+- A sync client or a virus scanner holds the manifest of the run folder for a moment. The second live test of 2026-11-24 met this case: with an admin-role token, 14 of 15 switches collected, and one manifest replace got a Windows permission error. That error failed the whole batch record, so the last switch was refused. The store waits and tries again (FR-044).
 - Mist answers HTTP 429 during discovery or while the tool opens a shell.
 - The MSP organization list is denied, or it lists an organization whose devices the token cannot read.
 - An MSP has more than 1000 connected EX switches in total. The CLI runs each organization as its own batch. The portal refuses the whole preview.
@@ -150,6 +151,7 @@ Targets:
 - **FR-013**: The tool MUST refuse a batch with more than 1000 targets. It MUST NOT cut the list. The CLI runs one batch for each organization, so the limit applies to each organization. The portal runs one batch for the whole preview, so the limit applies to the whole run.
 - **FR-042**: When a run has no target, the tool MUST write no report and MUST say so.
 - **FR-043**: When every grant of the credential has the read-only role, the CLI MUST print one note at step 1 that Mist can refuse a switch shell for that role. The note MUST NOT block the run. A switch that Mist refuses MUST appear as one `failed` outcome row whose detail points to the log.
+- **FR-044**: When a file replace in the run folder gets a permission error, the store MUST try the replace again, up to five tries in total, with waits of 50, 100, 200, and 400 milliseconds. Any other error MUST fail at once. When a save still fails, the report detail MUST say that the reply could not be saved, and MUST NOT call the reply invalid. Issue #4926.
 
 Collection:
 
