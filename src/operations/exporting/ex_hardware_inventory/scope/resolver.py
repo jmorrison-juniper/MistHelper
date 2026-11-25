@@ -182,6 +182,11 @@ class ScopeResolver:
             " The organizations of that MSP are not in this run." if found else " The run uses one organization."
         )  # Say what the failure changed.
         notes = tuple(reason + tail for reason in reasons)  # Say what each failure changed.
+        if profile.read_only:  # A live run showed that Mist refused the shell of every switch for this role.
+            notes += (
+                "This credential has the read-only role. Mist can refuse a switch shell for that role,"
+                " and then each switch fails.",
+            )  # Say it before the operator types the phrase.
         if found:  # MSP scope: every listed organization and every direct grant.
             every = {ref.org_id: ref for ref in reversed((*direct, *found))}  # Reversed, so the first sight wins.
             ordered = sorted(every.values(), key=lambda ref: (ref.org_name.casefold(), ref.org_id))  # Stable.

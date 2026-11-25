@@ -159,6 +159,50 @@ class TestSafeOutcomes:
         assert lines[-1] == "No connected EX switch was found. No file was written."
 
 
+class TestRefusedShells:
+    """Mist refuses the shell session of every switch, as it did for the read-only token of the live test."""
+
+    NOTE = (
+        "  Note: This credential has the read-only role. Mist can refuse a switch shell for that role,"
+        " and then each switch fails."
+    )  # The contract text of the console.
+    DETAIL = "The shell could not collect this switch. See the log for the cause."  # The plain cause for the report.
+
+    def refuse_both(self, world: World, role: str) -> None:
+        """Script two connected switches whose shell sessions Mist refuses, for a credential with the role."""
+        world.org_token(role=role)
+        world.mixed_site_one()
+        world.shells.behavior.update({make_uuid(101): "refused", make_uuid(102): "refused"})
+        world.answer = "RUN 2 TARGETS"
+
+    def test_a_read_only_token_gets_the_note_first_and_every_switch_is_an_outcome_row(
+        self, world: World, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The note comes before the phrase, no shell opens, and the report names each failed switch."""
+        caplog.set_level(logging.DEBUG)  # Capture every log line to prove that the credential never appears.
+        self.refuse_both(world, "read")
+        result, lines = run_menu(capsys)
+        rows = world.rows()
+        assert self.NOTE in lines and lines.index(self.NOTE) < lines.index(
+            "Step 2 of 4: Find the connected EX switches"
+        )
+        assert (
+            "  Alpha Org: collected 0, failed 2, skipped 0, cancelled 0" in lines and lines[-1] == "Run status: partial"
+        )
+        assert result == len(rows) == 2 and {row["collection_status"] for row in rows} == {"failed"}
+        assert {row["collection_detail"] for row in rows} == {self.DETAIL}  # One plain sentence for each switch.
+        assert world.shells.opened == 0 and TOKEN not in "\n".join(lines) + caplog.text
+
+    def test_the_same_refusal_for_another_role_gives_no_note(
+        self, world: World, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The note belongs to the read-only role only. The refusal itself reads the same for every role."""
+        self.refuse_both(world, "write")
+        result, lines = run_menu(capsys)
+        assert not [line for line in lines if line.startswith("  Note:")]  # No note.
+        assert result == 2 and "  Alpha Org: collected 0, failed 2, skipped 0, cancelled 0" in lines
+
+
 class TestMspEndToEnd:
     """An MSP login runs every organization, and a failed organization does not stop the others."""
 

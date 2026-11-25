@@ -66,9 +66,9 @@ class World:
             self.before_answer()
         return self.answer
 
-    def org_token(self, org_id: str = ORG_A, name: str = "Alpha Org") -> FakeMist:
-        """Make the credential an organization token for one organization."""
-        return FakeMist(self.monkeypatch, Payloads.profile([Payloads.org_grant(org_id, name)]))
+    def org_token(self, org_id: str = ORG_A, name: str = "Alpha Org", role: str = "admin") -> FakeMist:
+        """Make the credential an organization token for one organization, with the given role."""
+        return FakeMist(self.monkeypatch, Payloads.profile([Payloads.org_grant(org_id, name, role=role)]))
 
     def mixed_site_one(self) -> None:
         """Add a site with two connected EX switches, a disconnected one, and an access point."""

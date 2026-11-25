@@ -61,12 +61,14 @@ class CredentialProfile:
         credential_type: ``api_token`` when the session holds a token, otherwise ``login``.
         org_grants: The organizations that the credential grants directly, as (id, name) pairs.
         msp_ids: The MSP identifiers that the credential grants, without repeats.
+        read_only: True when the credential has at least one grant and every grant has the read-only role.
     """
 
     account_kind: str  # Display only.
     credential_type: str  # Display only.
     org_grants: tuple[tuple[str, str], ...]  # Direct organization grants in profile order.
     msp_ids: tuple[str, ...]  # MSP grants in profile order.
+    read_only: bool = False  # Mist can refuse the shell of a switch for this credential.
 
 
 class ProfileReader:
@@ -105,6 +107,7 @@ class ProfileReader:
             credential_type="api_token" if getattr(self._apisession, "_apitoken", None) else "login",
             org_grants=self._org_grants(data.get("privileges")),
             msp_ids=self._msp_ids(data.get("privileges")),
+            read_only=self._read_only(data.get("privileges")),
         )  # Everything the resolver needs.
         logger.debug(
             "Read the profile: kind=%s organizations=%d msps=%d",
@@ -133,3 +136,10 @@ class ProfileReader:
             if isinstance(msp_id, str) and msp_id and grant.get("scope", "msp") == "msp":  # An org grant is not MSP.
                 found[msp_id] = None  # Remember the first sight only.
         return tuple(found)  # Profile order, no repeats.
+
+    @staticmethod
+    def _read_only(privileges: object) -> bool:
+        """Return True when the profile has a grant and every grant has the read-only role."""
+        grants = privileges if isinstance(privileges, list) else []  # A bad shape gives no grant.
+        roles = [grant.get("role") for grant in grants if isinstance(grant, dict)]  # One role for each mapping.
+        return bool(roles) and all(role == "read" for role in roles)  # No grant is not read only: it is unknown.

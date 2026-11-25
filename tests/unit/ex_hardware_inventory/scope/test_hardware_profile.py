@@ -77,6 +77,36 @@ class TestGrants:
         assert profile.org_grants == () and profile.msp_ids == ()  # Nothing granted.
 
 
+class TestReadOnlyRole:
+    """The profile says when every grant has the read-only role, because Mist can refuse a shell for it."""
+
+    @pytest.mark.parametrize(
+        ("grants", "expected"),
+        [
+            ([Payloads.org_grant(ORG, role="read")], True),  # The role of the live test token.
+            ([Payloads.org_grant(ORG, role="read"), Payloads.msp_grant(MSP, role="read")], True),  # Every grant.
+            ([Payloads.org_grant(ORG, role="read"), Payloads.org_grant(OTHER, role="write")], False),  # One write.
+            ([Payloads.org_grant(ORG, role="admin")], False),  # An administrator.
+            ([Payloads.org_grant(ORG, role="helpdesk")], False),  # Not known to be read only.
+            ([], False),  # No grant is unknown, not read only.
+        ],
+    )
+    def test_only_a_profile_with_nothing_but_read_grants_is_read_only(
+        self, monkeypatch: pytest.MonkeyPatch, grants: list[dict], expected: bool
+    ) -> None:
+        """The flag is True only when a grant exists and no grant has another role."""
+        FakeMist(monkeypatch, Payloads.profile(grants))
+        assert ProfileReader(TOKEN_SESSION).read().read_only is expected
+
+    @pytest.mark.parametrize("privileges", [None, "text", 7, [None, "x", 3], [{"org_id": ORG}]])
+    def test_a_missing_role_or_a_bad_shape_is_not_read_only(
+        self, monkeypatch: pytest.MonkeyPatch, privileges: object
+    ) -> None:
+        """A grant with no role, and a shape that is not a list of mappings, never count as read only."""
+        FakeMist(monkeypatch, Payloads.response(status=200, data={"privileges": privileges}))
+        assert ProfileReader(TOKEN_SESSION).read().read_only is False
+
+
 class TestFailures:
     """A profile that is not status 200 with a mapping body stops the run."""
 

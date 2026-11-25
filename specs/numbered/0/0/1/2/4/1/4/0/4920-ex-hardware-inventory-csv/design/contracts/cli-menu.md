@@ -80,5 +80,7 @@ The `Left out` line appears for each organization with a count above 0. In MSP s
 | Mist limited the requests while the menu read an organization | `<organization name> was not read, because Mist limited the requests.` The report holds one outcome row for the organization. |
 | Mist refused or could not list the switches of an organization | `<organization name> was not read, because Mist could not list its switches. See the log for the cause.` The report holds one outcome row for the organization. |
 | No Mist session exists | `No Mist session exists. Sign in first. No shell was opened.` |
+| Every grant of the credential has the read-only role | Step 1 prints `Note: This credential has the read-only role. Mist can refuse a switch shell for that role, and then each switch fails.` The run is not blocked. |
+| Mist refuses or cannot open the shell of a switch | The report holds one `failed` outcome row with the detail `The shell could not collect this switch. See the log for the cause.` The log holds the HTTP status. A live test with a read-only organization token got HTTP 403 for 15 of 15 shells. |
 | A confirmed organization got a new switch before its turn | `<organization name>: new switches appeared after the confirmation. Run the menu again.` The report holds one skipped row for each confirmed switch of that organization. |
 | The report check fails | `The report file failed its check and was removed. See the log for the cause.` |

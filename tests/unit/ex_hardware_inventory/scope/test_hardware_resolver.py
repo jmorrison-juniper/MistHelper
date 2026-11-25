@@ -21,6 +21,10 @@ MSP_TWO = "55555555-5555-4555-8555-555555555555"
 SESSION = SimpleNamespace(_apitoken=["SYNTHETIC-TOKEN-VALUE"])  # A session that holds a token.
 USER = "user@example.invalid"  # An invented user.
 NOTE_403 = "The MSP organization list is not permitted for this account (HTTP 403)."  # The contract text.
+READ_ONLY_NOTE = (  # The contract text.
+    "This credential has the read-only role. Mist can refuse a switch shell for that role,"
+    " and then each switch fails."
+)
 
 
 def msp_page(*rows: tuple[str, str], next_link: str | None = None, status: int = 200) -> SimpleNamespace:
@@ -40,6 +44,18 @@ class TestOrganizationScope:
         assert (decision.credential_type, decision.account_kind) == ("api_token", "organization_token")  # Display.
         assert decision.notes == ()  # Nothing unusual.
         assert mist.calls == ["getSelf"]  # No MSP list call without an MSP grant.
+
+    def test_a_read_only_credential_gets_one_note_and_still_runs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The read-only role adds the note of the contract, and the scope is the same as for another role."""
+        FakeMist(monkeypatch, Payloads.profile([Payloads.org_grant(ORG, "Alpha", role="read")]))
+        decision = ScopeResolver(SESSION).resolve()  # Decide.
+        assert decision.organizations == (OrganizationRef(ORG, "Alpha"),)  # The run is not blocked.
+        assert decision.notes == (READ_ONLY_NOTE,)  # One note, and the same sentence for every run.
+
+    def test_a_write_role_adds_no_note(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Any grant above the read-only role gives no note."""
+        FakeMist(monkeypatch, Payloads.profile([Payloads.org_grant(ORG, "Alpha", role="write")]))
+        assert ScopeResolver(SESSION).resolve().notes == ()
 
     def test_the_setting_picks_one_of_several_grants_without_case(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Several grants and an org_id: the setting decides, whatever its case."""

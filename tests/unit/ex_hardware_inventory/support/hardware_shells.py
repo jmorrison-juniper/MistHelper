@@ -42,7 +42,7 @@ class FakeShells:
 
     def __init__(self) -> None:
         """Start with every switch answering well."""
-        self.behavior: dict[str, str] = {}  # Device identifier to ok, bad_xml, or silent.
+        self.behavior: dict[str, str] = {}  # Device identifier to ok, bad_xml, silent, or refused.
         self.replies: dict[str, str] = {}  # Device identifier to its reply text.
         self.commands: list[tuple[str, str]] = []  # Each command that a shell received, with its device.
         self.opened = 0  # How many shells were opened.
@@ -83,7 +83,9 @@ class FakeShellRunner:
         self._live = False  # True between start and stop.
 
     def start(self) -> None:
-        """Open the shell and print the banner and the prompt."""
+        """Open the shell and print the banner and the prompt, or raise when Mist refuses the session."""
+        if self._shells.behavior.get(self._device) == "refused":  # Mist answers 403 to a read-only role.
+            raise RuntimeError("HTTP 403")  # The session is never created, so no shell counts as opened.
         with self._shells.lock:
             self._shells.opened += 1
             self._shells.open += 1

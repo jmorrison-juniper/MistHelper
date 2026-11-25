@@ -117,7 +117,7 @@ An operator opens the CSV in a spreadsheet and sends it to a colleague. The repo
 - A switch accepts the shell but never shows a stable prompt.
 - A switch reply is empty, truncated, malformed, larger than the limit, or holds a credential.
 - A virtual chassis has several members, or two switches share one host name.
-- The token cannot open a shell on a device (HTTP 403 on shell creation).
+- The token cannot open a shell on a device (HTTP 403 on shell creation). The live test of 2026-11-24 met this case: an organization token with the read-only role got HTTP 403 for each of 15 connected switches. The tool notes the read-only role at step 1 and gives each switch one `failed` outcome row.
 - Mist answers HTTP 429 during discovery or while the tool opens a shell.
 - The MSP organization list is denied, or it lists an organization whose devices the token cannot read.
 - An MSP has more than 1000 connected EX switches in total. The CLI runs each organization as its own batch. The portal refuses the whole preview.

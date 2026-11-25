@@ -27,9 +27,11 @@ class Payloads:
         return SimpleNamespace(status_code=status, data=data, next=next_link)
 
     @staticmethod
-    def org_grant(org_id: str, name: str | None = "Example Org", scope: str | None = "org") -> dict[str, Any]:
+    def org_grant(
+        org_id: str, name: str | None = "Example Org", scope: str | None = "org", role: str = "admin"
+    ) -> dict[str, Any]:
         """Return one organization privilege as ``getSelf`` lists it."""
-        grant: dict[str, Any] = {"org_id": org_id, "role": "admin"}  # The fields that the reader uses.
+        grant: dict[str, Any] = {"org_id": org_id, "role": role}  # The fields that the reader uses.
         if scope is not None:  # A missing scope is a legal shape that the reader treats as org.
             grant["scope"] = scope
         if name is not None:  # A missing name makes the reader fall back to the identifier.
@@ -37,9 +39,9 @@ class Payloads:
         return grant
 
     @staticmethod
-    def msp_grant(msp_id: str, scope: str | None = "msp") -> dict[str, Any]:
+    def msp_grant(msp_id: str, scope: str | None = "msp", role: str = "admin") -> dict[str, Any]:
         """Return one MSP privilege as ``getSelf`` lists it."""
-        grant: dict[str, Any] = {"msp_id": msp_id, "role": "admin"}  # The fields that the reader uses.
+        grant: dict[str, Any] = {"msp_id": msp_id, "role": role}  # The fields that the reader uses.
         if scope is not None:  # A missing scope is a legal shape that the reader treats as msp.
             grant["scope"] = scope
         return grant

@@ -50,7 +50,7 @@ class RowFactory:
         "unknown_status": "Mist reported no status for the switch when its turn came.",
         "completion_unproven": "The shell did not show a stable prompt.",
         "format_failed": "The reply was not a valid chassis inventory.",
-        "target_failed": "The shell could not collect this switch.",
+        "target_failed": "The shell could not collect this switch. See the log for the cause.",
         "output_failed": "The reply could not be saved.",
         "new_targets": "New switches appeared after the confirmation, so this organization was not run.",
         "no_longer_connected": "The switch was no longer connected when the run started.",
