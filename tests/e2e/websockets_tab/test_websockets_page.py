@@ -327,6 +327,11 @@ class FakeWebSocketServices:
                     "show chassis hardware detail | display json | no-more",
                 ][: 1 if selected_format == "csv" else 2],
                 "scope": dict(self.hardware_scope),
+                "site_selection": (
+                    {"mode": "selected", "count": len(self.batch_preview_body["sites"]["ids"])}
+                    if isinstance(self.batch_preview_body.get("sites"), dict)
+                    else {"mode": "all"}
+                ),  # The real service reports a count, so the page can name the site choice.
                 "operation": {
                     "kind": "shell",
                     "key": "ex.createShellSession",
@@ -1025,6 +1030,147 @@ def test_ex_hardware_one_organization_scope_line(
     assert page.get_by_test_id("ws-batch-scope-summary").inner_text() == (
         "Scope: One organization; all sites; EX switches only."
     )
+
+
+def test_review_card_lists_the_steps_and_tells_the_operator_to_preview_first(page: Any, websocket_portal: str) -> None:
+    """Before any preview, the card shows the four steps, and Start batch says why it is off."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    steps = page.get_by_test_id("ws-batch-steps").inner_text()
+    assert "Click Preview targets. Nothing runs yet." in steps and "Click Start batch." in steps
+    assert "confirmation word" in steps  # The third step names the word.
+    next_step = page.get_by_test_id("ws-batch-next-step")
+    assert next_step.inner_text() == "Next: click Preview targets. Start batch stays off until you review the list."
+    start = page.get_by_test_id("ws-batch-start")
+    assert start.is_disabled() and start.get_attribute("title") == next_step.inner_text()  # The pointer explains it.
+
+
+def test_the_page_names_the_confirmation_word_and_the_next_step(page: Any, websocket_portal: str) -> None:
+    """The label, the empty box, and the next step all show the word. A near miss keeps Start batch off."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    confirmation = page.get_by_test_id("ws-batch-confirmation")
+    assert page.get_by_test_id("ws-batch-confirmation-label").inner_text() == "Type RUN 2 TARGETS to confirm."
+    assert confirmation.get_attribute("placeholder") == "RUN 2 TARGETS"  # The word shows inside the empty box.
+    next_step = page.get_by_test_id("ws-batch-next-step")
+    waiting = "Next: type RUN 2 TARGETS in the box, then click Start batch."
+    assert next_step.inner_text() == waiting and page.get_by_test_id("ws-batch-start").is_disabled()
+    confirmation.fill("RUN 2 TARGET")  # A near miss.
+    assert next_step.inner_text() == waiting and page.get_by_test_id("ws-batch-start").is_disabled()
+    confirmation.fill("RUN 2 TARGETS")  # The exact word.
+    assert next_step.inner_text() == "Next: click Start batch to run on 2 target(s)."
+    assert page.get_by_test_id("ws-batch-start").is_enabled()
+
+
+def test_a_changed_choice_sends_the_operator_back_to_the_preview(page: Any, websocket_portal: str) -> None:
+    """Changing the output after a preview voids the preview, the word, and the Start button."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-confirmation").fill("RUN 2 TARGETS")
+    assert page.get_by_test_id("ws-batch-start").is_enabled()
+    page.get_by_test_id("ws-batch-hardware-format").select_option("csv")  # A different output.
+    assert page.get_by_test_id("ws-batch-start").is_disabled()
+    assert page.get_by_test_id("ws-batch-next-step").inner_text() == (
+        "Next: click Preview targets. Start batch stays off until you review the list."
+    )
+    assert not page.get_by_test_id("ws-batch-review").is_visible()  # The old list is gone.
+
+
+def test_a_read_only_preview_needs_no_word_and_says_so(page: Any, websocket_portal: str) -> None:
+    """A read-only operation shows no word. The next step goes straight to Start batch."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-operation").select_option("channel:site.stats.devices")
+    page.get_by_test_id("ws-batch-site-status").get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.wait_for_function("() => !document.getElementById('wsBatchStart').disabled", timeout=READY_TIMEOUT_MS)
+    assert page.get_by_test_id("ws-batch-next-step").inner_text() == "Next: click Start batch to run on 101 target(s)."
+    assert not page.get_by_test_id("ws-batch-confirmation").is_visible()  # No word is needed.
+
+
+def test_ex_hardware_preset_keeps_the_site_choice_in_the_targets_card(page: Any, websocket_portal: str) -> None:
+    """Checking the action keeps the Sites choice, lists the sites of the organization, and hides only the resources."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    sites = page.get_by_test_id("ws-batch-sites")  # The choice of all sites or some sites.
+    sites.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-site-status").get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    assert sites.input_value() == "all"  # The whole organization stays the default.
+    assert not page.get_by_test_id("ws-batch-targets").is_visible()  # The action finds its own switches.
+    assert not page.get_by_test_id("ws-batch-operation").is_visible()  # No catalog operation can replace it.
+    sites.select_option("selected")  # Choose some sites.
+    options = page.locator("#wsBatchSiteOptions")
+    options.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert options.locator("option").count() == 2  # Every site of the organization is a choice.
+
+
+def test_ex_hardware_preset_sends_the_selected_sites_and_names_them_in_the_scope_line(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A chosen site is the only site in the request, and the review says how many sites the operator chose."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-site-status").get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-sites").select_option("selected")
+    page.locator("#wsBatchSiteOptions").select_option(SITE_ID)  # One site.
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    body = fake_services.batch_preview_body
+    assert body is not None and body["sites"] == {"mode": "selected", "ids": [SITE_ID]}
+    assert set(body) == {"preset", "format", "scope_revision", "sites"}  # Still no command or device value.
+    assert page.get_by_test_id("ws-batch-scope-summary").inner_text() == (
+        "Scope: One organization; 1 selected site; EX switches only."
+    )
+    page.get_by_test_id("ws-batch-sites").select_option("all")  # Back to the whole organization.
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert "sites" not in (fake_services.batch_preview_body or {})  # All sites sends no selection.
+
+
+def test_ex_hardware_preset_needs_at_least_one_chosen_site_before_it_asks_the_server(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """Selected-sites mode with no site chosen shows a plain error, and no preview request leaves the page."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-site-status").get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-sites").select_option("selected")  # Choose no site.
+    page.get_by_test_id("ws-batch-preview").click()
+    error = page.get_by_test_id("ws-batch-error")
+    error.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert error.inner_text() == "Select one or more sites."
+    assert fake_services.batch_preview_body is None  # The server never saw the request.
+
+
+def test_leaving_the_ex_hardware_preset_gives_the_catalog_operation_its_sites_back(
+    page: Any, websocket_portal: str
+) -> None:
+    """Unchecking restores the sites of the chosen operation, or the first message when there is no operation."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    status = page.get_by_test_id("ws-batch-site-status")
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    status.get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-ex-hardware").uncheck()  # No operation was chosen.
+    status.get_by_text("Choose an operation to load eligible sites.").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-operation").select_option("channel:site.stats.devices")
+    status.get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-ex-hardware").check()  # The action takes the card.
+    status.get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-ex-hardware").uncheck()  # The operation takes it back.
+    status.get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    assert page.get_by_test_id("ws-batch-operation").input_value() == "channel:site.stats.devices"
+    assert page.get_by_test_id("ws-batch-sites").is_visible()
 
 
 def test_ex_hardware_csv_download_link_appears_only_when_the_report_is_ready(

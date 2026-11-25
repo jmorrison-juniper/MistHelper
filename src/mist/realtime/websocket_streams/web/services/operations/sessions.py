@@ -66,6 +66,7 @@ class BatchPreviewRecord:
     confirmation: str | None  # Risky batches require one exact server phrase.
     preset: str | None = None  # Dedicated presets remain bound to the preview.
     output_format: str | None = None  # Format selection cannot change at batch start.
+    site_count: int | None = None  # The number of chosen sites, or None when the preview covers every site.
     consumed: bool = False  # Admission consumes the snapshot at most once.
 
 
@@ -701,12 +702,8 @@ class _BatchServiceComponents:
                     "scope_revision": cast(int, values["scope_revision"]),
                 }
 
-            def _state_fields(
-                self,
-                values: Mapping[str, object],
-                details: Mapping[str, object],
-            ) -> dict[str, Any]:
-                """Return the checked result, fingerprint, and expiration fields."""
+            def _state_fields(self, values: Mapping[str, object], details: Mapping[str, object]) -> dict[str, Any]:
+                """Return the checked result, fingerprint, expiration, and preset fields."""
                 now = cast(float, details["now"])
                 excluded = dict(cast(Mapping[str, int], values.get("excluded", {})))
                 parameters = dict(cast(Mapping[str, object], values["parameters"]))
@@ -725,6 +722,7 @@ class _BatchServiceComponents:
                     "confirmation": confirmation,
                     "preset": values.get("preset"),
                     "output_format": values.get("format"),
+                    "site_count": values.get("site_count"),
                 }
 
             @staticmethod
@@ -802,8 +800,11 @@ class _BatchServiceComponents:
 
             @staticmethod
             def _preset(payload: dict[str, object], record: BatchPreviewRecord) -> None:
-                """Add only the validated format and fixed review command."""
+                """Add only the validated format, the site choice, and the fixed review command."""
                 payload.update({"preset": record.preset, "format": record.output_format})
+                payload["site_selection"] = (
+                    {"mode": "selected", "count": record.site_count} if record.site_count else {"mode": "all"}
+                )  # A count, never a site name or identifier.
                 if record.preset == HardwareXmlPreset.NAME:
                     payload["fixed_commands"] = list(record.commands)
 
@@ -898,7 +899,7 @@ class WebSocketBatchService:
         request = self._hardware_preset.batch_request(hardware) if hardware is not None else body
         values = self._input.selection(request)  # Validate operation, selectors, parameters, and commands.
         if hardware is not None:
-            values.update({"preset": self._hardware_preset.NAME, "format": hardware.output_format})
+            values.update(hardware.preview_values())  # Bind the preset, the format, and the site count.
         targets = self._targets.resolve(values)  # Discover and validate every selected target.
         if hardware is not None:
             targets, hardware_excluded = HardwareXmlSupport.TargetSelector.unique_targets(targets)

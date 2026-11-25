@@ -66,6 +66,7 @@
     };  // A change of a parent picker reloads each child picker.
     var BAND_LABELS = { '24': '2.4 GHz', '5': '5 GHz', '6': '6 GHz' };  // Plain radio band names.
     var START_LABELS = { channel: 'Start stream', capture: 'Start capture', shell: 'Open shell', utility: 'Run utility' };  // Start button text.
+    var HARDWARE_SITE_QUERY = 'kind=shell&key=ex.createShellSession';  // The catalog shell that the hardware action opens on each site.
 
     var state = {
         catalog: { channels: [], utilities: [], ready: false, reason: '' },  // The catalog payload from the server.
@@ -188,6 +189,7 @@
         byId('wsBatchConfirmation').addEventListener('input', updateBatchStart);  // Require the exact preview phrase.
         byId('wsBatchStart').addEventListener('click', startBatch);  // Admit only the reviewed server preview.
         byId('wsBatchStop').addEventListener('click', stopBatch);  // Stop the public parent session.
+        renderBatchNextStep();  // Show the first instruction before the operator clicks anything.
     }
 
     function changeBatchHardwarePreset() {
@@ -195,10 +197,46 @@
         batchState.preset = selected ? 'ex-hardware-xml' : null;  // Keep the accepted preset name fixed.
         show(byId('wsBatchHardwareFormatGroup'), selected);  // Show output choices only for this preset.
         show(byId('wsBatchCatalogOperation'), !selected);  // Hide arbitrary command and operation fields.
-        show(byId('wsBatchGenericTargets'), !selected);  // Hide site and target selectors for all-org scope.
         show(byId('wsBatchGenericOutput'), !selected);  // Hide generic JSONL layout choices.
+        show(byId('wsBatchTargets'), !selected);  // The preset finds its own switches, so no resource list shows.
         byId('wsBatchConcurrency').value = selected ? hardwareConcurrency() : '3';  // Use the server setting for this action.
         invalidateBatchPreview();  // A changed action invalidates every earlier preview.
+        if (selected) loadHardwareSites();  // The Targets card keeps the choice of all sites or some sites.
+        else restoreBatchSites();  // Leaving the preset gives the sites of the catalog operation back.
+    }
+
+    function loadHardwareSites() {
+        var revision = batchState.revision;  // Fence this request by the current action revision.
+        batchState.sites = [];  // Drop the sites of any catalog operation.
+        clearNode(byId('wsBatchSiteOptions'));  // Remove the earlier choices.
+        show(byId('wsBatchSiteGroup'), true);  // The preset always offers the site choice.
+        show(byId('wsBatchSiteOptions'), false);  // The list shows only after the operator selects some sites.
+        show(byId('wsBatchSafetyWarning'), false);  // The review shows the one fixed read-only command.
+        setText('wsBatchSiteStatus', 'Loading organization sites.');  // Show the pending read.
+        apiJson('/api/websockets/batches/sites?' + HARDWARE_SITE_QUERY).then(function(payload) {
+            if (revision !== batchState.revision || batchState.preset !== 'ex-hardware-xml') return;  // Drop a stale answer.
+            if (payload.error || !Array.isArray(payload.rows)) {
+                batchState.sites = [];  // A failure is not a complete empty list.
+                setText('wsBatchSiteStatus', payload.error || 'Site discovery is unavailable.');
+                return;
+            }
+            batchState.sites = payload.rows;  // Keep complete rows for the preview selection.
+            fillBatchSites(payload.rows, payload.reason);  // Draw the list of the preset.
+        });
+    }
+
+    function restoreBatchSites() {
+        var operation = batchState.operation;  // The catalog operation that the page kept while the preset was on.
+        batchState.sites = [];  // Drop the sites of the preset.
+        clearNode(byId('wsBatchSiteOptions'));  // Remove its choices.
+        show(byId('wsBatchSiteOptions'), false);  // The list returns with the sites of the operation.
+        show(byId('wsBatchSiteGroup'), !operation || operationNeedsSites(operation));  // The first state shows the hint.
+        renderBatchSafety();  // Show the catalog safety class of the operation again.
+        if (!operation) {
+            setText('wsBatchSiteStatus', 'Choose an operation to load eligible sites.');  // The first state of the card.
+            return;  // No operation reads no site.
+        }
+        loadBatchSites();  // Read the sites of the operation again.
     }
 
     function hardwareConcurrency() {
@@ -296,7 +334,12 @@
         show(byId('wsBatchSiteGroup'), operationNeedsSites(operation));  // Organization channels need no site selection.
         clearNode(byId('wsBatchTargets'));  // Remove selectors from a prior operation.
         batchState.targets = [];  // Do not carry targets across catalog operations.
-        var warning = entry && (entry.safety === 'change' || entry.safety === 'shell');
+        renderBatchSafety();  // Keep the catalog safety class visible.
+    }
+
+    function renderBatchSafety() {
+        var entry = batchState.operation && batchState.operation.entry;  // The selected catalog entry, if any.
+        var warning = entry && (entry.safety === 'change' || entry.safety === 'shell');  // The risky catalog classes.
         show(byId('wsBatchSafetyWarning'), !!warning);  // Keep the catalog safety class visible.
         setText('wsBatchSafetyWarning', warning
             ? 'Warning: This batch runs on every confirmed target. Verify the operation and target list before start.'
@@ -383,12 +426,12 @@
         var selected = byId('wsBatchSiteMode').value === 'selected';  // Show choices only when selection is explicit.
         show(byId('wsBatchSiteOptions'), selected && batchState.sites.length > 0);
         invalidateBatchPreview();  // All and selected targets are different execution snapshots.
-        loadBatchTargets();  // Rebuild resources for the selected site subset.
+        if (!batchState.preset) loadBatchTargets();  // Rebuild resources for the selected site subset. The preset has none.
     }
 
     function changeBatchSiteSelection() {
         invalidateBatchPreview();  // A changed site set invalidates the exact target snapshot.
-        loadBatchTargets();  // Do not keep resources from a different site set.
+        if (!batchState.preset) loadBatchTargets();  // Do not keep resources from a different site set.
     }
 
     function changeBatchTargetSelection(event) {
@@ -556,6 +599,8 @@
         show(byId('wsBatchReview'), false);  // Remove review text for a stale target set.
         show(byId('wsBatchConfirmationGroup'), false);  // Hide confirmation until preview returns.
         show(byId('wsBatchError'), false);  // Clear errors tied to the previous selection.
+        byId('wsBatchStart').dataset.confirmation = '';  // The old phrase belongs to the old snapshot.
+        renderBatchNextStep();  // A changed selection needs a new preview first.
     }
 
     function previewBatch() {
@@ -569,6 +614,7 @@
         }
         batchState.previewPending = true;  // Prevent duplicate preview submissions.
         byId('wsBatchPreview').disabled = true;  // Keep the current selection stable while the server resolves it.
+        renderBatchNextStep();  // Tell the operator to wait for the list.
         setText('wsBatchError', '');  // Clear the prior refusal.
         show(byId('wsBatchError'), false);  // Hide the empty error box.
         apiJson('/api/websockets/batches/previews', {
@@ -592,11 +638,17 @@
 
     function batchPreviewRequest() {
         if (batchState.preset === 'ex-hardware-xml') {
-            return {
+            var request = {
                 preset: 'ex-hardware-xml',
                 format: byId('wsBatchHardwareFormat').value,
                 scope_revision: batchState.revision
-            };  // Submit no command, organization, site, or device values.
+            };  // Submit no command, organization, or device values.
+            if (byId('wsBatchSiteMode').value === 'selected') {
+                var ids = selectedBatchSites().map(function(site) { return site.id; });  // Source site identifiers only.
+                if (!ids.length) throw new Error('Select one or more sites.');  // A subset needs at least one site.
+                request.sites = { mode: 'selected', ids: ids };  // All sites is the default and sends no selection.
+            }
+            return request;  // The server checks each site against its own scope.
         }
         var operation = batchState.operation;  // The current server-catalog identity.
         if (!operation) throw new Error('Choose a catalog operation.');  // No preview can exist without a key.
@@ -664,7 +716,7 @@
                 csv: 'One combined CSV report (.csv)'
             };
             summary.appendChild(make('div', '', 'Output: ' + (formatNames[preview.format] || 'Unknown')));
-            var scopeLine = make('div', '', scopeText(preview.scope));  // Show the scope that the server decided.
+            var scopeLine = make('div', '', scopeText(preview.scope, preview.site_selection));  // The scope that the server decided.
             scopeLine.dataset.testid = 'ws-batch-scope-summary';
             summary.appendChild(scopeLine);
             (preview.fixed_commands || []).forEach(function(command) {
@@ -706,16 +758,21 @@
         }
         show(byId('wsBatchConfirmationGroup'), !!confirmation.required);  // Only risky batches need a phrase.
         byId('wsBatchConfirmation').value = '';  // No earlier confirmation applies to this preview.
+        byId('wsBatchConfirmation').placeholder = confirmation.phrase || '';  // Show the word inside the empty box.
+        setText('wsBatchConfirmationLabel', confirmation.required
+            ? 'Type ' + confirmation.phrase + ' to confirm.' : 'Type the exact confirmation phrase.');  // Name the word.
         byId('wsBatchStart').dataset.confirmation = confirmation.phrase || '';  // Keep exact text for comparison.
         updateBatchStart();  // Enable start only after preview and confirmation checks pass.
     }
 
-    function scopeText(scope) {
+    function scopeText(scope, siteSelection) {
         if (!scope) return 'Scope: All sites in the configured organization; EX switches only.';  // Older answer shape.
         var count = Number(scope.organization_count || 0);  // The server counts the organizations in scope.
+        var chosen = siteSelection && siteSelection.mode === 'selected' ? Number(siteSelection.count || 0) : 0;  // A subset.
+        var sites = chosen ? chosen + ' selected site' + (chosen === 1 ? '' : 's') : 'all sites';  // The site choice.
         var text = scope.mode === 'msp'
-            ? 'Scope: MSP, ' + count + ' organization' + (count === 1 ? '' : 's') + '; all sites; EX switches only.'
-            : 'Scope: One organization; all sites; EX switches only.';  // The two scopes of the menu.
+            ? 'Scope: MSP, ' + count + ' organization' + (count === 1 ? '' : 's') + '; ' + sites + '; EX switches only.'
+            : 'Scope: One organization; ' + sites + '; EX switches only.';  // The two scopes of the menu.
         var failed = Number(scope.failed_count || 0);  // Organizations that Mist could not read.
         if (failed) text += ' ' + failed + ' organization' + (failed === 1 ? '' : 's') + ' could not be read.';
         return text;  // Plain text only.
@@ -750,6 +807,25 @@
         var targets = preview && Array.isArray(preview.targets) ? preview.targets : [];  // Require the full server list.
         var complete = !!preview && targets.length === Number(preview.target_count);  // Require the entire target snapshot.
         byId('wsBatchStart').disabled = !complete || !correct || batchState.previewPending;  // Require full review.
+        renderBatchNextStep();  // Tell the operator the one action that is left.
+    }
+
+    function renderBatchNextStep() {
+        var start = byId('wsBatchStart');  // The start button holds the phrase of the server.
+        var preview = batchState.preview;  // The current reviewed snapshot, if any.
+        var phrase = start.dataset.confirmation || '';  // The confirmation word that the server issued.
+        var text;  // The one instruction for the operator.
+        if (batchState.previewPending) {
+            text = 'Reading the targets from Mist. Wait for the list.';  // The preview takes a while on a large organization.
+        } else if (!preview) {
+            text = 'Next: click Preview targets. Start batch stays off until you review the list.';  // The first step.
+        } else if (phrase && byId('wsBatchConfirmation').value !== phrase) {
+            text = 'Next: type ' + phrase + ' in the box, then click Start batch.';  // Name the word.
+        } else {
+            text = 'Next: click Start batch to run on ' + preview.target_count + ' target(s).';  // The last step.
+        }
+        setText('wsBatchNextStep', text);  // Show only the action that is left.
+        start.title = start.disabled ? text : '';  // Explain the disabled button where the pointer rests.
     }
 
     function startBatch() {

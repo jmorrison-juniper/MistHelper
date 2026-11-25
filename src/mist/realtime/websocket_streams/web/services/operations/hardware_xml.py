@@ -31,10 +31,43 @@ class HardwareXmlDocument:
 
 @dataclass(frozen=True, slots=True)
 class HardwareXmlSelection:
-    """Keep the output format and UI revision selected for one preview."""
+    """Keep the output format, the chosen sites, and the UI revision selected for one preview."""
 
     output_format: str
     scope_revision: int
+    site_ids: tuple[str, ...] = ()  # An empty tuple means every eligible site of the scope.
+
+    @staticmethod
+    def parse_sites(raw: object) -> tuple[str, ...]:
+        """Validate the optional site selection and return the chosen site identifiers.
+
+        Why:
+            The page can run the action on every site or on a subset. The batch service checks membership later.
+
+        Args:
+            raw: None, ``{"mode": "all"}``, or ``{"mode": "selected", "ids": [...]}``.
+
+        Returns:
+            An empty tuple for every site, or the chosen site identifiers.
+        """
+        if raw is None:  # The page sends no selection for every site.
+            return ()  # Every eligible site.
+        if not isinstance(raw, Mapping) or set(raw) - {"mode", "ids"} or raw.get("mode") not in {"all", "selected"}:
+            raise StreamRequestError("bad_request", "The site selection is not valid.")  # Refuse an unknown shape.
+        ids = raw.get("ids", [])  # Present only in the selected mode.
+        if not isinstance(ids, list) or any(not isinstance(item, str) or not item for item in ids):
+            raise StreamRequestError("bad_request", "Select one or more valid site identifiers.")  # Refuse.
+        if (raw["mode"] == "all") != (not ids):  # Every site names no site, and a subset names at least one.
+            raise StreamRequestError("bad_request", "The site selection does not match its mode.")  # Refuse.
+        return tuple(ids)  # Empty for every site.
+
+    def preview_values(self) -> dict[str, object]:
+        """Return the values that the batch service binds to the preview of the hardware preset."""
+        return {
+            "preset": HardwareXmlPreset.NAME,
+            "format": self.output_format,
+            "site_count": len(self.site_ids) or None,  # None means every site.
+        }
 
 
 class HardwareXmlSupport:
@@ -295,8 +328,9 @@ class HardwareXmlPreset:
         return output is not None and output.get("preset") == cls.NAME
 
     def parse(self, body: object) -> HardwareXmlSelection:
-        """Validate the exact preset request and default to XML."""
-        if not isinstance(body, Mapping) or set(body) - {"preset", "format", "scope_revision"}:  # Exact fields only.
+        """Validate the exact preset request and default to XML and every site."""
+        allowed = {"preset", "format", "scope_revision", "sites"}  # The site selection is optional.
+        if not isinstance(body, Mapping) or set(body) - allowed:  # Exact fields only.
             raise StreamRequestError("bad_request", "The hardware preset request has an unknown field.")  # Refuse.
         if body.get("preset") != self.NAME:  # Only the one server-owned preset exists.
             raise StreamRequestError("bad_request", "The hardware preset is not available.")  # Refuse.
@@ -306,13 +340,16 @@ class HardwareXmlPreset:
             raise StreamRequestError("bad_request", "Choose XML, JSON, BOTH, or CSV for hardware output.")  # Refuse.
         if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:  # A bool is not a revision.
             raise StreamRequestError("bad_request", "The selection revision is not valid.")  # Refuse.
-        return HardwareXmlSelection(output_format, revision)  # The checked selection.
+        return HardwareXmlSelection(
+            output_format, revision, HardwareXmlSelection.parse_sites(body.get("sites"))
+        )  # The checked choice.
 
     def batch_request(self, selection: HardwareXmlSelection) -> dict[str, object]:
         """Build the existing shell batch request without browser-controlled targets."""
+        sites = {"mode": "selected", "ids": list(selection.site_ids)} if selection.site_ids else {"mode": "all"}
         return {
             "operation": {"kind": "shell", "key": "ex.createShellSession"},
-            "selection": {"sites": {"mode": "all"}, "resources": {"mode": "all"}},
+            "selection": {"sites": sites, "resources": {"mode": "all"}},
             "parameters": {},
             "commands": [
                 self.COMMANDS[output_format] for output_format in self.COMMAND_FORMATS[selection.output_format]

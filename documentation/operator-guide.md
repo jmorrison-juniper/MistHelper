@@ -407,6 +407,28 @@ the line says so. In MSP scope, the line gives the number of organizations that
 the login can reach, and the number that Mist could not read. The portal uses
 the same scope rules as menu 309.
 
+The Targets card stays on the page when you choose this action. Keep **All
+eligible sites** to cover the whole organization. To run on some sites, choose
+**Selected sites**, then select one or more sites in the list. The preview says
+how many sites you chose, for example `One organization; 1 selected site`. The
+page refuses an empty choice, and the server refuses a site that is not in the
+scope. In MSP scope, the list shows the sites of the configured organization,
+and **All eligible sites** covers every organization.
+
+Follow these steps, in this order. The Review card shows them too.
+
+1. Choose the action, the output, and the sites.
+2. Click **Preview targets**. Nothing runs yet. The portal reads Mist and
+   shows the exact list of switches.
+3. Review the list. The page shows the confirmation word, `RUN <count>
+   TARGETS`, in the label of the box, in the box, and in the line above **Start
+   batch**. Type the word.
+4. Click **Start batch**.
+
+**Start batch** stays off until you finish step 2 and type the word. A change
+of the choices after the preview clears the preview, so you click **Preview
+targets** again. The line above **Start batch** always tells you the next step.
+
 Type the confirmation phrase, then select **Start batch**. The progress panel
 shows **Download CSV report** when the report is complete. The report file is
 `hardware/inventory.csv` in the run directory. The archive holds it too. If the

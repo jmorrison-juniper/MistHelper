@@ -90,12 +90,12 @@ def wait_final(client: Any, session_id: str, seconds: float = 30.0) -> dict[str,
     raise AssertionError("The batch did not end in time.")
 
 
-def request_preview(client: Any, output_format: str = "csv") -> Any:
+def request_preview(client: Any, output_format: str = "csv", sites: dict[str, Any] | None = None) -> Any:
     """Post the preview request of the hardware preset and return the raw answer."""
-    return client.post(
-        "/api/websockets/batches/previews",
-        json={"preset": "ex-hardware-xml", "format": output_format, "scope_revision": 0},
-    )
+    body: dict[str, Any] = {"preset": "ex-hardware-xml", "format": output_format, "scope_revision": 0}
+    if sites is not None:  # A subset of the sites. All sites is the default and sends no field.
+        body["sites"] = sites
+    return client.post("/api/websockets/batches/previews", json=body)
 
 
 def run_batch(
@@ -103,9 +103,10 @@ def run_batch(
     output_format: str = "csv",
     concurrency: int | None = None,
     before_start: Callable[[], None] | None = None,
+    sites: dict[str, Any] | None = None,
 ) -> tuple[dict, dict, str]:
     """Preview, start, and wait. Return the preview, the final batch summary, and the session identifier."""
-    preview = request_preview(client, output_format)
+    preview = request_preview(client, output_format, sites)
     assert preview.status_code == 201, preview.get_data(as_text=True)
     body = preview.get_json()
     start = {"preview_id": body["preview_id"], "confirmation": body["confirmation"]["phrase"]}
@@ -188,6 +189,50 @@ class TestOrganizationScope:
             run_batch(client, concurrency=3)
         assert {command for _, command in portal.shells.commands} == {COMMAND}
         assert 1 < portal.shells.peak <= 3 and portal.shells.open == 0
+
+    def test_a_site_subset_runs_only_the_chosen_site_and_the_report_holds_only_its_switches(
+        self, portal: Portal
+    ) -> None:
+        """One chosen site gives two targets and two shells, and the report names no other site."""
+        self.build(portal)
+        for client in portal.build():
+            preview, batch, session_id = run_batch(client, sites={"mode": "selected", "ids": [SITE_2]})
+            assert preview["target_count"] == 2 and preview["confirmation"]["phrase"] == "RUN 2 TARGETS"
+            assert preview["site_selection"] == {"mode": "selected", "count": 1}  # A count and no name.
+            assert {target["site_label"] for target in preview["targets"]} == {"Site Two"}
+            assert batch["artifact_status"] == "ready"
+            rows = report_rows(client, session_id)
+            assert {row["site_name"] for row in rows} == {"Site Two"}
+            assert {row["device_name"] for row in rows} == {"ex-03", "ex-04"}
+        assert portal.shells.opened == 2  # The two switches of the other site never got a shell.
+
+    def test_the_explicit_all_mode_and_no_selection_give_the_same_preview(self, portal: Portal) -> None:
+        """Both ways to say every site list the four switches, and the preview names no subset."""
+        self.build(portal)
+        for client in portal.build():
+            plain = request_preview(client).get_json()
+            explicit = request_preview(client, sites={"mode": "all"}).get_json()
+        assert plain["target_count"] == explicit["target_count"] == 4
+        assert plain["site_selection"] == explicit["site_selection"] == {"mode": "all"}
+
+    @pytest.mark.parametrize(
+        "sites",
+        [
+            {"mode": "selected", "ids": [make_uuid(99)]},
+            {"mode": "selected", "ids": [SITE_1, SITE_1]},
+            {"mode": "selected", "ids": []},
+            {"mode": "all", "ids": [SITE_1]},
+            {"mode": "selected", "ids": ["not-a-uuid"]},
+            "all",
+        ],
+    )
+    def test_a_bad_site_choice_is_refused_before_any_shell(self, portal: Portal, sites: Any) -> None:
+        """An unknown site, a repeated site, an empty subset, and a wrong shape give HTTP 400 and no shell."""
+        self.build(portal)
+        for client in portal.build():
+            response = request_preview(client, sites=sites)
+            assert response.status_code == 400 and response.get_json()["code"] == "bad_request"
+        assert portal.shells.opened == 0
 
     @pytest.mark.parametrize("output_format", ["xml", "both"])
     def test_the_existing_outputs_publish_no_csv(self, portal: Portal, output_format: str) -> None:
