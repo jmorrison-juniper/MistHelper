@@ -561,3 +561,36 @@ class TestMspScope:
             run_batch(client)
         calls = [key for _, key, _ in portal.mist.calls("listOrgSites")]
         assert calls[:3] == [ORG_A, ORG_B, ORG_C] and set(calls) == {ORG_A, ORG_B, ORG_C}
+
+
+class TestShellLock:
+    """The default setting keeps remote shells locked, and the hardware action refuses before it opens a shell."""
+
+    LOCK_MESSAGE = "This stream is locked by the portal settings."  # The sentence that the operator guide quotes.
+
+    @pytest.mark.parametrize("value", [None, "", "false", "0", "off"])
+    def test_a_locked_shell_class_refuses_the_preview_and_opens_no_shell(
+        self, portal: Portal, tmp_path: Path, value: str | None
+    ) -> None:
+        """An absent, empty, or off value gives HTTP 403 with the lock code and the setting name (issue #4938)."""
+        two_sites(portal)  # Four switches that would run if the shell class were unlocked.
+        if value is None:  # The setting is absent.
+            portal.monkeypatch.delenv("PORTAL_WS_ENABLE_SHELL")  # The fixture set it to true.
+        else:  # The setting holds an off value.
+            portal.monkeypatch.setenv("PORTAL_WS_ENABLE_SHELL", value)  # The portal reads it when it starts.
+        for client in portal.build():  # One real portal app with the locked class.
+            response = request_preview(client, "csv-master-xml")  # The operator clicks Preview targets.
+            body = response.get_json()  # The refusal payload that the page reads.
+            assert response.status_code == 403  # The lock refuses the request.
+            assert body["code"] == "locked" and body["error"] == self.LOCK_MESSAGE  # The page shows this sentence.
+            assert body["flag"] == "PORTAL_WS_ENABLE_SHELL"  # The payload names the setting that unlocks the class.
+        assert portal.shells.opened == 0  # No shell opened.
+        assert not list(tmp_path.rglob("inventory.*"))  # No report was written.
+
+    def test_the_unlocked_setting_accepts_the_same_preview(self, portal: Portal) -> None:
+        """The fixture sets the value to true, and the same request then gives HTTP 201 and the phrase."""
+        two_sites(portal)  # The same four switches as the refusal tests.
+        for client in portal.build():  # One real portal app with the unlocked class.
+            response = request_preview(client, "csv-master-xml")  # The same request as the refusal tests.
+            assert response.status_code == 201  # The preview is accepted.
+            assert response.get_json()["confirmation"]["phrase"] == "RUN 4 TARGETS"  # The operator can go on.
