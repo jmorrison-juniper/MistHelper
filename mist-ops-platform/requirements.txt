@@ -154,7 +154,7 @@ pydantic-core==2.50.5
     # via pydantic
 pydantic-settings==2.16.3
     # via mist-ops-platform (mist-ops-platform/pyproject.toml)
-python-dateutil==2.9.0.post0
+python-dateutil==4.0.0
     # via celery
 python-dotenv==1.2.4
     # via
