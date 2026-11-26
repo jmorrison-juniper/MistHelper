@@ -4,6 +4,9 @@ import hashlib
 import logging
 import os
 import secrets
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -16,6 +19,37 @@ from requests.adapters import HTTPAdapter
 from src.foundation.persistence.db import DatabaseConfig
 
 logger = logging.getLogger(__name__)
+_scoped_organization: ContextVar[str | None] = ContextVar(  # Tenant of the current site reads.
+    "misthelper_scoped_organization",
+    default=None,
+)
+
+
+@contextmanager
+def organization_scope(org_id: str) -> Iterator[None]:
+    """Attribute site-scoped Mist reads in this block to one organization.
+
+    Site endpoints carry no organization in their path, so shared admission cannot
+    attribute them to a tenant without this scope.
+    """
+    token = _scoped_organization.set(org_id)  # Make the organization visible only to reads in this block.
+    try:  # Restore the outer scope on every exit path.
+        yield  # Run the caller's reads under the organization.
+    finally:  # Reset the context variable even when a read raises.
+        _scoped_organization.reset(token)  # Return to the previous scope value.
+
+
+def _credential_fingerprint(request: PreparedRequest) -> str:
+    """Hash the request credential without leaving the raw value in a local name."""
+    return hashlib.sha256(_authentication_header(request).encode()).hexdigest()  # Hash the credential inline.
+
+
+def _authentication_header(request: PreparedRequest) -> str:
+    """Return the request credential, or fail before any shared accounting."""
+    authentication = request.headers.get("Authorization") or request.headers.get("Cookie")  # Read auth locally.
+    if not authentication:  # Anonymous requests cannot share a safe identity key.
+        raise ConnectionError("Shared API admission requires configured authentication.")  # Fail closed.
+    return authentication  # Return the credential to the caller that hashes it.
 
 
 class RequestLedger:
@@ -75,10 +109,7 @@ return 1"""  # Reserve all matching quotas in one atomic operation.
         if not self.available:  # Redis already failed, so continue the read without it.
             logger.debug("Shared Redis admission is unavailable; the request will continue.")  # Explain the fallback.
             return  # Keep read-only Mist requests alive on a workstation without Redis.
-        authentication = request.headers.get("Authorization") or request.headers.get("Cookie")  # Read auth locally.
-        if not authentication:  # Anonymous requests cannot share a safe identity key.
-            raise ConnectionError("Shared API admission requires configured authentication.")  # Fail closed.
-        fingerprint = hashlib.sha256(authentication.encode()).hexdigest()  # Store only a one-way credential key.
+        fingerprint = _credential_fingerprint(request)  # Store only a one-way credential key, never the credential.
         keys = [f"misthelper:api:v1:requests:{fingerprint}"]  # Count attempts for this credential.
         org_id = self._organization(request)  # Resolve the tenant bucket before reservation.
         if org_id:  # Include cross-credential organization control when known.
@@ -105,7 +136,10 @@ return 1"""  # Reserve all matching quotas in one atomic operation.
         if len(path) > 4 and path[3] == "orgs":  # Organization requests expose the tenant in the path.
             return path[4]  # Use the source organization value.
         if len(path) > 3 and path[3] == "sites" and not self.org_id:  # Site requests need a tenant context.
-            raise ConnectionError("Site API request admission requires a selected organization.")  # Fail closed.
+            scoped_org_id = _scoped_organization.get()  # Use the organization that the caller is reading now.
+            if not scoped_org_id:  # Neither the ledger nor the caller names a tenant.
+                raise ConnectionError("Site API request admission requires a selected organization.")  # Fail closed.
+            return scoped_org_id  # Attribute this site request to the caller's organization.
         return self.org_id  # Retain the selected organization for site requests.
 
 

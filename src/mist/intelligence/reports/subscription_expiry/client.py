@@ -4,12 +4,15 @@ from __future__ import annotations  # Keep annotations import-safe during tests.
 
 import logging  # Record client actions for operator traceability.
 import time  # Bound the one HTTP 429 retry.
+from collections.abc import Iterator  # Type the SDK error-line mute as a context manager.
+from contextlib import contextmanager  # Build the mute as a scoped block.
 from types import SimpleNamespace  # Build safe SDK-shaped responses for transport failures.
 from typing import Any  # Type SDK responses without importing Mist response classes.
 
 import mistapi  # Use the project-approved Mist SDK for API calls.
 
 from src.foundation.runtime.config import runtime_settings  # Reuse the project page-limit setting.
+from src.interfaces.wan_performance.collection.request_admission import organization_scope  # Scope site reads.
 from src.mist.intelligence.reports.subscription_expiry.model import (
     MISSING_VALUE,
     JsiContractSource,
@@ -20,6 +23,8 @@ from src.mist.intelligence.reports.subscription_expiry.model import (
 
 logger = logging.getLogger(__name__)  # Give this module a stable logger name.
 HTTP_BAD_REQUEST = 400  # Detect the no-linked-account JSI path.
+HTTP_FORBIDDEN = 403  # Name the MSP grant that cannot list organizations.
+SDK_LOGGER_NAME = "mistapi"  # The Mist SDK writes its own HTTP error lines to this logger.
 
 
 class JsiAccountNotLinkedError(RuntimeError):
@@ -28,6 +33,26 @@ class JsiAccountNotLinkedError(RuntimeError):
 
 class SubscriptionExpiryClientError(RuntimeError):
     """Raised when a Mist API response reports an unexpected failure."""
+
+
+class _SkipSdkErrorRecords(logging.Filter):
+    """Drop ERROR records from the Mist SDK logger while one report call runs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Keep every record below ERROR so warnings and info still reach the operator."""
+        return record.levelno < logging.ERROR  # Drop only the SDK's error lines.
+
+
+@contextmanager
+def _sdk_error_lines_muted() -> Iterator[None]:
+    """Mute the SDK's own error lines while this report logs the call outcome once."""
+    sdk_logger = logging.getLogger(SDK_LOGGER_NAME)  # Attach the filter where the SDK writes its error lines.
+    mute = _SkipSdkErrorRecords()  # Use one instance so removal affects only this call.
+    sdk_logger.addFilter(mute)  # Start muting SDK errors for the enclosed call.
+    try:  # Restore the logger on every exit path.
+        yield  # Run the enclosed Mist call.
+    finally:  # Remove the filter even when the call raises.
+        sdk_logger.removeFilter(mute)  # Leave no filter behind for later calls.
 
 
 class SubscriptionExpiryClient:
@@ -157,6 +182,22 @@ class SubscriptionExpiryClient:
             ),
         )  # Add direct organization scope.
 
+    @staticmethod
+    def _warn_msp_list_failed(status_code: int | None) -> None:
+        """Log one warning for a failed MSP organization list."""
+        if status_code == 0:  # A transport failure already logged its own error line.
+            return  # Avoid a second line for the same failure.
+        if status_code == HTTP_FORBIDDEN:  # The grant exists, but this account cannot list its organizations.
+            logger.warning(
+                "MSP organization list is not permitted for this account (HTTP 403). "
+                "The report continues with direct organizations."
+            )  # Explain the expected outcome in one line.
+            return  # Keep the 403 message specific.
+        logger.warning(
+            "MSP organization list returned HTTP %s. The report continues with direct organizations.",
+            status_code,
+        )  # Name the unexpected status.
+
     def _discover_msp(
         self,
         msp_id: str,
@@ -164,13 +205,15 @@ class SubscriptionExpiryClient:
         failures: list[OrganizationScope],
     ) -> None:
         """Discover organizations under one MSP grant."""
-        response = self._request_with_retry(
-            "listMspOrgs",
-            msp_id,
-            lambda: mistapi.api.v1.msps.orgs.listMspOrgs(self.apisession, msp_id),
-        )  # Call MSP organization discovery.
+        with _sdk_error_lines_muted():  # The SDK logs HTTP errors itself; log the outcome once.
+            response = self._request_with_retry(
+                "listMspOrgs",
+                msp_id,
+                lambda: mistapi.api.v1.msps.orgs.listMspOrgs(self.apisession, msp_id),
+            )  # Call MSP organization discovery.
         status_code = getattr(response, "status_code", None)  # Read MSP status.
         if status_code != 200:  # MSP discovery failed at the first page.
+            self._warn_msp_list_failed(status_code)  # Report the outcome without the SDK's error lines.
             failures.append(
                 OrganizationScope(
                     org_id=MISSING_VALUE,
@@ -626,7 +669,8 @@ class SubscriptionExpiryClient:
             if key in seen_vc:  # Another record represents the same logical VC.
                 continue  # Avoid duplicate status calls and member rows.
             seen_vc.add(key)  # Remember this logical VC.
-            members = self._fetch_virtual_chassis_members(org_id, site_id, device_id)  # Fetch physical members.
+            with organization_scope(org_id):  # Admit this site-scoped VC read under its organization.
+                members = self._fetch_virtual_chassis_members(org_id, site_id, device_id)  # Fetch physical members.
             if not members:  # The status call failed or found no members.
                 expanded.append(record)  # Preserve the source row for visible fallback and model filtering.
                 continue  # Continue without physical evidence.

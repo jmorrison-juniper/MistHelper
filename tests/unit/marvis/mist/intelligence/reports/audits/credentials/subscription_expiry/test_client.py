@@ -2,10 +2,14 @@
 
 from __future__ import annotations  # Keep annotations import-safe during test collection.
 
+import logging  # Read the SDK and report log records.
 from types import SimpleNamespace  # Build small SDK response doubles.
+from typing import Any  # Type the discovery failure list.
 
 import pytest  # Assert exceptions and test outcomes.
+from requests import Request  # Prepare a real admission request.
 
+from src.interfaces.wan_performance.collection.request_admission import RequestLedger  # Check VC reads at admission.
 from src.mist.intelligence.reports.subscription_expiry import client as client_module  # Patch the module SDK seams.
 from src.mist.intelligence.reports.subscription_expiry.client import (
     JsiAccountNotLinkedError,
@@ -49,6 +53,84 @@ class FakeMistApi:
     def get_all(response: SimpleNamespace, mist_session: object) -> list[dict[str, object]]:
         """Return paginated rows from the wrapped response."""
         return list(response.data["results"])  # Simulate mistapi pagination output.
+
+
+class AcceptingRedis:
+    """Reserve every request so the test measures only the organization scope."""
+
+    def eval(self, *_arguments: object) -> int:
+        """Return a successful reservation."""
+        return 1  # Admit the request.
+
+
+def test_virtual_chassis_read_is_admitted_under_its_organization(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A site-scoped VC status read reaches shared admission with its organization attached."""
+    ledger = RequestLedger(AcceptingRedis())  # Use shared admission with no selected organization.
+    vc_request = Request(
+        "GET",
+        "https://mist.example/api/v1/sites/site-one/devices/dev-one/vc",
+        headers={"Authorization": "Token value"},
+    ).prepare()  # Prepare the same site-scoped read that the SDK sends.
+    admitted: list[str] = []  # Record the organization that the read used.
+
+    def fake_status_read(
+        self: SubscriptionExpiryClient,
+        org_id: str,
+        site_id: str,
+        device_id: str,
+    ) -> list[dict[str, object]]:
+        """Admit the VC status request before returning no members."""
+        ledger.admit(vc_request)  # Fail here if the organization scope is missing.
+        admitted.append(org_id)  # Record the organization of the admitted read.
+        return []  # Leave the logical row unchanged.
+
+    monkeypatch.setattr(SubscriptionExpiryClient, "_fetch_virtual_chassis_members", fake_status_read)  # Stub the read.
+    monkeypatch.setattr(
+        SubscriptionExpiryClient,
+        "_logical_vc_context",
+        staticmethod(lambda record, inventory: ("site-one", "dev-one", "vc-mac")),
+    )  # Force one logical VC row.
+    client = SubscriptionExpiryClient(object())  # Build the client with a fake session.
+    client._expand_virtual_chassis_members("org-one", [{"mac": "vc-mac"}])  # Expand the logical VC row.
+    assert admitted == ["org-one"]  # The read reached admission under its own organization.
+
+
+class SdkErrorListingApi:
+    """Fake MSP listing that writes the SDK's own HTTP error record, then returns the status."""
+
+    def __init__(self, status_code: int) -> None:
+        """Store the HTTP status that the fake SDK returns."""
+        self.status_code = status_code  # Choose the outcome for this case.
+
+    def listMspOrgs(self, apisession: object, msp_id: str) -> SimpleNamespace:
+        """Write the same error record the SDK writes, then return the response."""
+        logging.getLogger("mistapi").error("apirequest:mist_get:HTTP error: %s", self.status_code)  # Mimic the SDK.
+        return SimpleNamespace(status_code=self.status_code, data=None, next=None)  # Return the SDK response shape.
+
+
+@pytest.mark.parametrize("status_code", [403, 500])
+def test_failed_msp_listing_logs_one_outcome_and_no_sdk_error_lines(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    status_code: int,
+) -> None:
+    """A failed MSP organization list logs one report warning and no SDK error record."""
+    fake_sdk = SimpleNamespace(
+        api=SimpleNamespace(v1=SimpleNamespace(msps=SimpleNamespace(orgs=SdkErrorListingApi(status_code))))
+    )  # Route the listing to the fake SDK so no network call can occur.
+    monkeypatch.setattr(client_module, "mistapi", fake_sdk)  # Replace the SDK for this test only.
+    client = SubscriptionExpiryClient(object())  # Build the client with a fake session.
+    failures: list[Any] = []  # Collect the visible discovery failure.
+    filters_before = list(logging.getLogger("mistapi").filters)  # Keep the logger's own filters, such as redaction.
+    with caplog.at_level(logging.DEBUG):  # Capture every record that the call emits.
+        client._discover_msp("msp-one", {}, failures)  # Discover one MSP grant.
+    sdk_errors = [record for record in caplog.records if record.name == "mistapi" and record.levelno >= logging.ERROR]
+    warnings = [record.getMessage() for record in caplog.records if record.levelno == logging.WARNING]
+    assert sdk_errors == []  # The SDK's own error lines must not reach the screen.
+    assert len(warnings) == 1  # The report logs one outcome line.
+    assert f"HTTP {status_code}" in warnings[0]  # The line names the HTTP status.
+    assert failures[0].error == f"HTTP {status_code}"  # The summary keeps the failure visible.
+    assert logging.getLogger("mistapi").filters == filters_before  # The mute must not outlive the call.
 
 
 def test_client_converts_plain_and_wrapped_payloads(monkeypatch: pytest.MonkeyPatch) -> None:

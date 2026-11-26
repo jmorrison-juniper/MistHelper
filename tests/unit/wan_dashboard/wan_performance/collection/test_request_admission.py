@@ -1,5 +1,6 @@
 """Verify shared request accounting before Mist transport."""
 
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -8,7 +9,14 @@ from requests import Request
 from requests.adapters import HTTPAdapter
 
 from src.foundation.support.refactors.initialize_mist_session import MistSessionConfigurator
-from src.interfaces.wan_performance.collection.request_admission import AdmittedAdapter, RequestLedger
+from src.foundation.support.utils.logger_utils import StructuredLoggingFrontend
+from src.interfaces.wan_performance.collection.request_admission import (
+    AdmittedAdapter,
+    RequestLedger,
+    organization_scope,
+)
+
+SECRET_HEADER = "Token secret-value"  # Credential that no traceback may print.
 
 
 class FakeRedis:
@@ -99,6 +107,65 @@ class TestRequestAdmission:
         ).prepare()  # Prepare a site request.
         with pytest.raises(ConnectionError, match="organization"):  # Require tenant context.
             RequestLedger(FakeRedis()).admit(request)  # Refuse unsafe quota attribution.
+
+    def test_site_request_uses_the_scoped_organization(self) -> None:
+        """A site request inside an organization scope counts against that organization."""
+        request = Request(
+            "GET", "https://mist.example/api/v1/sites/site-one/devices/dev-one/vc", headers={"Cookie": "session"}
+        ).prepare()  # Prepare a site-scoped VC read.
+        client = FakeRedis()  # Allow the reservation.
+        with organization_scope("org-two"):  # Name the organization that owns the site.
+            RequestLedger(client).admit(request)  # Reserve the request under that organization.
+        assert "org-two" in str(client.arguments[2:4])  # Count the site read against org-two.
+
+    def test_organization_scope_ends_with_its_block(self) -> None:
+        """A site request after the scope closes fails closed again."""
+        request = Request(
+            "GET", "https://mist.example/api/v1/sites/site-one/devices", headers={"Cookie": "session"}
+        ).prepare()  # Prepare a site request.
+        with organization_scope("org-two"):  # Open and close one organization scope.
+            pass  # Leave the scope before the request runs.
+        with pytest.raises(ConnectionError, match="organization"):  # The scope must not outlive its block.
+            RequestLedger(FakeRedis()).admit(request)  # Refuse the unscoped site request.
+
+    def test_credential_never_appears_in_exception_locals(self) -> None:
+        """An admission failure must not expose the credential through a traceback frame."""
+        request = Request(
+            "GET",
+            "https://mist.example/api/v1/sites/site-one/devices",
+            headers={"Authorization": SECRET_HEADER},
+        ).prepare()  # Prepare an authenticated site request that fails admission.
+        with pytest.raises(ConnectionError) as error:  # Capture the admission failure.
+            RequestLedger(FakeRedis()).admit(request)  # Fail after the credential is read.
+        frame = error.value.__traceback__  # Start at the frame that caught the error.
+        assert frame is not None  # pytest.raises always attaches the traceback.
+        frame = frame.tb_next  # Skip the test frame, which holds the assertion literals.
+        while frame is not None:  # Walk every frame in the traceback.
+            assert "secret-value" not in repr(frame.tb_frame.f_locals)  # No local may hold the raw credential.
+            frame = frame.tb_next  # Continue to the next frame.
+
+    def test_console_renderer_hides_frame_locals(self) -> None:
+        """A credential held in a frame local must not reach the terminal traceback."""
+
+        def fail_with_credential() -> None:
+            """Raise while a frame local holds the credential."""
+            credential = SECRET_HEADER  # Hold the credential in a local name when the error is raised.
+            raise ConnectionError(f"Shared request failed with {len(credential)} credential characters.")
+
+        with pytest.raises(ConnectionError) as error:  # Capture the failure from the helper frame.
+            fail_with_credential()  # Raise with the credential in a frame local.
+        record = logging.LogRecord(  # Build one stdlib record like the one mistapi emits.
+            name="mistapi",
+            level=logging.ERROR,
+            pathname=__file__,
+            lineno=1,
+            msg="apirequest:mist_get:Exception occurred",
+            args=(),
+            exc_info=(type(error.value), error.value, error.value.__traceback__),
+        )  # Attach the exception that the SDK logs.
+        rendered = StructuredLoggingFrontend.console_formatter().format(record)  # Render with production settings.
+        assert "ConnectionError" in rendered  # The operator still sees the error type.
+        assert "secret-value" not in rendered  # The credential never reaches the terminal.
 
     def test_adapter_counts_429_and_initializer_selects_shared_adapter(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Stop after HTTP 429 and wire shared admission into session setup."""

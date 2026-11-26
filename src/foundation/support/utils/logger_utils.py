@@ -145,7 +145,12 @@ class StructuredLoggingFrontend:
             foreign_pre_chain=StructuredLoggingFrontend._foreign_pre_chain(),
             processors=[
                 structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-                structlog.dev.ConsoleRenderer(colors=supports_color, sort_keys=True),
+                # Hide frame locals: a local can hold a credential, and the terminal would print it.
+                structlog.dev.ConsoleRenderer(
+                    colors=supports_color,
+                    sort_keys=True,
+                    exception_formatter=structlog.dev.RichTracebackFormatter(show_locals=False),  # Hide frame locals.
+                ),
             ],
         )  # Render one shared event style for terminal and stdlib records.
 
