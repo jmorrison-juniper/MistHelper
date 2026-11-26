@@ -281,7 +281,7 @@ sessions. This repairs two defects in the Mist software kit path.
 | `PORTAL_ALLOWED_IPS` | *(empty = all)* | Comma-separated CIDR allowlist |
 | `PORTAL_SECRET_KEY` | *(auto-generated)* | Flask session secret key |
 | `PORTAL_WS_ENABLE_CHANGES` | `false` | Unlocks the `change` utilities of the WebSockets tab |
-| `PORTAL_WS_ENABLE_SHELL` | `false` | Unlocks the device shell of the WebSockets tab |
+| `PORTAL_WS_ENABLE_SHELL` | `false` | Unlocks the device shell of the WebSockets tab. The EX hardware inventory action of the Multi Site tab needs it, too. See [the operator guide](../operator-guide.md#collect-ex-chassis-hardware-as-one-csv-report-or-one-xml-file) |
 | `PORTAL_WS_MAX_SESSIONS` | `5` | Live WebSockets sessions, 1 to 20 |
 | `PORTAL_WS_IDLE_SECONDS` | `120` | Seconds without a page read before a session stops, 30 to 3600 |
 | `PORTAL_WS_BUFFER_MESSAGES` | `500` | Messages that each session keeps, 50 to 5000 |

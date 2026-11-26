@@ -411,6 +411,26 @@ The action runs only
 switch. The portal keeps the saved XML replies and compiles them into the file
 or files that you chose.
 
+The action opens one shell on each switch, so the portal must unlock shells. Set
+`PORTAL_WS_ENABLE_SHELL=true` in `.env`, then restart the portal. A container
+reads `.env` only when it starts, so recreate the application container:
+
+```powershell
+podman rm -f misthelper-app
+.\scripts\compose.ps1 up -d --no-deps misthelper
+```
+
+The default is `false`. With the default, **Preview targets** shows `This stream
+is locked by the portal settings.` The portal answers HTTP 403, opens no shell,
+and writes no file. Menu 309 in the CLI needs no setting, because you type the
+confirmation phrase at the terminal.
+
+Warning: the same setting also unlocks the free-form **Remote shell** utility of
+EX switches and SRX gateways. The portal has no user login, so every caller who
+reaches the port can use that shell while the value is `true`. Unlock shells only
+when an operator needs them, and set `PORTAL_ALLOWED_IPS` to limit who reaches
+the port. Issue #4939 asks whether the action needs a narrower unlock.
+
 The preview shows a scope line before you confirm. In one-organization scope,
 the line says so. In MSP scope, the line gives the number of organizations that
 the login can reach, and the number that Mist could not read. The portal uses
