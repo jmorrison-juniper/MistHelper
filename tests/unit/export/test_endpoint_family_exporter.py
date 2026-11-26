@@ -684,12 +684,12 @@ def trend_payloads(
         LOCAL_SITE_URL: _trend_response(LOCAL_SITE_URL, [{"id": "site-3335", "name": "Local Site"}]),
         url: _trend_response(url, body, headers),
     }
-    expected: list[dict[str, object]] = [{"summary_value": 42, "note": "first\\nsecond\\nthird"}]
+    expected: list[dict[str, object]] = [{"summary_value": 42, "note": "first\\nsecond\r\\nthird"}]
     urls = [LOCAL_SITE_URL, url]
     if shape.startswith("paged"):
         next_url = url + "?page=2"
         responses[next_url] = _trend_response(next_url, {"results": [second]} if "results" in shape else [second])
-        expected.append({"summary_value": 43, "note": "nextpage"})
+        expected.append({"summary_value": 43, "note": "next\rpage"})
         urls.append(next_url)
     dimensions: dict[str, object] = {
         "site_id": "site-3335",

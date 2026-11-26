@@ -405,7 +405,11 @@ class DataExporter:  # Multi-backend export facade.
             return  # Nothing to do
         csv_file_path = DataExporter._resolve_csv_path(csv_file)  # Place bare filenames under data/
         logger.debug("Preparing to write %s rows to %s...", len(data), csv_file_path)  # Trace write prep
-        escaped_data = DataProcessingUtils.escape_multiline(data)  # type: ignore[no-untyped-call]
+        escaped_data = DataProcessingUtils.escape_multiline([row.copy() for row in data])  # type: ignore[no-untyped-call]
+        escaped_data = [
+            {key: value.replace("\r", "\\r") if isinstance(value, str) else value for key, value in row.items()}
+            for row in escaped_data
+        ]  # Keep carriage returns visible without changing source records.
         fields = DataExporter._resolve_csv_fields(escaped_data, fieldnames)  # Final column order for the CSV
         logger.debug("CSV fields determined: %s", fields)  # Trace fields
         DataExporter._write_csv_with_exception_handling(csv_file_path, escaped_data, fields)  # Open + write rows
