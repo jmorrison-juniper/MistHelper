@@ -176,7 +176,7 @@ logistro==2.0.1
     # via
     #   choreographer
     #   kaleido
-mando==0.7.1
+mando==0.8.2
     # via radon
 markdown-it-py==4.3.0
     # via rich
