@@ -116,3 +116,14 @@ Check these points. The live run of issue #4933 used a throwaway script for each
 7. A control run: nine corrupted copies of the file (a control character, a wrong count, a changed serial number, an undeclared prefix, a missing required attribute, two root elements, no declaration, a truncated file, and a DTD) must each fail at least one check.
 
 Expected: every check passes for the real file, and every corrupted copy fails.
+
+## Scenario 11: Sign in for an MSP run (mocked tests and the owner check)
+
+```powershell
+python -m pytest tests/unit/ex_hardware_inventory/scope tests/unit/websocket_streams/live/transport/test_ws_endpoint.py tests/unit/marvis/mist/access/auth/interactive/test_login_orchestrator.py -q
+python -m pytest tests/unit/ex_hardware_inventory/test_hardware_operation.py -q -k "msp"
+```
+
+Expected: a password login with an MSP grant gives MSP scope and the credential type `login`. A group, site, or site-group grant adds no organization. A 2FA login replays the email and the password with the code. A password login sends its cookies and no token header. Step 1 prints `Credential: interactive login (user account)`, `Scope: MSP`, and the organization count.
+
+The owner check (issue #4925) is the only live proof. Run `python MistHelper.py --login --menu 309`, answer the prompts (cloud, email, password, 2FA code), and check the three lines of step 1. For the portal, run `python MistHelper.py --login --web-portal`, answer the same prompts in that terminal, and check the scope line of the Multi Site preview. Do not paste the code or the password anywhere.

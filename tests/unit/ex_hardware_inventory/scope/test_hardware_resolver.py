@@ -19,6 +19,7 @@ THIRD = "44444444-4444-4444-8444-444444444444"
 MSP = "33333333-3333-4333-8333-333333333333"
 MSP_TWO = "55555555-5555-4555-8555-555555555555"
 SESSION = SimpleNamespace(_apitoken=["SYNTHETIC-TOKEN-VALUE"])  # A session that holds a token.
+LOGIN_SESSION = SimpleNamespace(_apitoken=[])  # A session that holds a password login and no API token.
 USER = "user@example.invalid"  # An invented user.
 NOTE_403 = "The MSP organization list is not permitted for this account (HTTP 403)."  # The contract text.
 READ_ONLY_NOTE = (  # The contract text.
@@ -81,6 +82,19 @@ class TestOrganizationScope:
         with pytest.raises(ScopeError, match="grants no organization. No shell was opened."):
             ScopeResolver(SESSION).resolve()
 
+    @pytest.mark.parametrize("scope", ["orggroup", "site", "sitegroup"])
+    def test_group_and_site_grants_add_no_organization(self, monkeypatch: pytest.MonkeyPatch, scope: str) -> None:
+        """A grant that is not an organization or an MSP grant gives nothing to run on, whatever ids it carries."""
+        grants = [
+            Payloads.org_grant(ORG, "Named", scope=scope),  # It carries an organization identifier.
+            Payloads.msp_grant(MSP, scope=scope),  # It carries an MSP identifier.
+            {"scope": scope, "role": "admin", "orggroup_ids": [OTHER]},  # The shape of a group grant.
+        ]
+        mist = FakeMist(monkeypatch, Payloads.profile(grants, email=USER))
+        with pytest.raises(ScopeError, match="grants no organization. No shell was opened."):
+            ScopeResolver(LOGIN_SESSION).resolve()
+        assert mist.calls == ["getSelf"]  # No MSP list call, because no grant has the scope msp.
+
     @pytest.mark.parametrize(
         ("status", "words"), [(401, "HTTP 401"), (403, "HTTP 403"), (429, "HTTP 429"), (503, "HTTP 503")]
     )
@@ -117,6 +131,20 @@ class TestMspScope:
         assert [ref.source for ref in decision.organizations] == ["msp", "msp", "direct"]  # The direct grant wins.
         assert decision.organizations[0].msp_id == MSP  # The MSP is recorded.
         assert decision.account_kind == "user" and decision.notes == ()  # A user, and nothing unusual.
+
+    def test_a_password_login_with_an_msp_grant_gives_msp_scope(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A login session with no API token, an MSP grant, and a direct grant covers each organization once."""
+        grants = [Payloads.org_grant(ORG, "Direct"), Payloads.msp_grant(MSP)]
+        mist = FakeMist(
+            monkeypatch,
+            Payloads.profile(grants, email=USER),
+            {MSP: [msp_page((OTHER, "Beta"), (ORG, "Listed"))]},
+        )
+        decision = ScopeResolver(LOGIN_SESSION).resolve()
+        assert decision.mode == "msp"  # MSP scope, as for a token.
+        assert (decision.credential_type, decision.account_kind) == ("login", "user")  # The step 1 display.
+        assert [(ref.org_id, ref.org_name) for ref in decision.organizations] == [(OTHER, "Beta"), (ORG, "Direct")]
+        assert mist.calls == ["getSelf", "listMspOrgs"]  # One profile read and one list call.
 
     def test_every_page_of_the_list_is_read(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The reader follows the next link until the last page."""

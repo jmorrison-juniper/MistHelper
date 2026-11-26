@@ -477,10 +477,12 @@ Run `python MistHelper.py --menu 309`, or choose 309 in the menu. The menu
 works in four steps.
 
 1. **Check the credential.** The menu reads the profile of the credential and
-   chooses the scope. An organization token uses one organization. A login with
-   an MSP grant and a working MSP list uses every organization that it can
+   chooses the scope. An organization token uses one organization. A credential
+   with an MSP grant and a working MSP list uses every organization that it can
    reach. If the MSP list is denied, the menu says so once and uses one
-   organization.
+   organization. The menu prints the credential, the scope, and the number of
+   organizations. [Sign in for an MSP run](#sign-in-for-an-msp-run) tells how to
+   sign in, with two-factor authentication.
 2. **Find the connected EX switches.** The menu gives the number of connected EX
    switches in each organization. It also gives the number that it left out,
    with the reason: offline, unknown status, other device types, or a repeated
@@ -540,6 +542,69 @@ OneDrive or a virus scanner can hold a file for a short time. The run waits and
 tries again, up to five times and 0.75 second in total, so a short lock does not
 fail a switch. If the detail stays, run the menu again. You can also keep the
 `data` folder outside a synced folder.
+
+### Sign in for an MSP run
+
+Menu 309 and the Multi Site action do not ask for a password. They use the Mist
+session that the launcher builds at startup. The credential of that session
+decides the scope. A credential with an MSP grant gives MSP scope. An
+organization token gives one organization.
+
+| Front end | Start command | How the session signs in |
+|-----------|---------------|--------------------------|
+| CLI with a login | `python MistHelper.py --login --menu 309` | The terminal asks for the cloud, the email, the password, and the 2FA code. |
+| CLI with a token | `python MistHelper.py --menu 309` | No sign-in prompt. The token comes from `.env`. |
+| Portal on your computer with a login | `python MistHelper.py --login --web-portal` | The terminal that starts the portal asks the same questions. The browser page has no sign-in form. |
+| Portal on your computer with a token | `python MistHelper.py --web-portal` | No sign-in prompt. The token comes from `.env`. |
+| Portal in a container | `podman compose up -d` | The token comes from the container environment. A container has no keyboard for a 2FA code. |
+
+The portal also needs one organization. Set `org_id`, or choose one when the
+terminal asks. In MSP scope, **All eligible sites** still covers every
+organization of the account.
+
+With `--login`, the terminal shows these prompts in this order: the choice of
+the Mist cloud, `Email:`, `Password:` (the characters stay hidden), and
+`Enter 2FA code:`. The last prompt appears only when the account requires
+two-factor authentication. Type the current code from your authenticator
+application. A wrong or empty code ends the login, so start the command again.
+
+After the login, MistHelper prints `+ Login successful!`. It then prints
+`+ MSP access detected: <n> MSP(s) available` and one line for each MSP with its
+role. If the account has no MSP grant, it prints `- No MSP privileges detected
+(org-level access only)`, and the run covers one organization.
+
+Step 1 of menu 309 confirms the result. For a login, it prints `Credential:
+interactive login (user account)`, `Scope: MSP`, and `Organizations in scope:
+<n>`. Check these lines before you type the confirmation phrase. The Multi Site
+preview shows the same scope.
+
+The scope comes from the grants in the profile of the account
+(`GET /api/v1/self`).
+
+| Grant scope | Effect on the run |
+|-------------|-------------------|
+| `msp` | Adds every organization that `listMspOrgs` returns for that MSP. The call has no `limit` parameter, so the tool follows each page. |
+| `org` | Adds that organization. The tool joins the direct grants and the MSP lists, and it removes repeats. |
+| `orggroup`, `site`, `sitegroup` | Adds nothing. |
+
+An account that has only an `orggroup`, `site`, or `sitegroup` grant has no
+organization in scope. The menu then stops with a plain sentence and opens no
+shell. Use an account with an MSP grant or an organization grant.
+
+A token that you create under your own account carries the privileges of that
+account, including an MSP grant. See
+`documentation/api/self/POST_self_apitokens.md`. An organization token carries
+one organization and no MSP grant. A token never asks for a 2FA code. Use a token
+for a scheduled job or for a container.
+
+Caution: a login session ends after the lifetime that Mist sets for the account.
+The profile field `session_expiry` gives that lifetime in minutes. After that
+time, Mist refuses the requests of the session, and the organizations that
+remain do not finish. Use a token for a long run.
+
+The upgrade capture portal on port 8056 has its own browser sign-in with a page
+for the 2FA code. It serves the firmware upgrade flow, and it has no WebSockets
+tab. Issue #4936 tracks a browser sign-in for the operations portal on port 8055.
 
 ### Watch the network from a monitoring system
 

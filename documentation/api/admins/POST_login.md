@@ -119,4 +119,4 @@ Use this endpoint to authenticate with email and password to obtain a session. C
 
 ## MistHelper Notes
 
-Not currently used by MistHelper. MistHelper uses API token authentication via the `mistapi` SDK rather than interactive email/password login.
+MistHelper calls this endpoint through the `mistapi` SDK in two places. The interactive login (`--login`, or menu 143) asks for the cloud, the email, and the password in the terminal. The upgrade capture portal (port 8056) offers the same login on a browser page. A run with an API token never calls this endpoint. The operations portal (port 8055) has no sign-in page, so start it with `--login --web-portal` or with a token. See [Sign in for an MSP run](../../operator-guide.md#sign-in-for-an-msp-run).

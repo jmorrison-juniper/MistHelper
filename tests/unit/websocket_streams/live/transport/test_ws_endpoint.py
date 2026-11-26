@@ -76,6 +76,16 @@ class TestMistStreamEndpoint:
         endpoint = MistStreamEndpoint(session)  # Build endpoint from the fake session.
         assert endpoint.cookie() == "safe=one"  # The CRLF cookie must be skipped.
 
+    def test_password_login_sends_its_cookies_and_no_token_header(self) -> None:
+        """A password login, as an MSP account with 2FA uses, opens a shell with cookies and no token header."""
+        session = FakeApiSession()  # Build a fake SDK session.
+        session._apitoken = []  # A password login holds no API token.
+        session._session.cookies.set("sessionid", "one")  # The session cookie of the login.
+        session._session.cookies.set("csrftoken", "two")  # The CSRF cookie of the login.
+        endpoint = MistStreamEndpoint(session)  # Build endpoint from the fake session.
+        assert endpoint.headers() == []  # A login session sends no token header.
+        assert set((endpoint.cookie() or "").split("; ")) == {"sessionid=one", "csrftoken=two"}  # Both cookies.
+
     def test_ssl_options_follow_requests_session(self) -> None:
         """Map verify and cert values into websocket-client options."""
         session = FakeApiSession()  # Build a fake SDK session.

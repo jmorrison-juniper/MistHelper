@@ -192,6 +192,16 @@ The customer added this requirement on 2026-11-25 (issue #4933, FR-055 through F
 - [X] T093 [US6] Check live, read-only, on the one test organization. Result: menu 309 collected 15 of 15 switches and wrote a 105370-byte XML file with 1830 elements, 114 serial numbers, and the same 297 rows in the CSV report. The Multi Site action, with the choice **Combined CSV and XML** in a Playwright browser, published both files and the table showed 297 rows. The download of the XML equals the saved file byte for byte. A second portal run with the choice **One combined XML file** published the XML only, with no CSV link and no table, and the link came back after a reload. The files of the two front ends are canonically equal apart from the run time. Readers that the tool does not use accepted each file: ElementTree (expat), SAX with namespaces, minidom, the standard canonicalizer, libxml2 through `lxml` 6.1.3 with recovery off, `xmlschema` 4.3.2, the .NET `XmlReader` with the schema (0 errors), `XmlDocument`, and LINQ to XML. The canonical form of libxml2 equals the canonical form of the standard library. Each embedded reply equals its saved reply apart from formatting, and the 114 serial numbers equal those of the 15 saved replies. A control run of nine corrupted copies (a control character, a wrong count, a changed serial number, an undeclared prefix, a missing attribute, two roots, no declaration, a truncated file, and a DTD) failed at least one check each, and the two that the .NET reader should catch failed there too. A file that was built offline from the 15 real replies of an older run passes the same checks. The token is in none of 54 files and no log.
 - [X] T094 [US6] Document the format and the choices (FR-067): `documentation/ex-hardware-master-xml.md`, the operator guide, the contracts, the quickstart, the research notes, the data model, the plan, the release note, and the generated menu pages.
 
+## Phase 12: Sign in for an MSP run, with 2FA (Priority: P1)
+
+The owner asked on 2026-11-25 how MSP mode signs in when the MSP and the organization require 2FA, in the CLI and in the portals (FR-070, FR-071, research R17). The review found no code defect. It found outdated statements in the documentation and four untested claims. Issue #4936 tracks the one gap: a browser sign-in for the operations portal. One pull request holds this phase and the earlier phases, so T066 and T067 cover it too.
+
+- [X] T095 [US2] Check the sign-in paths against the code, the SDK, and the OpenAPI file: `LoginOrchestrator` (the cloud, `Email:`, the hidden `Password:`, `Enter 2FA code:`), `establish_mist_session` (the login runs before the portal mode), `wsgi.py` (the SDK asks for the code with `input()`), `SessionConnectionValues` (the cookie header for a login, the token header for a token), `ProfileReader` (the grant scopes), the privilege schema, `POST /api/v1/login`, `POST /api/v1/login/two_factor`, `listMspOrgs`, and `session_expiry`.
+- [X] T096 [P] [US2] Add the section **Sign in for an MSP run** to `documentation/operator-guide.md` and correct step 1 of menu 309 (FR-071): a table of the five ways to start, the prompts, the lines to check, the grants that give MSP scope, tokens and 2FA, and the session lifetime.
+- [X] T097 [P] [US2] Correct the outdated statements: the claim in `documentation/wiki/MSP-Support.md` that an MSP grant needs a login and cannot use a token, and its wrong banner text; the notes `Not currently used by MistHelper` in `documentation/api/admins/POST_login.md` and `POST_login_two_factor.md`; the rows `--login` and `--web-portal` in `documentation/cli-reference.md`; and the missing sign-in section of `documentation/wiki/Web-Portal.md`.
+- [X] T098 [P] [US2] Add four tests: a password login with an MSP grant gives MSP scope and the credential type `login`, and a group, site, or site-group grant adds no organization (`test_hardware_resolver.py`); step 1 prints `Credential: interactive login (user account)` (`test_hardware_operation.py`); a password login sends its cookies and no token header (`test_ws_endpoint.py`). Four faults in the source (the scope test of an organization grant, the credential type of the MSP decision, the word `interactive login`, and the cookie text) made five test cases fail, and each fault was reverted.
+- [X] T099 [US2] Record the decision (spec clarifications, FR-070, FR-071, edge cases, assumptions, and non-goals; research R17; quickstart scenario 11) and file issue #4936.
+
 ## Dependencies and Execution Order
 
 ### Phase Dependencies
@@ -207,6 +217,7 @@ The customer added this requirement on 2026-11-25 (issue #4933, FR-055 through F
 - **Live validation (Phase 9)**: needs Phase 8.
 - **Delivery (Phase 10)**: needs Phase 9. T067 needs the owner.
 - **Story 6 (Phase 11)**: needs Stories 1, 3, and 5, because it reuses the results, the finish step, and the page. It was added after the first delivery steps, so T066 and T067 cover it.
+- **Sign-in review (Phase 12)**: needs Stories 2 and 3. It adds documentation and tests only, so T066 and T067 cover it.
 
 ### Parallel Opportunities
 
@@ -242,7 +253,8 @@ Task T012: File tests in tests/unit/ex_hardware_inventory/report/test_hardware_c
 3. Story 3: the portal output and MSP scope.
 4. Stories 4 and 5: the concurrency page default and the trust rules.
 5. Story 6: the master XML (T082 through T094).
-6. Polish, live validation, and the pull request.
+6. Phase 12: the sign-in documentation and tests (T095 through T099).
+7. Polish, live validation, and the pull request.
 
 ### Guard Rules
 

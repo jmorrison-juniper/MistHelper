@@ -23,6 +23,22 @@ through 9699. Remove the container when the test ends. A test container that
 publishes 8055 takes the port from the running portal, and the portal then stops
 answering.
 
+## Sign in to Mist
+
+The portal page has no sign-in form. The portal uses the Mist session of the
+process that starts it. To sign in with a password and a 2FA code, start the
+portal from a terminal and answer the prompts there.
+
+```powershell
+python MistHelper.py --login --web-portal
+```
+
+The container portal reads an API token from its environment, because a
+container has no keyboard for a 2FA code. A token of your own account carries
+your MSP grant. [Sign in for an MSP run](../operator-guide.md#sign-in-for-an-msp-run)
+gives the prompts and the grants that give MSP scope. Issue #4936 tracks a
+browser sign-in for this portal.
+
 ## Features
 
 - **Data Browser**: Browse, preview, search, and download the CSV and SQLite output files.

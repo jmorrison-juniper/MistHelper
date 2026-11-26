@@ -315,6 +315,22 @@ class TestMspScope:
         assert result == 0 and harness.script.run_order == []
         assert lines[-1] == "Cancelled. No shell was opened and no file was written."
 
+    def test_an_msp_login_prints_the_credential_the_scope_and_the_count_in_step_one(
+        self, harness: Harness, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A password login with an MSP grant shows the three lines that the operator guide says to check."""
+        refs = (OrganizationRef(ORG_A, "Alpha"), OrganizationRef(ORG_B, "Beta"))
+        harness.scope = ScopeDecision("msp", "login", "user", refs, ())  # A login of a user account.
+        harness.script.previews[ORG_A] = BatchPreview.empty(ORG_A, "Alpha", {})
+        harness.script.previews[ORG_B] = BatchPreview.empty(ORG_B, "Beta", {})
+        _, lines = run_menu(capsys)
+        assert lines[:4] == [
+            HEADER_1,
+            "  Credential: interactive login (user account)",
+            "  Scope: MSP",
+            "  Organizations in scope: 2",
+        ]  # The lines that the operator checks before the typed phrase.
+
     @pytest.mark.parametrize(
         ("error", "sentence"),
         [

@@ -18,6 +18,11 @@
 - Q: How does each front end write the report? → A: The CLI writes through `DataExporter.write_with_format_selection` and forces the CSV backend. It uses a unique UTC-stamped name and then checks the file. The exporter does not write atomically. The portal publishes the CSV with its atomic artifact writer.
 - Q: Which organization does a credential with several organization grants and no MSP grant use? → A: It uses the configured `org_id` when that organization is among the grants. When no `org_id` is set and the grants name one organization, it uses that one. In every other case it stops and tells the operator to set `org_id`.
 
+### Session 2026-11-25
+
+- Q: How does an operator sign in for an MSP run when the account requires two-factor authentication, in the CLI and in the portal? → A: The tool never asks for a password or a code. It reads the profile of the session that the launcher built (FR-070). In the CLI, `python MistHelper.py --login --menu 309` asks for the cloud, the email, the password, and the 2FA code in the terminal. For the operations portal, `python MistHelper.py --login --web-portal` asks the same questions in the terminal that starts it, and the portal then uses that session. The portal page has no sign-in form. The container portal has no keyboard, so it needs an API token. A token of the operator account carries the account privileges, including an MSP grant, and it never asks for a 2FA code. Issue #4936 tracks a browser sign-in. The upgrade capture portal on port 8056 already has a browser sign-in, but it has no Multi Site action.
+- Q: Which grants give MSP scope? → A: A grant with the scope `msp` adds the organizations of that MSP, from `listMspOrgs`. A grant with the scope `org` adds that organization. A grant with the scope `orggroup`, `site`, or `sitegroup` adds none. The OpenAPI file gives an `orggroup` grant a list of group identifiers (`orggroup_ids`) and no organization list, and the tool does not resolve groups. A site grant must not widen to the whole organization. An account that has only these grants has nothing to run on, and the tool stops with the sentence that no organization is granted.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Collect one CSV for an organization from the CLI (Priority: P1)
@@ -56,6 +61,8 @@ An operator signs in with an MSP login. The tool reads the profile and finds an 
 3. **Given** a profile with an MSP grant whose organization list returns HTTP 403, **When** the tool decides the scope, **Then** it says so once and continues in organization scope.
 4. **Given** a profile that the tool cannot read, **When** the tool decides the scope, **Then** it stops before any shell opens and states the reason.
 5. **Given** one organization of an MSP fails during discovery or collection, **When** the run continues, **Then** the CSV holds outcome rows for that failure and complete data for the other organizations.
+6. **Given** a login session (no API token) whose profile holds an MSP grant and an organization grant, **When** the tool decides the scope, **Then** it chooses MSP scope, names the credential an interactive login, and covers each organization once.
+7. **Given** a profile whose only grants have the scope `orggroup`, `site`, or `sitegroup`, **When** the tool decides the scope, **Then** it stops with the sentence that the credential grants no organization, and no shell opens.
 
 ---
 
@@ -137,6 +144,9 @@ A customer system reads the hardware of every EX switch. The system wants one XM
 - A sync client or a virus scanner holds the manifest of the run folder for a moment. The second live test of 2026-11-24 met this case: with an admin-role token, 14 of 15 switches collected, and one manifest replace got a Windows permission error. That error failed the whole batch record, so the last switch was refused. The store waits and tries again (FR-044).
 - Mist answers HTTP 429 during discovery or while the tool opens a shell.
 - The MSP organization list is denied, or it lists an organization whose devices the token cannot read.
+- The account requires a 2FA code, and the operator types a wrong or empty code. The login ends and the tool starts no run.
+- The account has only `orggroup`, `site`, or `sitegroup` grants. The tool stops at step 1 and opens no shell.
+- A login session outlasts its lifetime (`session_expiry` of the profile, in minutes) during a long MSP run.
 - An MSP has more than 1000 connected EX switches in total. The CLI runs each organization as its own batch. The portal refuses the whole preview.
 - The operator ends the input or presses Ctrl+C at the prompt or during the run.
 - The output folder is not writable, or the report name already exists.
@@ -237,6 +247,8 @@ Master XML:
 - **FR-067**: The repository MUST hold a schema for the wrapper elements, `documentation/schemas/ex-hardware-inventory.xsd`, and a reference page for the format, `documentation/ex-hardware-master-xml.md`. The schema MUST accept each file that the tool writes.
 - **FR-068**: The XML, JSON, both, and CSV outputs of the portal MUST keep their behavior and their bytes.
 - **FR-069**: The title of menu 309 MUST name both outputs, and the generated menu pages MUST show the title.
+- **FR-070**: The tool MUST read the grants from the profile of the session that the launcher built. It MUST NOT ask for, store, show, or log a password or a 2FA code. The sign-in happens before the run, at the terminal that starts the CLI or the portal.
+- **FR-071**: The documentation MUST tell an operator how to sign in for an MSP run when the account requires 2FA, for the CLI, for the portal on a workstation, and for the portal in a container. It MUST say that the operations portal has no sign-in form, and it MUST name the grants that give MSP scope.
 
 Safety and observability:
 
@@ -288,6 +300,7 @@ Safety and observability:
 - The tool reuses the collector, the target filter, the fixed command, and the typed confirmation of issue #4769.
 - The menu category is `resource_intensive`, because the action opens a shell on many devices. The unattended sweeps skip that category.
 - The portal keeps one authenticated Mist session. An MSP run in the portal uses the same session for every organization.
+- The operations portal has no sign-in form. It uses the session of the process that starts it, so a password login with a 2FA code starts at the terminal (`--login --web-portal`). Issue #4936 tracks a browser sign-in.
 - Live validation uses the one test organization of the configured token. The owner tests MSP scope later.
 - Tests use mocked Mist responses and a fake WebSocket. They need no production credential.
 - The 1000-target limit, the concurrency default of 3, and the concurrency range of 1 through 5 come from the existing Multi Site batch limits.
@@ -300,6 +313,8 @@ Safety and observability:
 - Running any command other than the fixed command.
 - Changing a Mist organization, a site, or a device.
 - Running a live MSP validation in this change.
+- Building a browser sign-in with 2FA for the operations portal (issue #4936).
+- Resolving organization groups (`orggroup_ids`) into organizations.
 - Replacing the XML, JSON, or both outputs of issue #4769.
 - Scheduling or repeating the run.
 - Converting the Junos XML to another vocabulary, or merging the JSON replies into the master XML.
