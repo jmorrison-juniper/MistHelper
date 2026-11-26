@@ -534,6 +534,12 @@ class OperationRegistry:
         },
         "307": {"category": "safe"},
         "308": {"category": "safe"},
+        "309": {
+            "category": "resource_intensive",
+            "skip_reason": (
+                "Opens a shell on every connected EX switch - resource intensive, requires a typed confirmation"
+            ),
+        },
         "238": {"category": "interactive_safe", "skip_reason": "Requires an MSP ID"},
         "240": {
             "category": "interactive_safe",

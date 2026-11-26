@@ -23,6 +23,22 @@ through 9699. Remove the container when the test ends. A test container that
 publishes 8055 takes the port from the running portal, and the portal then stops
 answering.
 
+## Sign in to Mist
+
+The portal page has no sign-in form. The portal uses the Mist session of the
+process that starts it. To sign in with a password and a 2FA code, start the
+portal from a terminal and answer the prompts there.
+
+```powershell
+python MistHelper.py --login --web-portal
+```
+
+The container portal reads an API token from its environment, because a
+container has no keyboard for a 2FA code. A token of your own account carries
+your MSP grant. [Sign in for an MSP run](../operator-guide.md#sign-in-for-an-msp-run)
+gives the prompts and the grants that give MSP scope. Issue #4936 tracks a
+browser sign-in for this portal.
+
 ## Features
 
 - **Data Browser**: Browse, preview, search, and download the CSV and SQLite output files.
@@ -272,6 +288,7 @@ sessions. This repairs two defects in the Mist software kit path.
 | `PORTAL_WS_BUFFER_MB` | `8` | Megabytes that each session keeps, 1 to 64 |
 | `PORTAL_WS_MAX_STREAM_MINUTES` | `30` | Minutes before a session stops, 1 to 240 |
 | `PORTAL_WS_TERMINAL_HISTORY_KB` | `1024` | KiB of terminal output bytes per session, 256 to 8192 |
+| `PORTAL_WS_HARDWARE_CONCURRENCY` | `3` | Shells that the EX hardware inventory action opens at the same time, 1 to 5 |
 
 ## API Endpoints
 

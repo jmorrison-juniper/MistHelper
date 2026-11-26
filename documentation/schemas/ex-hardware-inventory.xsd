@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Schema of the master XML file of the EX hardware inventory (menu 309 and the Multi Site action).
+
+  What it covers: the wrapper elements of the file (hardware-inventory, organization, site, and device).
+  What it does not cover: the reply of each collected switch. The reply is Junos XML, and no public schema
+  covers every Junos release, so this schema accepts any one element under a collected device.
+
+  What the schema cannot say: XML Schema 1.0 cannot tie the content of a device to its status attribute.
+  The tool checks that rule itself before it publishes a file: a collected device holds exactly one
+  element, and every other device holds none. It also checks that the counts on the root equal the counts
+  in the document.
+
+  Reference: documentation/ex-hardware-master-xml.md
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:mh="urn:misthelper:ex-hardware-inventory:1"
+           targetNamespace="urn:misthelper:ex-hardware-inventory:1"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified"
+           version="1">
+
+  <xs:simpleType name="ScopeType">
+    <xs:annotation>
+      <xs:documentation>The scope of the run: one organization, or every organization of an MSP.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="organization"/>
+      <xs:enumeration value="msp"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="DeviceStatusType">
+    <xs:annotation>
+      <xs:documentation>The outcome of one switch. It equals the collection_status of the CSV report.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="collected"/>
+      <xs:enumeration value="failed"/>
+      <xs:enumeration value="skipped"/>
+      <xs:enumeration value="cancelled"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="OrganizationStatusType">
+    <xs:annotation>
+      <xs:documentation>read: Mist listed the switches of the organization. failed: Mist could not read it.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="read"/>
+      <xs:enumeration value="failed"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="UtcTimeType">
+    <xs:annotation>
+      <xs:documentation>A time in UTC in ISO 8601 form, for example 2026-11-25T18:46:06Z.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:dateTime">
+      <xs:pattern value="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:complexType name="DeviceType">
+    <xs:annotation>
+      <xs:documentation>One attempted switch. A collected switch holds its reply as the one child element.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:any namespace="##any" processContents="lax" minOccurs="0" maxOccurs="1"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="status" type="mh:DeviceStatusType" use="required"/>
+    <xs:attribute name="reason" type="xs:string" use="optional"/>
+    <xs:attribute name="detail" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:complexType name="SiteType">
+    <xs:annotation>
+      <xs:documentation>One site and the switches of the run that belong to it.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="device" type="mh:DeviceType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+  </xs:complexType>
+
+  <xs:complexType name="OrganizationType">
+    <xs:annotation>
+      <xs:documentation>One organization. An organization that Mist could not read has no site.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="site" type="mh:SiteType" minOccurs="0" maxOccurs="unbounded"/>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="required"/>
+    <xs:attribute name="name" type="xs:string" use="required"/>
+    <xs:attribute name="status" type="mh:OrganizationStatusType" use="required"/>
+    <xs:attribute name="reason" type="xs:string" use="optional"/>
+    <xs:attribute name="detail" type="xs:string" use="optional"/>
+  </xs:complexType>
+
+  <xs:element name="hardware-inventory">
+    <xs:annotation>
+      <xs:documentation>The master XML of one run: the replies of all collected switches in one document.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="organization" type="mh:OrganizationType" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+      <xs:attribute name="generated" type="mh:UtcTimeType" use="required"/>
+      <xs:attribute name="scope" type="mh:ScopeType" use="required"/>
+      <xs:attribute name="command" type="xs:string" use="required"/>
+      <xs:attribute name="organizations" type="xs:nonNegativeInteger" use="required"/>
+      <xs:attribute name="unread" type="xs:nonNegativeInteger" use="required"/>
+      <xs:attribute name="devices" type="xs:nonNegativeInteger" use="required"/>
+      <xs:attribute name="collected" type="xs:nonNegativeInteger" use="required"/>
+      <xs:attribute name="failed" type="xs:nonNegativeInteger" use="required"/>
+      <xs:attribute name="skipped" type="xs:nonNegativeInteger" use="required"/>
+      <xs:attribute name="cancelled" type="xs:nonNegativeInteger" use="required"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

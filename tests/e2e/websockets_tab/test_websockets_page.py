@@ -21,8 +21,13 @@ from typing import Any  # Type Playwright objects without importing private type
 
 import pytest  # Use fixtures and Playwright integration.
 
+from src.mist.realtime.websocket_streams.intake.fields.error import StreamRequestError  # The fake report can refuse.
 from src.mist.realtime.websocket_streams.live.sessions.buffer.message import StreamMessage
 from src.mist.realtime.websocket_streams.live.sessions.buffer.page import MessagePage  # The fake keeps real records.
+from src.operations.exporting.ex_hardware_inventory.report.csv_file import (
+    CsvPreviewer,
+    CsvRenderer,
+)  # The fake report uses the real renderer and the real page reader.
 
 logger = logging.getLogger(__name__)  # Keep this test module visible in logs.
 
@@ -32,6 +37,7 @@ READY_TIMEOUT_MS = 15000  # Bound every browser wait.
 # The container mounts data/, so the screenshots stay in the test-artifacts/ folder instead.
 ARTIFACT_DIR = Path(__file__).resolve().parents[3] / "test-artifacts" / "websockets"  # Git ignores this folder.
 ORG_ID = "99999999-8888-7777-6666-555555555555"  # Fake organization identifier.
+DEFAULT_HARDWARE_SCOPE = {"mode": "organization", "organization_count": 1, "failed_count": 0}  # One organization.
 SITE_ID = "11111111-2222-3333-4444-555555555555"  # First fake site identifier.
 SITE_ID_2 = "22222222-3333-4444-5555-666666666666"  # Second fake site identifier.
 DEVICE_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"  # Fake device identifier.
@@ -44,6 +50,22 @@ PING_OUTPUT_CHUNKS = (
     "estinations, 1 routes (1 active, 0 holddown, 0 hidden)\nNext ",
     "line stays complete.\n",
 )  # The fake cloud splits one word and one line at unstable message boundaries.
+CSV_COLUMNS = ["org_name", "site_name", "device_name", "item_type", "item_serial_number"]  # The fake report columns.
+
+
+def make_csv_report(rows: int = 6) -> bytes:
+    """Render a fake combined report with one row for each invented switch."""
+    items = [
+        {
+            "org_name": "Alpha Org",
+            "site_name": "HQ" if index % 2 else "Branch",
+            "device_name": f"ex-{index:03d}",
+            "item_type": ("Chassis", "FPC", "Fan")[index % 3],
+            "item_serial_number": f"SN{index:05d}",
+        }
+        for index in range(1, rows + 1)
+    ]
+    return CsvRenderer.render(items, CSV_COLUMNS, 50_000_000)  # The same bytes that a real run publishes.
 
 
 @dataclass
@@ -80,6 +102,12 @@ class FakeWebSocketServices:
         self.batch_start_body: dict[str, object] | None = None  # Keep the admitted preview-only request.
         self.batch_progress: dict[str, dict[str, object]] = {}  # Store target progress by public parent.
         self.batch_targets_data: dict[str, list[dict[str, object]]] = {}  # Store a frozen target list.
+        self.hardware_scope: dict[str, object] = dict(DEFAULT_HARDWARE_SCOPE)  # The scope line of the hardware preview.
+        self.hardware_concurrency: int | None = None  # The catalog default for the hardware action.
+        self.csv_report: bytes = make_csv_report()  # The combined report that the table preview reads.
+        self.csv_error: StreamRequestError | None = None  # A planned refusal of the table preview.
+        self.csv_preview_calls: list[dict[str, object]] = []  # Record what the browser asked for.
+        self.terminal_reads: list[str] = []  # Record each session that the page reads as a terminal.
         lifecycle = SimpleNamespace(
             start=self.start_session, list=self.list_sessions, stop=self.stop_session, shutdown=self.shutdown
         )  # Group fake session lifecycle behavior.
@@ -95,7 +123,7 @@ class FakeWebSocketServices:
         )  # Group fake session behavior.
         self.catalog = SimpleNamespace(payload=self.catalog_payload)  # Group fake catalog behavior.
         self.artifacts = SimpleNamespace(
-            delete=self.delete_session, download=self.download_session
+            delete=self.delete_session, download=self.download_session, csv_preview=self.csv_preview
         )  # Group fake artifact behavior.
         self.terminal = self  # Expose direct fake terminal behavior.
         self.pickers = SimpleNamespace(
@@ -116,6 +144,12 @@ class FakeWebSocketServices:
             self.batch_start_body = None  # Remove the previous batch admission request.
             self.batch_progress.clear()  # Remove prior parent progress.
             self.batch_targets_data.clear()  # Remove prior frozen target lists.
+            self.hardware_scope = dict(DEFAULT_HARDWARE_SCOPE)  # Restore the one-organization scope line.
+            self.hardware_concurrency = None  # Restore the page default.
+            self.csv_report = make_csv_report()  # Restore the small default report.
+            self.csv_error = None  # Restore a working preview.
+            self.csv_preview_calls.clear()  # Remove prior preview requests.
+            self.terminal_reads.clear()  # Remove prior terminal reads.
 
     def catalog_payload(self) -> dict[str, object]:
         """Return the catalog shown by the page."""
@@ -123,7 +157,8 @@ class FakeWebSocketServices:
             "ready": True,
             "reason": None,
             "flags": {},
-            "limits": {"max_sessions": 2, "idle_seconds": 120, "capture_seconds": 3600},
+            "limits": {"max_sessions": 2, "idle_seconds": 120, "capture_seconds": 3600}
+            | ({"hardware_concurrency": self.hardware_concurrency} if self.hardware_concurrency else {}),
             "channels": [self._channel(), self._device_command_channel()],
             "utilities": self._utilities(),
         }  # Catalog.
@@ -209,6 +244,7 @@ class FakeWebSocketServices:
 
     def read(self, session_id: str, after: int, _wait_seconds: float) -> dict[str, object]:
         """Return fake terminal bytes after one position."""
+        self.terminal_reads.append(session_id)  # A batch parent must never reach this route.
         with self._lock:  # Copy terminal state while the fake runner can append bytes.
             session = self._sessions[session_id]  # The browser names a visible fake session.
             data = self.terminal_data.get(session_id, b"")  # A new terminal can have no bytes.
@@ -247,6 +283,13 @@ class FakeWebSocketServices:
         with self._lock:  # Copy while timer threads can write.
             count = len(self._sessions[session_id].messages)  # Count messages for the stream.
         return "fake-session.jsonl", iter([f'{{"count":{count}}}\n'])  # Safe JSON Lines.
+
+    def csv_preview(self, session_id: str, offset: int, limit: int, text: str) -> dict[str, object]:
+        """Return one page of the fake report with the real page reader, or the planned refusal."""
+        self.csv_preview_calls.append({"session_id": session_id, "offset": offset, "limit": limit, "text": text})
+        if self.csv_error is not None:  # A story can plan a refusal, like a report that is too large.
+            raise self.csv_error
+        return CsvPreviewer.page(self.csv_report, offset, limit, text)  # The same answer as the portal service.
 
     def devices(self, _site_id: str) -> dict[str, object]:
         """Return one EX device for utility stories."""
@@ -310,6 +353,7 @@ class FakeWebSocketServices:
         self.batch_preview_body = body if isinstance(body, dict) else {}  # Retain the request for assertions.
         if self.batch_preview_body.get("preset") == "ex-hardware-xml":
             selected_format = self.batch_preview_body.get("format", "xml")
+            xml_only = selected_format in {"csv", "master-xml", "csv-master-xml"}  # A combined report reads XML.
             return {
                 "preview_id": "hardware-preview",
                 "expires_at": "2026-10-16T12:00:00Z",
@@ -319,7 +363,13 @@ class FakeWebSocketServices:
                 "fixed_commands": [
                     "show chassis hardware detail | display xml | no-more",
                     "show chassis hardware detail | display json | no-more",
-                ],
+                ][: 1 if xml_only else 2],
+                "scope": dict(self.hardware_scope),
+                "site_selection": (
+                    {"mode": "selected", "count": len(self.batch_preview_body["sites"]["ids"])}
+                    if isinstance(self.batch_preview_body.get("sites"), dict)
+                    else {"mode": "all"}
+                ),  # The real service reports a count, so the page can name the site choice.
                 "operation": {
                     "kind": "shell",
                     "key": "ex.createShellSession",
@@ -368,14 +418,24 @@ class FakeWebSocketServices:
         payload = body if isinstance(body, dict) else {}  # Keep the fake request shape bounded.
         self.batch_start_body = dict(payload)  # Verify the start request carries only the preview reference.
         session_id = "batch1"  # Use one stable public parent id.
-        session = BrowserSession(
-            session_id, "channel", "site.stats.devices", "Multi Site: Device statistics", "json", "read"
-        )  # Keep the same public session shape as the channel runner.
+        preview = self.batch_preview_body or {}  # The real summary names the preset and the format of the run.
+        hardware = preview.get("preset") == "ex-hardware-xml"  # The hardware action opens a shell on each switch.
+        session = (
+            BrowserSession(
+                session_id, "shell", "ex.createShellSession", "Multi Site: EX hardware inventory", "terminal", "shell"
+            )
+            if hardware
+            else BrowserSession(
+                session_id, "channel", "site.stats.devices", "Multi Site: Device statistics", "json", "read"
+            )
+        )  # The hardware parent has the public shape of the real one: a shell entry with the terminal output.
         with self._lock:  # Allocate the public session and its target state together.
             self._sessions[session_id] = session  # Store the parent for session list and message reads.
             self.batch_progress[session_id] = self._new_batch_progress(
                 int(payload.get("concurrency", 1))
             )  # Model one active worker and a complete queued set.
+            if hardware:
+                self.batch_progress[session_id].update(preset=preview["preset"], format=preview.get("format", "xml"))
             self.batch_targets_data[session_id] = self._new_batch_targets()  # Keep target order frozen.
         return self._batch_payload(session)  # Return one parent with additive batch state.
 
@@ -609,6 +669,7 @@ class FakeWebSocketServices:
         }  # Payload.
         if session.session_id in self.batch_progress:
             payload["mode"] = "multi_site"  # Mark only batch parents.
+            payload["terminal"] = False  # The real service says so: the shells run on the targets, not on the parent.
             payload["batch"] = self.batch_progress[session.session_id]  # Add batch progress to session listings.
         return payload  # Preserve the existing session payload shape.
 
@@ -965,3 +1026,567 @@ def test_ex_hardware_preset_selects_formats_and_starts_preview_bound_batch(
         "concurrency": 3,
         "output": {"group_by": "site", "mode": "combined"},
     }  # Start carries the reviewed reference, required phrase, and existing scheduler choices only.
+
+
+def start_hardware_batch(page: Any, fake_services: FakeWebSocketServices, output: str) -> None:
+    """Select the hardware preset with one output, preview it, confirm the phrase, and start the batch."""
+    page.get_by_test_id("ws-multi-site-tab").click()  # Open the batch workflow.
+    page.get_by_test_id("ws-batch-ex-hardware").check()  # Select the named server-owned preset.
+    page.get_by_test_id("ws-batch-hardware-format").select_option(output)  # Choose the output.
+    page.get_by_test_id("ws-batch-preview").click()  # Resolve the choice through the fake service.
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-confirmation").fill("RUN 2 TARGETS")  # Confirm the shell-safe target count.
+    page.get_by_test_id("ws-batch-start").click()  # Admit only the reviewed snapshot.
+    page.get_by_test_id("ws-batch-progress").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+
+
+def test_ex_hardware_csv_output_names_the_scope_and_runs_the_fixed_xml_command(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The CSV choice previews one XML command and an MSP scope line with the unread organization count."""
+    open_page(page, websocket_portal)  # Load the local mocked Operations portal.
+    fake_services.hardware_scope = {"mode": "msp", "organization_count": 3, "failed_count": 1}  # An MSP login.
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-hardware-format").select_option("csv")  # The new output choice.
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert fake_services.batch_preview_body == {
+        "preset": "ex-hardware-xml",
+        "format": "csv",
+        "scope_revision": 2,
+    }  # The browser sends only the preset and the output. The check and the choice each bump the revision.
+    assert page.get_by_test_id("ws-batch-scope-summary").inner_text() == (
+        "Scope: MSP, 3 organizations; all sites; EX switches only. 1 organization could not be read."
+    )  # The scope line shows the decision of the server.
+    summary = page.get_by_test_id("ws-batch-review-summary").inner_text()
+    assert "Output: One combined CSV report (.csv)" in summary  # The review names the output.
+    assert "display xml" in summary and "display json" not in summary  # CSV runs the XML command only.
+
+
+def test_ex_hardware_one_organization_scope_line(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """An organization token shows the one-organization scope line."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert page.get_by_test_id("ws-batch-scope-summary").inner_text() == (
+        "Scope: One organization; all sites; EX switches only."
+    )
+
+
+def test_review_card_lists_the_steps_and_tells_the_operator_to_preview_first(page: Any, websocket_portal: str) -> None:
+    """Before any preview, the card shows the four steps, and Start batch says why it is off."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    steps = page.get_by_test_id("ws-batch-steps").inner_text()
+    assert "Click Preview targets. Nothing runs yet." in steps and "Click Start batch." in steps
+    assert "confirmation word" in steps  # The third step names the word.
+    next_step = page.get_by_test_id("ws-batch-next-step")
+    assert next_step.inner_text() == "Next: click Preview targets. Start batch stays off until you review the list."
+    start = page.get_by_test_id("ws-batch-start")
+    assert start.is_disabled() and start.get_attribute("title") == next_step.inner_text()  # The pointer explains it.
+
+
+def test_the_page_names_the_confirmation_word_and_the_next_step(page: Any, websocket_portal: str) -> None:
+    """The label, the empty box, and the next step all show the word. A near miss keeps Start batch off."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    confirmation = page.get_by_test_id("ws-batch-confirmation")
+    assert page.get_by_test_id("ws-batch-confirmation-label").inner_text() == "Type RUN 2 TARGETS to confirm."
+    assert confirmation.get_attribute("placeholder") == "RUN 2 TARGETS"  # The word shows inside the empty box.
+    next_step = page.get_by_test_id("ws-batch-next-step")
+    waiting = "Next: type RUN 2 TARGETS in the box, then click Start batch."
+    assert next_step.inner_text() == waiting and page.get_by_test_id("ws-batch-start").is_disabled()
+    confirmation.fill("RUN 2 TARGET")  # A near miss.
+    assert next_step.inner_text() == waiting and page.get_by_test_id("ws-batch-start").is_disabled()
+    confirmation.fill("RUN 2 TARGETS")  # The exact word.
+    assert next_step.inner_text() == "Next: click Start batch to run on 2 target(s)."
+    assert page.get_by_test_id("ws-batch-start").is_enabled()
+
+
+def test_a_changed_choice_sends_the_operator_back_to_the_preview(page: Any, websocket_portal: str) -> None:
+    """Changing the output after a preview voids the preview, the word, and the Start button."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-confirmation").fill("RUN 2 TARGETS")
+    assert page.get_by_test_id("ws-batch-start").is_enabled()
+    page.get_by_test_id("ws-batch-hardware-format").select_option("csv")  # A different output.
+    assert page.get_by_test_id("ws-batch-start").is_disabled()
+    assert page.get_by_test_id("ws-batch-next-step").inner_text() == (
+        "Next: click Preview targets. Start batch stays off until you review the list."
+    )
+    assert not page.get_by_test_id("ws-batch-review").is_visible()  # The old list is gone.
+
+
+def test_a_read_only_preview_needs_no_word_and_says_so(page: Any, websocket_portal: str) -> None:
+    """A read-only operation shows no word. The next step goes straight to Start batch."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-operation").select_option("channel:site.stats.devices")
+    page.get_by_test_id("ws-batch-site-status").get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.wait_for_function("() => !document.getElementById('wsBatchStart').disabled", timeout=READY_TIMEOUT_MS)
+    assert page.get_by_test_id("ws-batch-next-step").inner_text() == "Next: click Start batch to run on 101 target(s)."
+    assert not page.get_by_test_id("ws-batch-confirmation").is_visible()  # No word is needed.
+
+
+def test_ex_hardware_preset_keeps_the_site_choice_in_the_targets_card(page: Any, websocket_portal: str) -> None:
+    """Checking the action keeps the Sites choice, lists the sites of the organization, and hides only the resources."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    sites = page.get_by_test_id("ws-batch-sites")  # The choice of all sites or some sites.
+    sites.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-site-status").get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    assert sites.input_value() == "all"  # The whole organization stays the default.
+    assert not page.get_by_test_id("ws-batch-targets").is_visible()  # The action finds its own switches.
+    assert not page.get_by_test_id("ws-batch-operation").is_visible()  # No catalog operation can replace it.
+    sites.select_option("selected")  # Choose some sites.
+    options = page.locator("#wsBatchSiteOptions")
+    options.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert options.locator("option").count() == 2  # Every site of the organization is a choice.
+
+
+def test_ex_hardware_preset_sends_the_selected_sites_and_names_them_in_the_scope_line(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A chosen site is the only site in the request, and the review says how many sites the operator chose."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-site-status").get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-sites").select_option("selected")
+    page.locator("#wsBatchSiteOptions").select_option(SITE_ID)  # One site.
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    body = fake_services.batch_preview_body
+    assert body is not None and body["sites"] == {"mode": "selected", "ids": [SITE_ID]}
+    assert set(body) == {"preset", "format", "scope_revision", "sites"}  # Still no command or device value.
+    assert page.get_by_test_id("ws-batch-scope-summary").inner_text() == (
+        "Scope: One organization; 1 selected site; EX switches only."
+    )
+    page.get_by_test_id("ws-batch-sites").select_option("all")  # Back to the whole organization.
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert "sites" not in (fake_services.batch_preview_body or {})  # All sites sends no selection.
+
+
+def test_ex_hardware_preset_needs_at_least_one_chosen_site_before_it_asks_the_server(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """Selected-sites mode with no site chosen shows a plain error, and no preview request leaves the page."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-site-status").get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-sites").select_option("selected")  # Choose no site.
+    page.get_by_test_id("ws-batch-preview").click()
+    error = page.get_by_test_id("ws-batch-error")
+    error.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert error.inner_text() == "Select one or more sites."
+    assert fake_services.batch_preview_body is None  # The server never saw the request.
+
+
+def test_leaving_the_ex_hardware_preset_gives_the_catalog_operation_its_sites_back(
+    page: Any, websocket_portal: str
+) -> None:
+    """Unchecking restores the sites of the chosen operation, or the first message when there is no operation."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    status = page.get_by_test_id("ws-batch-site-status")
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    status.get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-ex-hardware").uncheck()  # No operation was chosen.
+    status.get_by_text("Choose an operation to load eligible sites.").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-operation").select_option("channel:site.stats.devices")
+    status.get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-ex-hardware").check()  # The action takes the card.
+    status.get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-ex-hardware").uncheck()  # The operation takes it back.
+    status.get_by_text("2 eligible site(s).").wait_for(timeout=READY_TIMEOUT_MS)
+    assert page.get_by_test_id("ws-batch-operation").input_value() == "channel:site.stats.devices"
+    assert page.get_by_test_id("ws-batch-sites").is_visible()
+
+
+def test_ex_hardware_csv_download_link_appears_only_when_the_report_is_ready(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The link points at the CSV route, stays hidden while the run goes, and hides again when the output failed."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv")
+    link = page.get_by_test_id("ws-batch-csv-download")
+    assert not link.is_visible()  # The report is published at the end of the run.
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="writing")
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - completed").wait_for(timeout=READY_TIMEOUT_MS)
+    assert not link.is_visible()  # The output is not final yet.
+    fake_services.batch_progress["batch1"].update(artifact_status="ready")
+    link.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert link.get_attribute("href") == "/api/websockets/batches/batch1/download?format=csv"
+
+
+def test_ex_hardware_csv_download_link_stays_hidden_when_the_output_failed(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A failed output offers no report, and the run keeps its archive."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv")
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="failed")
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - completed").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-zip-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert not page.get_by_test_id("ws-batch-csv-download").is_visible()
+
+
+def test_ex_hardware_xml_output_never_offers_the_csv_link(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A finished XML run keeps its archive only."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "xml")
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
+    page.get_by_test_id("ws-batch-zip-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert not page.get_by_test_id("ws-batch-csv-download").is_visible()
+
+
+@pytest.mark.parametrize(
+    "output, expected",
+    [
+        ("master-xml", "Output: One combined XML file (.xml)"),
+        ("csv-master-xml", "Output: Combined CSV and XML (.csv + .xml)"),
+    ],
+)
+def test_ex_hardware_master_xml_output_previews_the_one_xml_command_and_names_the_files(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices, output: str, expected: str
+) -> None:
+    """The page offers both combined XML choices, sends the choice, and the review names the files."""
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    page.get_by_test_id("ws-batch-hardware-format").select_option(output)  # Fails when the option is missing.
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert fake_services.batch_preview_body is not None and fake_services.batch_preview_body["format"] == output
+    summary = page.get_by_test_id("ws-batch-review-summary").inner_text()
+    assert expected in summary
+    assert "display xml" in summary and "display json" not in summary  # A combined report runs the XML command only.
+
+
+def test_ex_hardware_master_xml_download_link_appears_only_when_the_file_is_ready(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The link points at the XML route, stays hidden while the run goes, and no CSV link or table appears."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "master-xml")
+    link = page.get_by_test_id("ws-batch-xml-download")
+    assert not link.is_visible()  # The file is published at the end of the run.
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="writing")
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - completed").wait_for(timeout=READY_TIMEOUT_MS)
+    assert not link.is_visible()  # The output is not final yet.
+    fake_services.batch_progress["batch1"].update(artifact_status="ready")
+    link.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert link.get_attribute("href") == "/api/websockets/batches/batch1/download?format=xml"
+    assert link.inner_text() == "Download combined XML"
+    assert not page.get_by_test_id("ws-batch-csv-download").is_visible()  # This output holds no CSV report.
+    assert not page.get_by_test_id("ws-batch-csv-preview").is_visible() and fake_services.csv_preview_calls == []
+
+
+def test_ex_hardware_master_xml_download_link_stays_hidden_when_the_output_failed(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A failed output offers no file, and the run keeps its archive."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv-master-xml")
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="failed")
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - completed").wait_for(timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-zip-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert not page.get_by_test_id("ws-batch-xml-download").is_visible()
+    assert not page.get_by_test_id("ws-batch-csv-download").is_visible()
+
+
+@pytest.mark.parametrize("output", ["xml", "json", "both", "csv"])
+def test_ex_hardware_other_outputs_never_offer_the_master_xml_link(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices, output: str
+) -> None:
+    """Only the two combined XML choices publish the file, so no other finished run shows the link."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, output)
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
+    page.get_by_test_id("ws-batch-zip-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.wait_for_timeout(500)  # Give a wrong link time to appear.
+    assert not page.get_by_test_id("ws-batch-xml-download").is_visible()
+
+
+def test_ex_hardware_csv_and_master_xml_output_offers_both_files_and_the_table(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The run publishes two files, so the page shows two links, and the table reads the CSV report."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services, output="csv-master-xml")
+    csv_link, xml_link = page.get_by_test_id("ws-batch-csv-download"), page.get_by_test_id("ws-batch-xml-download")
+    assert csv_link.is_visible() and xml_link.is_visible()
+    assert csv_link.get_attribute("href") == "/api/websockets/batches/batch1/download?format=csv"
+    assert xml_link.get_attribute("href") == "/api/websockets/batches/batch1/download?format=xml"
+    assert csv_rows(page).count() == 6  # The table still shows the CSV report.
+    screenshot(page, "csv-master-xml-links.png")
+
+
+def test_ex_hardware_master_xml_download_link_returns_after_a_page_reload(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The page restores the last batch, and the link shows again for its ready file."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "master-xml")
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
+    page.get_by_test_id("ws-batch-xml-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.reload(wait_until="networkidle")
+    page.get_by_test_id("ws-multi-site-tab").click()  # The page opens on the first tab.
+    link = page.get_by_test_id("ws-batch-xml-download")
+    link.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert link.get_attribute("href") == "/api/websockets/batches/batch1/download?format=xml"
+
+
+def finish_csv_run(
+    page: Any, fake_services: FakeWebSocketServices, report: bytes | None = None, output: str = "csv"
+) -> None:
+    """Start a run with a CSV report, end it with a ready report, and wait for the table to show rows."""
+    if report is not None:
+        fake_services.csv_report = report  # The report that the fake service publishes.
+    start_hardware_batch(page, fake_services, output)
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
+    page.get_by_test_id("ws-batch-csv-table").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+
+
+def csv_rows(page: Any) -> Any:
+    """Return the body rows of the report table."""
+    return page.get_by_test_id("ws-batch-csv-table").locator("tbody tr")
+
+
+def test_ex_hardware_csv_table_shows_the_report_and_keeps_the_download(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """When the report is ready, the table lists its columns and every row, and the page asks for a full page."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    headers = page.get_by_test_id("ws-batch-csv-table").locator("thead th")
+    assert headers.all_inner_texts() == CSV_COLUMNS
+    assert csv_rows(page).count() == 6
+    assert csv_rows(page).first.locator("td").all_inner_texts() == ["Alpha Org", "HQ", "ex-001", "FPC", "SN00001"]
+    assert page.get_by_test_id("ws-batch-csv-status").inner_text() == "Rows 1 to 6 of 6."
+    assert page.get_by_test_id("ws-batch-csv-download").is_visible()  # The file stays one click away.
+    assert page.get_by_test_id("ws-batch-csv-previous").is_disabled()  # One page holds the whole report.
+    assert page.get_by_test_id("ws-batch-csv-next").is_disabled()
+    assert fake_services.csv_preview_calls == [{"session_id": "batch1", "offset": 0, "limit": 1000, "text": ""}]
+    screenshot(page, "csv-table-report.png")
+
+
+def test_ex_hardware_csv_table_waits_for_the_report(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The table stays hidden, and asks nothing, until the output is ready."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv")
+    panel = page.get_by_test_id("ws-batch-csv-preview")
+    assert not panel.is_visible()  # The run is still going.
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="writing")
+    page.locator("#wsBatchProgressTitle").get_by_text("Batch progress - completed").wait_for(timeout=READY_TIMEOUT_MS)
+    page.wait_for_timeout(500)  # Give a wrong request time to arrive.
+    assert not panel.is_visible() and fake_services.csv_preview_calls == []  # The report is not final.
+    fake_services.batch_progress["batch1"].update(artifact_status="ready")
+    panel.wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert len(fake_services.csv_preview_calls) == 1
+
+
+@pytest.mark.parametrize("output, artifact_status", [("csv", "failed"), ("xml", "ready")])
+def test_ex_hardware_csv_table_never_shows_for_a_failed_output_or_another_format(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices, output: str, artifact_status: str
+) -> None:
+    """A failed CSV output and the XML output have no report, so the page shows no table and asks for none."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, output)
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status=artifact_status)
+    page.get_by_test_id("ws-batch-zip-download").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.wait_for_timeout(500)  # Give a wrong request time to arrive.
+    assert not page.get_by_test_id("ws-batch-csv-preview").is_visible() and fake_services.csv_preview_calls == []
+
+
+def test_ex_hardware_csv_filter_asks_the_server_after_a_pause_and_shows_the_matching_rows(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The filter runs on the server over the whole report, and clearing it brings every row back."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    box = page.get_by_test_id("ws-batch-csv-filter")
+    status = page.get_by_test_id("ws-batch-csv-status")
+    box.press_sequentially("EX-002", delay=30)  # Six keys in a quick row.
+    status.get_by_text("that match the filter").wait_for(timeout=READY_TIMEOUT_MS)
+    assert status.inner_text() == "Rows 1 to 1 of 1 that match the filter. The report has 6 rows."
+    assert csv_rows(page).count() == 1 and csv_rows(page).first.locator("td").nth(2).inner_text() == "ex-002"
+    asked = [call["text"] for call in fake_services.csv_preview_calls]
+    assert asked[0] == "" and asked[-1] == "EX-002" and len(asked) < 1 + len("EX-002")  # A pause, not each key.
+    box.fill("")  # An empty filter shows the whole report again.
+    status.get_by_text("Rows 1 to 6 of 6.").wait_for(timeout=READY_TIMEOUT_MS)
+    assert csv_rows(page).count() == 6
+
+
+def test_ex_hardware_csv_filter_with_no_match_says_so(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A filter with no match gives no rows and one plain sentence that names the report size."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    page.get_by_test_id("ws-batch-csv-filter").fill("no-such-switch")
+    status = page.get_by_test_id("ws-batch-csv-status")
+    status.get_by_text("No row matches the filter.").wait_for(timeout=READY_TIMEOUT_MS)
+    assert status.inner_text() == "No row matches the filter. The report has 6 rows."
+    assert csv_rows(page).count() == 0
+
+
+def test_ex_hardware_csv_table_pages_through_a_large_report(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A report of 1500 rows shows 1000 rows, then the last 500 rows, and the buttons follow the position."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services, make_csv_report(1500))
+    status = page.get_by_test_id("ws-batch-csv-status")
+    previous, following = page.get_by_test_id("ws-batch-csv-previous"), page.get_by_test_id("ws-batch-csv-next")
+    assert status.inner_text() == "Rows 1 to 1000 of 1500." and csv_rows(page).count() == 1000
+    assert previous.is_disabled() and following.is_enabled()
+    following.click()
+    status.get_by_text("Rows 1001 to 1500 of 1500.").wait_for(timeout=READY_TIMEOUT_MS)
+    assert csv_rows(page).count() == 500 and previous.is_enabled() and following.is_disabled()
+    previous.click()
+    status.get_by_text("Rows 1 to 1000 of 1500.").wait_for(timeout=READY_TIMEOUT_MS)
+    assert [call["offset"] for call in fake_services.csv_preview_calls] == [0, 1000, 0]
+
+
+def test_ex_hardware_csv_table_shows_markup_in_a_cell_as_text(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A switch controls its text, so a cell with markup must show as text and must not run."""
+    hostile = '<img src=x onerror="window.cellScriptRan = 1"><b>bold</b>'
+    report = CsvRenderer.render(
+        [{"org_name": hostile, "site_name": "HQ", "device_name": "ex-001", "item_type": "Chassis"}],
+        CSV_COLUMNS,
+        1_000_000,
+    )
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services, report)
+    table = page.get_by_test_id("ws-batch-csv-table")
+    assert csv_rows(page).first.locator("td").first.text_content() == hostile  # The raw text is on the page.
+    assert table.locator("img").count() == 0 and table.locator("b").count() == 0  # No element came from the text.
+    page.wait_for_timeout(300)  # An image error handler would have run by now.
+    assert page.evaluate("window.cellScriptRan") is None
+
+
+def test_ex_hardware_csv_table_cuts_a_long_cell_and_says_so(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A cell of 1500 characters keeps 1000, and the status line names the cut and the download."""
+    report = CsvRenderer.render(
+        [{"org_name": "Alpha Org", "site_name": "x" * 1500, "device_name": "ex-001"}], CSV_COLUMNS, 1_000_000
+    )
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services, report)
+    assert len(csv_rows(page).first.locator("td").nth(1).text_content() or "") == 1000
+    status = page.get_by_test_id("ws-batch-csv-status").inner_text()
+    assert status == "Rows 1 to 1 of 1. 1 cell is cut at 1000 characters here. The download has the full text."
+
+
+def test_ex_hardware_csv_table_gives_each_column_a_name_for_a_screen_reader(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The scroll box is a named, focusable region, and each column name is a column header."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    region = page.get_by_role("region", name="Combined CSV report")
+    assert region.is_visible() and region.get_attribute("tabindex") == "0"  # A keyboard can scroll it.
+    assert page.locator('[data-testid="ws-batch-csv-table"] th[scope="col"]').count() == len(CSV_COLUMNS)
+
+
+def test_ex_hardware_csv_table_shows_a_refusal_in_plain_words_and_keeps_the_download(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A report that is too large gets the sentence of the server, no rows, and the download stays."""
+    message = "The report is too large to show here. Download the CSV report."
+    fake_services.csv_error = StreamRequestError("too_large", message)
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv")
+    fake_services.batch_progress["batch1"].update(status="completed", artifact_status="ready")
+    status = page.get_by_test_id("ws-batch-csv-status")
+    status.get_by_text(message).wait_for(timeout=READY_TIMEOUT_MS)
+    assert status.evaluate("element => element.classList.contains('text-danger')")  # The refusal stands out.
+    assert csv_rows(page).count() == 0 and page.get_by_test_id("ws-batch-csv-next").is_disabled()
+    assert page.get_by_test_id("ws-batch-csv-download").is_visible()
+
+
+def test_ex_hardware_csv_table_recovers_after_a_refusal(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """A refused filter shows the reason. The next filter, after the fault ends, shows the rows again."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    fake_services.csv_error = StreamRequestError("output_failed", "The saved report cannot be shown as a table.")
+    box, status = page.get_by_test_id("ws-batch-csv-filter"), page.get_by_test_id("ws-batch-csv-status")
+    box.fill("ex")
+    status.get_by_text("The saved report cannot be shown as a table.").wait_for(timeout=READY_TIMEOUT_MS)
+    fake_services.csv_error = None  # The fault ends.
+    box.fill("")
+    status.get_by_text("Rows 1 to 6 of 6.").wait_for(timeout=READY_TIMEOUT_MS)
+    assert csv_rows(page).count() == 6 and not status.evaluate("element => element.classList.contains('text-danger')")
+
+
+def test_ex_hardware_csv_table_returns_after_a_page_reload(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The page restores the last batch, and the table loads again for its ready report."""
+    open_page(page, websocket_portal)
+    finish_csv_run(page, fake_services)
+    page.reload(wait_until="networkidle")
+    page.get_by_test_id(
+        "ws-multi-site-tab"
+    ).click()  # The page opens on the first tab, and the batch card is on this one.
+    page.get_by_test_id("ws-batch-csv-table").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert csv_rows(page).count() == 6 and len(fake_services.csv_preview_calls) == 2  # One read for each page load.
+
+
+def test_a_batch_parent_of_a_shell_action_is_not_opened_as_a_terminal(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The hardware parent keeps the terminal output name but owns no shell, so the page reads no terminal (#4932)."""
+    open_page(page, websocket_portal)
+    start_hardware_batch(page, fake_services, "csv")
+    page.wait_for_timeout(1500)  # A terminal read would start at once, and it would repeat each second.
+    assert fake_services.terminal_reads == []  # The parent never reaches the terminal route.
+    page.get_by_test_id("ws-single-site-tab").click()  # The output panel of the selected session is on the first tab.
+    assert page.get_by_test_id("ws-output").is_visible()  # The message view shows the parent, as for a channel batch.
+    assert page.get_by_test_id("ws-terminal-panel").is_hidden()  # No dead terminal.
+    assert page.get_by_test_id("ws-session-state").inner_text() == "State: Live"  # The state of the session itself.
+
+
+def test_ex_hardware_concurrency_default_comes_from_the_catalog_setting(
+    page: Any, websocket_portal: str, fake_services: FakeWebSocketServices
+) -> None:
+    """The page takes the shell limit of the hardware action from the catalog, and the start carries it."""
+    fake_services.hardware_concurrency = 2  # The server setting in use.
+    open_page(page, websocket_portal)
+    page.get_by_test_id("ws-multi-site-tab").click()
+    page.get_by_test_id("ws-batch-ex-hardware").check()
+    assert page.get_by_test_id("ws-batch-concurrency").input_value() == "2"
+    page.get_by_test_id("ws-batch-preview").click()
+    page.get_by_test_id("ws-batch-review").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    page.get_by_test_id("ws-batch-confirmation").fill("RUN 2 TARGETS")
+    page.get_by_test_id("ws-batch-start").click()
+    page.get_by_test_id("ws-batch-progress").wait_for(state="visible", timeout=READY_TIMEOUT_MS)
+    assert fake_services.batch_start_body is not None and fake_services.batch_start_body["concurrency"] == 2
+    page.get_by_test_id("ws-batch-ex-hardware").uncheck()  # Leaving the action restores the generic default.
+    assert page.get_by_test_id("ws-batch-concurrency").input_value() == "3"

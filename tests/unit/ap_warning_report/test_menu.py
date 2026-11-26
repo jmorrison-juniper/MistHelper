@@ -16,7 +16,7 @@ def test_menu_307_uses_the_report_callable() -> None:
 
 def test_menu_307_and_308_are_safe() -> None:
     """Permit unattended read-only reports without weakening destructive menus."""
-    assert max(map(int, MistHelper.menu_actions)) == 308  # Menu 308 follows menu 307.
+    assert max(map(int, MistHelper.menu_actions)) == 309  # Menu 309 follows menu 308.
     assert OperationRegistry.skip_category("307") == "safe"  # AP warnings remain read-only.
     assert OperationRegistry.skip_category("308") == "safe"  # Cross-org subscriptions remain read-only.
     safe_options = OperationRegistry.safe_options(list(MistHelper.menu_actions))  # Build unattended menu options.

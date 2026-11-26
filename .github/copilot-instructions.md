@@ -8,7 +8,7 @@ file adds to it, and it does not hold a copy of a rule from it. Where the two fi
 ## What this repository is
 
 MistHelper is a Python tool for the operation of a network on the Juniper Mist cloud. It gives a
-network operations center 307 registered menu operations, numbered 1 through 308 with one gap at
+network operations center 308 registered menu operations, numbered 1 through 309 with one gap at
 152. Menu 0 exits the tool. The tool exports data, manages devices, and upgrades firmware.
 Each export writes to CSV, to SQLite, or to
 ArangoDB and Redis. The audience is a junior engineer in a network operations center, so each
@@ -211,7 +211,7 @@ updates a row and does not duplicate it. Define the strategy before you write th
 ### Menu categories
 
 `src/foundation/support/utils/operation_registry.py` is the single source of truth for the
-category of each menu. The measurement date of the counts below is 2026-11-06. The guard
+category of each menu. The measurement date of the counts below is 2026-11-24. The guard
 `tests/guardrails/test_destructive_menu_docs.py` fails when this table drifts from the registry.
 
 | Category | Count | Menu numbers |
@@ -221,7 +221,7 @@ category of each menu. The measurement date of the counts below is 2026-11-06. T
 | `destructive` | 50 | 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293, 305-306 |
 | `interactive` | 33 | 0, 124-150, 192, 283-285, 290 |
 | `websocket` | 22 | 102-123 |
-| `resource_intensive` | 10 | 14, 18-19, 59, 97-101, 153 |
+| `resource_intensive` | 11 | 14, 18-19, 59, 97-101, 153, 309 |
 | `continuous_loop` | 1 | 151 |
 
 `--test` runs the `safe` category only, and `--testinteractive` adds `interactive_safe`. The

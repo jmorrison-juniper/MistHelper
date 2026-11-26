@@ -10,8 +10,9 @@ import re  # Server-generated path labels reject traversal characters.
 import secrets  # Artifact directory names remain private and unpredictable.
 import shutil  # Delete only one verified session-owned directory.
 import threading  # Writers, downloads, and cleanup share one artifact lock.
+import time  # A refused file replace waits before the next try.
 import zipfile  # ZIP archives contain only the saved safe layout.
-from collections.abc import Iterator, Mapping  # Type streams and target identities.
+from collections.abc import Callable, Iterator, Mapping  # Type streams, target identities, and the report read.
 from dataclasses import dataclass, field  # Keep batch storage state explicit.
 from datetime import UTC, datetime, timedelta  # Artifact expiry uses UTC ISO 8601.
 from io import BytesIO  # Bound archive construction to the output quota.
@@ -36,8 +37,19 @@ from src.mist.realtime.websocket_streams.web.services.operations.hardware_xml im
     HardwareXmlPreset,
     HardwareXmlSupport,
 )  # Keep raw hardware files outside the generic JSONL redaction pipeline.
+from src.operations.exporting.ex_hardware_inventory.report.csv_file import (
+    CsvPreviewer,
+    ReportCheckError,
+    ReportTooLarge,
+)  # Read one page of the published report for the table view (issue #4931), and name the report errors.
+from src.operations.exporting.ex_hardware_inventory.run.publisher import (
+    ReportHook,
+)  # Compile the combined CSV from the saved replies (issue #4920).
 
 logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep artifact fields safe and bounded.
+
+REPORT_NAME = "hardware/inventory.csv"  # The combined CSV of a hardware run, relative to its run folder.
+MASTER_XML_NAME = "hardware/inventory.xml"  # The combined XML file of a hardware run, in the same folder.
 
 
 @dataclass(slots=True)
@@ -167,7 +179,7 @@ class BatchArtifactWriter:
                 try:
                     self._stage(names, contents, staged)
                     for temporary, destination, relative_name in staged:
-                        os.replace(temporary, destination)
+                        self._storage.metadata.replace(temporary, destination)  # Wait out a short file lock.
                         published.append(destination)
                         self._record.files.add(relative_name)
                     self._record.bytes_written += required_bytes
@@ -217,6 +229,7 @@ class BatchArtifactStorage:
         self.results = self.Results(self)  # Serialize all result writes under the record lock.
         self.retention = self.Retention(self.files)  # Delete only verified, unowned trees.
         self.streams = self.Streams(self.files)  # Downloads share the same path checks.
+        self.reports = self.Reports(self)  # Compile the combined CSV at the end of a hardware run.
 
     def prepare(self, targets: tuple[BatchTargetRequest, ...], output: Mapping[str, object]) -> BatchArtifactWriter:
         """Create one private output tree before public session admission."""
@@ -244,6 +257,8 @@ class BatchArtifactStorage:
         with record.lock:
             record.outcomes = [self.metadata.codec.outcome(item) for item in outcomes]  # Remove private metadata.
             record.partial = record.partial or any(item.get("state") != "completed" for item in outcomes)
+            if record.status != "failed" and HardwareXmlPreset.REPORT_KINDS.get(str(record.output.get("format"))):
+                self.reports.publish(record)  # A failure sets the failed status and keeps the saved replies.
             if record.status != "failed":
                 record.status = "ready"  # The manifest write must succeed before completion.
             self.metadata.write(record)  # Persist state within the reserved metadata limit.
@@ -319,6 +334,13 @@ class BatchArtifactStorage:
             except OSError as error:
                 logger.emit(logging.ERROR, "web.artifact.batch.cleanup.error", {"status": type(error).__name__})
                 raise StreamRequestError("cleanup_pending", "The batch output could not be removed.") from error
+
+        def read_bytes(self, record: BatchArtifactRecord, relative: Path, limit: int) -> bytes:
+            """Read one saved file under a size limit, after the same link and containment checks."""
+            path = self.safe_file(record, relative)  # Reject links and traversal before any read.
+            if path.stat().st_size > limit:  # A missing file raises OSError, and a large file is refused.
+                raise StreamRequestError("output_failed", "The saved file exceeds its size limit.")
+            return path.read_bytes()  # Return the exact saved bytes.
 
         class Layout:
             """Derive saved output names only from frozen target identities."""
@@ -430,11 +452,35 @@ class BatchArtifactStorage:
                 temporary = record.directory / ".manifest.tmp"  # Stage one complete manifest.
                 with temporary.open("wb") as stream:
                     stream.write(encoded)  # Complete the bytes before atomic replacement.
-                os.replace(temporary, path)  # Readers never see partial metadata.
+                self.replace(temporary, path)  # Readers never see partial metadata, and a short lock cannot fail it.
             except OSError as error:
                 record.status, record.partial = "failed", True  # Preserve a failed metadata write.
                 logger.emit(logging.ERROR, "web.artifact.batch.manifest.error", {"status": type(error).__name__})
                 raise StreamRequestError("output_failed", "The batch manifest could not be saved.") from error
+
+        def replace(self, temporary: Path, destination: Path, waits: tuple[float, ...] = (0.05, 0.1, 0.2, 0.4)) -> None:
+            """Replace one file atomically, and wait out a short file lock.
+
+            Why:
+                On Windows, a sync client or a virus scanner can hold the file for a moment, and the replace then
+                fails. One refusal would fail the whole batch, so the replace waits and tries again.
+
+            Args:
+                temporary: The complete staged file.
+                destination: The final path of the file.
+                waits: The seconds to wait after each refused try. The tries are one more than the waits.
+
+            Raises:
+                PermissionError: When the last try is refused too. Any other OSError fails at the first try.
+            """
+            for wait in waits:  # Each refused try is followed by one wait.
+                try:  # Windows raises a permission error while another process holds the file.
+                    os.replace(temporary, destination)  # Readers never see partial content.
+                    return  # The first accepted try ends the loop.
+                except PermissionError:  # The other process still holds the file.
+                    logger.emit(logging.INFO, "web.artifact.replace.retry")  # The log shows why the run is slow.
+                    time.sleep(wait)  # Give the other process time to close its handle.
+            os.replace(temporary, destination)  # The last try raises its own error to the caller.
 
         def encode(self, record: BatchArtifactRecord) -> bytes:
             """Encode only safe manifest fields and enforce the reserved quota."""
@@ -632,6 +678,45 @@ class BatchArtifactStorage:
             stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")  # Use a server-generated UTC name.
             return f"websocket-batch-{stamp}.zip", output.getvalue()  # Return a completed in-memory snapshot.
 
+    @dataclass
+    class Reports:
+        """Compile the combined reports of a hardware run and publish them next to the saved replies."""
+
+        storage: BatchArtifactStorage  # Share the quota, the checked paths, and the atomic publication.
+
+        def publish(self, record: BatchArtifactRecord) -> None:
+            """Compile each report that the format asks for and publish them together, or fail the run."""
+            try:  # Any failure keeps the saved replies and marks the artifact failed.
+                reports = self._compile(record)  # The file name and the checked bytes of each report.
+                names, contents = tuple(name for name, _ in reports), [data for _, data in reports]  # Same order.
+                BatchArtifactWriter.Hardware.Publication(self.storage, record).commit(
+                    names, contents, sum(map(len, contents))
+                )  # All reports appear, or none does.
+            except (ValueError, OSError, StreamRequestError) as error:
+                record.status, record.partial = "failed", True  # The summary then reports a failed output.
+                cause = str(error) if isinstance(error, ReportCheckError | ReportTooLarge) else ""  # No content.
+                logger.emit(
+                    logging.ERROR, "web.artifact.report.error", {"status": type(error).__name__, "detail": cause}
+                )  # The sentence of a report error names the check and holds no data of a reply.
+
+        def _compile(self, record: BatchArtifactRecord) -> list[tuple[str, bytes]]:
+            """Return the file name and the checked bytes of each report, within the quota that the replies left."""
+            scope = record.output.get("scope")  # The service stores the organizations of the run at the start.
+            hook = ReportHook(self._reader(record), scope if isinstance(scope, Mapping) else None)  # One run time.
+            builders = {"csv": (REPORT_NAME, hook.compile), "xml": (MASTER_XML_NAME, hook.compile_xml)}
+            remaining = self.storage.owner.OUTPUT_LIMIT - record.bytes_written  # The quota that the replies left.
+            reports: list[tuple[str, bytes]] = []  # In the order of the format, CSV first.
+            for kind in HardwareXmlPreset.REPORT_KINDS.get(str(record.output.get("format")), ()):
+                name, build = builders[kind]  # The file name and the builder of this report.
+                reports.append((name, build(record.outcomes, remaining)))  # The builder refuses a file over the limit.
+                remaining -= len(reports[-1][1])  # The next report must fit in what is left.
+            return reports
+
+        def _reader(self, record: BatchArtifactRecord) -> Callable[[str], str]:
+            """Return a reader that gives the saved text of one reply, only through the checked path."""
+            limit = self.storage.owner.RECORD_LIMIT  # One reply is never larger than one record.
+            return lambda name: self.storage.files.read_bytes(record, Path(name), limit).decode("utf-8")
+
 
 class BatchSessionBindings:
     """Own public session bindings, manifest summaries, and retention cleanup."""
@@ -704,6 +789,9 @@ class SessionArtifactService:
         self.bind_batch = self._bindings.bind_batch  # Expose the atomic public binding operation.
         self.manifest = self._bindings.manifest  # Expose the safe public summary operation.
         self.cleanup_expired = self._bindings.cleanup_expired  # The manager calls the retention owner directly.
+        self.csv_download = self.ReportDownload(self, REPORT_NAME, "csv", "combined CSV report")  # The CSV report.
+        self.xml_download = self.ReportDownload(self, MASTER_XML_NAME, "xml", "combined XML file")  # The master XML.
+        self.csv_preview = self.Preview(self.csv_download)  # The table reads only what the download holds.
 
     def delete(self, session_id: str) -> dict[str, object]:
         """Delete one ended session."""
@@ -754,3 +842,55 @@ class SessionArtifactService:
         finally:
             with record.lock:
                 record.pins -= 1  # Release the cleanup pin after the snapshot is complete.
+
+    class ReportDownload:
+        """Read one published combined report of a completed hardware run (issues #4920 and #4933)."""
+
+        def __init__(self, service: SessionArtifactService, name: str, suffix: str, label: str) -> None:
+            """Bind the service, the saved file name, the download suffix, and the plain name of the report."""
+            self._service, self._name, self._suffix, self._label = service, name, suffix, label
+
+        def __call__(self, session_id: str) -> tuple[str, bytes]:
+            """Return a server-made file name and the bytes of the report, or refuse with a plain sentence."""
+            service = self._service  # The storage, the manager, and the bindings stay with the service.
+            service._storage.require_ready()  # A not-ready portal cannot create downloads.
+            service._manager.session(session_id)  # Reject unknown or expired parents before file access.
+            writer = service._bindings.writer(session_id)  # Single Site sessions have no report.
+            if writer is None:
+                raise StreamRequestError("not_batch", "The session is not a Multi Site batch.")
+            record = writer._record  # The private record owns completion state and pins.
+            with record.lock:
+                if not record.complete or self._name not in record.files:  # Only the chosen format publishes it.
+                    raise StreamRequestError("artifact_not_ready", f"The {self._label} is not ready.")
+                record.pins += 1  # Pin the files while the report is read.
+            try:
+                data = service._storage.files.read_bytes(record, Path(self._name), service.OUTPUT_LIMIT)  # Checked.
+            finally:
+                with record.lock:
+                    record.pins -= 1  # Release the cleanup pin after the read.
+            return f"ExHardwareInventory_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.{self._suffix}", data
+
+    class Preview:
+        """Return one page of the published combined CSV as table data (issue #4931)."""
+
+        BYTE_LIMIT = 16 * 1024 * 1024  # A larger report is a download, because each page request parses the file.
+
+        def __init__(self, read_report: Callable[[str], tuple[str, bytes]]) -> None:
+            """Bind the checked report read, so a preview gives the same refusals as a download."""
+            self._read_report = read_report  # Unknown, not a batch, and not ready stay refusals of one owner.
+
+        def __call__(self, session_id: str, offset: int, limit: int, text: str) -> dict[str, object]:
+            """Read the report, then return the requested page of its rows."""
+            logger.emit(logging.INFO, "web.artifact.preview.start")  # Log no filter text and no position.
+            _name, data = self._read_report(session_id)  # The pinned, size-checked read of the download.
+            if len(data) > self.BYTE_LIMIT:  # Refuse before the parse, with a way forward for the operator.
+                raise StreamRequestError("too_large", "The report is too large to show here. Download the CSV report.")
+            try:  # A damaged file gets one plain refusal, and the download stays available.
+                page = CsvPreviewer.page(data, offset, limit, text)
+            except ReportCheckError as error:
+                logger.emit(logging.ERROR, "web.artifact.preview.error", {"status": type(error).__name__})
+                raise StreamRequestError("output_failed", "The saved report cannot be shown as a table.") from error
+            logger.emit(
+                logging.DEBUG, "web.artifact.preview.finish", {"count": page["matched"], "byte_count": len(data)}
+            )  # Counts only.
+            return page

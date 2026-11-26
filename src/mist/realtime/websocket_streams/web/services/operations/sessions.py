@@ -66,6 +66,7 @@ class BatchPreviewRecord:
     confirmation: str | None  # Risky batches require one exact server phrase.
     preset: str | None = None  # Dedicated presets remain bound to the preview.
     output_format: str | None = None  # Format selection cannot change at batch start.
+    site_count: int | None = None  # The number of chosen sites, or None when the preview covers every site.
     consumed: bool = False  # Admission consumes the snapshot at most once.
 
 
@@ -336,12 +337,16 @@ class _BatchServiceComponents:
 
             def _discover(self, values: Mapping[str, object]) -> list[dict[str, object]]:
                 """Require complete organization site discovery."""
-                if self.picker is None:
-                    raise StreamRequestError("not_ready", self.reason or "The WebSocket engine is not ready.")
-                response = self.picker.sites(str(values["kind"]), str(values["key"]))
-                rows = response.get("rows")
-                if response.get("complete") is not True or not isinstance(rows, list):
-                    raise StreamRequestError("picker_incomplete", "Site discovery did not complete.")
+                if self.picker is None:  # A not-ready portal has no picker.
+                    raise StreamRequestError(
+                        "not_ready", self.reason or "The WebSocket engine is not ready."
+                    )  # Refuse.
+                preset = values.get("preset") == HardwareXmlPreset.NAME  # The hardware preset may span an MSP.
+                reader = getattr(self.picker, "hardware_sites", self.picker.sites) if preset else self.picker.sites
+                response = reader(str(values["kind"]), str(values["key"]))  # Scope-aware only for the hardware preset.
+                rows = response.get("rows")  # The complete site list.
+                if response.get("complete") is not True or not isinstance(rows, list):  # No partial discovery.
+                    raise StreamRequestError("picker_incomplete", "Site discovery did not complete.")  # Refuse.
                 return [row for row in rows if isinstance(row, dict)]  # Ignore malformed rows as before.
 
             def _choose(self, rows: list[dict[str, object]], selector: Mapping[str, object]) -> list[dict[str, object]]:
@@ -697,12 +702,8 @@ class _BatchServiceComponents:
                     "scope_revision": cast(int, values["scope_revision"]),
                 }
 
-            def _state_fields(
-                self,
-                values: Mapping[str, object],
-                details: Mapping[str, object],
-            ) -> dict[str, Any]:
-                """Return the checked result, fingerprint, and expiration fields."""
+            def _state_fields(self, values: Mapping[str, object], details: Mapping[str, object]) -> dict[str, Any]:
+                """Return the checked result, fingerprint, expiration, and preset fields."""
                 now = cast(float, details["now"])
                 excluded = dict(cast(Mapping[str, int], values.get("excluded", {})))
                 parameters = dict(cast(Mapping[str, object], values["parameters"]))
@@ -721,6 +722,7 @@ class _BatchServiceComponents:
                     "confirmation": confirmation,
                     "preset": values.get("preset"),
                     "output_format": values.get("format"),
+                    "site_count": values.get("site_count"),
                 }
 
             @staticmethod
@@ -798,8 +800,11 @@ class _BatchServiceComponents:
 
             @staticmethod
             def _preset(payload: dict[str, object], record: BatchPreviewRecord) -> None:
-                """Add only the validated format and fixed review command."""
+                """Add only the validated format, the site choice, and the fixed review command."""
                 payload.update({"preset": record.preset, "format": record.output_format})
+                payload["site_selection"] = (
+                    {"mode": "selected", "count": record.site_count} if record.site_count else {"mode": "all"}
+                )  # A count, never a site name or identifier.
                 if record.preset == HardwareXmlPreset.NAME:
                     payload["fixed_commands"] = list(record.commands)
 
@@ -894,7 +899,7 @@ class WebSocketBatchService:
         request = self._hardware_preset.batch_request(hardware) if hardware is not None else body
         values = self._input.selection(request)  # Validate operation, selectors, parameters, and commands.
         if hardware is not None:
-            values.update({"preset": self._hardware_preset.NAME, "format": hardware.output_format})
+            values.update(hardware.preview_values())  # Bind the preset, the format, and the site count.
         targets = self._targets.resolve(values)  # Discover and validate every selected target.
         if hardware is not None:
             targets, hardware_excluded = HardwareXmlSupport.TargetSelector.unique_targets(targets)
@@ -911,24 +916,25 @@ class WebSocketBatchService:
     def start(self, body: object) -> dict[str, object]:
         """Atomically consume one preview and admit one public batch session."""
         self._input.require_ready()  # Refuse before a preview or session can change.
-        preview_id, phrase, concurrency, output = self._input.start_values(body)
-        with self._lock:
-            record = self._previews.admission(preview_id, phrase)
-            self._previews.validate_fingerprint(record)
+        preview_id, phrase, concurrency, output = self._input.start_values(body)  # Validate the start fields first.
+        with self._lock:  # Consume the preview and admit the batch as one step.
+            record = self._previews.admission(preview_id, phrase)  # Scope, expiry, single use, and phrase.
+            self._previews.validate_fingerprint(record)  # The stored snapshot must be unchanged.
             if record.output_format is not None:
-                output.update(
-                    {"preset": HardwareXmlPreset.NAME, "format": record.output_format}
-                )  # Preserve the selected format in the immutable artifact plan.
-            writer = self._artifacts.prepare_batch(record.targets, output)
-            parent = _BatchServiceComponents.Previews.ParentRequest.create(
+                scope = getattr(self._input.picker, "scope_summary", None)  # The organizations of the run.
+                output.update(preset=HardwareXmlPreset.NAME, format=record.output_format, scope=scope and scope())
+            writer = self._artifacts.prepare_batch(record.targets, output)  # Create the private run folder.
+            parent = _BatchServiceComponents.Previews.ParentRequest.create(  # One parent request owns the plan.
                 record, concurrency, output, writer, self._input.picker
             )
-            try:
-                payload = cast(dict[str, object], self._manager.start(parent))
+            try:  # A refused admission must not leave a run folder.
+                payload = cast(dict[str, object], self._manager.start(parent))  # Start the worker threads.
             except StreamRequestError:
                 writer.discard()  # A checked admission refusal created no parent session.
                 raise
-            _BatchServiceComponents.Previews.Admission.bind(payload, record, writer, self._artifacts)
+            _BatchServiceComponents.Previews.Admission.bind(
+                payload, record, writer, self._artifacts
+            )  # Bind the folder.
         return payload  # Preserve the established public session response.
 
     def summary(self, session_id: str) -> dict[str, object]:

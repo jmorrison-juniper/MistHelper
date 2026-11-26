@@ -4,19 +4,34 @@ MistHelper supports MSP-level operations for users with Managed Service Provider
 
 ## Enabling MSP Mode
 
-1. **Use Interactive Login (Menu 143)**: MSP privileges require email/password authentication, not API tokens
+MSP mode needs a credential that carries an MSP grant. Two kinds of credential do.
+
+1. **Interactive login (`--login`, or menu 143 in a running session)**: The terminal asks for the Mist cloud, the email, and the password. If the account requires two-factor authentication, it also asks for the code. A wrong or empty code ends the login.
+
+   ```text
+   python MistHelper.py --login
+   ```
+
+   In a running session, choose the same login from the menu:
 
    ```text
    Select menu option: 143
    ```
 
-   This switches from token-based auth to interactive login and automatically detects MSP privileges.
+   This switches from the token to the login and detects the MSP privileges.
 
-2. **Automatic Detection**: On successful login, MistHelper detects and displays your MSP access:
+2. **A user API token**: A token that you create under your own account carries the privileges of that account, including an MSP grant. It never asks for a 2FA code, so it suits a scheduled job and a container. An organization token carries no MSP grant.
+
+3. **Automatic Detection**: After a login, MistHelper detects and displays your MSP access:
 
    ```text
-   + MSP access available: 2 MSP(s)
+   + MSP access detected: 2 MSP(s) available
+     - Example MSP (role: admin)
    ```
+
+   With a token, menu 309 prints the scope at step 1 of its run.
+
+[Sign in for an MSP run](../operator-guide.md#sign-in-for-an-msp-run) gives the start command of each front end, the prompts, and the grants that give MSP scope.
 
 ## MSP-Enabled Operations
 
@@ -28,6 +43,15 @@ MistHelper supports MSP-level operations for users with Managed Service Provider
 
 Warning: All three operations are destructive. Each one changes the Mist cloud
 configuration and needs a typed confirmation. Use `--dry-run` first.
+
+## Read-Only MSP Reports
+
+| Menu | Operation | Documentation |
+|------|-----------|---------------|
+| **308** | Cross-org subscription, deployed inventory, and stock | [Cross-org report](../cross-org-subscription-stock.md) |
+| **309** | EX switch hardware inventory of every organization in scope, as one CSV report and one XML file | [Operator guide](../operator-guide.md#sign-in-for-an-msp-run) |
+
+Both operations read only. Menu 309 opens one read-only shell on each connected EX switch. It covers every organization that the account can reach, and it needs no MSP selection.
 
 ## Using MSP Multi-Org Mode
 
@@ -89,4 +113,6 @@ Once you select an MSP in menu 143, MistHelper remembers it for subsequent opera
 - **API Differences**: MSP operations use `mistapi.api.v1.msps.orgs.listMspOrgs()` to enumerate organizations
 - **Dry-Run Support**: All MSP upgrade modes support `--dry-run` for safe validation
 - **Global Variable**: MSP state stored in `msp_privileges` list and `selected_msp` dict
-- **Detection Function**: `detect_msp_privileges()` called after interactive login
+- **Detection Function**: `detect_msp_privileges()` runs after an interactive login and after a token session starts
+- **Menu 309**: Reads the grants of the profile itself and covers every MSP of the account. It does not use `selected_msp`
+- **Orggroup Grants**: A grant with the `orggroup`, `site`, or `sitegroup` scope adds no organization to the run of menu 309

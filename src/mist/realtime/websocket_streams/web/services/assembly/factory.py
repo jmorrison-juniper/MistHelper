@@ -38,13 +38,15 @@ from src.mist.realtime.websocket_streams.web.services.operations.terminal import
     WebSocketTerminalService,
 )  # Terminal actions.
 from src.mist.realtime.websocket_streams.web.services.pickers.related import (
-    BatchTargetPickerService,
     RelatedPickerService,
 )  # Related picker actions.
 from src.mist.realtime.websocket_streams.web.services.pickers.service import (
     ClientSuggestionService,
     SitePickerService,
 )  # Site and client suggestion actions.
+from src.operations.exporting.ex_hardware_inventory.run.routing import (
+    ScopeAwareTargets,
+)  # Target discovery that spans an MSP for the hardware preset (issue #4920).
 
 logger = StructuredTransportLogger(logging.getLogger(__name__))  # Keep assembly fields safe and bounded.
 
@@ -99,9 +101,9 @@ class WebSocketServiceFactory:
         site_pickers = SitePickerService(collaborators.picker, reason)  # Build site picker actions.
         related_pickers = RelatedPickerService(collaborators.picker, reason)  # Build related picker actions.
         client_suggestions = ClientSuggestionService(collaborators.picker, reason)  # Build scoped client suggestions.
-        batch_targets = BatchTargetPickerService(
+        batch_targets = ScopeAwareTargets(
             collaborators.picker, collaborators.catalog, reason
-        )  # Build catalog-driven target discovery.
+        )  # Build catalog-driven target discovery, with scope-aware reads for the hardware preset.
         batches = WebSocketBatchService(
             collaborators.checker, batch_targets, collaborators.manager, artifacts, reason
         )  # Preview validation shares the complete operation-scoped picker.

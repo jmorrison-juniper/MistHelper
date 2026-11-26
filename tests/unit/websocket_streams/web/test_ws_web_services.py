@@ -584,6 +584,87 @@ def test_ex_hardware_preset_rejects_unknown_output_format(tmp_path: Path) -> Non
     assert error.value.code == "bad_request"  # Keep invalid formats out of preview storage.
 
 
+NORTH_SITE = "22222222-2222-4222-8222-222222222222"  # The first site of the fake organization.
+SOUTH_SITE = "33333333-3333-4333-8333-333333333333"  # The second site of the fake organization.
+OTHER_SITE = "88888888-8888-4888-8888-888888888888"  # A valid identifier that no fake site holds.
+
+
+def hardware_preview_body(**overrides: object) -> dict[str, object]:
+    """Build one hardware preset preview request with optional extra or replaced fields."""
+    return {"preset": "ex-hardware-xml", "format": "csv", "scope_revision": 3, **overrides}
+
+
+def test_ex_hardware_preset_previews_only_the_selected_sites(tmp_path: Path) -> None:
+    """A site subset limits target discovery to those sites. The preview gives a count and no site name."""
+    picker = FakeBatchPicker(device_target=True)  # Two sites with one EX switch each.
+    service = make_batch_service(FakeBatchChecker(hardware_shell_definition()), picker, FakeManager(), tmp_path)
+    payload = service.preview(hardware_preview_body(sites={"mode": "selected", "ids": [NORTH_SITE]}))
+    assert payload["target_count"] == 1 and payload["confirmation"]["phrase"] == "RUN 1 TARGETS"
+    assert [call[0] for call in picker.target_calls] == [NORTH_SITE]  # Only the chosen site is read.
+    assert payload["site_selection"] == {"mode": "selected", "count": 1}  # A count, never a name.
+    assert payload["targets"][0]["site_label"] == "North"  # The review list still names each switch site.
+
+
+def test_ex_hardware_preset_counts_two_selected_sites(tmp_path: Path) -> None:
+    """Two chosen sites give two targets, and the count of the preview is two."""
+    picker = FakeBatchPicker(device_target=True)
+    service = make_batch_service(FakeBatchChecker(hardware_shell_definition()), picker, FakeManager(), tmp_path)
+    payload = service.preview(hardware_preview_body(sites={"mode": "selected", "ids": [SOUTH_SITE, NORTH_SITE]}))
+    assert payload["target_count"] == 2 and payload["site_selection"] == {"mode": "selected", "count": 2}
+    assert sorted(call[0] for call in picker.target_calls) == [NORTH_SITE, SOUTH_SITE]
+
+
+@pytest.mark.parametrize("sites", [None, {"mode": "all"}, {"mode": "all", "ids": []}])
+def test_ex_hardware_preset_reads_every_site_when_no_subset_is_chosen(tmp_path: Path, sites: object) -> None:
+    """An absent selection and the mode all both read every site, and the browser needs to send neither."""
+    picker = FakeBatchPicker(device_target=True)
+    service = make_batch_service(FakeBatchChecker(hardware_shell_definition()), picker, FakeManager(), tmp_path)
+    body = hardware_preview_body() if sites is None else hardware_preview_body(sites=sites)
+    payload = service.preview(body)
+    assert payload["target_count"] == 2 and payload["site_selection"] == {"mode": "all"}
+    assert sorted(call[0] for call in picker.target_calls) == [NORTH_SITE, SOUTH_SITE]
+
+
+@pytest.mark.parametrize(
+    "sites",
+    [
+        {"mode": "selected", "ids": []},
+        {"mode": "selected"},
+        {"mode": "selected", "ids": NORTH_SITE},
+        {"mode": "selected", "ids": [7]},
+        {"mode": "selected", "ids": [""]},
+        {"mode": "selected", "ids": ["not-a-uuid"]},
+        {"mode": "selected", "ids": [OTHER_SITE]},
+        {"mode": "selected", "ids": [NORTH_SITE, NORTH_SITE]},
+        {"mode": "all", "ids": [NORTH_SITE]},
+        {"mode": "some"},
+        {"mode": "selected", "ids": [NORTH_SITE], "extra": 1},
+        "all",
+        ["x"],
+    ],
+)
+def test_ex_hardware_preset_refuses_a_bad_site_selection(tmp_path: Path, sites: object) -> None:
+    """Each wrong shape, an unknown site, and a repeated site stop the preview before any target read."""
+    picker = FakeBatchPicker(device_target=True)
+    service = make_batch_service(FakeBatchChecker(hardware_shell_definition()), picker, FakeManager(), tmp_path)
+    with pytest.raises(StreamRequestError) as error:
+        service.preview(hardware_preview_body(sites=sites))
+    assert error.value.code == "bad_request"  # Keep the request-shape refusal stable.
+    assert picker.target_calls == [] and not service._previews.records  # No read and no stored preview.
+
+
+def test_ex_hardware_preset_values_and_request_carry_the_site_choice() -> None:
+    """The selection binds the site count to the preview, and the preset builds the selected-sites request."""
+    preset = HardwareXmlPreset()
+    every = preset.parse(hardware_preview_body())  # No selection.
+    chosen = preset.parse(hardware_preview_body(sites={"mode": "selected", "ids": [NORTH_SITE, SOUTH_SITE]}))
+    assert every.site_ids == ()
+    assert every.preview_values() == {"preset": "ex-hardware-xml", "format": "csv", "site_count": None}
+    assert chosen.site_ids == (NORTH_SITE, SOUTH_SITE) and chosen.preview_values()["site_count"] == 2
+    assert preset.batch_request(every)["selection"] == {"sites": {"mode": "all"}, "resources": {"mode": "all"}}
+    assert preset.batch_request(chosen)["selection"]["sites"] == {"mode": "selected", "ids": [NORTH_SITE, SOUTH_SITE]}
+
+
 def test_ex_hardware_preview_deduplicates_virtual_chassis_and_excludes_non_ex(tmp_path: Path) -> None:
     """Keep one logical EX device even when inventory repeats its member records."""
     picker = FakeBatchPicker(device_target=True)

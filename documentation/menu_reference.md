@@ -3,9 +3,9 @@
 This page is generated. Run `python scripts/generate_menu_wiki.py` after any
 change to `menu_actions` in `MistHelper.py` or to `src/foundation/support/utils/operation_registry.py`.
 
-MistHelper defines **307 actionable menu entries**, numbered
-1 to 308 with gaps at 152.
-Menu 0 is Exit, so the registry holds 308 entries in total.
+MistHelper defines **308 actionable menu entries**, numbered
+1 to 309 with gaps at 152.
+Menu 0 is Exit, so the registry holds 309 entries in total.
 
 The Safety column reads from `src/foundation/support/utils/operation_registry.py`, which is the
 single source of truth. The classifier fails closed, so an unregistered option
@@ -13,7 +13,7 @@ never runs in an automated test pass.
 
 ## Important Notes
 
-- Options 14, 18-19, 59, 97-101, 153 are resource intensive. They can run for a long time on a large org.
+- Options 14, 18-19, 59, 97-101, 153, 309 are resource intensive. They can run for a long time on a large org.
 - Options 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293, 305-306 are destructive. They change the Mist cloud configuration.
 - Warning: Do not script a destructive option unattended. Each one needs a typed
   confirmation from a human operator.
@@ -27,7 +27,7 @@ never runs in an automated test pass.
 | 154-187, 189-191, 194, 206-208, 239, 281, 286-287, 291-293, 305-306 | Destructive | 50 operations. They change the Mist cloud configuration. Each one needs a typed confirmation. |
 | 0, 124-150, 192, 283-285, 290 | Interactive | 33 operations. They prompt the operator, so no automated run includes them. |
 | 102-123 | WebSocket | 22 operations. They open a WebSocket stream to a device. |
-| 14, 18-19, 59, 97-101, 153 | Resource intensive | 10 operations. They run long or fetch a large payload. |
+| 14, 18-19, 59, 97-101, 153, 309 | Resource intensive | 11 operations. They run long or fetch a large payload. |
 | 151 | Continuous loop | 1 operations. They loop until the operator stops them. |
 
 ## Full Menu Table
@@ -342,6 +342,7 @@ never runs in an automated test pass.
 | 306 | DESTRUCTIVE: Restore organization and site firmware policies from private backups (Requires typing 'RESTORE', verified recovery backups, supports --dry-run) | Destructive | `lambda: RestoreMenu(api=_build_policy_api(), inputs=PolicyMenuInputs(organization=ConfigUtils.get_cached_or_prompted_org_id, stopped=ConfigUtils.check_stop_signal, dry_run=getattr(globals().get('args', None), 'dry_run', False), data_directory=Path(os.environ.get('DATA_DIR', 'data')))).run()` |
 | 307 | Export AP warning and error codes across all sites | Safe org exports | `ApWarningReport.run` |
 | 308 | Export cross-org subscription, entitlement, and stock inventory report | Safe org exports | `CrossOrgSubscriptionInventoryReport.run` |
+| 309 | Collect EX switch hardware inventory into one CSV report and one XML file | Resource intensive | `ExHardwareInventoryReport.run` |
 
 ### Endpoint family sub-menus (259-268)
 

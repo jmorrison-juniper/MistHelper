@@ -577,6 +577,7 @@ from src.operations.execution.firmware_policy.cli import (  # Menu 305 configure
 from src.operations.execution.firmware_policy.recovery.cli import RestoreMenu
 from src.operations.execution.firmware_policy.sdk import PolicyApi  # Keep all menu 305 requests in the SDK boundary.
 from src.operations.exporting.ap_warning_report.operation import ApWarningReport
+from src.operations.exporting.ex_hardware_inventory.operation import ExHardwareInventoryReport
 from src.operations.exporting.export.const_definitions_exporter import (
     ConstDefinitionsExporter,  # Cat B (1013 SC-001 position 17) -- re-export
 )
@@ -4832,6 +4833,14 @@ menu_actions: dict[str, Any] = {
         destructive=False,
         supports_fast=False,
     ),
+    "309": GlobalImportManager.MenuEntry(  # Use named fields for menu 309.
+        menu_id="309",  # Store key for drift checks.
+        handler=ExHardwareInventoryReport.run,
+        title="Collect EX switch hardware inventory into one CSV report and one XML file",
+        category=OperationRegistry.skip_category("309"),  # Read the safety class.
+        destructive=False,  # The command is read-only, and a typed phrase starts the run.
+        supports_fast=False,  # Shell concurrency is bounded by PORTAL_WS_HARDWARE_CONCURRENCY.
+    ),
     "238": GlobalImportManager.MenuEntry(  # Use named fields for menu 238.
         menu_id="238",  # Store key for drift checks.
         handler=MSPLicenseExporter.licenses,
@@ -6929,11 +6938,15 @@ def _launch_web_portal(
     portal_config = loader.load_config()  # Preserve the existing behavior during the compliance refactor.
     port = portal_config["web_port"]  # Preserve the existing behavior during the compliance refactor.
     host = _resolve_web_portal_host()  # Loopback on a workstation, all interfaces in a container, WEB_HOST wins
+    org_id = (
+        MainEntrypoint.context.org_id or ConfigUtils.get_cached_or_prompted_org_id()
+    )  # The other modes resolve it first, and the WebSockets tab needs it (issue #4929).
+    MainEntrypoint.context.org_id = org_id  # Keep one organization for every part of the portal.
 
     app = WebPortalApp.create_app(  # Construct Flask app with shared API session + menu registry
         apisession=MainEntrypoint.context.apisession,
         menu_actions=menu_actions,
-        org_id=MainEntrypoint.context.org_id,
+        org_id=org_id,
     )
 
     _run_web_portal_server(app, host, port, args.debug)  # Dispatch to container/local runner

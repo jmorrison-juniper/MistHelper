@@ -88,4 +88,4 @@ Use this endpoint to complete two-factor authentication after initial login when
 
 ## MistHelper Notes
 
-Not currently used by MistHelper. MistHelper uses API token authentication and does not handle interactive 2FA flows.
+MistHelper completes this step in two places. The interactive login (`--login`, or menu 143) asks `Enter 2FA code:` in the terminal. It then sends the code through the SDK call `login_with_return(email, password, two_factor)`. The upgrade capture portal (port 8056) asks for the code on its second factor page, `/auth/twofactor`. A run with an API token never calls this endpoint. The operations portal (port 8055) has no page for the code. See [Sign in for an MSP run](../../operator-guide.md#sign-in-for-an-msp-run).

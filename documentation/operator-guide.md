@@ -395,6 +395,217 @@ After session expiry, access the files through the mounted `data/` directory.
 The portal download requires a retained session.
 Automatic cleanup does not remove hardware runs. Review disk usage and archive retained runs through your storage process.
 
+### Collect EX chassis hardware as one CSV report or one XML file
+
+In the WebSockets tab, select **Multi Site**, choose **Collect EX hardware
+inventory**, and choose one of the combined outputs:
+
+| Output | Files that the run publishes |
+|--------|------------------------------|
+| **One combined CSV report (.csv)** | `hardware/inventory.csv` |
+| **One combined XML file (.xml)** | `hardware/inventory.xml` |
+| **Combined CSV and XML (.csv + .xml)** | Both files, together |
+
+The action runs only
+`show chassis hardware detail | display xml | no-more` on each connected EX
+switch. The portal keeps the saved XML replies and compiles them into the file
+or files that you chose.
+
+The preview shows a scope line before you confirm. In one-organization scope,
+the line says so. In MSP scope, the line gives the number of organizations that
+the login can reach, and the number that Mist could not read. The portal uses
+the same scope rules as menu 309.
+
+The Targets card stays on the page when you choose this action. Keep **All
+eligible sites** to cover the whole organization. To run on some sites, choose
+**Selected sites**, then select one or more sites in the list. The preview says
+how many sites you chose, for example `One organization; 1 selected site`. The
+page refuses an empty choice, and the server refuses a site that is not in the
+scope. In MSP scope, the list shows the sites of the configured organization,
+and **All eligible sites** covers every organization.
+
+Follow these steps, in this order. The Review card shows them too.
+
+1. Choose the action, the output, and the sites.
+2. Click **Preview targets**. Nothing runs yet. The portal reads Mist and
+   shows the exact list of switches.
+3. Review the list. The page shows the confirmation word, `RUN <count>
+   TARGETS`, in the label of the box, in the box, and in the line above **Start
+   batch**. Type the word.
+4. Click **Start batch**.
+
+**Start batch** stays off until you finish step 2 and type the word. A change
+of the choices after the preview clears the preview, so you click **Preview
+targets** again. The line above **Start batch** always tells you the next step.
+
+Type the confirmation phrase, then select **Start batch**. The progress panel
+shows **Download CSV report** when the report is complete, and **Download
+combined XML** when the XML file is complete. The report file is
+`hardware/inventory.csv` in the run directory, and the XML file is
+`hardware/inventory.xml`. The archive holds both. The portal publishes the two
+files together, so you never see one without the other. If a file fails, the
+portal publishes none of them, the XML files of the switches stay, and the
+progress panel shows the output state `failed`.
+
+The combined XML file is one XML document for the whole run. It holds the reply
+of each switch that collected, grouped by organization and site. A switch that
+returned no valid reply, and an organization that Mist could not read, appear as
+elements with a status and a reason, so no target is missing. Other programs can
+read the file as standard XML 1.0 with namespaces. The tool checks the file
+before it publishes it, and it publishes no file that fails a check. The
+reference page `documentation/ex-hardware-master-xml.md` describes the structure
+and shows how to check the file with common tools.
+
+When the report is complete, the progress panel also shows it as a table. The
+table appears for the outputs that hold the CSV report. The table lists the columns and the rows of the file, in the same order as the file.
+The line above the table gives the rows that you see, for example `Rows 1 to 297
+of 297.` Type text in **Filter rows** to find a row. The filter looks in every
+cell of the whole report, and it ignores case. The table shows up to 1000 rows
+at one time. If the report has more rows, use **Previous rows** and **Next
+rows**. The table cuts a cell at 1000 characters, and the line above the table
+says when it does. The download has the full text. If the report is too large
+to show, the panel says so, and **Download CSV report** still works.
+
+Set `PORTAL_WS_HARDWARE_CONCURRENCY` to limit the shells that open at the same
+time. The range is 1 through 5, and the default is 3. The page takes its default
+from this setting. A value outside the range gives the default and one warning
+in the log.
+
+### Collect EX hardware inventory from the command line (menu 309)
+
+Run `python MistHelper.py --menu 309`, or choose 309 in the menu. The menu
+works in four steps.
+
+1. **Check the credential.** The menu reads the profile of the credential and
+   chooses the scope. An organization token uses one organization. A credential
+   with an MSP grant and a working MSP list uses every organization that it can
+   reach. If the MSP list is denied, the menu says so once and uses one
+   organization. The menu prints the credential, the scope, and the number of
+   organizations. [Sign in for an MSP run](#sign-in-for-an-msp-run) tells how to
+   sign in, with two-factor authentication.
+2. **Find the connected EX switches.** The menu gives the number of connected EX
+   switches in each organization. It also gives the number that it left out,
+   with the reason: offline, unknown status, other device types, or a repeated
+   chassis.
+3. **Confirm.** The menu shows the one read-only command and the number of shells
+   that open at the same time. Type `RUN <count> TARGETS` to start. Press Enter to
+   cancel. An empty answer, end of input, or Ctrl+C cancels the run.
+4. **Collect.** The menu runs one organization at a time and prints the result of
+   each one.
+
+If the credential grants several organizations and you are not in MSP scope, set
+`org_id` to the one to use. The menu stops with a plain sentence when the choice
+is not clear. Each organization runs as one batch of 1000 switches or fewer.
+
+The menu writes two files for each run. The first is
+`data/ExHardwareInventory_<UTC time>.csv`. The file
+holds one row for each hardware item of each switch that returned a valid reply.
+A switch that returned no valid reply gives one outcome row with the status
+(`failed`, `skipped`, or `cancelled`) and the reason. An organization that Mist
+could not read gives one outcome row with empty site and switch columns. Press
+Ctrl+C during the run to stop it. The file then marks the unfinished switches
+`cancelled`, and the run status is `partial`.
+
+The second file is `data/ExHardwareInventory_<UTC time>.xml`, next to the CSV
+report. It is one XML document that holds the reply of each switch that
+collected, and one element for each other switch and for each organization that
+Mist could not read. The menu prints one line for it, `Master XML: <path> (<count>
+devices)`. The menu reads the file back from the disk and checks it again. It
+removes a file that fails a check, says so in one sentence, and keeps the CSV
+report. The two files are independent. The structure of the XML file and a way
+to check it with other tools are in `documentation/ex-hardware-master-xml.md`.
+
+A text value can start with `=`, `+`, `-`, `@`, a tab, or a carriage return.
+The menu adds a leading apostrophe, so a spreadsheet does not run the value as a
+formula. The menu reads the file back after it writes it. It removes a file that
+does not match its rows. The rows also go to the configured database backends, with the
+key `org_id`, `device_id`, and `item_path`. The saved XML replies stay under
+`data/websocket-streams/<run id>/`.
+
+The menu is a `resource_intensive` operation. The `--test` and `--testinteractive`
+sweeps skip it. A large MSP run is slow, because each site costs about three
+reads, and the shared limit is 5000 requests an hour for each credential.
+
+The credential must have a role that can open a switch shell. In a live test, an
+organization token with the read-only role found 15 connected EX switches, and
+Mist refused the shell of each one with HTTP 403 and the detail `shell access not
+allowed for this user`. The menu then gave one `failed` outcome row for each
+switch and no hardware row. The menu prints a note at step 1 when every grant of
+the credential has the read-only role. Each failed switch has the detail `The
+shell could not collect this switch. See the log for the cause.` The log holds
+the HTTP status. The Multi Site action of the portal opens the same shells, so it
+needs the same role.
+
+A switch can also show the detail `The reply could not be saved.` The shell
+worked, but the run folder refused the file. On Windows, a sync client such as
+OneDrive or a virus scanner can hold a file for a short time. The run waits and
+tries again, up to five times and 0.75 second in total, so a short lock does not
+fail a switch. If the detail stays, run the menu again. You can also keep the
+`data` folder outside a synced folder.
+
+### Sign in for an MSP run
+
+Menu 309 and the Multi Site action do not ask for a password. They use the Mist
+session that the launcher builds at startup. The credential of that session
+decides the scope. A credential with an MSP grant gives MSP scope. An
+organization token gives one organization.
+
+| Front end | Start command | How the session signs in |
+|-----------|---------------|--------------------------|
+| CLI with a login | `python MistHelper.py --login --menu 309` | The terminal asks for the cloud, the email, the password, and the 2FA code. |
+| CLI with a token | `python MistHelper.py --menu 309` | No sign-in prompt. The token comes from `.env`. |
+| Portal on your computer with a login | `python MistHelper.py --login --web-portal` | The terminal that starts the portal asks the same questions. The browser page has no sign-in form. |
+| Portal on your computer with a token | `python MistHelper.py --web-portal` | No sign-in prompt. The token comes from `.env`. |
+| Portal in a container | `podman compose up -d` | The token comes from the container environment. A container has no keyboard for a 2FA code. |
+
+The portal also needs one organization. Set `org_id`, or choose one when the
+terminal asks. In MSP scope, **All eligible sites** still covers every
+organization of the account.
+
+With `--login`, the terminal shows these prompts in this order: the choice of
+the Mist cloud, `Email:`, `Password:` (the characters stay hidden), and
+`Enter 2FA code:`. The last prompt appears only when the account requires
+two-factor authentication. Type the current code from your authenticator
+application. A wrong or empty code ends the login, so start the command again.
+
+After the login, MistHelper prints `+ Login successful!`. It then prints
+`+ MSP access detected: <n> MSP(s) available` and one line for each MSP with its
+role. If the account has no MSP grant, it prints `- No MSP privileges detected
+(org-level access only)`, and the run covers one organization.
+
+Step 1 of menu 309 confirms the result. For a login, it prints `Credential:
+interactive login (user account)`, `Scope: MSP`, and `Organizations in scope:
+<n>`. Check these lines before you type the confirmation phrase. The Multi Site
+preview shows the same scope.
+
+The scope comes from the grants in the profile of the account
+(`GET /api/v1/self`).
+
+| Grant scope | Effect on the run |
+|-------------|-------------------|
+| `msp` | Adds every organization that `listMspOrgs` returns for that MSP. The call has no `limit` parameter, so the tool follows each page. |
+| `org` | Adds that organization. The tool joins the direct grants and the MSP lists, and it removes repeats. |
+| `orggroup`, `site`, `sitegroup` | Adds nothing. |
+
+An account that has only an `orggroup`, `site`, or `sitegroup` grant has no
+organization in scope. The menu then stops with a plain sentence and opens no
+shell. Use an account with an MSP grant or an organization grant.
+
+A token that you create under your own account carries the privileges of that
+account, including an MSP grant. See
+`documentation/api/self/POST_self_apitokens.md`. An organization token carries
+one organization and no MSP grant. A token never asks for a 2FA code. Use a token
+for a scheduled job or for a container.
+
+Caution: a login session ends after the lifetime that Mist sets for the account.
+The profile field `session_expiry` gives that lifetime in minutes. After that
+time, Mist refuses the requests of the session, and the organizations that
+remain do not finish. Use a token for a long run.
+
+The upgrade capture portal on port 8056 has its own browser sign-in with a page
+for the 2FA code. It serves the firmware upgrade flow, and it has no WebSockets
+tab. Issue #4936 tracks a browser sign-in for the operations portal on port 8055.
+
 ### Watch the network from a monitoring system
 
 Menu 241 starts a metrics gateway on port 8057. The gateway reads your

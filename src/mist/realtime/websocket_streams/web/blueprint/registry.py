@@ -4,6 +4,9 @@ from __future__ import annotations  # Keep Flask annotations lazy.
 
 from flask import Blueprint  # Register the portal routes.
 
+from src.mist.realtime.websocket_streams.web.blueprint.responses.csv_preview import (
+    CsvPreviewResponse,
+)  # Register the report preview route (issue #4931).
 from src.mist.realtime.websocket_streams.web.blueprint.responses.download import (
     DownloadResponse,
 )  # Register the download route.
@@ -138,10 +141,13 @@ class BatchSessionRouteRegistry:
 
     @staticmethod
     def _artifact_routes(blueprint: Blueprint) -> None:
-        """Add batch artifact manifest and archive routes."""
+        """Add batch artifact manifest, archive, and report preview routes."""
         blueprint.add_url_rule(
             "/api/websockets/batches/<session_id>/artifacts", view_func=BatchSessionRoutes.batch_artifacts
         )  # Read the safe file manifest and retention deadline.
         blueprint.add_url_rule(
             "/api/websockets/batches/<session_id>/download", view_func=DownloadResponse.batch_zip
         )  # Download the selected saved layout as ZIP.
+        blueprint.add_url_rule(
+            "/api/websockets/batches/<session_id>/csv-preview", view_func=CsvPreviewResponse.preview
+        )  # Read one page of the combined CSV report as table data.
