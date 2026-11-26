@@ -10,11 +10,13 @@ from __future__ import annotations  # Postpone annotations, so the helper types 
 import io  # Hold the body bytes of a real HTTP response without a socket.
 import json  # Encode the fake JSON bodies that the replies carry.
 import threading  # Block a fake SDK call until the test releases it.
+from collections.abc import Iterator  # Type the fixture, which yields once and gives no value.
 from typing import Any  # Type the scripted replies, which can be fakes or exceptions.
 
 import mistapi  # SDK package. This module is the only test module that imports it at module scope.
 import pytest  # Run the parametrized cases and assert the raised errors.
 import requests  # Build a real HTTP response object for the SDK response class.
+import structlog  # Save and reset the global structlog chain around one test.
 from mistapi.__api_response import APIResponse  # SDK class that parses the body text of a real response.
 from requests.structures import CaseInsensitiveDict  # Header container of a real HTTP response.
 from structlog.testing import capture_logs  # Capture the structured log events of one test.
@@ -238,6 +240,28 @@ def make_client(  # Build a client for the approved host, with a governor from m
         The client.
     """
     return ReadOnlyMistClient(HOST, make_governor(session, **options))  # One governor for the run.
+
+
+@pytest.fixture
+def default_structlog_chain() -> Iterator[None]:  # Isolate one test from the global chain.
+    """Run one test under the default structlog chain, then restore the earlier chain.
+
+    The chain holds the processors, the wrapper class, and the logger factory.
+
+    Why: an earlier test in the full CI suite can configure structlog with the stdlib wrapper class.
+    That wrapper class keeps the raw template in the event text, and the path in positional_args.
+    So capture_logs records "GET %s started" and not the path. The default wrapper class formats the
+    arguments into the event text before the processors run, so the test sees the path.
+
+    Yields:
+        None. The test body runs at this yield.
+    """
+    previous = structlog.get_config()  # Save the earlier chain, so the finally block can restore it.
+    structlog.reset_defaults()  # Switch to the default chain, which formats the path into the event text.
+    try:  # Restore the chain even when the test body fails.
+        yield  # Run the test body on the default chain.
+    finally:  # Run on every exit path, so the later tests keep their own chain.
+        structlog.configure(**previous)  # Restore the saved processors, wrapper class, and logger factory.
 
 
 def test_success_reply_gives_one_attempt_without_error() -> (  # Confirm that a 200 reply with records is one attempt.
@@ -710,7 +734,9 @@ def test_unexpected_sdk_fault_reaches_the_caller() -> None:  # Confirm that an u
         make_client(session).get(PATH, IDENTIFIERS, {})  # Call the client, so the SDK fault reaches the caller.
 
 
-def test_log_events_show_the_path_template_and_never_the_identifier_or_the_body() -> None:  # Logs hold no identifiers.
+def test_log_events_show_the_path_template_and_never_the_identifier_or_the_body(  # Logs hold no identifiers.
+    default_structlog_chain: None,  # Run the test on the default chain, not the earlier one.
+) -> None:
     """The log holds the path template, and it holds no real identifier and no response body."""
     session = FakeSession([json_reply(200, {"results": [{"echo": "body-text-that-must-stay-private"}]})])  # One page.
     with capture_logs() as logs:  # Capture every event of the request.
