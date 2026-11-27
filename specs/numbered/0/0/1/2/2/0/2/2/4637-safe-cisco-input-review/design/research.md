@@ -195,7 +195,7 @@ Counts come from the main tree on 2026-11-26.
 | `tests/e2e/web_portal/` | 32 | 5 | One existing file gains functions. No child is added. |
 | `tests/contract/` | 17 | 5 | Not used. |
 | `web_portal/` | 7 | 5 | Not touched. |
-| `src/input/` | 0, absent | 5 | Not used. |
+| `input/` under the former source root | 0, absent | 5 | Not used. |
 
 ## R7. Shared portal exposure of stored inputs
 

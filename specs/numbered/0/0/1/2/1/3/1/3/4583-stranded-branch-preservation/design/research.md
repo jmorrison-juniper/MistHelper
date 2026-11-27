@@ -201,7 +201,7 @@ Column `Blob or commit SHA` holds a blob SHA for files and a commit SHA for pull
 | R31 | The reference record research exists | `specs/numbered/0/0/1/2/4/1/4/0/4920-ex-hardware-inventory-csv/design/research.md` | main | 2e4aaa714e56fff7f96a2af9e686e9f5c06224a7 | present | 0 |
 | R32 | The route folder for issue 4583 is absent | `specs/numbered/0/0/1/2/1/3/1/3` | main | none | absent | 0 |
 | R33 | No legacy record for issue 4583 exists | `specs/**/4583-*` | main | none | absent | 0 |
-| R34 | The old WebSocket source path is absent | `src/websocket_streams` | main | none | absent | 0 |
+| R34 | The old WebSocket source path is absent | `websocket_streams` under the former source root | main | none | absent | 0 |
 | R35 | The current WebSocket source path holds 221 files | `src/mist/realtime/websocket_streams` | main | none | present | 0 |
 | R36 | The report command sets the quiet period to 7 days | `src/misthelper_devtools/stranded_branch_report.py` in misthelper-devtools | 79a5e45970e876f1656d69520d9635cea1aa25ef | dad8d5081a3f716363408f3e25d92898054953d3 | present | 49 |
 | R37 | The report command ignores three bot prefixes | `src/misthelper_devtools/stranded_branch_report.py` in misthelper-devtools | 79a5e45970e876f1656d69520d9635cea1aa25ef | dad8d5081a3f716363408f3e25d92898054953d3 | present | 53 |
