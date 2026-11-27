@@ -9,7 +9,7 @@ Caution: run every terminal step from the worktree root. A run from the main che
 Run these commands in any checkout with GitHub read access. The first command must print nothing. The other commands print the moved paths, the cited lines, and the `init-hook` line that rows R01 to R36 and R51 record.
 
 ```powershell
-gh api "repos/jmorrison-juniper/MistHelper/git/trees/main?recursive=1" --jq ".tree[] | select(.path | startswith(\"src/org/juniper_rma/\")) | .path"
+gh api "repos/jmorrison-juniper/MistHelper/git/trees/main?recursive=1" --jq ".tree[] | select(.path | startswith(\"src/\") and contains(\"/org/juniper_rma/\")) | .path"
 ```
 
 ```powershell
@@ -28,7 +28,7 @@ uv run --no-project --python 3.15.2 python scripts/bootstrap_worktree.py
 .venv\Scripts\Activate.ps1
 ```
 
-If the worktree still uses `src/org/juniper_rma/`, rebase onto `main` before step 3 (decision D-8).
+If the worktree still uses the retired `org/juniper_rma` folder under `src`, rebase onto `main` before step 3 (decision D-8).
 
 ## Step 3: Check the root and the interpreter (AT-03)
 

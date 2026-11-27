@@ -17,13 +17,13 @@
 1. **Title and count**: The title says 27 findings in 11 files. `main` f03c6c9 has 25 findings. `fake_gateway.py` has none (research row RC-25).
 2. **Stale lines in the issue body**: `MistHelper.py` line 1087 is an `ImportError` line on `main` (research row RC-07). The class lines are 1207, 1744, and others (rows RC-01 to RC-04).
 3. **Stale fake gateway finding**: The issue body places an R0903 finding at `fake_gateway.py` line 96. That line is a docstring on `main` (research row RC-26). `FakeClock` counts two public methods, because pylint counts `__call__` (research row RC-58).
-4. **Stale paths**: The issue body names `src/org/juniper_rma`. That path is absent on `main` (research row RC-49). The current path is `src/operations/exporting/juniper_rma`.
+4. **Stale paths**: The issue body names the retired `org/juniper_rma` folder under `src`. That folder is absent on `main` (research row RC-49). The current path is `src/operations/exporting/juniper_rma`.
 5. **Stale PR ownership**: Issue comment 1 says PR #4607 still owns `MistHelper.py`. PR #4607 merged on 2026-11-13 (research row RC-51).
 6. **Stale PR status**: Issue comment 2 says draft PR #4358 renames the three RMA tests. PR #4358 merged on 2026-11-13, and its file list holds no RMA test (research row RC-52).
 7. **Attribute count drift**: Issue comment 2 gives 14 attributes for `OperationExecutor` at line 917. `main` has 15 attributes at line 918 (research row RC-20). The finding remains.
 8. **Pylint version drift**: Issue comment 2 used Pylint 4.1.3. The `.venv` holds Pylint 4.1.4 (research rows RC-57 to RC-59). This record re-derives the counts from source, because the brief forbids running a linter.
 9. **Branch name reference**: The issue body cites branch `3519-juniper-rma-correlation`. Issue 3519 is a closed CI issue about a pytest failure. It is not related to this issue.
-10. **Command path**: The issue body reproduces with `.venv\Scripts\python.exe -m pylint src\org\juniper_rma`. The path `src\org\juniper_rma` is absent. `quickstart.md` gives the current paths.
+10. **Command path**: The issue body reproduces with `.venv\Scripts\python.exe -m pylint` and the retired `org\juniper_rma` argument under `src`. That argument path is absent. `quickstart.md` gives the current paths.
 
 ## Rule Conflicts
 

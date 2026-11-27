@@ -20,7 +20,7 @@ This report checks `spec.md`, `plan.md`, `tasks.md`, and the remote evidence aga
 | F-12 | High | Three holds (H1) touch the destructive upgrade path. Issues #2863 and #3222 carry `needs-human-review`. | RC-45, RC-49, RC-53 | Decision D-7 (human). |
 | F-13 | Medium | The report matches branch names, so 248 PR-kept rows stay listed. Closure needs the title fix or a rule change. | RC-40, RC-41 | Decision D-4 and Decision D-11. |
 | F-14 | Medium | The 257 unkept rows map to 251 distinct head commits. Example: `recovery/4208-original-before-review-fbb23f8` and `recovery/4208-pre-reconstruction-20261113` share head `fbb23f8a23`. | RC-42 | Decision D-3. A second row cites the first PR. |
-| F-15 | Medium | Three owner-cited branches change paths that `main` no longer has, such as `src/api/` and `src/juniper_docs/`. | Annotated rows | Owner notes say do not replay these branches. This record keeps that rule. |
+| F-15 | Medium | Three owner-cited branches change paths that `main` no longer has, such as the retired `api/` and `juniper_docs/` folders under `src`. | Annotated rows | Owner notes say do not replay these branches. This record keeps that rule. |
 | F-16 | Low | The age column in the #4302 body was computed at creation. | Issue body | Use the age column of report #4911. |
 | F-17 | Low | The report's quiet-period and bot-branch rules sit in the shared workflow. This record reads the lines that matter, but it does not run them. | U-6 | Unverified. TST-02 repeats the count. |
 

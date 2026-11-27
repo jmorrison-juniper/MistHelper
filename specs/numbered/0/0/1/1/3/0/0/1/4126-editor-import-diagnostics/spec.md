@@ -16,7 +16,7 @@
 
 - Q: Which editor does the documented setup target? → A: Visual Studio Code with the Microsoft Python and Pylint extensions. `documentation/development-setup.md` line 204 states this.
 - Q: Which closing keyword may the pull request use? → A: `Refs #4126` only. The owner keeps the issue open until live evidence exists. See decision D-6.
-- Q: Do the 27 paths in the issue still exist? → A: Ten do not. They moved from `src/org/juniper_rma/` to `src/operations/exporting/juniper_rma/`. See rows R03 to R12 and R28 in `design/research.md`.
+- Q: Do the 27 paths in the issue still exist? → A: Ten do not. They moved from the retired `org/juniper_rma` folder under `src` to `src/operations/exporting/juniper_rma/`. See rows R03 to R12 and R28 in `design/research.md`.
 - Q: Does the repository Pylint configuration add the working directory? → A: Yes. `pyproject.toml` line 566 adds it through `init-hook`. See row R51.
 - Q: Can this agent run the live editor check? → A: No. Analyzers are forbidden for this task. The 2026-10-31 issue comment reports a missing Screen Recording permission.
 
@@ -48,7 +48,7 @@ A maintainer compares the 27 listed paths and the 8 cited lines with the remote 
 
 **Acceptance Scenarios**:
 
-1. **Given** the issue lists `src/org/juniper_rma` paths, **When** the maintainer reads the remote tree, **Then** the record shows ten moved files.
+1. **Given** the issue lists paths in the retired `org/juniper_rma` folder under `src`, **When** the maintainer reads the remote tree, **Then** the record shows ten moved files.
 2. **Given** the issue cites eight lines in `MistHelper.py`, **When** the maintainer reads them on `main`, **Then** the record shows their current content.
 
 ---
@@ -83,7 +83,7 @@ An operator records the interpreter, root, extension version, time, and counts f
 ### Edge Cases
 
 - The editor window contains both the main checkout and the worktree. The row records which root Pylint used. The check fails when the main checkout is the root.
-- The worktree still uses the old `src/org/juniper_rma/` layout. The moved paths do not exist there. The operator rebases onto `main` before the check.
+- The worktree still uses the old `org/juniper_rma` layout under `src`. The moved paths do not exist there. The operator rebases onto `main` before the check.
 - The workspace setting `pylint.importStrategy` is `fromEnvironment`. The extension description says `pylint.path` may be ignored in that mode. The evidence row records the Pylint command from the output.
 - A moved file moves again. The operator repeats the terminal and live checks for the new current path.
 - macOS Screen Recording permission is missing. The live check stops. A terminal pass does not replace the live check.

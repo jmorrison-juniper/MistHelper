@@ -77,7 +77,7 @@
 
 - [ ] T008 [FR-001, FR-002, FR-003] Run the root and interpreter check in the worktree.
   - Files: the worktree root and its `.venv`. The check reads no repository file.
-  - Acceptance: The command prints a root, an interpreter, and an environment inside the worktree (AT-03). If the worktree still uses `src/org/juniper_rma/`, rebase onto `main` first (decision D-8).
+  - Acceptance: The command prints a root, an interpreter, and an environment inside the worktree (AT-03). If the worktree still uses the retired `org/juniper_rma` folder under `src`, rebase onto `main` first (decision D-8).
   - Verification: Supporting command in `design/quickstart.md`, step 3. No table gate covers this check.
   - Status: open
 

@@ -64,7 +64,7 @@ Each decision names the alternatives, the chosen option, the reason, and the ris
 ### D-8 Worktree base for the live check
 
 - Alternatives: check the old layout (rejected, because its paths do not exist on `main`). Check the main checkout only (rejected, because the reported failure concerns a worktree window).
-- Chosen: rebase onto `main` first when the worktree still uses `src/org/juniper_rma/`.
+- Chosen: rebase onto `main` first when the worktree still uses the retired `org/juniper_rma` folder under `src`.
 - Reason: The issue asks for a path check before a rebase, and `main` changed the layout.
 - Risk: A rebase can conflict. Resolve the conflict before the live check.
 
@@ -99,16 +99,16 @@ Row groups: R01 to R28 are listed issue paths (28 rows). R29 to R36 are cited li
 | - | - | - | - | - | - | - |
 | R01 | Listed MistHelper.py exists on main. | `MistHelper.py` | main | 98d7828479ded6bc4c83d15e0c1847171cfbfd49 | present | 0 |
 | R02 | Listed web_portal/services/operation.py exists on main. | `web_portal/services/operation.py` | main | 39f9446da8648fb245022c63dc382ff38ccece76 | present | 0 |
-| R03 | Listed src/org correlation.py moved to the current path. | `src/operations/exporting/juniper_rma/workflows/correlation.py` | main | 5687bf116cae51f8180242a51fb4d4e12c1cf06f | present | 0 |
-| R04 | Listed src/org asset_lookup.py moved to the current path. | `src/operations/exporting/juniper_rma/workflows/asset_lookup.py` | main | d4e34076440a8709c409c95a1fed81cbc0091e8a | present | 0 |
-| R05 | Listed src/org lookup.py moved to the current path. | `src/operations/exporting/juniper_rma/workflows/lookup.py` | main | 58b5d099659e00e28f0b5e7621f68c5eac548a4d | present | 0 |
-| R06 | Listed src/org settings.py moved to the current path. | `src/operations/exporting/juniper_rma/settings.py` | main | 43667e5cff756b8e097d184cefd72286f24aff03 | present | 0 |
-| R07 | Listed src/org access_check.py moved to the current path. | `src/operations/exporting/juniper_rma/workflows/access_check.py` | main | ed39f4e1ad8a313041fb5fff0b46458207f75fb2 | present | 0 |
-| R08 | Listed src/org case_service.py moved to the current path. | `src/operations/exporting/juniper_rma/api/case_service.py` | main | 51f1042be48a135d587f03e21fae047bb9a71722 | present | 0 |
-| R09 | Listed src/org asset_service.py moved to the current path. | `src/operations/exporting/juniper_rma/api/asset_service.py` | main | 3828354a10305391194b8302bd5bceb7a762c20c | present | 0 |
-| R10 | Listed src/org export_rows.py moved to the current path. | `src/operations/exporting/juniper_rma/model/export_rows.py` | main | 6d83f9554e08a583a1488a9ae7c04f47b49c7071 | present | 0 |
-| R11 | Listed src/org asset.py moved to the current path. | `src/operations/exporting/juniper_rma/model/asset.py` | main | 97a26e5bb997942d3fb06fa81e52f2a6fe665ca7 | present | 0 |
-| R12 | Listed src/org gateway.py moved to the current path. | `src/operations/exporting/juniper_rma/api/gateway.py` | main | 9f857510ad86fd2951f8b94ba549d24ad3ca291c | present | 0 |
+| R03 | Listed correlation.py from the retired `org/juniper_rma` folder moved to the current path. | `src/operations/exporting/juniper_rma/workflows/correlation.py` | main | 5687bf116cae51f8180242a51fb4d4e12c1cf06f | present | 0 |
+| R04 | Listed asset_lookup.py from the retired `org/juniper_rma` folder moved to the current path. | `src/operations/exporting/juniper_rma/workflows/asset_lookup.py` | main | d4e34076440a8709c409c95a1fed81cbc0091e8a | present | 0 |
+| R05 | Listed lookup.py from the retired `org/juniper_rma` folder moved to the current path. | `src/operations/exporting/juniper_rma/workflows/lookup.py` | main | 58b5d099659e00e28f0b5e7621f68c5eac548a4d | present | 0 |
+| R06 | Listed settings.py from the retired `org/juniper_rma` folder moved to the current path. | `src/operations/exporting/juniper_rma/settings.py` | main | 43667e5cff756b8e097d184cefd72286f24aff03 | present | 0 |
+| R07 | Listed access_check.py from the retired `org/juniper_rma` folder moved to the current path. | `src/operations/exporting/juniper_rma/workflows/access_check.py` | main | ed39f4e1ad8a313041fb5fff0b46458207f75fb2 | present | 0 |
+| R08 | Listed case_service.py from the retired `org/juniper_rma` folder moved to the current path. | `src/operations/exporting/juniper_rma/api/case_service.py` | main | 51f1042be48a135d587f03e21fae047bb9a71722 | present | 0 |
+| R09 | Listed asset_service.py from the retired `org/juniper_rma` folder moved to the current path. | `src/operations/exporting/juniper_rma/api/asset_service.py` | main | 3828354a10305391194b8302bd5bceb7a762c20c | present | 0 |
+| R10 | Listed export_rows.py from the retired `org/juniper_rma` folder moved to the current path. | `src/operations/exporting/juniper_rma/model/export_rows.py` | main | 6d83f9554e08a583a1488a9ae7c04f47b49c7071 | present | 0 |
+| R11 | Listed asset.py from the retired `org/juniper_rma` folder moved to the current path. | `src/operations/exporting/juniper_rma/model/asset.py` | main | 97a26e5bb997942d3fb06fa81e52f2a6fe665ca7 | present | 0 |
+| R12 | Listed gateway.py from the retired `org/juniper_rma` folder moved to the current path. | `src/operations/exporting/juniper_rma/api/gateway.py` | main | 9f857510ad86fd2951f8b94ba549d24ad3ca291c | present | 0 |
 | R13 | Listed fake_gateway.py exists on main. | `tests/unit/juniper_rma/fixtures/fake_gateway.py` | main | 13072a7bd637c6c8bac98968b2f775e0243968c8 | present | 0 |
 | R14 | Listed test_lookups.py exists on main. | `tests/unit/juniper_rma/workflows/test_lookups.py` | main | 779b9ae49c4d0642cc5cef9eb8d6ab6c3595cc09 | present | 0 |
 | R15 | Listed test_asset_service.py exists on main. | `tests/unit/juniper_rma/api/test_asset_service.py` | main | 1296b0162dedb9f5661d283afe1e4b99630eb047 | present | 0 |
@@ -124,7 +124,7 @@ Row groups: R01 to R28 are listed issue paths (28 rows). R29 to R36 are cited li
 | R25 | Listed test_service_request.py exists on main. | `tests/unit/juniper_rma/model/test_service_request.py` | main | 002ff367d8995fc2fc37afcb0f5598e105a701ae | present | 0 |
 | R26 | Listed test_menu_entry_metadata.py exists on main. | `tests/unit/test_menu_entry_metadata.py` | main | d9b4d79ebb6f303e54ad52add9c741e87eb01e32 | present | 0 |
 | R27 | Listed test_settings.py exists on main. | `tests/unit/juniper_rma/api/test_settings.py` | main | 54102ec08f1539ff121622226f23bb25079164d8 | present | 0 |
-| R28 | No path under the listed src/org/juniper_rma prefix exists on main. | `src/org/juniper_rma/` | main | none | absent | 0 |
+| R28 | No path under the listed retired `org/juniper_rma` folder exists on main. | `org/juniper_rma/` below the retired `src` root | main | none | absent | 0 |
 | R29 | Cited line 474 holds a closing parenthesis of an import block. | `MistHelper.py` | main | 98d7828479ded6bc4c83d15e0c1847171cfbfd49 | stale | 474 |
 | R30 | Cited line 480 holds a name inside an import block. | `MistHelper.py` | main | 98d7828479ded6bc4c83d15e0c1847171cfbfd49 | stale | 480 |
 | R31 | Cited line 543 holds a name inside an import block. | `MistHelper.py` | main | 98d7828479ded6bc4c83d15e0c1847171cfbfd49 | stale | 543 |
@@ -205,7 +205,7 @@ Row groups: R01 to R28 are listed issue paths (28 rows). R29 to R36 are cited li
 - Reference record: `specs/numbered/0/0/1/2/4/1/4/0/4920-ex-hardware-inventory-csv`. Its spec opening, its analysis headings, and its research headings were read for shape only. No content was copied.
 - Local SDK and tools: `.venv\Lib\site-packages\mistapi`, `.venv\Lib\site-packages\pylint`, and `.venv\Lib\site-packages\requests`.
 - Local editor files: the VS Code extension folder for `ms-python.pylint-2026.8.0`, read for `package.json`, `package.nls.json`, and `dist/extension.js`. The `.vscode\settings.json` and `tasks.json` files were read for key names and for the pylint and python keys only.
-- Git commit `f03c6c9b36d612a48d7b9652998c2fd87dd777ca`: read-only `git grep`, `git ls-tree`, and `git show` commands. A search for `src.org.juniper_rma` returned no match.
+- Git commit `f03c6c9b36d612a48d7b9652998c2fd87dd777ca`: read-only `git grep`, `git ls-tree`, and `git show` commands. A search for the retired dotted form of the listed path returned no match.
 - GitHub pull request #4322 (state, changed files, checks, and merge commit) and issue #4126 (body, comments, and labels) were read with `gh`.
 
 ## 5. Unverified

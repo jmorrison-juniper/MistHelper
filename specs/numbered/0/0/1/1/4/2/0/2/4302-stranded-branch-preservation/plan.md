@@ -103,7 +103,7 @@ The fragment follows the shape of the existing fragments on `main`. Its content 
 - Report #4911 rows: 505. PR-kept: 248. Unkept: 257.
 - Unkept annotated rows: 47. They form holds H1, H2, and H3, and batches B1, B2, and B3.
 - Unkept new rows: 210. They form group N.
-- High-impact paths on unkept heads include `src/upgrade_portal/app/routes/org_upgrade.py` on `fix/3222-confirm-details` and `src/interfaces/portals/upgrade_portal/upgrade/driver.py` on `jmorrison-juniper-fix-2863-identifier-defaults-batch-1`. Both sit on the destructive upgrade path.
+- High-impact paths on unkept heads include `upgrade_portal/app/routes/org_upgrade.py` below the retired `src` root on `fix/3222-confirm-details` and `src/interfaces/portals/upgrade_portal/upgrade/driver.py` on `jmorrison-juniper-fix-2863-identifier-defaults-batch-1`. Both sit on the destructive upgrade path.
 
 ## Dependencies
 

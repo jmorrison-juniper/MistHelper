@@ -197,7 +197,7 @@ Each row is one check. The ref column names the branch, the pull request, or the
 | RC-46 | Checklist template format | `.specify/templates/checklist-template.md` | main | 806657da09d1058823923e346a323b633114971a | present | 1 |
 | RC-47 | Base-5 route rule, width 8 | `.specify/scripts/powershell/spec-route.ps1` | main | 37293a255f9b5de20ccb2b3ef0ad15717bab2826 | present | 17 |
 | RC-48 | Target route folder does not exist before this record | `specs/numbered/0/0/1/1/3/0/1/4` | main | absent | absent | 0 |
-| RC-49 | Issue body path src/org/juniper_rma does not exist | `src/org/juniper_rma/model/service_request.py` | main | absent | absent | 0 |
+| RC-49 | Issue body path in the retired `org/juniper_rma` folder under `src` does not exist | `org/juniper_rma/model/service_request.py` below the retired `src` root | main | absent | absent | 0 |
 | RC-50 | Changelog guard test reads changelog.d | `tests/guardrails/test_changelog_fragment_policy.py` | main | dbd5e8776797f12536b3bc2bd613143b85f3fc4a | present | 8 |
 | RC-51 | Issue comment: PR #4607 still owns MistHelper.py (PR merged 2026-11-13) | `MistHelper.py` | PR #4607 | 98d7828479ded6bc4c83d15e0c1847171cfbfd49 | stale | 0 |
 | RC-52 | Issue comment: draft PR #4358 renames the RMA tests (PR merged 2026-11-13, no RMA test in its file list) | `tests/unit/juniper_rma/workflows/test_lookups.py` | PR #4358 | 779b9ae49c4d0642cc5cef9eb8d6ab6c3595cc09 | stale | 0 |
