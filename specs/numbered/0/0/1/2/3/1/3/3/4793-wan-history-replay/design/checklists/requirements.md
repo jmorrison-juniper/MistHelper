@@ -2,7 +2,7 @@
 
 **Purpose**: Check the quality of `spec.md` before the plan starts.
 **Created**: 2026-11-26
-**Feature**: [spec.md](../spec.md)
+**Feature**: [spec.md](../../spec.md)
 
 ## Content Quality
 
