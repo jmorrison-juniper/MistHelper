@@ -1,178 +1,125 @@
 # Tasks: Migrate Mist Guest Authorizations
 
-**Input**: [Specification](spec.md), [plan](plan.md), and the four supporting paths under `design/`.
+**Input**: spec.md, plan.md, design/research.md, design/data-model.md, design/quickstart.md, and the four contracts under design/contracts/.
 
-**Execution boundary**: This is a future implementation list for issue #4278.
-The current request permits planning only. Do not execute any product task during this refresh.
-All tasks remain unchecked because no approval or product delivery occurs here.
+**Format**: Each row gives the task ID, the parallel marker, requirement IDs, exact paths, acceptance, one verification command, and status. The parallel marker is `[P]` when safe in parallel and `seq` otherwise. Status values are open, verified-present, partial, and absent.
 
-## Format and Existing Delivery
+**Prerequisites**: Phase 0 closes before any write route. Writes also need gate G5.
 
-Tasks use a checkbox, sequential ID, optional story label, action, and concrete path.
-Execute serially. No task has a parallel marker.
-Mark a task complete only after verification, with a `(delivered: path)` evidence note.
-Human decisions require linked dated evidence and remain unchecked until approval exists.
+## Phase 0: Gates and Decisions
 
-PR #4279 already delivered `src/interfaces/portals/guest_authorizations.py`
-and `tests/unit/web_portal/test_guest_authorization_read_model.py`.
-Do not recreate them or claim they complete US1. They provide only an offline projection.
+| ID | Parallel | Requirements | Paths | Acceptance | Verification | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| T001 | seq | FR-005 | design/research.md (D-11) | Maintainers record the operator identity method with a dated decision. | `python -m pytest tests/integration/web_portal/test_guest_authorizations.py` | open |
+| T002 | seq | FR-028 | design/research.md (D-13) | Maintainers record the licensing path for any reuse of source expression. | `python -m pytest tests/guardrails/test_guest_access_topology.py` | open |
+| T003 | seq | FR-012, FR-013, FR-016 | design/contracts/mist-api.md | Gate G5 closes for WLAN binding, revoke semantics, and list shape. | `python -m pytest tests/contract/guests/test_guest_gateway.py` | open |
+| T004 | [P] | FR-027 | tests/guardrails/nested_package_baseline.json, tests/guardrails/test_nested_package_structure.py | The guard and baseline exist, and `src/interfaces/portals` holds five children. | `python -m pytest tests/guardrails/test_nested_package_structure.py` | verified-present |
+| T005 | seq | FR-001 | web_portal/app.py, web_portal/templates/base.html | PR #4208 hands over both files in writing before any edit. | `python -m pytest tests/guardrails/test_nested_package_structure.py` | open |
 
-Paths below are future targets. T006 must approve their hierarchy and ownership before creation.
-Keep the existing projection module unchanged unless a separate approved requirement needs it.
+## Phase 1: Foundation
 
-## Phase 1: Setup and Approval Decisions
+| ID | Parallel | Requirements | Paths | Acceptance | Verification | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| T006 | [P] | FR-007, FR-008, FR-027 | src/interfaces/portals/guest_authorizations.py (delete), src/interfaces/portals/guest_authorizations/__init__.py, src/interfaces/portals/guest_authorizations/read_model.py, tests/unit/web_portal/test_guest_authorization_read_model.py | The projection moves into the package with unchanged output fields. The test imports the new module path. | `python -m pytest tests/unit/web_portal/test_guest_authorization_read_model.py` | open |
+| T007 | [P] | FR-016, FR-017, FR-018, FR-021, FR-028 | src/mist/access/guests/__init__.py, src/mist/access/guests/gateway.py, src/mist/access/guests/responses.py | The gateway calls only allowlisted mistapi functions with keyword arguments. It classifies responses as the contract states. | `python -m pytest tests/contract/guests/test_guest_gateway.py` | open |
+| T008 | seq | FR-016, FR-017, FR-018, FR-021, FR-028 | tests/contract/guests/test_guest_gateway.py | TC-022 to TC-026 pass offline with zero live calls. | `python -m pytest tests/contract/guests/test_guest_gateway.py` | open |
+| T009 | [P] | FR-009, FR-011, FR-014, FR-015 | src/interfaces/portals/guest_authorizations/workflows/domain.py, tests/unit/web_portal/test_guest_authorization_domain.py | Validation, typed words, and hashes pass TC-001 to TC-008. | `python -m pytest tests/unit/web_portal/test_guest_authorization_domain.py` | open |
+| T010 | [P] | FR-003, FR-019, FR-020 | src/interfaces/portals/guest_authorizations/workflows/journal.py, tests/unit/web_portal/test_guest_authorization_journal.py | Journal read-back, unknown states, and scope locks pass TC-011 to TC-013. | `python -m pytest tests/unit/web_portal/test_guest_authorization_journal.py` | open |
+| T011 | [P] | FR-026, FR-030 | src/interfaces/portals/guest_authorizations/workflows/audit.py, tests/unit/web_portal/test_guest_authorization_audit.py | Audit events mask MAC addresses, and captured logs hold no secrets (TC-014 and TC-015). | `python -m pytest tests/unit/web_portal/test_guest_authorization_audit.py` | open |
+| T012 | seq | FR-012, FR-013, FR-015, FR-016, FR-018, FR-019, FR-020 | src/interfaces/portals/guest_authorizations/workflows/changes.py, tests/integration/web_portal/test_guest_authorizations.py | Change orchestration passes TC-031 to TC-037 with zero-write checks. | `python -m pytest tests/integration/web_portal/test_guest_authorizations.py` | open |
+| T013 | seq | FR-001, FR-002 | web_portal/app.py, web_portal/templates/base.html | After the T005 handover, the blueprint registers. The tab shows only when `GUEST_ACCESS_ENABLED` is true (TC-045). | `python -m pytest tests/e2e/web_portal/test_guest_authorizations.py` | open |
 
-**Purpose**: Resolve G1-G4 without creating routes, product helpers, or new storage.
-The full record path is `specs/numbered/0/0/1/1/3/4/1/1/4231-mist-guest-authorizations/`.
-Relative design paths below resolve within that record.
+## Phase 2: Review (User Story 1)
 
-- [ ] T001 Obtain the G1 rights decision in `design/research.md`. Record the independent implementation approval or compatible reuse terms before integration.
-- [ ] T002 Obtain the G2 access decision in `design/research.md`. Define permitted reads/writes, operator attribution, and exact organization/site/WLAN policy.
-- [ ] T003 Obtain G3 numeric byte/row limits and encoding/header/cell rules in `design/research.md`. Approve the bounded request budget without inventing defaults.
-- [ ] T004 Obtain G4 durable audit, retention, pre-write failure, post-write failure, and reconciliation decisions in `design/contracts/portal.md`.
+| ID | Parallel | Requirements | Paths | Acceptance | Verification | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| T014 | seq | FR-001, FR-005, FR-006, FR-007, FR-008, FR-029, FR-030 | src/interfaces/portals/guest_authorizations/presentation/routes.py, src/interfaces/portals/guest_authorizations/presentation/templates/guest_access.html, src/interfaces/portals/guest_authorizations/presentation/static/guest_access.js, src/interfaces/portals/guest_authorizations/read_model.py | The review page, selectors, masked table, and unknown states follow the portal contract (TC-031, TC-033, TC-046). | `python -m pytest tests/integration/web_portal/test_guest_authorizations.py` | open |
+| T015 | [P] | FR-002, FR-004, FR-027, FR-028 | tests/guardrails/test_guest_access_topology.py | TC-028 to TC-030 pass. | `python -m pytest tests/guardrails/test_guest_access_topology.py` | open |
+| T016 | [P] | FR-001 | deploy/.env.example, README.md | `GUEST_ACCESS_ENABLED` documents a default of false. No secret value appears. | `ste-linter --config .ste-linter.toml --min-score 80 README.md AGENTS.md .github/copilot-instructions.md CLAUDE.md documentation/ASD-STE100_writing-guide.md` | open |
 
-## Phase 2: Foundational Contract Gates
+## Phase 3: Grant (User Story 2)
 
-**Purpose**: Resolve G5 and establish an approved implementation boundary.
-T005 is a documentation and evidence task, not permission to send production writes.
-No story begins until T001-T006 pass.
+| ID | Parallel | Requirements | Paths | Acceptance | Verification | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| T017 | seq | FR-009, FR-014, FR-015, FR-016, FR-019, FR-020 | src/interfaces/portals/guest_authorizations/presentation/routes.py, src/interfaces/portals/guest_authorizations/workflows/changes.py, src/mist/access/guests/gateway.py | The grant route sends one PUT and one reconciliation read. It runs only after gate G5 closes (D-16). | `python -m pytest tests/integration/web_portal/test_guest_authorizations.py` | open |
+| T018 | seq | FR-014, FR-029, FR-030 | tests/e2e/web_portal/test_guest_authorizations.py | TC-047 proves the typed word GRANT and the reviewed summary. | `python -m pytest tests/e2e/web_portal/test_guest_authorizations.py` | open |
 
-- [ ] T005 Verify G5 in `design/contracts/mist-api.md`. Pin SDK/API revisions and document exact methods, requests, responses, fields, pagination, durations, WLAN scope, and revocation evidence.
-- [ ] T006 Record an approved file manifest and owner handover in `plan.md`. Check `src/interfaces/portals/guest_workflows/` and each new hierarchy level against the five-child rule.
-- [ ] T007 Add offline contract tests in `tests/contract/web_portal/test_guest_authorizations_api.py`. Cover pinned signatures, arguments, response shapes, HTTP 4xx/5xx, 429, timeouts, and zero live calls.
-- [ ] T008 Add access and topology tests in `tests/integration/web_portal/test_guest_authorizations.py`. Prove no second application/database and zero disclosure or writes before permission.
-- [ ] T009 Implement approved scope/action checks and audit readiness in `src/interfaces/portals/guest_workflows/access.py`. Preserve CSRF and refuse missing approved attribution or audit readiness.
+## Phase 4: Edit and Extend (User Stories 3 and 4)
 
-## Phase 3: User Story 1 - Review Access (Priority: P1)
+| ID | Parallel | Requirements | Paths | Acceptance | Verification | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| T019 | seq | FR-010 | src/interfaces/portals/guest_authorizations/presentation/routes.py, src/interfaces/portals/guest_authorizations/workflows/domain.py, src/mist/access/guests/gateway.py | Edit sends allowlisted fields only. Name input fails before any call (TC-027 and TC-035). | `python -m pytest tests/integration/web_portal/test_guest_authorizations.py` | open |
+| T020 | seq | FR-011 | src/interfaces/portals/guest_authorizations/workflows/domain.py, src/interfaces/portals/guest_authorizations/presentation/routes.py | Extension applies the duration bounds and shows the UTC expiry before confirmation (TC-004 and TC-041). | `python -m pytest tests/unit/web_portal/test_guest_authorization_domain.py` | open |
 
-**Goal**: Show permitted scoped observations without inventing status.
-**Independent test**: Mock permitted, denied, incomplete, and missing-credential responses. Confirm zero cross-scope disclosure.
+## Phase 5: Revoke (User Story 5)
 
-### Tests
+| ID | Parallel | Requirements | Paths | Acceptance | Verification | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| T021 | seq | FR-012, FR-013, FR-018 | src/interfaces/portals/guest_authorizations/workflows/changes.py, src/mist/access/guests/gateway.py, src/interfaces/portals/guest_authorizations/presentation/routes.py | Revoke checks the WLAN, sends minutes 0, reconciles, and never retries (TC-038 to TC-040). | `python -m pytest tests/integration/web_portal/test_guest_authorizations.py` | open |
 
-- [ ] T010 [US1] Add unit cases in `tests/unit/web_portal/test_guest_authorization_workflows.py`. Enforce "Preserve absent fields as unknown and reject malformed values".
-- [ ] T011 [US1] Extend `tests/contract/web_portal/test_guest_authorizations_api.py` for scoped discovery, inherited WLAN resolution, response containers, pagination, and expired-record limits.
-- [ ] T012 [US1] Extend `tests/integration/web_portal/test_guest_authorizations.py` and `tests/e2e/web_portal/test_guest_authorizations.py` for permission, selection changes, unknown state, and denied reads.
+## Phase 6: Client Search (User Story 6)
 
-### Implementation
+| ID | Parallel | Requirements | Paths | Acceptance | Verification | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| T022 | seq | FR-021, FR-030 | src/mist/access/guests/gateway.py, src/interfaces/portals/guest_authorizations/presentation/routes.py, src/interfaces/portals/guest_authorizations/presentation/templates/guest_access.html | Client search filters the selected site and masks MAC addresses (TC-044). | `python -m pytest tests/integration/web_portal/test_guest_authorizations.py` | open |
 
-- [ ] T013 [US1] Define verified scope and observation types in `src/interfaces/portals/guest_workflows/domain.py`. Enforce "Bind returned membership and operator permission before any disclosure or change".
-- [ ] T014 [US1] Add explicit scoped SDK reads in `src/interfaces/portals/guest_workflows/sdk.py`. Reuse only the existing session and apply the approved bounded read budget.
-- [ ] T015 [US1] Add review routes and templates under `src/interfaces/portals/guest_workflows/presentation/`. Provide stable test IDs and visible unknown or denied states.
-- [ ] T016 [US1] After documented handover, register approved review navigation in `web_portal/app.py` and `web_portal/templates/base.html`. Rerun denial and no-write tests before review.
+## Phase 7: Import (User Story 7)
 
-## Phase 4: User Story 2 - Grant Access (Priority: P1)
+| ID | Parallel | Requirements | Paths | Acceptance | Verification | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| T023 | [P] | FR-022, FR-023 | src/interfaces/portals/guest_authorizations/imports.py, tests/unit/web_portal/test_guest_authorization_imports.py | CSV limits, headers, duplicates, and the minutes rule pass TC-016 to TC-020. | `python -m pytest tests/unit/web_portal/test_guest_authorization_imports.py` | open |
+| T024 | seq | FR-023, FR-024, FR-025 | src/interfaces/portals/guest_authorizations/presentation/routes.py, src/interfaces/portals/guest_authorizations/workflows/changes.py, tests/integration/web_portal/test_guest_authorizations.py | The preview, typed word IMPORT, sequential run, and stop rules pass TC-021, TC-042, and TC-043. | `python -m pytest tests/integration/web_portal/test_guest_authorizations.py` | open |
 
-**Goal**: Submit one reviewed, permitted, exactly confirmed grant.
-**Independent test**: Mock scope and duration. Check confirmation and every zero-write rejection path.
+## Phase 8: Validation and Documentation
 
-### Tests
+| ID | Parallel | Requirements | Paths | Acceptance | Verification | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| T025 | seq | FR-029 | tests/e2e/web_portal/test_guest_authorizations.py, src/interfaces/portals/guest_authorizations/presentation/templates/guest_access.html | Stable `data-testid` values, failure artifacts, and strict mode pass TC-045 to TC-049. | `python -m pytest tests/e2e/web_portal/test_guest_authorizations.py` | open |
+| T026 | seq | FR-026, FR-027 | src/interfaces/portals/guest_authorizations/, src/mist/access/guests/ | Child counts stay within five, and log output stays redacted (TC-015 and TC-030). | `python -m pytest tests/guardrails/test_nested_package_structure.py` | open |
+| T027 | [P] | Documentation (AGENTS.md Documentation section) | documentation/guest-authorizations.md, README.md, changelog.d/issue-4231-guest-authorizations.md | The operator guide, README entry, and release note describe the final behavior. | `ste-linter --config .ste-linter.toml --min-score 80 README.md AGENTS.md .github/copilot-instructions.md CLAUDE.md documentation/ASD-STE100_writing-guide.md` | open |
 
-- [ ] T017 [US2] Extend `tests/unit/web_portal/test_guest_authorization_workflows.py` for MAC formats, approved duration boundaries, changed scope, and supported fields.
-- [ ] T018 [US2] Extend contract, integration, and browser cases in `tests/contract/web_portal/test_guest_authorizations_api.py`, `tests/integration/web_portal/test_guest_authorizations.py`, and `tests/e2e/web_portal/test_guest_authorizations.py`. Cover confirmed grant, wrong/canceled confirmation, denied permission, service failure, unknown write, and audit failure.
+## Closing Tasks
 
-### Implementation
+| ID | Parallel | Requirements | Paths | Acceptance | Verification | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| T-LOCAL-GATES | seq | SC-006, SC-007 | Every changed file in the change set | Run each applicable gate in the local gates table: compile, ruff, black, mypy, changed-file pytest, coverage, complexity, bandit, pylint, vulture, pydocstyle, interrogate, symbol-diff, and STE. | `python -m ruff check .` | open |
+| T-PR | seq | SC-007 | Branch docs/4231-mist-guest-authorizations and the changed record files | Commit with the subject `docs(spec): refresh guest authorization migration record`. Push the branch and open a pull request with `Closes #4231` (D-17). | `ste-linter --config .ste-linter.toml --min-score 80 README.md AGENTS.md .github/copilot-instructions.md CLAUDE.md documentation/ASD-STE100_writing-guide.md` | open |
+| T-REMOTE-CI | seq | SC-006 | The planning pull request | Each required check reports success, including the STE compliance check that `ste-lint.yml` runs. | `ste-linter --config .ste-linter.toml --min-score 80 README.md AGENTS.md .github/copilot-instructions.md CLAUDE.md documentation/ASD-STE100_writing-guide.md` | open |
+| T-MERGE | seq | SC-007 | The planning pull request | Enable auto-merge only after CI passes and the orchestrator authorizes the merge. | `python -m pytest tests/guardrails/test_nested_package_structure.py` | open |
 
-- [ ] T019 [US2] Add verified grant validation in `src/interfaces/portals/guest_workflows/domain.py`. Use approved limits, not the prior one-hour assumption or source five-year claim.
-- [ ] T020 [US2] Add the bound grant handler in `src/interfaces/portals/guest_workflows/presentation/routes.py` and explicit SDK call in `src/interfaces/portals/guest_workflows/sdk.py`. Reject changed scope/content before any write.
-- [ ] T021 [US2] Add minimized audit and reconciliation outcomes in `src/interfaces/portals/guest_workflows/access.py`. Enforce "Separate facts, including unknown cloud result" for cloud and audit outcomes.
+## Requirement Coverage Matrix
 
-## Phase 5: User Story 3 - Edit or Extend Access (Priority: P2)
+| Requirement | Tasks | Tests |
+| --- | --- | --- |
+| FR-001 | T013, T014, T016 | TC-031, TC-045 |
+| FR-002 | T013, T015 | TC-028 |
+| FR-003 | T010 | TC-011 |
+| FR-004 | T015 | TC-029 |
+| FR-005 | T001, T014 | TC-032 |
+| FR-006 | T014 | TC-033 |
+| FR-007 | T006, T014 | TC-009, TC-046 |
+| FR-008 | T006, T014 | TC-010 |
+| FR-009 | T009, T017, T023 | TC-001 to TC-005, TC-008, TC-020 |
+| FR-010 | T019 | TC-027, TC-035 |
+| FR-011 | T020 | TC-004, TC-041 |
+| FR-012 | T021 | TC-038, TC-040 |
+| FR-013 | T021 | TC-039 |
+| FR-014 | T009, T017, T018 | TC-006, TC-007, TC-035, TC-047 |
+| FR-015 | T012, T017 | TC-007, TC-034, TC-035 |
+| FR-016 | T007, T012 | TC-012, TC-023 |
+| FR-017 | T007 | TC-024 |
+| FR-018 | T007, T021 | TC-012, TC-025 |
+| FR-019 | T010, T012 | TC-011, TC-036 |
+| FR-020 | T010, T012 | TC-013, TC-037 |
+| FR-021 | T007, T022 | TC-026, TC-044 |
+| FR-022 | T023 | TC-016, TC-017, TC-018, TC-020 |
+| FR-023 | T023, T024 | TC-019, TC-021, TC-048 |
+| FR-024 | T024 | TC-021, TC-042 |
+| FR-025 | T024 | TC-043 |
+| FR-026 | T011, T026 | TC-014, TC-015 |
+| FR-027 | T004, T006, T026 | TC-030 |
+| FR-028 | T002, T007, T015 | TC-022, TC-029 |
+| FR-029 | T014, T018, T025 | TC-045, TC-047, TC-049 |
+| FR-030 | T011, T014, T022 | TC-014, TC-044, TC-046 |
 
-**Goal**: Change only verified writable fields or approved duration.
-**Independent test**: Supply a selected record directly. Check exact change, unsupported fields, duration rules, and uncertain outcomes.
-
-### Tests
-
-- [ ] T022 [US3] Extend `tests/contract/web_portal/test_guest_authorizations_api.py` for separate site/organization payload allowlists and verified extension semantics.
-- [ ] T023 [US3] Extend `tests/integration/web_portal/test_guest_authorizations.py` and `tests/e2e/web_portal/test_guest_authorizations.py` for edit/extend review, confirmation, denied scope, canceled changes, and audit failure.
-
-### Implementation
-
-- [ ] T024 [US3] Add edit and extension validation in `src/interfaces/portals/guest_workflows/domain.py` and SDK methods in `src/interfaces/portals/guest_workflows/sdk.py`. Reject read-only fields per verified scope.
-- [ ] T025 [US3] Add separate edit and extension forms in `src/interfaces/portals/guest_workflows/presentation/`. Bind each typed confirmation to exact reviewed content.
-
-## Phase 6: User Story 4 - Revoke Access (Priority: P2)
-
-**Goal**: Distinguish accepted revocation requests from verified termination.
-**Independent test**: Mock approved method and reconciliation results. Reject unsupported semantics and uncertain success.
-
-### Tests
-
-- [ ] T026 [US4] Extend `tests/contract/web_portal/test_guest_authorizations_api.py` for approved revocation, response interpretation, state reconciliation, and no automatic retry.
-- [ ] T027 [US4] Extend `tests/integration/web_portal/test_guest_authorizations.py` and `tests/e2e/web_portal/test_guest_authorizations.py` for exact confirmation, cancellation, denied access, unknown termination, and failed audit.
-
-### Implementation
-
-- [ ] T028 [US4] Add only the verified revoke and reconciliation methods in `src/interfaces/portals/guest_workflows/sdk.py`. Do not infer termination from DELETE success or assume `minutes=0` semantics.
-- [ ] T029 [US4] Add revoke review and explicit result states in `src/interfaces/portals/guest_workflows/presentation/`. Require an approved typed word and show unverified termination as unknown.
-
-## Phase 7: User Story 5 - Search and Import (Priority: P3)
-
-**Goal**: Search permitted clients and submit only a reviewed bounded batch.
-**Independent test**: Mock search and row outcomes. Check all approved boundaries and stop conditions.
-
-### Tests
-
-- [ ] T030 [US5] Add CSV tests in `tests/unit/web_portal/test_guest_authorization_import.py`. Enforce "Exactly one final outcome per row", approved limits, encoding, headers, cells, duplicate scope/MAC pairs, and changed-preview rejection.
-- [ ] T031 [US5] Extend `tests/contract/web_portal/test_guest_authorizations_api.py` for permitted returned search fields, sequential calls, rate limits, unknown writes, and no scope fallback.
-- [ ] T032 [US5] Extend `tests/integration/web_portal/test_guest_authorizations.py` and `tests/e2e/web_portal/test_guest_authorizations.py` for search, zero-write preview, batch confirmation, partial outcomes, and audit failure.
-
-### Implementation
-
-- [ ] T033 [US5] Add bounded parsing and ordered row transitions in `src/interfaces/portals/guest_workflows/imports.py`. Enforce "Changed content or scope invalidates confirmation".
-- [ ] T034 [US5] Add scoped client reads in `src/interfaces/portals/guest_workflows/sdk.py`. Search only verified returned fields and never infer guest authorization from client presence.
-- [ ] T035 [US5] Add import preview and submission handlers in `src/interfaces/portals/guest_workflows/presentation/`. Apply "Approved byte, row, header, encoding, and cell bounds apply" before unbounded parsing.
-- [ ] T036 [US5] Add stop and audit outcomes in `src/interfaces/portals/guest_workflows/imports.py`. Stop later rows after 429, unknown writes, or audit failure and never repeat uncertain writes.
-
-## Phase 8: Cross-Cutting Validation
-
-- [ ] T037 Verify masking, injection-safe rendering, zero direct HTTP fallback, and all denied/canceled cases in `tests/integration/web_portal/test_guest_authorizations.py`. Exclude tokens, names, email addresses, raw payloads, and complete MAC addresses from logs.
-- [ ] T038 Verify all interactive labels, stable test IDs, and failure artifacts in `tests/e2e/web_portal/test_guest_authorizations.py`.
-- [ ] T039 Write the approved operator guide in `documentation/guest-authorizations.md` and a unique fragment under `changelog.d/`. Document supported workflows, limits, rights, and recovery without changing the shared changelog.
-- [ ] T040 Run the applicable checks in `design/quickstart.md`. Record exact commands, counts, results, and remaining limitations in the implementation PR before requesting review.
-
-## Dependencies & Execution Order
-
-```text
-T001-T004 decisions -> T005 contracts -> T006 ownership
--> T007-T009 foundation -> US1 -> US2 -> US3 -> US4 -> US5
--> T037-T040 validation
-```
-
-The decision tasks can collect evidence independently, but this assignment executes serially.
-T007-T009 and every story require all G1-G5 evidence first.
-Within each story, tests must fail for the missing behavior before implementation, then pass afterward.
-US2-US5 use US1 scope selection. Their independent tests supply fictional scopes instead of executing earlier UI journeys.
-US3, US4, and US5 do not require each other's behavior, but run serially to avoid shared-file conflicts.
-US5 imports require the confirmed grant and outcome contract from US2.
-T037-T040 require all selected story increments.
-
-## Parallel Execution Examples
-
-No parallel execution is authorized in this assignment.
-US1 contract, integration, and browser files are distinct, but execute T010-T016 serially.
-For US2, US3, US4, and US5, shared SDK, access, and presentation files prohibit concurrent edits.
-Do not apply the old task list's parallel markers to these shared files.
-
-## Implementation Strategy
-
-Complete the planning PR and stop. Do not start T001-T040 as product implementation in this session.
-A later authorized implementation first obtains decisions and verifies evidence.
-Its first portal increment is US1 only after all gates pass, including CSV and audit gates.
-Add grant, edit/extension, revoke, and import as separately reviewed increments in the stated order.
-The existing offline projection is not a reason to bypass a missing approval.
-
-## Requirement Coverage
-
-| Requirements | Tasks |
-| --- | --- |
-| FR-001, FR-002, SC-007 | T006, T008, T040 |
-| FR-003, FR-004, SC-001 | T001-T009, T012, T016 |
-| FR-005, FR-006, SC-003 | T010-T016 |
-| FR-007 | T031, T032, T034 |
-| FR-008, FR-009, FR-010, SC-002 | T017-T025, T027, T032, T035 |
-| FR-011, FR-012, SC-005 | T018, T021, T026-T029, T031, T036 |
-| FR-013, FR-014, FR-015, FR-016, SC-004 | T003, T030-T036 |
-| FR-017, FR-018 | T002, T004, T009, T021, T027, T036, T037 |
-| FR-019, FR-020, SC-006 | T007-T008, T012, T018, T023, T027, T032, T037-T040 |
+Every requirement maps to at least one task and at least one planned test. Test identifiers are defined in design/quickstart.md.
