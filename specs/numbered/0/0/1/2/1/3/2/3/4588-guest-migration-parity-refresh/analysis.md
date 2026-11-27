@@ -55,7 +55,7 @@ No task lacks a requirement or an acceptance purpose. Each task names a primary 
 ## Constitution alignment
 
 - The feature root holds five children. The design directory holds five children. The contracts directory holds five files. The checklists directory holds two files.
-- The route uses the base-5 radix of 4588 (T19 L4). The route parent holds two children after this record.
+- The route uses the base-5 radix of 4588 (T19 L4). The route parent holds one child after this record.
 - The plan records the existing folder debt and a separate remediation action (plan, Complexity Tracking).
 - The future code uses named classes and direct imports from the defining module (T18 L91 to L112).
 - The future writes need validated input, exact scope, approved access, a typed word, durable intent, and no ambiguous retry (T18 L113 to L141).
