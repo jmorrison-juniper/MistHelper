@@ -71,7 +71,7 @@ class AnalyticsStructureInspector:
         directories = [self.analytics_root / relative_path for relative_path in self.required_packages]
         missing = [directory for directory in directories if not directory.is_dir()]  # Validate all inputs first.
         if missing:  # A partial result cannot prove the package hierarchy.
-            missing_paths = [str(path) for path in missing]  # Preserve each absent required path.
+            missing_paths = ", ".join(str(path) for path in missing)  # Name each absent path as plain text.
             raise AssertionError(f"Cannot inspect required analytics directories: {missing_paths}")
         return directories  # Return only the explicitly approved package levels.
 

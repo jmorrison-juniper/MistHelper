@@ -82,7 +82,7 @@ def pytest_runtestloop(session):
 def slow_session_teardown(request):
     root = request.config.rootpath
     yield
-    (root / "teardown-start.marker").write_text("started", encoding="ascii")
+    (root / "teardown-start.marker").write_text(str(time.monotonic()), encoding="ascii")  # Store the start time.
     print("SESSION TEARDOWN START", flush=True)
     time.sleep({teardown_sleep})
     (root / "teardown-end.marker").write_text("ended", encoding="ascii")
@@ -151,6 +151,23 @@ class PytestRunResult:
             True when the synthetic fixture wrote its end marker.
         """
         return (self.trail_path.parent / "teardown-end.marker").is_file()  # Read the durable marker.
+
+    def teardown_offset_seconds(self) -> float:
+        """Measure when the session teardown began, counted from the execution start.
+
+        Why:
+            A bound counted from the execution start includes the earlier items,
+            which run before the timer of the last item starts. Their cost grows
+            under machine load. A bound counted from the teardown start measures
+            the teardown alone.
+
+        Returns:
+            The seconds from the execution start to the start of the session teardown.
+        """
+        project = self.trail_path.parent  # The temporary project holds both markers.
+        loop_start = float((project / "execution-start.marker").read_text(encoding="ascii"))  # Read the loop start.
+        teardown_at = float((project / "teardown-start.marker").read_text(encoding="ascii"))  # Read teardown start.
+        return teardown_at - loop_start  # Both values share one monotonic clock, so the difference is valid.
 
     def trail_records(self) -> list[dict[str, object]]:
         """Read the phase trail that this run wrote.
@@ -393,7 +410,8 @@ def test_shared_budget_loses_the_report(shared_budget_run: PytestRunResult) -> N
     assert not shared_budget_run.has_summary(), "The red case printed a summary, so it did not reproduce #3517."
     assert shared_budget_run.teardown_started(), "The red case never reached the session teardown."
     assert not shared_budget_run.teardown_finished(), "The red case completed the session teardown."
-    assert shared_budget_run.execution_seconds < TEARDOWN_SLEEP_SECONDS, "The red case outlived the teardown."
+    cutoff = shared_budget_run.teardown_offset_seconds() + TEARDOWN_SLEEP_SECONDS  # Full teardown end, in seconds.
+    assert shared_budget_run.execution_seconds < cutoff, "The red case outlived the teardown."  # Stop before it ends.
 
 
 def test_separate_budget_keeps_the_report(separate_budget_run: PytestRunResult) -> None:
@@ -406,17 +424,18 @@ def test_separate_budget_keeps_the_report(separate_budget_run: PytestRunResult) 
     assert separate_budget_run.execution_seconds > TEARDOWN_SLEEP_SECONDS, "The teardown did not run in full."
 
 
-def test_teardown_budget_still_ends_an_overrun(
-    tight_budget_run: PytestRunResult, shared_budget_run: PytestRunResult
-) -> None:
-    """A teardown that exceeds its own budget still ends, and later than the shared budget would."""
+def test_teardown_budget_still_ends_an_overrun(tight_budget_run: PytestRunResult) -> None:
+    """A teardown that exceeds its own budget still ends after that budget, not at the item timer."""
     print(f"tight_budget: exit {tight_budget_run.return_code} in {tight_budget_run.elapsed_seconds:.2f}s")
     assert tight_budget_run.return_code == 1, f"The overrun exited {tight_budget_run.return_code}, not 1."
     assert tight_budget_run.teardown_started(), "The overrun never reached the session teardown."
     assert not tight_budget_run.teardown_finished(), "The overrun completed the session teardown."
-    assert tight_budget_run.execution_seconds < TEARDOWN_SLEEP_SECONDS + LAST_TEST_SLEEP_SECONDS, "No bound fired."
-    gap = tight_budget_run.execution_seconds - shared_budget_run.execution_seconds  # Compare protected work only.
-    assert gap > 1.0, f"The overrun ran {gap:.2f} seconds longer than the red case, so the budget is not separate."
+    # Count only the time after the teardown began, so load before the teardown cannot shift the result.
+    teardown_seconds = tight_budget_run.execution_seconds - tight_budget_run.teardown_offset_seconds()
+    assert (
+        teardown_seconds >= TIGHT_TEARDOWN_BUDGET_SECONDS * 0.9
+    ), f"The overrun ended {teardown_seconds:.2f} seconds into its teardown, before its own budget."
+    assert teardown_seconds < TEARDOWN_SLEEP_SECONDS, "The overrun ran the full teardown, so no bound fired."
 
 
 def test_phase_trail_survives_the_stop(shared_budget_run: PytestRunResult) -> None:

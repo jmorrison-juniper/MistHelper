@@ -1,6 +1,7 @@
 """Protect equivalent browser installation without the slow apt route (issue #4613)."""
 
 import copy
+import logging  # Record each shell run, so a failed setup shows its context.
 import shlex
 import subprocess
 import sys
@@ -10,11 +11,22 @@ from typing import Any
 import pytest
 import yaml
 
+from tests.unit.prod_readiness.operations.exporting.container.build_support.bash_support import (
+    BASH_PATH,  # The bash that opens Windows paths, which the capability probe selected.
+    BASH_SKIP_REASON,  # None when this machine has such a bash.
+)
+
+logger = logging.getLogger(__name__)  # A module logger keeps the record source readable.
+
 WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "ci.yml"
 MIRRORS = (
     b"http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n"
     b"https://archive.ubuntu.com/ubuntu/\tpriority:2\n"
     b"https://security.ubuntu.com/ubuntu/\tpriority:3\n"
+)
+REQUIRES_BASH = pytest.mark.skipif(  # Skip with the cause when no bash can open a Windows path.
+    BASH_SKIP_REASON is not None,  # The probe found no usable bash on this machine.
+    reason=BASH_SKIP_REASON or "",  # Print the missing capability in the skip record.
 )
 
 
@@ -56,11 +68,24 @@ class BrowserInstallation:
     @classmethod
     def execute(cls, directory: Path) -> subprocess.CompletedProcess[str]:
         """Execute the workflow shell with only its privileged path and interpreter replaced."""
-        steps = cls.workflow()["jobs"]["playwright_shards"]["steps"]
-        command = next(step["run"] for step in steps if step.get("name") == "Prepare Ubuntu package mirrors")
-        command = command.replace("/etc/apt/apt-mirrors.txt", str(directory / "apt-mirrors.txt"))
-        command = command.replace("sudo python3", shlex.quote(sys.executable))
-        return subprocess.run(["bash", "-e", "-c", command], capture_output=True, text=True, timeout=10, check=False)
+        steps = cls.workflow()["jobs"]["playwright_shards"]["steps"]  # Read the shipped steps.
+        command = next(  # Take the shipped mirror script, so the guard runs the text that CI runs.
+            step["run"] for step in steps if step.get("name") == "Prepare Ubuntu package mirrors"
+        )
+        mirror_file = (directory / "apt-mirrors.txt").as_posix()  # Forward slashes stay valid in bash and Python.
+        command = command.replace("/etc/apt/apt-mirrors.txt", mirror_file)  # Point the script at the temp file.
+        interpreter = shlex.quote(Path(sys.executable).as_posix())  # Quote the path, which can hold spaces.
+        command = command.replace("sudo python3", interpreter)  # Run the test interpreter, not sudo.
+        logger.info("Running the Ubuntu mirror setup script in %s", directory)  # Log before the shell starts.
+        completed = subprocess.run(  # Run the script with the bash that opens Windows paths.
+            [str(BASH_PATH), "-e", "-c", command],  # Keep -e, the flag that GitHub Actions uses.
+            capture_output=True,  # Keep both streams, because the cases assert on them.
+            text=True,  # Decode the output as text for the assertions.
+            timeout=10,  # Stop a stuck shell, so one case cannot block the suite.
+            check=False,  # Keep the status, because the failure cases assert on it.
+        )
+        logger.debug("The mirror setup script exited with status %s", completed.returncode)  # Log the status.
+        return completed  # Hand the measured result to the caller.
 
 
 def test_browser_setup_preserves_the_installer_contract() -> None:
@@ -68,6 +93,7 @@ def test_browser_setup_preserves_the_installer_contract() -> None:
     assert BrowserInstallation.check(BrowserInstallation.workflow()) == 4
 
 
+@REQUIRES_BASH
 def test_setup_removes_only_the_slow_route_and_preserves_a_backup(tmp_path: Path) -> None:
     """Keep unknown mirror entries and signed-package configuration outside the edited file."""
     mirrors = tmp_path / "apt-mirrors.txt"
@@ -89,6 +115,7 @@ def test_setup_removes_only_the_slow_route_and_preserves_a_backup(tmp_path: Path
     assert mirrors.read_bytes() == original.split(b"\n", 1)[1]
 
 
+@REQUIRES_BASH
 def test_setup_accepts_layout_variations_and_preserves_other_bytes(tmp_path: Path) -> None:
     """Accept priority changes and missing priority metadata without changing other bytes."""
     mirrors = tmp_path / "apt-mirrors.txt"
@@ -108,6 +135,7 @@ def test_setup_accepts_layout_variations_and_preserves_other_bytes(tmp_path: Pat
     assert mirrors.with_suffix(".txt.issue-4613.bak").read_bytes() == original
 
 
+@REQUIRES_BASH
 def test_missing_azure_mirror_is_a_safe_no_op(tmp_path: Path) -> None:
     """Leave official mirrors unchanged and create no backup when Azure is already absent."""
     mirrors = tmp_path / "apt-mirrors.txt"
@@ -125,6 +153,7 @@ def test_missing_azure_mirror_is_a_safe_no_op(tmp_path: Path) -> None:
     assert not mirrors.with_suffix(".txt.issue-4613.bak").exists()
 
 
+@REQUIRES_BASH
 @pytest.mark.parametrize(
     "content",
     [
@@ -153,6 +182,7 @@ def test_invalid_mirror_configuration_fails_without_a_write(tmp_path: Path, cont
         assert not mirrors.exists()
 
 
+@REQUIRES_BASH
 def test_a_failed_backup_prevents_the_mirror_rewrite(tmp_path: Path) -> None:
     """An existing recovery record must not be overwritten to make setup continue."""
     mirrors = tmp_path / "apt-mirrors.txt"
