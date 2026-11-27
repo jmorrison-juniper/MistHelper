@@ -23,7 +23,7 @@ This review checks the spec, the plan, the tasks, and the remote code against ea
 
 | ID | Defect | Evidence | Handling |
 | - | - | - | - |
-| A-1 | The issue body names `src/upgrade_portal/runtime/identity.py`. That path does not exist on main. | RC-39 absent, RC-01 present | Corrected in spec.md Clarifications |
+| A-1 | The issue body names the retired path `upgrade_portal/runtime/identity.py`. That path does not exist on main. | RC-39 absent, RC-01 present | Corrected in spec.md Clarifications |
 | A-2 | The issue body names a proof test that does not exist on main. Its "3 passed" result cannot be reproduced. | RC-38 absent, U-1 | T013 creates the restart contract in an existing module |
 | A-3 | The assessment comments cite capture Gunicorn lines 312 to 321 and 315 to 318. Main places the capture command at lines 321 to 327. | RC-10 | Cited from main in this record |
 | A-4 | The assessment says that no credential redaction filter protects the portal logger. The factory installs `SensitiveFilter`. The filter is pattern based. | RC-05, RC-16 | D-13 keeps the filter and adds TP-22 |

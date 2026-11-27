@@ -78,7 +78,7 @@ This review compares the spec, plan, tasks, and research with the code on GitHub
 
 ### A-6 The issue body is stale in five places (LOW)
 
-- The path `src/upgrade_portal/app/routes/org_upgrade.py` is absent on `main` (RC-21). The live path is `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`.
+- The retired path `upgrade_portal/app/routes/org_upgrade.py` is absent on `main` (RC-21). The live path is `src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py`.
 - The line numbers are stale. `save_options` is at line 1215 now, not 863.
 - The statement that no clause catches `RequestException` is stale after PR 4413 (RC-10).
 - The cache wording "less than one minute" matches a TTL of 60 seconds (RC-24).

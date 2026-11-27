@@ -125,7 +125,7 @@ The Ref column holds `main` for a repository file, `object` for a commit lookup,
 | RC-18 | Route constants name the options page, the save, and the confirmation page | src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py | main | 11c839db760b07291b51a3804546dc53e8ba8a85 | present | 145 |
 | RC-19 | A refused cloud result answers 502 | src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py | main | 11c839db760b07291b51a3804546dc53e8ba8a85 | present | 1039 |
 | RC-20 | A failed status read answers 503, which is the sibling precedent | src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py | main | 11c839db760b07291b51a3804546dc53e8ba8a85 | present | 2500 |
-| RC-21 | Issue body path src/upgrade_portal/app/routes/org_upgrade.py exists | src/upgrade_portal/app/routes/org_upgrade.py | main | none | absent | 0 |
+| RC-21 | Issue body path retired upgrade_portal/app/routes/org_upgrade.py exists | retired upgrade_portal/app/routes/org_upgrade.py | main | none | absent | 0 |
 | RC-22 | build_site_rows reads listOrgSites and listOrgSiteStats | src/interfaces/portals/upgrade_portal/app/routes/select.py | main | 604f8a5e1b6f72b6df860cf1ae03d0ffbc01055c | present | 1060 |
 | RC-23 | default_cloud_read catches RequestException | src/interfaces/portals/upgrade_portal/app/routes/select.py | main | 604f8a5e1b6f72b6df860cf1ae03d0ffbc01055c | absent | 357 |
 | RC-24 | Site list cache keeps each read for 60 seconds | src/interfaces/portals/upgrade_portal/app/routes/select.py | main | 604f8a5e1b6f72b6df860cf1ae03d0ffbc01055c | present | 192 |

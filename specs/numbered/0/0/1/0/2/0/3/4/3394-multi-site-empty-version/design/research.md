@@ -13,8 +13,8 @@ Measured on 2026-11-26. Remote facts come from the GitHub API for `main` at comm
 | PR #4547 (issue #3396) | Merged on 2026-11-13. Changes `org_upgrade.py`. | Earlier comment that calls it a draft is stale. |
 | PR #4606 (issue #4540) | Merged on 2026-11-09. Changes `portal.js`. | Changes the browser script. |
 | PR #4541 (issue #3200) | Merged on 2026-11-05. Changes the contract test file. | Changes the contract test file. |
-| PR #3426 (issue #3389) | Merged on 2026-09-26 under the old folder `src/upgrade_portal`, which no longer exists on `main`. | Earlier multi-site save change. |
-| PR #3075 | Merged on 2026-09-20 under the old folder `src/upgrade_portal`, which no longer exists on `main`. | Historical move. |
+| PR #3426 (issue #3389) | Merged on 2026-09-26 under the retired folder `upgrade_portal/`, which no longer exists on `main`. | Earlier multi-site save change. |
+| PR #3075 | Merged on 2026-09-20 under the retired folder `upgrade_portal/`, which no longer exists on `main`. | Historical move. |
 | PRs #3996 and #3997 | Merged on 2026-10-06. Neither touches a shared path. | The earlier comment that calls them open is stale. |
 
 Open pull requests on 2026-11-26: #4890, #4889, #4888, #4887, #4886, #4813 (draft), and #4208 (draft). Their file counts are 1, 1, 1, 2, 1, 15, and 82. None touches the seven shared paths: `org_upgrade.py`, the contract test module, `options.py`, `org_options.html`, `portal.js`, the e2e flow module, and the changelog fragment. The dependency bumps #427, #952, and #537 matched the search text "3394". They are not linked to this issue.
@@ -115,7 +115,7 @@ The table holds 105 checks. Each row matches one row of the `remote_checks` arra
 
 | ID | Claim | Path | Ref | Blob SHA | Result | Line |
 | - | - | - | - | - | - | - |
-| RC01 | Issue body cause path exists on main | src/upgrade_portal/app/routes/org_upgrade.py | main | none | absent | 0 |
+| RC01 | Issue body cause path exists on main | retired upgrade_portal/app/routes/org_upgrade.py | main | none | absent | 0 |
 | RC02 | Save handler file exists and defines save_options | src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py | main | 11c839db760b07291b51a3804546dc53e8ba8a85 | present | 1215 |
 | RC03 | Issue body line near 510 for _selected_target_rows is stale | src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py | main | 11c839db760b07291b51a3804546dc53e8ba8a85 | stale | 775 |
 | RC04 | Issue comment line 755 for _selected_target_rows is stale | src/interfaces/portals/upgrade_portal/app/routes/org_upgrade.py | main | 11c839db760b07291b51a3804546dc53e8ba8a85 | stale | 775 |
@@ -235,7 +235,7 @@ Method notes:
 ## 4. Local Sources
 
 - The local worktree blobs equal the main blobs for these files: `org_upgrade.py` (11c839db), `select.py` (604f8a5e), `options.py` (6a1446c9), and `org_options.html` (2675897e). The remaining files also equal the main blobs: `portal.js` (03ed368d), `test_org_upgrade_routes.py` (d026c23c), `tests/e2e/conftest.py` (e450e185), and the OpenAPI file (b7fc2bfb).
-- The local `src/upgrade_portal` folder holds only untracked `__pycache__` files. A read-only `git ls-files` check returned zero tracked files.
+- The local retired `upgrade_portal/` folder holds only untracked `__pycache__` files. A read-only `git ls-files` check returned zero tracked files.
 - The reference record `specs/numbered/0/0/1/2/4/1/4/0/4920-ex-hardware-inventory-csv` has these children: `analysis.md`, `plan.md`, `spec.md`, `tasks.md`, and `design/`. The `design/` folder holds `checklists/`, `contracts/`, `data-model.md`, `quickstart.md`, and `research.md`. This record copies that depth and that shape. No content is copied [RC72, RC73, RC74].
 - The OpenAPI file defines the inventory path at line 10639 [RC77]. The local mistapi package defines `getOrgInventory` at line 17 [RC80]. The installed version is 0.64.1 [RC79].
 

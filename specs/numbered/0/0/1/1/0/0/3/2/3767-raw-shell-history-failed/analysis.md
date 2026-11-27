@@ -20,7 +20,7 @@
 
 These defects come from the issue text, its comments, and its linked records. The record corrects each one.
 
-1. The issue traceback names the `src.websocket_streams` import path. That path is correct for accepted main (R-08, R-22). Current main moved the package to `src/mist/realtime/websocket_streams/` and changed most blobs (R-31, R-32). The record cites both paths.
+1. The issue traceback names the retired `websocket_streams` import path. That path is correct for accepted main (R-08, R-22). Current main moved the package to `src/mist/realtime/websocket_streams/` and changed most blobs (R-31, R-32). The record cites both paths.
 2. The issue line numbers 108 and 464 match accepted main (R-02, R-03). The same test moved on current main (R-06, R-07).
 3. The issue command passes `--cov-config=coverage.ini`. The repository tree has no such file on either commit (R-29, R-30). The controlled run uses the tracked coverage settings in `pyproject.toml`.
 4. The issue names a Python 3.13 environment. The project requires Python 3.15 (R-36, R-37). The controlled run uses 3.15.2 (D-5).

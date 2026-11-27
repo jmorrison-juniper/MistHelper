@@ -45,7 +45,7 @@
 ### T003 [P] Record the branch lines at both commits
 
 - **Requirements**: FR-003
-- **Files**: Accepted main source files under `src/websocket_streams/live/`: `runners/shell/lifecycle/outcomes.py`, `runners/shell/lifecycle/reading.py`, `transport/runtime/reader/keepalive.py`, and `transport/runtime/reader/frame_reader.py`. Current main holds the moved files under `src/mist/realtime/websocket_streams/`.
+- **Files**: Accepted main source files under the retired `websocket_streams/live/` path: `runners/shell/lifecycle/outcomes.py`, `runners/shell/lifecycle/reading.py`, `transport/runtime/reader/keepalive.py`, and `transport/runtime/reader/frame_reader.py`. Current main holds the moved files under `src/mist/realtime/websocket_streams/`.
 - **Acceptance**: Research rows R-08 to R-22, R-31 to R-34, and R-67 to R-74 name each line and each blob SHA.
 - **Verification**: `ste-linter --config .ste-linter.toml --min-score 80 specs/numbered/0/0/1/1/0/0/3/2/3767-raw-shell-history-failed/design/research.md`
 - **Status**: verified-present

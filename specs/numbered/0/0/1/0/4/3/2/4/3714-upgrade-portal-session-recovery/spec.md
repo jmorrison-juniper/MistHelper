@@ -174,7 +174,7 @@ The store holds no credential value in plaintext. Logs, responses, cookies, and 
 ### Session 2026-11-26
 
 - Q: Does the issue authorize persistent token storage? A: No. The issue body says it does not authorize persistent token storage. Decision D-1 keeps credential material out of the store.
-- Q: Which source path is live? A: `src/interfaces/portals/upgrade_portal/runtime/identity.py` (RC-01, RC-02). The issue path `src/upgrade_portal/runtime/identity.py` is absent (RC-39).
+- Q: Which source path is live? A: `src/interfaces/portals/upgrade_portal/runtime/identity.py` (RC-01, RC-02). The retired issue path `upgrade_portal/runtime/identity.py` is absent (RC-39).
 - Q: Does the issue proof test exist? A: No (RC-38). Task T013 adds the restart contract to the existing auth contract module.
 - Q: Which base revision applies? A: Remote `main` at `f03c6c9b36d612a48d7b9652998c2fd87dd777ca` (RC-52). The legacy base commits are stale (LC-03 and LC-09 in design/research.md).
 - Q: Can the closed PR 4018 record be reused? A: Only verified claims are reused. The record uses a new slug, `upgrade-portal-session-recovery`.

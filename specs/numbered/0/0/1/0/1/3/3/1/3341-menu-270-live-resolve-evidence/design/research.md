@@ -116,7 +116,7 @@ Rows: 52. The `remote_checks` array in `META\3341-STATUS.json` and the summary u
 | 38 | Reference record title, the shape source | specs/numbered/0/0/1/2/4/1/4/0/4920-ex-hardware-inventory-csv/spec.md | main | 83b950279e45704943ad6942d23c8fc99cced492 | present | 1 |
 | 39 | Route folder for 3341 is absent | specs/numbered/0/0/1/0/1/3/3/1 | main | none | absent | 0 |
 | 40 | No record folder for 3341 exists | specs (folders named 3341-) | main | none | absent | 0 |
-| 41 | PR 3316 path `src/marvis/actions/client.py` is absent | src/marvis/actions/client.py | main | none | absent | 0 |
+| 41 | PR 3316 retired path `marvis/actions/client.py` is absent | retired `marvis/actions/client.py` | main | none | absent | 0 |
 | 42 | OpenAPI document holds no labs path | documentation/mist-api-openapi31yaml.yaml | main | b7fc2bfbe0aa9d718f2a91a5bd1ff07c3b612f14 | absent | 0 |
 | 43 | mistapi `mist_put` method | .venv\Lib\site-packages\mistapi\__api_request.py | local-venv | none | present | 303 |
 | 44 | mistapi `mist_get` method | .venv\Lib\site-packages\mistapi\__api_request.py | local-venv | none | present | 260 |

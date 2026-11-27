@@ -213,7 +213,7 @@ Each row is one check. Results are `present` or `absent`. The table has 78 rows.
 | RC-36 | Container policy docs guard | `tests/guardrails/test_container_policy_docs.py` | `main` | `1b842c302e52bcb43a95e4a2aed2366a93d94909` | present | 1 |
 | RC-37 | Configuration unit test module | `tests/unit/upgrade_portal/test_config.py` | `main` | `c516f3a3e5b98a2b1930b84a006349d226514cc7` | present | 1 |
 | RC-38 | Restart test file cited by the issue body | `tests/contract/upgrade_portal/session_signing/test_restart.py` | `main` | `none` | absent | 0 |
-| RC-39 | Source path cited by the issue body without the interfaces prefix | `src/upgrade_portal/runtime/identity.py` | `main` | `none` | absent | 0 |
+| RC-39 | Source path cited by the issue body without the interfaces prefix | retired `upgrade_portal/runtime/identity.py` | `main` | `none` | absent | 0 |
 | RC-40 | Planned shared session store module | `src/interfaces/portals/upgrade_portal/persistence/session_store.py` | `main` | `none` | absent | 0 |
 | RC-41 | Legacy record folder for issue 3714 on main | `specs/numbered/0/0/1/0/4/3/2/4/3714-session-persistence` | `main` | `none` | absent | 0 |
 | RC-42 | Legacy changelog fragment on main | `changelog.d/issue-3714-session-persistence.md` | `main` | `none` | absent | 0 |
@@ -272,7 +272,7 @@ The closed PR 4018 holds a draft. Its branch no longer exists on the remote (RC-
 | LC-04 | 51 protected handlers (spec.md, plan.md, issue comment 5) | verified | RC-23 to RC-29 sum to 51 |
 | LC-05 | 51 handlers across 13 route files (spec.md, plan.md) | stale | RC-23 to RC-29 show 7 files. RC-78 shows 13 entries in the folder, including `__init__.py`. |
 | LC-06 | Decorator line numbers in the handler groups (spec.md) | stale | RC-23 starts at 1155. The draft lists 1133 for the same handler family. |
-| LC-07 | The issue body path `src/upgrade_portal/` is stale (spec.md) | verified | RC-39 absent. RC-01 present under the interfaces prefix. |
+| LC-07 | The retired issue body path `upgrade_portal/` is stale (spec.md) | verified | RC-39 absent. RC-01 present under the interfaces prefix. |
 | LC-08 | The defect check at `test_identity.py` lines 1505 to 1520 (spec.md) | verified | RC-30 |
 | LC-09 | The base revision is f1505203 (plan.md) | stale | RC-51 present, superseded by RC-52 |
 | LC-10 | Redis holds site locks, not sessions (plan.md) | verified | RC-18, RC-12 |

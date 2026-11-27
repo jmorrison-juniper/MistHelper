@@ -98,7 +98,7 @@ After the owner authorizes the change, a maintainer changes only the close timin
 
 ## Out of Scope
 
-- Changes to the production keepalive default in `src/websocket_streams/live/transport/endpoint.py`.
+- Changes to the production keepalive default in the retired `websocket_streams/live/transport/endpoint.py` path.
 - Changes to the owned WebSocket transport, the SDK contract test, or the installed mistapi package.
 - Changes to the candidate branch `recovery/3760-handoff-20261004`.
 - Changes to the Python version pin or to the CI workflow.

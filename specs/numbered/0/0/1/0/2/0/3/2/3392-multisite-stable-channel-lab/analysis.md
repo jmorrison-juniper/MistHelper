@@ -6,8 +6,8 @@ Audit date: 2026-11-26. Each finding cites a remote check row (RC-nn) from `desi
 
 | ID | Finding | Evidence | Action |
 | - | - | - | - |
-| A-1 | Issue #3392 cites `src/firmware/aggregate_upgrade_service.py`, which is absent on main. The current file is under `src/operations/execution/firmware/`. | RC-58, RC-27 | Owner edits the issue text. The agent cannot write to GitHub. |
-| A-2 | PR #3391 lists `src/firmware/` and `src/upgrade_portal/` paths. Both are absent on main. The PR is merged, so the list is historical. | RC-59 | No action. The record uses the current paths (D-5). |
+| A-1 | Issue #3392 cites the retired path `firmware/aggregate_upgrade_service.py`, which is absent on main. The current file is under `src/operations/execution/firmware/`. | RC-58, RC-27 | Owner edits the issue text. The agent cannot write to GitHub. |
+| A-2 | PR #3391 lists the retired `firmware/` and `upgrade_portal/` paths. Both are absent on main. The PR is merged, so the list is historical. | RC-59 | No action. The record uses the current paths (D-5). |
 | A-3 | Parity row C17 says `parity` for all families, including access points. The save refuses the stable word for access points. | RC-98, RC-99, RC-42 | T017 sets a gap for the access point family until L-AP-STABLE has an accepted verdict. |
 | A-4 | Parity row C21 says `parity` and cites `org_options.html` line 35 as absent. The router channel control is at line 535. | RC-101, RC-102, RC-45 | T017 cites line 535 as the multi-site evidence. |
 | A-5 | The constitution says mistapi 0.59 or newer. `requirements.txt` pins 0.64.1 exactly. The instructions name the range from 0.64.0 to below 0.65. | RC-12, RC-25, RC-04 | Owner amends the constitution text through its amendment procedure (a PATCH change). A follow-up issue tracks it. |

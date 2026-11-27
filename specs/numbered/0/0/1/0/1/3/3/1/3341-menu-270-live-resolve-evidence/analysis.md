@@ -20,7 +20,7 @@ This review checks the spec, the plan, the tasks, and the code on `main`. Row nu
 
 **A-2 (high). Stale endpoint report.** Row 26 states that the research did not send a live resolve request. Row 25 names mistapi 0.64.0. Row 51 shows that 0.64.1 is installed. T003 corrects both statements.
 
-**A-3 (medium). Pull request paths differ from `main`.** The file list of pull request #3316 names `src/marvis/actions/client.py` and related paths. Row 41 shows that the path is absent on `main`. The Marvis package sits at `src/mist/intelligence/marvis/actions/`. This record cites only the current paths.
+**A-3 (medium). Pull request paths differ from `main`.** The file list of pull request #3316 names the retired `marvis/actions/client.py` path and related paths. Row 41 shows that the path is absent on `main`. The Marvis package sits at `src/mist/intelligence/marvis/actions/`. This record cites only the current paths.
 
 **A-4 (high). Classification conflict for mode 3.** The registry places menu 270 in `interactive_safe` (rows 3 and 4). The copilot instructions define destructive as a change to the Mist cloud or a production device (row 28). The constitution lists other changes to the Mist cloud as destructive (row 33). Mode 3 changes Mist cloud state (row 14). The registry comment records the reason for the current row: the portal needs the row. The typed gate (row 17) meets the typed-confirmation rule. Decision D-5 gives the owner the choice. Status: unresolved, human decision.
 

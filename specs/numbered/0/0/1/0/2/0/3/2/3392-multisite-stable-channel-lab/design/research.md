@@ -16,7 +16,7 @@ Read with `gh` only. The record holds no token value.
 - Comment IC_kwDOQltU8c8AAAABaCJ2iA (2026-10-07) reassesses origin/main at commit e0dc054d74e0a53c074c8b08158f105eb7c08fc0. It states that no lab run occurred.
 - Comment IC_kwDOQltU8c8AAAABeA-lUg (2026-10-21, owner) authorizes checks only on identified lab devices. It requires exact targets and a one-time typed confirmation. No firmware request is authorized.
 - `gh pr list --search "3392"` with state all returned no pull request. A search for "#3392" also returned none.
-- PR #3391 is MERGED (2026-09-25T16:08:28Z). Its head is feat/3383-multisite-advanced-controls. It closes #3383. Its changed-file list names src/firmware and src/upgrade_portal paths. Both are absent on main (RC-58, RC-59).
+- PR #3391 is MERGED (2026-09-25T16:08:28Z). Its head is feat/3383-multisite-advanced-controls. It closes #3383. Its changed-file list names the retired `firmware/` and `upgrade_portal/` paths. Both are absent on main (RC-58, RC-59).
 - Issue #3383 is CLOSED (2026-09-25T16:08:29Z). Issues #3388, #3389, and #3390 are CLOSED. The body of PR #3391 names each issue.
 - `gh api repos/jmorrison-juniper/MistHelper/commits/e0dc054d74e0a53c074c8b08158f105eb7c08fc0` returns the commit. Its committer date is 2026-10-07T09:11:26Z.
 
@@ -96,8 +96,8 @@ Columns: ID, Claim, Path, Ref, Blob SHA, Result, Line. A line value of 0 marks a
 | RC-55 | Blank value keeps organization writes closed | src/interfaces/portals/upgrade_portal/app/config.py | main | adfa7ba9b59ea1ab89bbcb8a20a18cfc28b4ff6e | present | 501 |
 | RC-56 | CLI channel prompt offers stable, beta, and alpha | src/operations/execution/firmware/firmware_manager.py | main | f1c1c6d1ccc5b1fe16e5a34d86e57a2b55f6c00f | present | 2315 |
 | RC-57 | CLI alpha warning text | src/operations/execution/firmware/firmware_manager.py | main | f1c1c6d1ccc5b1fe16e5a34d86e57a2b55f6c00f | present | 2324 |
-| RC-58 | Path cited by issue #3392 is absent | src/firmware/aggregate_upgrade_service.py | main | absent | absent | 0 |
-| RC-59 | Path cited by PR #3391 is absent | src/upgrade_portal/upgrade/org_advanced_options.py | main | absent | absent | 0 |
+| RC-58 | Path cited by issue #3392 is absent | retired `firmware/aggregate_upgrade_service.py` | main | absent | absent | 0 |
+| RC-59 | Path cited by PR #3391 is absent | retired `upgrade_portal/upgrade/org_advanced_options.py` | main | absent | absent | 0 |
 | RC-60 | Organization device upgrade path for the POST operation | documentation/mist-api-openapi31yaml.yaml | main | b7fc2bfbe0aa9d718f2a91a5bd1ff07c3b612f14 | present | 9232 |
 | RC-61 | Organization device upgrade job path for the GET operation | documentation/mist-api-openapi31yaml.yaml | main | b7fc2bfbe0aa9d718f2a91a5bd1ff07c3b612f14 | present | 9282 |
 | RC-62 | Organization device upgrade cancel path | documentation/mist-api-openapi31yaml.yaml | main | b7fc2bfbe0aa9d718f2a91a5bd1ff07c3b612f14 | present | 9306 |
@@ -194,7 +194,7 @@ Each decision names the alternatives, the choice, the reason, and the risk. D-18
 
 ### D-5 Cite the current main paths, not the stale paths of issue #3392
 
-- Alternatives: (a) Cite the paths named by issue #3392 under src/firmware. (b) Edit the issue text. (c) Cite the current main paths.
+- Alternatives: (a) Cite the paths named by issue #3392 under the retired `firmware/` path. (b) Edit the issue text. (c) Cite the current main paths.
 - Chosen: (c).
 - Reason: The issue path is absent on main (RC-58). The current paths hold the code (RC-27, RC-40). The agent cannot write to GitHub.
 - Risk: The issue text stays stale until the owner edits it. Mitigation: analysis item A-1 names the owner action.
