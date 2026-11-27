@@ -1,62 +1,47 @@
-# Data Model: Guest Authorizations
+# Data Model: Migrate Mist Guest Authorizations
 
-These entities describe conditional future behavior. They do not create storage or approve a guest-data route.
-Mist remains the authorization authority.
+## Entities
 
-## Scope and Observation
+| Entity | Natural key | Fields | Source |
+| --- | --- | --- | --- |
+| Operator reference | Identity from D-11 | Opaque subject reference. No name or email is stored. | Identity method (pending D-11) |
+| Permission scope | Organization, site, WLAN, and action | Allowed actions for one site and one WLAN | Organization and site reads (R-107, R-109) and portal policy |
+| Guest authorization | Site, WLAN, and normalized MAC address | Returned fields only: authorized, minutes, expiry, company, email, and field1 to field3. The MAC address appears masked in tables. | Site guest list (R-94). `field4` is never written (D-6). |
+| Action journal entry | Internal action identifier, with a scope lock on site, WLAN, and MAC | Operation, site, WLAN, normalized MAC, reviewed-content hash, state, reconciliation result, cloud outcome, audit outcome, and timestamps | `ActionJournal` in the ArangoDB collection `guest_authorization_actions` |
+| Audit event | Internal event identifier | Operator reference, site, WLAN, masked MAC, operation, cloud outcome, audit outcome, and timestamp | `AuditRecorder` in the ArangoDB collection `audit_logs` |
+| Import batch | Reviewed-content hash | Sanitized file name, byte count, row count, header result, and batch state | `CsvImportParser` |
+| Import row | Batch hash and row number | Row number, normalized MAC address, minutes, optional fields, validation result, and row state | `CsvImportParser` |
 
-| Entity | Fields | Validation |
-| --- | --- | --- |
-| Scope | Organization ID, scope kind, site ID when applicable, WLAN ID, permitted action | Bind returned membership and operator permission before any disclosure or change |
-| Observation | Scoped record, authorization state, reported expiry, observation time | Preserve absent fields as unknown and reject malformed values |
-| Connected client | Scoped MAC address, returned hostname and IP address | Search only permitted returned fields |
+## Validation rules
 
-Do not assume a site selection restricts organization-wide authorization.
-G5 must establish the relationship between a WLAN, its portal settings, and the effective authorization resource.
-Do not use a MAC address as a globally unique authorization key. Combine it with the verified scope.
+- MAC address: accept colon, hyphen, and dotted forms. Normalize to lowercase colon form. Reject malformed, all-zero, broadcast, and multicast values (TC-001 and TC-002).
+- Minutes: an integer from 1 to 259200 (TC-004 and TC-005). Import rows reject a missing value. No default applies (TC-020).
+- Typed word: an exact, case-sensitive match for the operation word (TC-006).
+- Reviewed-content hash: a SHA-256 digest over the reviewed fields. A mismatch refuses the write before any call (TC-007).
+- Text fields: company, field1, field2, and field3 accept at most 128 characters. Email accepts at most 254 characters and a valid address format (TC-003 and TC-008). These limits are MistHelper choices under D-8.
 
-The existing offline projection accepts one mapping and validates its MAC, authorization flag, and expiry.
-Its exact output is `masked_mac`, `authorized`, and `expires_at`.
-It does not validate organization membership, WLAN eligibility, identity, or permission.
-It does not accept a new public response schema in this refresh.
+## State transitions
 
-## Import Batch
+Journal entry:
 
-| Field | Meaning | Constraint |
-| --- | --- | --- |
-| Scope and reviewed content identifier | Binds the operator decision to one batch | Changed content or scope invalidates confirmation |
-| Validated rows | Ordered unique scoped targets | Approved byte, row, header, encoding, and cell bounds apply |
-| Duration and supported fields | Requested access change | Approved verified contract only |
-| Confirmation | Exact operation-specific typed word and current permission | Validate again before submission |
-| Row outcome | Rejected, succeeded, failed, unknown, or not attempted | Exactly one final outcome per row |
+1. `intent_recorded`: the entry exists and reads back. No Mist call has started.
+2. `cloud_sent`: the single SDK write call has started.
+3. `cloud_succeeded`, `cloud_failed`, or `cloud_unknown`: the write returned a result. A 2xx response gives `cloud_succeeded`. A 4xx response gives `cloud_failed`. A missing status gives `cloud_unknown`.
+4. `reconciled`: a single read showed `ended`, `not_ended`, or `not_found`.
+5. `audit_recorded` or `audit_failed`: the audit event was written or failed.
 
-No raw CSV enters a signed browser cookie, cache, log, or persistent store by default.
-If a future preview needs server-side storage, G4 must approve its lifetime, isolation, cleanup, and existing storage mechanism first.
-Do not select numeric retention values in implementation without approval.
+Later writes for the same scope refuse while any entry remains `cloud_sent`, `cloud_unknown`, or `audit_failed`.
 
-## States and Failure Boundaries
+Import row:
 
-```text
-received -> validated -> previewed -> confirmed -> submitting -> completed
-                                                   |
-                                                   +-> stopped with per-row outcomes
-```
+- `validated` or `rejected` after the preview.
+- `running`, then `succeeded`, `failed`, or `unknown` during the run.
+- `not_attempted` for every row after a stop rule (TC-043).
 
-Invalid rows never reach submission.
-A rate limit, uncertain cloud result, or audit failure stops later rows.
-Completed cloud changes remain completed even when audit persistence fails.
-The page must distinguish those facts and must not report overall success.
-Do not roll back, repeat, or broaden an uncertain operation automatically.
+## Retention and recovery
 
-## Audit Evidence
-
-| Field | Meaning |
-| --- | --- |
-| Operator attribution | Identity or attribution mechanism approved by G2 and G4 |
-| Operation and scope | Exact confirmed action and resource |
-| Masked target | Device identifier without a complete MAC address |
-| Cloud outcome and audit outcome | Separate facts, including unknown cloud result |
-| UTC time and correlation reference | ISO 8601 time and a safe reference for reconciliation |
-
-Exclude tokens, names, email addresses, raw payloads, and full MAC addresses.
-The durable sink, retention, failure recovery, and attribution mechanism remain blocked by G4.
+- Journal and audit records have no automatic expiry (D-10).
+- Warning: Deleting journal or audit records removes the only local evidence of Mist changes made by the portal.
+- Backup unit: the named volume `misthelper-arangodb-data` (`compose.yml` lines 347 and 348, R-29).
+- Restart recovery: entries in `cloud_sent` or `cloud_unknown` block writes. The operator reconciles each entry with one read before a new write runs.
+- Logs and audit events hold masked MAC addresses only (FR-026). The journal alone keeps the full normalized address for reconciliation.

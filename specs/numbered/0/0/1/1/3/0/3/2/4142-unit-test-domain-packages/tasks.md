@@ -1,175 +1,112 @@
-# Tasks: Unit Test Domain Packages
+# Tasks: Split tests/unit into domain packages
 
 **Input**: Numeric record at `specs/numbered/0/0/1/1/3/0/3/2/4142-unit-test-domain-packages/`.
 
-**Prerequisites**: `spec.md`, `plan.md`, `design/research.md`, `design/quickstart.md`
+**Prerequisites**: `spec.md`, `plan.md`, `design/research.md`, `design/quickstart.md`.
 
-**Status rule**: A checked task means all its work is complete. Leave a task unchecked while any part remains.
+**Status values**: `open` means no work exists on `main`. `partial` means some work exists on `main`. `verified-present` means the work exists on `main` and a check confirmed it. `absent` means the path does not exist on `main`.
 
-**Fresh-main candidate, 2026-11-13**: This worktree starts at `31b752f060d4d10cbe87b5880b071b6570d0b3c9`.
-It contains only a partial relocation. Keep the final hierarchy and issue #4142 open.
-The checked task history below came from the preserved branch and does not prove full hierarchy acceptance on this candidate.
+**Parallel rule**: `[P]` marks a task that can run in parallel with other `[P]` tasks. Batch tasks change the same tree, so they run in sequence.
 
-**Preserved-branch status, 2026-10-26**: Tasks T039 through T043 complete four independent bounded splits and one cleared root move.
-Keep T004 and the final acceptance tasks open.
-The existing branch also overlaps PR #4415 at rename source `tests/unit/test_wan_hub_group_manager.py`.
-PRs #4471, #4438, and #4436 overlap the existing `pyproject.toml` changes.
-Do not publish or rebase this scope before the coordinator resolves these ownership conflicts.
-The draft, merge hold, historical-link deferral, and previous path reservations remain unchanged.
+**Hold rule**: Do not start a batch task until each hold in plan section "Holds" for its paths is clear. Refresh the holds with T003 first.
 
-**Previous branch ownership log**: PR #4350 released
-`tests/unit/refactors/test_sqlite_database_writer.py` and
-`tests/unit/export/test_endpoint_family_exporter.py`. T046 uses only the SQLite writer test.
-T047 applies the PR #4208 handoff for the five Arango tests and two named helper references.
-Defer every other PR #4208 workflow and test path.
-The latest T046 ownership scan found no exact PR, issue, or session claim.
-Refresh ownership before each later batch.
-PR #4226 merged. Its owner released the Cisco test path for T044.
-Tasks T005 through T021 remain incomplete while these paths or other active claims remain reserved.
-The coordinator must release the PR hold after #4353 before any pull request opens or changes.
+## 1. Evidence And Setup
 
-**Fresh-main ownership holds**: Keep `tests/unit/test_device_events_52w_exporter.py` at its current path for issue #4721.
-Keep the other 21 claimed paths from the fresh ownership scan unchanged.
-Keep `pyproject.toml` unchanged while PR #4358 remains open.
-Do not publish this candidate or start a hosted run.
+- **T001** (FR-001, FR-006) Record the remote baseline and the holds in `design/research.md`. Acceptance: research section 2 lists 44 remote checks and section 4 lists the holds. Verification: `python -m pytest tests/guardrails`. Status: verified-present.
+- **T002** [P] (FR-003) Capture the collection baseline from `main`. Acceptance: `test-artifacts/4142/baseline-node-ids.txt` holds every node ID. Verification: `python -m pytest --collect-only -q tests/unit`. Status: open.
+- **T003** [P] (FR-006) Refresh the open pull request files and the issue comments before each batch. Acceptance: no open pull request or exact claim names a path in the batch. Verification: `python -m pytest tests/guardrails`. Status: open.
+- **T004** [P] (FR-004) Inventory active references with `git grep` on `HEAD`. Acceptance: the 31-file inventory appears in research section 6. Line edits remain open. Verification: `git grep -n "tests/unit" HEAD -- tests`. Status: partial.
 
-## Phase 1: Setup
+## 2. Guards
 
-**Purpose**: Preserve the baseline and the path ownership evidence.
+- **T005** (FR-001, FR-002, SC-001, SC-002) Add a ratchet to the existing guard `tests/guardrails/test_move_module_guidance.py`. Acceptance: the count of `tests/unit/` root children does not increase, and each new grouping directory holds five children or fewer. Verification: `python -m pytest tests/guardrails/test_move_module_guidance.py`. Status: open.
 
-- [X] T001 Record the baseline unit test collection, full test result, and current open pull request and session claims in `specs/numbered/0/0/1/1/3/0/3/2/4142-unit-test-domain-packages/design/research.md`.
-- [X] T002 Map all 108 root test modules and the helper file to exact destination groups and child counts in `specs/numbered/0/0/1/1/3/0/3/2/4142-unit-test-domain-packages/design/standalone-test-map.md`. The map has 109 unique source files and covers all 48 root directories.
+## 3. Batch A: Unowned Moves With Fixed Destinations
 
-## Phase 2: Foundational
+Each task moves the source to the destination and keeps file content unchanged. Each task updates the references it names in the same commit.
 
-**Purpose**: Prepare the path inventory before moving test packages.
+- **T010** (FR-001, FR-005) Move `tests/unit/analytics/test_insight_metrics_utils.py` to `tests/unit/marvis/mist/intelligence/analytics/`. Acceptance: the source is absent, and the historical link in issue #3300 stays unchanged. Verification: `python -m pytest tests/unit/marvis/mist/intelligence/analytics`. Status: open.
+- **T011** [P] (FR-001, FR-005) Move `tests/unit/ap_warning_report/` to `tests/unit/marvis/mist/intelligence/ap_warning_report/`. Acceptance: five modules move, and the source directory is absent. Verification: `python -m pytest tests/unit/marvis/mist/intelligence/ap_warning_report`. Status: open.
+- **T012** [P] (FR-001, FR-005) Move `tests/unit/api/` to `tests/unit/marvis/mist/access/api/`. Acceptance: four modules move, and the source directory is absent. Verification: `python -m pytest tests/unit/marvis/mist/access/api`. Status: open.
+- **T013** [P] (FR-001, FR-005) Move `tests/unit/test_unparseable_response_guards.py` to `tests/unit/marvis/mist/access/api/`. Acceptance: the destination holds five children. Verification: `python -m pytest tests/unit/marvis/mist/access/api`. Status: open.
+- **T014** [P] (FR-001, FR-005) Move `tests/unit/container/output_defaults/` to `tests/unit/prod_readiness/operations/exporting/container/output_defaults/`. Acceptance: the package moves as one unit, and its relative imports in `test_session.py` lines 15 and 16 still resolve. Verification: `python -m pytest tests/unit/prod_readiness/operations/exporting/container/output_defaults`. Status: open.
+- **T015** [P] (FR-001, FR-005) Move `tests/unit/dataclasses/` to `tests/unit/config/foundation/models/dataclasses/`. Acceptance: five children move, and the source directory is absent. Verification: `python -m pytest tests/unit/config/foundation/models/dataclasses`. Status: open.
+- **T016** [P] (FR-001, FR-005) Move `tests/unit/db_discovery/` to `tests/unit/config/foundation/persistence/storage/db_discovery/`. Acceptance: five children move, and `tests/contract/test_arango_declared_indexes.py` names the new path. Verification: `python -m pytest tests/unit/config/foundation/persistence/storage/db_discovery`. Status: open.
+- **T017** [P] (FR-001, FR-005) Move `tests/unit/db/test_database_schema_utils.py` and `tests/unit/db/sle_window_summary/test_export_identity.py` into `tests/unit/config/foundation/persistence/storage/db/`. Acceptance: the `db` directory holds five children, and `test_backend_preservation.py` remains under its hold H-2. Verification: `python -m pytest tests/unit/config/foundation/persistence/storage/db`. Status: open.
+- **T018** [P] (FR-001, FR-005) Move `tests/unit/device/test_ap_profile_migration_manager.py` and `tests/unit/device/test_arp_command_manager.py` into `tests/unit/marvis/mist/resources/device/`. Acceptance: the destination holds four children before T040 adds the group. Delete `tests/unit/device/__init__.py` after the import smoke passes. Verification: `python -m pytest tests/unit/marvis/mist/resources/device`. Status: open.
+- **T019** [P] (FR-001, FR-005) Regroup `tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py` and `_wave3.py` into `utility/`. Then move `tests/unit/device/test_device_reboot_manager.py`, `tests/unit/device/test_device_utils.py`, and `tests/unit/test_virtual_chassis.py` into `tests/unit/marvis/standalone/mist/resources/device/`. Acceptance: the standalone device directory holds five children. Verification: `python -m pytest tests/unit/marvis/standalone/mist/resources/device`. Status: open.
+- **T020** [P] (FR-001, FR-005) Move the eight `tests/unit/gateway/` modules into four destinations. Export utilities go to `exporters/`. WAN probe modules go to `wan_overrides/`. WAN2 migration modules go to `ssr_registration/`. Template cloner modules go to `tests/unit/marvis/standalone/mist/resources/gateway/device_template_cloner/`. Acceptance: no module remains in `tests/unit/gateway/`. Verification: `python -m pytest tests/unit/marvis/mist/resources/gateway tests/unit/marvis/standalone/mist/resources/gateway`. Status: open.
+- **T021** [P] (FR-001, FR-005) Move `tests/unit/inventory/test_csv_comparator_broad_handlers.py` to `csv_imports/`. Move the four org device modules to `tests/unit/marvis/mist/resources/inventory/org_device/`. Acceptance: the inventory group holds five children. Verification: `python -m pytest tests/unit/marvis/mist/resources/inventory`. Status: open.
+- **T022** [P] (FR-001, FR-005) Move `tests/unit/reports/psk_hygiene/` to `tests/unit/marvis/mist/intelligence/reports/audits/posture/psk_hygiene/`. Move the two wired-client modules to `tests/unit/marvis/mist/intelligence/reports/device_health/`. Acceptance: no module remains in `tests/unit/reports/`. Verification: `python -m pytest tests/unit/marvis/mist/intelligence/reports`. Status: open.
+- **T023** [P] (FR-001, FR-005) Move the `tests/unit/refactors/` modules except `test_wlanradius_timer_manager_paths.py` into the mapped groups under `tests/unit/config/foundation/support/refactors/`. Move `__init__.py` to the refactors group. Acceptance: no module remains in `tests/unit/refactors/` except the H-1 file. Verification: `python -m pytest tests/unit/config/foundation/support/refactors`. Status: open.
+- **T024** [P] (FR-001, FR-005) Move `tests/unit/troubleshooting/test_module_relocation.py` to `tests/unit/config/standalone/foundation/support/quality/imports/`. Acceptance: the imports group holds four children. Verification: `python -m pytest tests/unit/config/standalone/foundation/support/quality/imports`. Status: open.
+- **T025** [P] (FR-001, FR-005) Move seven root modules to their destinations in plan section "Change Map". The modules are `test_credential_preflight.py`, `test_csv_comparator.py`, `test_issue_1709_narrow_except.py`, `test_prompt_network_device_utils.py`, `test_routing_utils.py`, `test_standalone.py`, and `test_zone_analyzer.py`. Acceptance: each destination holds five or fewer children. Verification: `python -m pytest tests/unit/config tests/unit/marvis/standalone/mist/intelligence`. Status: open.
+- **T026** [P] (FR-001, FR-005) Move `tests/unit/wan_dashboard/test_worker.py` to `tests/unit/maps/interfaces/portals/wan_dashboard/`. Acceptance: the source file is absent, and the H-1 files stay in place. Verification: `python -m pytest tests/unit/maps/interfaces/portals/wan_dashboard`. Status: open.
+- **T027** [P] (FR-001, FR-005) Move `tests/unit/firmware/` modules to four destinations listed in plan section "Change Map". Acceptance: the root `firmware` directory is absent, and each destination holds five or fewer children. Verification: `python -m pytest tests/unit/prod_readiness/operations/execution/firmware tests/unit/prod_readiness/standalone/operations/execution/firmware`. Status: open.
+- **T028** (FR-004) Update the Batch A references. In `pyproject.toml`, change lines 269, 271, and 275. Update each moved `file_path` and `related_source` value in `.github/test-quality-baseline.json`. Acceptance: `git grep` finds no old Batch A path in active files. Verification: `git grep -n "tests/unit/test_routing_utils.py" HEAD -- pyproject.toml`. Status: open.
 
-- [X] T003 Inventory active imports, selectors, lint rules, workflows, the test-quality baseline, and current document references that name `tests/unit/` paths. Record broad scan counts and package-specific references in research.md. Mark paths selected by the PR-owned CI workflow as reserved. Preserve historical specifications, incident records, migration records, and handoff records.
-- [ ] T004 Refresh open pull request file lists and active session claims before each move batch. Keep a PR path unchanged until its PR merges and its owner accepts the handoff. Keep an issue or session path unchanged until its owner clears the claim. Keep workflow-selected paths unchanged until the workflow owner accepts the handoff.
+## 4. Batch B: Unowned Packages Split By Topic
 
-## Phase 3: User Story 1 - Find tests by domain (Priority: P1)
+Each task applies the split rule in section 6. The split groups stay inside the destination parent that plan section "Target Parents And Child Counts" names.
 
-**Goal**: Place existing unit tests in source-aligned domain groups inside four existing root containers.
+- **T030** [P] (FR-001, FR-002, FR-005) Split and move `tests/unit/ex_hardware_inventory/` to `tests/unit/prod_readiness/operations/hardware/ex_hardware_inventory/`. Place `test_hardware_operation.py` in `scope/`. Acceptance: the destination parent holds five or fewer children. Verification: `python -m pytest tests/unit/prod_readiness/operations/hardware`. Status: open.
+- **T031** [P] (FR-002, FR-005) Split and move `tests/unit/juniper_docs/` to `tests/unit/marvis/mist/intelligence/juniper_docs/`. Move `fixtures/` as a group of its own. Acceptance: no group holds more than five children. Verification: `python -m pytest tests/unit/marvis/mist/intelligence/juniper_docs`. Status: open.
+- **T032** [P] (FR-002, FR-005) Split and merge the Juniper RMA remainder from `tests/unit/juniper_rma/` into `tests/unit/prod_readiness/operations/exporting/juniper_rma/`. Move the eight JSON replies to `fixtures/payloads/`, and update the fixture reader root. Acceptance: the source directory is absent. Verification: `python -m pytest tests/unit/prod_readiness/operations/exporting/juniper_rma`. Status: open.
+- **T033** [P] (FR-002, FR-004, FR-005) Split and move `tests/unit/scripts/` to `tests/unit/maps/interfaces/handlers/scripts/`. Update `.github/workflows/ci.yml` line 303 to the new path of `test_script_imports.py`. Acceptance: the CI selector names an existing file. Verification: `python -m pytest tests/unit/maps/interfaces/handlers/scripts`. Status: open.
+- **T034** [P] (FR-002, FR-005) Split and move `tests/unit/security/rogue_dhcp/` to `tests/unit/prod_readiness/operations/protection/security/rogue_dhcp/`. Acceptance: the `rogue_dhcp` directory holds two groups of five or fewer children. Verification: `python -m pytest tests/unit/prod_readiness/operations/protection/security`. Status: open.
+- **T035** [P] (FR-002, FR-005) Split and move `tests/unit/site/address_audit/` to `tests/unit/marvis/mist/resources/site/address_audit/`. Delete `tests/unit/site/__init__.py` after the import smoke passes. Acceptance: the `site` directory holds five children. Verification: `python -m pytest tests/unit/marvis/mist/resources/site`. Status: open.
+- **T036** [P] (FR-002, FR-004, FR-005) Split and move the 11 non-held files of `tests/unit/ssh/` and `tests/unit/test_ssh_host_key_tofu.py` to `tests/unit/prod_readiness/operations/execution/ssh/`. Keep `test_cli_shell_manager.py` under H-4. Update the comment on line 15 of `tests/tools/test_quality_analyzer/test_golden_repo.py` when the test reads the path. Acceptance: each `ssh` group holds five or fewer children. Verification: `python -m pytest tests/unit/prod_readiness/operations/execution/ssh`. Status: open.
+- **T037** [P] (FR-002, FR-005) Split and move the 13 non-held files of `tests/unit/ui/` to `tests/unit/maps/interfaces/ui/`. Keep `test_parameter_collector.py` under H-6. Acceptance: each `ui` group holds five or fewer children. Verification: `python -m pytest tests/unit/maps/interfaces/ui`. Status: open.
+- **T038** [P] (FR-002, FR-004, FR-005) Split and move `tests/unit/utils/` to `tests/unit/config/foundation/support/utils/`. Update `.github/workflows/ci.yml` lines 96 and 99 to the new path of `test_zscaler_catalogue.py`. Acceptance: the RADON selector names an existing file. Verification: `python -m pytest tests/unit/config/foundation/support/utils`. Status: open.
+- **T039** [P] (FR-002, FR-005) Move the two service-ping modules from `tests/unit/websocket/` to `tests/unit/config/foundation/support/refactors/network/clients/`. Split the remaining websocket modules into `tests/unit/marvis/mist/realtime/websocket/`. Acceptance: the `websocket` root directory is absent. Verification: `python -m pytest tests/unit/marvis/mist/realtime/websocket`. Status: open.
+- **T040** [P] (FR-002, FR-005) Split and move `tests/unit/device/client_session_control/` to `tests/unit/marvis/mist/resources/device/client_session_control/`. Acceptance: the `device` directory holds five children after T018. Verification: `python -m pytest tests/unit/marvis/mist/resources/device`. Status: open.
+- **T041** [P] (FR-002, FR-005) Split and move `tests/unit/org/` to `tests/unit/marvis/standalone/mist/resources/org/`. Acceptance: the destination holds five or fewer children. Verification: `python -m pytest tests/unit/marvis/standalone/mist/resources/org`. Status: open.
 
-**Independent Test**: Inspect each new group and verify that it contains five or fewer children.
+## 5. Batch C: Large Unowned Packages
 
-### Implementation for User Story 1
+- **T050** (FR-002, FR-004, FR-005) Split and move `tests/unit/upgrade_portal/` to `tests/unit/maps/interfaces/portals/upgrade_portal/`. Update `.github/workflows/ci.yml` lines 263, 264, and 267. Update `pyproject.toml` line 516 and `.github/copilot-instructions.md` line 87. Acceptance: no CI selector names `tests/unit/upgrade_portal`. Verification: `python -m pytest tests/unit/maps/interfaces/portals/upgrade_portal`. Status: open.
+- **T051** (FR-002, FR-004, FR-005) Split and move `tests/unit/web_portal/` to `tests/unit/maps/interfaces/portals/web_portal/`. Update `.github/copilot-instructions.md` line 255. Acceptance: the output-scan test path in the instruction names an existing file. Verification: `python -m pytest tests/unit/maps/interfaces/portals/web_portal`. Status: open.
+- **T052** (FR-002, FR-005) Split and move `tests/unit/websocket_streams/` to `tests/unit/marvis/mist/realtime/websocket_streams/`. Acceptance: no group holds more than five children. Verification: `python -m pytest tests/unit/marvis/mist/realtime/websocket_streams`. Status: open.
+- **T053** (FR-002, FR-005) Split and move `tests/unit/export/` except the two H-2 files to `tests/unit/prod_readiness/operations/exporting/export/`. Move `tests/unit/test_org_inventory_exporter_helpers.py` to the same group. Acceptance: the `export` group holds five or fewer children after its split. Verification: `python -m pytest tests/unit/prod_readiness/operations/exporting/export`. Status: open.
+- **T054** (FR-004) Update active comment references in `tests/e2e/upgrade_portal/conftest.py` line 2881, `tests/e2e/upgrade_portal/test_alert_prefix_space.py`, `tests/e2e/upgrade_portal/test_capture_identifier_paint.py`, `tests/e2e/upgrade_portal/test_narrow_action_cells.py`, `tests/e2e/web_portal/juniper_browser_harness.py`, and `tests/support/rehearsal/clock.py` line 10. Acceptance: each comment names an existing path. Verification: `git grep -n "tests/unit/upgrade_portal" HEAD -- tests/e2e`. Status: open.
 
-- [ ] T005 [US1] Move unowned foundation packages, including `bootstrap` and the contents of the existing `config` container, into their mapped groups. Split each moved package by test topic when its destination would exceed five children. Keep the completed `serial_cc`, `audit`, and `auth` moves. Defer `dataclasses`, `db_discovery`, and every other package with a current claim.
-- [ ] T006 [US1] Move unowned Mist packages, including the contents of the existing `marvis` container, into their mapped groups. Split each moved package by test topic when its destination would exceed five children. Keep the root `marvis` container. Defer `api`, `org`, `websocket_streams`, and every other package with a current claim.
-- [ ] T007 [US1] Move unowned operations packages, including packet capture, firmware policy, and MIB generator tests, into their exact topic groups. Keep each group at five children or fewer. Keep the root `prod_readiness` container. Defer `export`, `ssh`, and every other package with a current claim.
-- [ ] T008 [US1] Move unowned interface packages, including the contents of the existing `maps` container, into their mapped groups. Split each moved package by test topic when its destination would exceed five children. Keep the root `maps` container. Defer `scripts`, `upgrade_portal`, and each other reserved or workflow-selected path.
-- [ ] T009 [US1] Move the 108 root test modules and `_test_arango_writer_helpers.py` from `tests/unit/` into the exact groups in `design/standalone-test-map.md`. Keep the Arango writer test and helper together. Do not move any reserved or workflow-selected path.
-- [ ] T010 [US1] Keep each new grouping directory at five children or fewer. Verify every mapped topic group, including `bootstrap/`, `serial_cc/`, `container/`, packet capture, firmware policy, MIB generator, troubleshooting, and Juniper Docs. Verify that `tests/unit/` gains no direct child.
-- [X] T027 [US1] Correct the four oversized Juniper RMA destination groups through the exact bounded map. Update the JSON fixture root. Compare full unit collection, run the RMA and browser tests, and verify baseline path fields and child counts.
-- [X] T028 [US1] Move the four unclaimed aggregate-cancellation tests into the mapped firmware aggregation group. Preserve the reserved aggregate service test. Verify focused tests, full node IDs, the unchanged baseline, and applicable guards.
-- [X] T029 [US1] Move the unclaimed proxy and SSR manager tests into their mapped firmware manager groups. Verify focused tests, full node IDs, baseline path fields, and applicable guards.
-- [X] T030 [US1] Move the three unclaimed device health report tests into the mapped report topic group. Verify focused tests, full node IDs, baseline path fields, and applicable guards.
-- [X] T031 [US1] Move the four unclaimed assurance report packages into the exact bounded map. Preserve fixtures and update the AP support-file root. Verify focused tests, full node IDs, the unchanged baseline, and applicable guards.
-- [X] T032 [US1] Move the four unclaimed certificate, subscription, rogue-evidence, and client-census packages into the mapped audit groups. Update helper imports and repository-root references. Verify tests, full node IDs, the baseline, and applicable guards.
-- [X] T033 [US1] Move and split the three remaining unowned audit-report packages through the exact bounded map. Keep PSK and wired-client reports deferred. Verify helper imports, tests, full node IDs, the baseline, and applicable guards.
-- [X] T034 [US2] Preserve the complete move commit and rebase onto the coordinator-approved main after PR #4353. Restore the held Arango package and its callers to main. Retain main's new posture outcome test and verify its fixture import. Compare both rename endpoints against all open pull requests. Verify focused tests, full node IDs, baseline fields, and changed-file style. Record results in `design/research.md`.
-- [X] T035 [US2] Defer the insight-metrics test move to preserve its historical specification link under FR-004. Restore the original test path without a shim or duplicate. Verify baseline path values, ownership, complete node IDs, Markdown links, and required quality gates before the correction push.
-- [X] T036 [US2] Rebase onto the coordinator-approved current main after PR #4357. Preserve the published correction and the merged UI test. Repair the moved MSP fixture's shared SDK mutation. Verify the failing seven-module order, the complete root-unit shard, node IDs, baseline fields, ownership, style, and required quality gates. Publish only after local validation.
-- [X] T037 [US2] After the green current-main checks, preserve that remote head and rebase onto the coordinator-approved main after PR #4361. Verify the merged credential test, both fixes, node IDs, baseline fields, ownership, style, and required quality gates. Keep the pull request draft with auto-merge disabled.
-- [X] T038 [US2] Preserve the green published head and rebase onto exact coordinated main `1c089ed07ba865a7e505df4774a79751c72187cf`. Verify merged WAN service tests, both fixes, complete node IDs, baseline fields, ownership, style, prerequisites, and quality gates. Keep the pull request draft without auto-merge.
-- [X] T039 [US1] Split the unclaimed MIB generator tests into the mapped CLI, generator, and performance groups. Move the JSON fixture with its reader. Verify focused tests, complete node IDs, unchanged baseline fields, group sizes, path guards, and style.
-- [X] T040 [US1] Split the unclaimed firmware policy tests into changes, recovery bundles, and recovery selection groups. Keep shared fixtures and helpers at their current paths. Verify focused tests, complete node IDs, unchanged baseline fields, group sizes, path guards, and style.
-- [X] T041 [US1] Split the unclaimed container tests into mapped build-support and runtime groups. Update helper imports, repository-root depths, and the current container guide. Verify focused tests, complete node IDs, unchanged baseline fields, group sizes, path guards, and style.
-- [X] T042 [US1] Apply the bounded troubleshooting map to core tests, credential tests, SMS tests, synthetic tests, and RF diagnostics. Update the standalone consumer import and RF manifest root. Preserve all baseline non-path fields. Verify focused tests, full node-ID parity, group sizes, declarations, path guards, and style.
-- [X] T043 [US1] Move the cleared `tests/unit/test_fast_mode_flag.py` to its mapped startup group without a content change. Verify focused tests, full node-ID parity, the root reduction, target group size, active references, path guards, and style. Keep all other claimed root files deferred.
-- [X] T044 [US1] Move the released Cisco test into its mapped group. Preserve its canonical content and five-child limit. Verify node IDs, tests, guards, style, compilation, and the quality baseline. (completed: see `design/research.md`)
-- [X] T045 [US1] Move the released CSV-import test package into its mapped inventory group. Update only active scratch paths. Verify node IDs, tests, guards, group counts, baseline semantics, style, and compilation. (completed: see `design/research.md`)
-- [X] T046 [US1] Move the four released device-replacement tests and the released SQLite writer test to their mapped groups. Preserve file bytes and all node IDs. Verify ownership, hierarchy, active references, baseline semantics, focused tests, guards, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
-- [X] T047 [US1] Move the five released Arango tests to their mapped storage group. Update only their internal helper imports and the approved imports in `tests/unit/db_discovery/test_probe.py` and `tests/contract/test_arango_declared_indexes.py`. Preserve all other file content and test behavior. Verify current ownership, hierarchy, active references, baseline semantics, the complete mapped unit collection, focused tests, guards, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
+## 6. Split Rule
 
-- [X] T048 [US1] Move the two inventory utility tests and the anomaly metrics discovery test to their mapped refactor groups. Preserve file bytes and all node IDs. Verify ownership, hierarchy, active references, baseline semantics, focused tests, guards, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
-- [X] T049 [US1] Move the two entrypoint tests to their mapped runtime entrypoint group. Preserve file bytes and all node IDs. Verify ownership, hierarchy, active references, baseline semantics, focused tests, guards, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
-- [X] T050 [US1] Move `test_connection_pool_executor.py`, `test_maps_manager_launcher.py`, and `test_wan2_migration_launcher.py` to `network/launchers/`. Preserve file bytes and node IDs. Update only four baseline path fields. Verify ownership, hierarchy, references, baseline semantics, tests, guards, style, compilation, and committed test-quality checks. Record evidence in `design/research.md`.
+Apply this rule to every split in Batch B, Batch C, and Batch D.
 
-- [X] T051 [US1] Move `test_data_directory_checker.py` to its mapped `data/filesystem/` group. Preserve file bytes, historical references, baseline records, and node IDs. Verify ownership, hierarchy, tests, guards, style, compilation, links, and committed test-quality checks.
+1. Read the source children before the move. Record each child name in the task output.
+2. Group children by test topic. Use the module name prefix and the imported source package.
+3. Keep each group at five children or fewer. Count package markers as children.
+4. Move a group as one unit only when the group already fits the limit.
+5. Move a package marker only when the destination group has no marker. Delete a root marker when the destination group has one.
+6. Run the verification command after each move. Record the node-ID count before and after.
+7. Stop the split when a group cannot meet the limit. Record the blocker in `design/research.md`.
+8. Update each moved `file_path` and `related_source` value in `.github/test-quality-baseline.json` in the same commit.
 
-- [X] T052 [US1] Move `test_main_entrypoint.py` to its mapped runtime entrypoint group. Preserve file bytes and node IDs. Update four baseline path fields and three active quickstart command paths. Verify ownership, hierarchy, historical evidence, tests, guards, style, compilation, links, and committed test-quality checks.
+## 7. Batch D: Held Paths After Release
 
-- [X] T053 [US1] Move `test_reject_unsupported_flag_variants.py` to its mapped runtime entrypoint group. Adjust only its repository-root depth and four baseline path fields. Preserve historical evidence and node IDs. Verify ownership, hierarchy, tests, guards, style, compilation, links, and committed test-quality checks.
+- **T060** (FR-006, FR-001) Move `tests/unit/db/sle_window_summary/test_backend_preservation.py` after PR #4813 merges. Remove the root `tests/unit/db/` directory after this move. Acceptance: the root `db` directory is absent. Verification: `python -m pytest tests/unit/config/foundation/persistence/storage/db`. Status: open.
+- **T061** (FR-006, FR-001) Move `tests/unit/export/test_data_exporter.py` and `tests/unit/export/test_endpoint_family_exporter.py` after PR #4813 merges. Acceptance: the root `export` directory is absent. Verification: `python -m pytest tests/unit/prod_readiness/operations/exporting/export`. Status: open.
+- **T062** (FR-006, FR-001) Move `tests/unit/refactors/test_wlanradius_timer_manager_paths.py` after PR #4208 merges. Acceptance: the `refactors` source directory is absent after the move. Verification: `python -m pytest tests/unit/config/foundation/support/refactors/network/configuration`. Status: open.
+- **T063** (FR-006, FR-001) Move `tests/unit/wan_dashboard/wan_performance/` to `tests/unit/maps/interfaces/portals/wan_dashboard/wan_performance/` after PR #4208 merges. Require PR #4208 to place its new `tests/unit/wan_performance/` paths in the final layout before merge. Acceptance: no path exists directly under `tests/unit/wan_performance/`. Verification: `python -m pytest tests/unit/maps/interfaces/portals/wan_dashboard`. Status: open.
+- **T064** (FR-006, FR-001) Move `tests/unit/test_device_events_52w_exporter.py` and `tests/unit/test_device_events_52w_exporter_extended.py` after issue #4721 releases them. Move them to `tests/unit/prod_readiness/operations/exporting/export/`. Acceptance: the new file named in issue #4721 lands in the export group. Verification: `python -m pytest tests/unit/prod_readiness/operations/exporting/export`. Status: open.
+- **T065** (FR-006, FR-001) Move `tests/unit/test_menu_entry_metadata.py` after issue #4133 releases it. Move `tests/unit/test_issue_2971_census_repairs.py` after issue #2746 confirms that its scope excludes the file. Both files go to `tests/unit/maps/standalone/interfaces/ui/`. Acceptance: the `ui` group holds four children. Verification: `python -m pytest tests/unit/maps/standalone/interfaces/ui`. Status: open.
+- **T066** (FR-006) Move `tests/unit/ssh/test_cli_shell_manager.py` after issues #2746 and #2747 release it. Move it to the ssh group that T036 creates. Acceptance: the root `ssh` directory is absent. Verification: `python -m pytest tests/unit/prod_readiness/operations/execution/ssh`. Status: open.
+- **T067** (FR-006) Move `tests/unit/ui/test_parameter_collector.py` after issue #2711 releases it. Move it to the ui group that T037 creates. Acceptance: the root `ui` directory is absent. Verification: `python -m pytest tests/unit/maps/interfaces/ui`. Status: open.
+- **T068** (FR-006, FR-002) Split and move `tests/unit/marvis/actions/` to `tests/unit/marvis/mist/realtime/actions/` after issue #4008 releases it. Acceptance: the `marvis/actions` directory is absent. Verification: `python -m pytest tests/unit/marvis/mist/realtime/actions`. Status: open.
 
-- [ ] T054 [US1] Move the template cloner, WAN probe configuration, and WLAN RADIUS timer tests to mapped `network/configuration/`. Preserve file bytes, historical evidence, baseline semantics, and node IDs. Verify ownership, hierarchy, tests, guards, style, compilation, links, and committed test-quality checks. The current claim keeps the WLAN RADIUS test at its source path.
-- [ ] T055 [US1] Repair the relocated WLAN fixture teardown for issue #4492. Restore the exact previous resolver host. Prove normal and exception teardown, then run the affected downstream tests. Preserve the unpublished #2746 HTTP 403 append for later integration from `tests/unit/refactors/test_wlanradius_timer_manager_paths.py` into `tests/unit/config/foundation/support/refactors/network/configuration/test_wlanradius_timer_manager_paths.py`. Do not import that separate change or alter its branch. Require green exact-head CI before another batch.
-- [X] T056 [US1] Move the unowned keyboard listener and TUI launcher tests into mapped `runtime/console/`. Preserve test bytes, all node IDs, historical records, and baseline semantics. Change only two baseline path fields. Verify ownership, hierarchy, affected test order, guards, style, compilation, links, and committed quality gates. Keep the fast-mode test outside this batch.
-- [X] T057 [US1] Move the unowned service-ping launcher test into mapped `network/clients/`. Preserve test bytes, all node IDs, historical records, and baseline semantics. Update only its baseline path fields and direct feature evidence. Verify ownership, hierarchy, affected test order, guards, style, compilation, links, and committed quality gates. Keep the other two client tests and their quickstart references outside this batch.
-- [X] T058 [US1] Move the unowned interactive session initializer and switch-login tests into mapped `runtime/session/`. Preserve test bytes, node IDs, historical records, and the unchanged baseline. Verify ownership, hierarchy, affected test order, guards, style, compilation, links, and committed quality gates. Keep the application-context and session initializer tests outside this batch.
-- [X] T059 [US1] Move the unowned fast-mode seam test into mapped `runtime/console/`. Preserve test bytes, node IDs, historical records, and baseline semantics. Change only four baseline path fields. Verify ownership, hierarchy, affected test order, guards, style, compilation, links, and committed quality gates.
-- [X] T060 [US1] Move the unowned output-formatter test into mapped `interfaces/ui/display/`. Preserve test bytes, node IDs, historical records, shared fixtures, and the unchanged baseline. Verify ownership, fixture independence, hierarchy, UI tests, guards, style, compilation, links, and committed quality gates. Preserve the application-context test and historical quickstart under the explicit user hold.
-- [X] T061 [US1] Move the unowned display-utils test into mapped `interfaces/ui/display/`. Preserve test bytes, node IDs, shared fixtures, baseline, and historical records. Verify ownership, fixture independence, hierarchy, UI tests, narrow guards, style, compilation, documentation, and committed quality gates.
-- [X] T062 [US1] Move the independent TUI orchestrator test into mapped `interfaces/ui/interaction/tui/`. Preserve test bytes, node IDs, historical references, shared fixtures, and the baseline. Keep the #2711 parameter-collector reservation unchanged. Verify ownership, UI tests, narrow guards, collection parity, style, compilation, documentation, and committed quality gates.
-- [X] T063 [US1] Move the independent device-prompt rename guard into mapped `interfaces/ui/interaction/dispatch/`. Adjust only its repository-root depth and four baseline path fields. Verify the exact source scan, negative control, node IDs, baseline semantics, fixture preservation, ownership, scoped tests, style, documentation, and committed quality gates.
-- [X] T064 [US1] Move the independent interactive-display test into mapped `interfaces/ui/interaction/dispatch/`. Preserve test bytes and shared fixtures. Update only four baseline path fields. Verify ownership, resolver-sensitive test order, full collection parity, baseline semantics, hierarchy, style, documentation, and committed quality gates.
-- [X] T065 [US1] Move the unowned inventory versioning test into mapped `inventory/support/versioning/`. Preserve every test byte, shared fixtures, baseline, and historical specifications. Verify ownership, inventory tests, collection parity, hierarchy, style, documentation, and committed quality gates.
-- [X] T066 [US1] Move the unowned inventory pivot-renderer package and its existing marker into mapped `inventory/inventory_summary/`. Preserve every file byte, baseline, fixtures, and historical records. Verify ownership, inventory tests, collection parity, hierarchy, style, documentation, and committed quality gates.
-- [X] T067 [US1] Move the unclaimed firmware manager MSP test into mapped `firmware/upgraders/manager/site/`. Preserve test bytes and baseline semantics. Verify live ownership, focused tests, node-ID parity, group size, style, compilation, and committed test-quality gates. Record evidence in `design/research.md`.
+## 8. References And Acceptance
 
-- [X] T068 [US1] Rebuild the unclaimed move set from fresh main. Move 360 mapped files, add ten required package markers, and update only active references and baseline paths. Leave 23 paths at source because their target groups would exceed five children. Keep four `output_defaults` package files at source to preserve the remaining test's relative imports. Keep eight Juniper RMA JSON replies beside their shared fixture loader. Keep all 22 claimed paths unchanged. Keep production files and dependency pins unchanged.
-- [X] T069 [US2] Compare the complete unit node-ID set with the fresh-main baseline. Run affected tests, relocation guards, configuration checks, and the test-quality gate. Record exact commands and results in `design/research.md`.
+- **T070** (FR-004, SC-006) Repeat the reference scan for each moved old path. Update each active file that still names an old path. Acceptance: `git grep` finds no old path in active files. Historical records stay unchanged. Verification: `git grep -n "tests/unit/upgrade_portal" HEAD -- ':(exclude)specs' ':(exclude)CHANGELOG.md'`. Status: open.
+- **T071** (FR-001, FR-002, SC-001, SC-002) Run the child-count ratchet from T005 with the final expected count. Acceptance: `tests/unit/` holds five children, and each new group holds five or fewer children. Verification: `python -m pytest tests/guardrails/test_move_module_guidance.py`. Status: open.
+- **T072** (FR-003, SC-003) Compare the final collection with the baseline from T002. Acceptance: every baseline node ID maps to one collected node ID. Verification: `python -m pytest --collect-only -q tests/unit`. Status: open.
+- **T073** (FR-004, SC-004) Run the guard suite and the focused tests for each moved group. Acceptance: no guard fails. Verification: `python -m pytest tests/guardrails`. Status: open.
+- **T074** (FR-007, SC-005) Run the production diff check. Acceptance: no executable line changes in `src/`, `web_portal/`, `Dockerfile`, or `Containerfile`. Verification: `git diff --name-only origin/main -- src web_portal Dockerfile Containerfile`. Status: open.
+- **T075** (FR-004) Add `changelog.d/issue-4142-test-domain-packages.md` with one `### Changed` heading and one bullet that names issue #4142. Acceptance: the fragment exists, and it follows `changelog.d/README.md`. Verification: `python -m pytest tests/guardrails`. Status: open.
 
-## Phase 4: User Story 2 - Run the existing unit tests (Priority: P1)
+## 9. Final Tasks
 
-**Goal**: Preserve test discovery, imports, and test selection after each move.
-
-**Independent Test**: Collect the unit tests after each batch and compare the result with the recorded baseline.
-
-### Implementation for User Story 2
-
-- [ ] T011 [US2] Update imports that name moved packages in `tests/unit/`, `tests/integration/`, and `tests/e2e/`. Update the Arango helper import and each package-helper import.
-- [ ] T012 [US2] Update test path overrides in `pyproject.toml` for moved standalone test modules.
-- [ ] T013 [US2] Update active path references in scripts, configuration, `.github/test-quality-baseline.json`, source comments, and current documents. Preserve historical specifications, incident records, migration records, handoff records, and release notes.
-- [ ] T014 [US2] Update CI selectors in `.github/workflows/ci.yml` only after PR #4208 merges and its owner accepts the handoff. Keep every path selected by the current workflow in place until then.
-- [ ] T015 [US2] Collect unit tests after each batch and compare every collected test with the baseline in `specs/numbered/0/0/1/1/3/0/3/2/4142-unit-test-domain-packages/design/research.md`.
-- [ ] T016 [US2] Run focused tests under each completed domain group and compare their results with the recorded baseline.
-
-## Phase 5: User Story 3 - Avoid conflicts with active work (Priority: P1)
-
-**Goal**: Move reserved paths only after their owners merge.
-
-**Independent Test**: Compare the new paths with the merged pull request files and confirm that each change remains present.
-
-### Implementation for User Story 3
-
-- [ ] T017 [US3] Move `api`, `dataclasses`, `db_discovery`, `export`, `gateway`, `org`, and `ssh` only after each related pull request, issue, and session claim clears. Split each released package by test topic when its destination would exceed five children. Move `db_discovery` only after `tests/unit/upgrade_portal/test_store.py` is released, PR #4208 accepts the handoff, issue #2752 receives human review, and its owner clears related claims. The Cisco converter test moved under T044 after PR #4226 merged. Remaining holds include PR #4287, issue #2746, issue #2747, and issue #2752.
-- [ ] T018 [US3] Move `tests/unit/websocket_streams/` only after PR #4208 merges, its owner accepts the handoff, and each active session claim clears. PRs #4308 and #4315 have merged.
-- [ ] T019 [US3] Move `tests/unit/wan_performance/` to `tests/unit/maps/interfaces/portals/wan_performance/` only after PR #4208 merges and its owner accepts the handoff.
-- [ ] T020 [US3] Move `tests/unit/scripts/` after PR #4208 merges and its owner accepts the handoff. Move `tests/unit/upgrade_portal/` after PR #4208 merges, issue #2752 work receives human review, and its owner clears all related claims. Do not enable auto-merge for portal work. Then update the CI selectors.
-- [ ] T021 [US3] Confirm that no open pull request, active issue claim, session claim, or workflow selector owns any remaining path under `tests/unit/`.
-
-## Phase 6: Polish & Cross-Cutting Concerns
-
-**Purpose**: Verify the complete layout and run the required checks.
-
-- [ ] T022 Run `python -m pytest tests/unit/ --collect-only -q`, verify the five final root entries, and compare the collection with the baseline in `specs/numbered/0/0/1/1/3/0/3/2/4142-unit-test-domain-packages/design/research.md`.
-- [ ] T023 Run `python -m ruff check .`, `python -m black --check .`, and `python -m py_compile MistHelper.py` for the applicable changed files.
-- [ ] T024 Run `python -m pytest tests/guardrails/test_move_module_guidance.py tests/guardrails/test_portal_operation_coverage.py` for the changed test paths.
-- [ ] T025 Confirm the final changed-file list contains only test files, test configuration, scripts, required CI selectors, Spec Kit artifacts, documentation, and `changelog.d/issue-4142-test-domain-packages.md`. Confirm that it contains no production code path.
-- [ ] T026 Add `changelog.d/issue-4142-test-domain-packages.md` and complete the local gates, commit, rebase, pull request, CI, merge, build, revision check, and deployment steps required by Constitution IV. Stop before any step that lacks user authorization.
-
-## Dependencies & Execution Order
-
-### Phase Dependencies
-
-- **Setup (Phase 1)**: No dependencies.
-- **Foundational (Phase 2)**: Depends on the baseline inventory.
-- **User Story 1 (Phase 3)**: Depends on the inventory and path map.
-- **User Story 2 (Phase 4)**: Runs with each completed move batch.
-- **User Story 3 (Phase 5)**: Each task waits for the named pull requests to merge.
-- **Polish (Phase 6)**: Depends on all paths moving and all references updating.
-
-### Parallel Opportunities
-
-- No package moves run in parallel because they share `tests/unit/` and can alter path references.
-- Focused tests for different completed groups can run in parallel after their moves and imports are complete.
-
-## Implementation Strategy
-
-1. Record the collection baseline and resolve destinations for each standalone test.
-2. Move only unowned packages and standalone tests.
-3. Update imports and path references in the same batch as each move.
-4. Wait for each owning pull request before moving its reserved package.
-5. Compare collection with the baseline and run the required checks after the final move.
+- **T-LOCAL-GATES** Run each local gate in the table of `.github/copilot-instructions.md` that applies to the changed files. The gates include Lint (`python -m ruff check .`), Format (`python -m black --check .`), Tests, Full tests (`pytest-chunks`), Test quality, Symbols, and Old paths. Acceptance: each gate reports its expected result. Verification: `python -m ruff check .`. Status: open.
+- **T-PR** Commit each batch with a Conventional Commits message such as `refactor(tests): move unit-test domain groups`. Push `chore/4142-unit-test-domain-packages`. Open a pull request whose body contains `Closes #4142`. Acceptance: the pull request title passes `Conventional Commits PR title`. Verification: `gh pr view --json title,body`. Status: open.
+- **T-REMOTE-CI** Watch the CI run with `gh pr checks <number> --watch`. Acceptance: each required check passes. Verification: `gh pr checks <number>`. Status: open.
+- **T-MERGE** Enable auto-merge only after T-REMOTE-CI passes and the orchestrator authorizes the merge. Acceptance: the pull request squash-merges into `main`. Verification: `gh pr view <number> --json mergedAt`. Status: open.
