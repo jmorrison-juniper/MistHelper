@@ -190,10 +190,10 @@ Each decision records the options, the chosen option, the reason, the risk, and 
 ### D-1 Record location
 
 - Options: (a) overwrite the legacy folder, (b) use a new number, or (c) use a new slug at the same route.
-- Chosen: (c). The record path is `specs\numbered\0\0\1\2\1\3\2\3\4588-guest-migration-parity-refresh`.
-- Reason: Acceptance criterion 1 forbids changes to old planning drafts. The issue fixes the number and the route.
-- Risk: Two folders share the number 4588. The analysis names the legacy folder as superseded for planning.
-- Human decision: No.
+- Chosen: (c). The record path is `specs\numbered\0\0\1\2\1\3\2\3\4588-guest-migration-parity-refresh`. The legacy folder is retired, backed up outside the repository, and listed in the pull request body.
+- Reason: One canonical record for issue 4588 avoids two folders with one number. The issue fixes the number and the route.
+- Risk: Acceptance criterion 1 of the issue forbids changes to old planning drafts. Retiring the legacy folder changes one such draft.
+- Human decision: Yes. The batch coordinator relayed the retirement decision.
 
 ### D-2 Implementation tracker
 

@@ -20,7 +20,7 @@
 
 ## Purpose and boundary
 
-This record refreshes the planning for the full migration. It replaces no earlier record. It adds no product code, no asset, and no live request.
+This record refreshes the planning for the full migration. It replaces the legacy record for issue 4588. The legacy folder is retired, backed up outside the repository, and listed in the pull request body. It adds no product code, no asset, and no live request.
 
 - The current implementation remains the offline projection.
 - This plan does not approve live guest reads, cloud writes, deployment, or a merge.
