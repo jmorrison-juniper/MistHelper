@@ -2,7 +2,7 @@
 
 **Purpose**: Confirm that the specification, plan, tasks, and analysis meet the quality rules before implementation starts.
 **Created**: 2026-11-26
-**Feature**: [spec.md](../spec.md)
+**Feature**: [spec.md](../../spec.md)
 
 ## Content Quality
 
