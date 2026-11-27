@@ -26,7 +26,7 @@ The check uses principles I to VII in the constitution (T18). "Pass" means the p
 
 | Principle | Result | Reason | Future condition |
 | --- | --- | --- | --- |
-| I. Five-item rule | Pass | This record adds one route folder with five feature children and five design children. The route parent holds two children after this record. | T007 checks the parent counts before any file is created. The legacy folder stays unchanged. |
+| I. Five-item rule | Pass | This record adds one route folder with five feature children and five design children. The route parent holds one child after this record, because the legacy folder is retired. | T007 checks the parent counts before any file is created. The legacy folder is retired and backed up, as in D-1. |
 | II. Class-based architecture | Pass | This planning step writes no code. The proposed package uses named classes. | T013, T018, T024, and T030 enforce class design and no wrapper functions. |
 | III. Safety-first | Pass for planning. Gate for implementation. | No live call or write is enabled. Typed words and CSRF protection are planned. | D-6, D-12, and D-14 must pass before any write. |
 | IV. Full deployment pipeline | Partial by design | This change edits Markdown only. Steps 10 to 12 do not run, because `container-build.yml` runs only for product file changes (T17 L473). | The orchestrator runs steps 1 to 9. Merge waits for authorization. |
