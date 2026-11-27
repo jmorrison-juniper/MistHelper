@@ -20,7 +20,7 @@ Facts come from GitHub main. The `gh api` reads return blob SHAs and file text, 
 ## Root Cause
 
 - The string `listOrgInvites` first appears in the initial commit `1d00b0495` (2025-12-09). The `-S` search found it in that commit (read only).
-- Commit `02c984253` (2026-07-08) moved the call out of `MistHelper.py` and into `src/export/org_export_utils.py`. Its diff shows both sides (read only).
+- Commit `02c984253` (2026-07-08) moved the call out of `MistHelper.py` and into `org_export_utils.py` in the retired `export` package at the source root. Its diff shows both sides (read only).
 - Commit `025ef82ee` (2026-10-04) renamed the file to `src/operations/exporting/export/org_export_utils.py` with similarity 98 percent.
 - Commit `c3b97113a` (2026-03-07) added documentation that names `listOrgInvites`. Specification 009 keeps that mention at RV-37.
 - No mistapi tag from v0.62.0 to v0.64.2 defines the function (RV-24). The call was never backed by a released SDK function.
