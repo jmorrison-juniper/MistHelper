@@ -23,7 +23,7 @@ Columns show the baseline line, the test module on `main`, and the 4xx status ev
 
 | # | Baseline line | Test module (main) | 4xx status evidence in test (line) | Source import (line) | Pre-census family | Repair rule after census |
 |---|---|---|---|---|---|---|
-| 1 | 131 | `mist-ops-platform/tests/unit/api/test_session_security.py` | L30 constant 401. L333-334 native 401 refusal | `src.api.deps` and five other `src` modules (L21-26). Module-level `import httpx` (L17) | F2 and F3 | Present: T006 and T007. Stale: T012. |
+| 1 | 131 | `mist-ops-platform/tests/unit/api/test_session_security.py` | L30 constant 401. L333-334 native 401 refusal | `api.deps` (retired src root) and five other `src` modules (L21-26). Module-level `import httpx` (L17) | F2 and F3 | Present: T006 and T007. Stale: T012. |
 | 2 | 230 | `mist-ops-platform/tests/unit/mist/test_final_sdk_verification.py` | none | `src.shared.mist.types` (L14). SDK attribute string `mistapi.api.v1.` (L27) | F2 | Present: T006. Stale: T012. |
 | 3 | 274 | `mist-ops-platform/tests/unit/mist/test_registry_validation.py` | none | `src.shared.mist.types` (L16). SDK attribute string `mistapi.api.v1.` (L22) | F2 | Present: T006. Stale: T012. |
 | 4 | 1165 | `tests/test_upgrade_portal_mist.py` | L123 status 403 with `requests.HTTPError`. L286 status 400 assertion | `src.interfaces.portals.upgrade_portal.api.mist_client` (L14) | F3 | Present: T007. Stale: T012. |

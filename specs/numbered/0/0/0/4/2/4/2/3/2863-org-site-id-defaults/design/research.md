@@ -106,7 +106,7 @@
 - Human decision: No. The rule is an existing repository rule.
 
 **D-12. Reservation update**
-- Decision: Post a new reservation comment with the current paths before any source edit. The new comment replaces `src/api/tenant_fetch.py`, the folder `specs/2863-tenant-identifier-slice/`, and `src/websocket/service_ping_discovery.py`.
+- Decision: Post a new reservation comment with the current paths before any source edit. The new comment replaces `api/tenant_fetch.py` (retired src root), the folder `specs/2863-tenant-identifier-slice/`, and `websocket/service_ping_discovery.py` (retired src root).
 - Alternatives: (a) Keep the old reservation. Its paths do not exist (RC-28, RC-48, RC-51). (b) Skip the reservation. This breaks `AGENTS.md:246-247`.
 - Chosen: A new reservation.
 - Reason: RC-04 and RC-28.
@@ -165,7 +165,7 @@ Columns: ID, claim, path, ref, blob SHA (tree SHA for folders and commits), resu
 | RC-25 | Site identifier reaches the derived network call without a check | src/mist/access/api/tenant_fetch.py | main | ba7e74141e32b6d0a4d4edfbeeff618290a9641f | present | 118 |
 | RC-26 | A falsy optional site selects organization-only policy scope | src/mist/access/api/tenant_fetch.py | main | ba7e74141e32b6d0a4d4edfbeeff618290a9641f | present | 156 |
 | RC-27 | A falsy optional site selects organization-only template scope | src/mist/access/api/tenant_fetch.py | main | ba7e74141e32b6d0a4d4edfbeeff618290a9641f | present | 180 |
-| RC-28 | Reserved module path src/api/tenant_fetch.py exists | src/api/tenant_fetch.py | main | absent-in-main-tree | absent | 0 |
+| RC-28 | Reserved module path api/tenant_fetch.py exists (retired src root) | api/tenant_fetch.py (retired src root) | main | absent-in-main-tree | absent | 0 |
 | RC-29 | Reserved test path exists before batch 1 | tests/unit/api/test_tenant_identifier_validation.py | main | absent-in-main-tree | absent | 0 |
 | RC-30 | Reserved changelog fragment exists before batch 1 | changelog.d/issue-2863-tenant-identifier-validation.md | main | absent-in-main-tree | absent | 0 |
 | RC-31 | Discovery skips site tenants when the site identifier is None | src/mist/realtime/websocket/service_ping_discovery.py | main | 5bc92f63a0045c0b19b776461cef143305433744 | present | 69 |
@@ -184,11 +184,11 @@ Columns: ID, claim, path, ref, blob SHA (tree SHA for folders and commits), resu
 | RC-44 | Site derived policies SDK builds its path from the identifier | .venv\Lib\site-packages\mistapi\api\v1\sites\servicepolicies.py | installed mistapi 0.64.1 | 65215b139c22433cbf21723b75cf9d1d96a070e0 | present | 43 |
 | RC-45 | Organization templates SDK builds its path from the identifier | .venv\Lib\site-packages\mistapi\api\v1\orgs\gatewaytemplates.py | installed mistapi 0.64.1 | 6b82963804738f1a6a85af80dab4b3c7d9b67735 | present | 48 |
 | RC-46 | Site derived templates SDK builds its path from the identifier | .venv\Lib\site-packages\mistapi\api\v1\sites\gatewaytemplates.py | installed mistapi 0.64.1 | 5e555e38819f03b81b2f15c267b659db4353abc7 | present | 43 |
-| RC-47 | Legacy: module path src/api/tenant_fetch.py | src/api/tenant_fetch.py | 188956f937019a0e07cab73919ebd289179c5def | a3db77a6507a9d37fd3a9f1cd51d3f8ee3c53e4c | stale | 0 |
+| RC-47 | Legacy: module path api/tenant_fetch.py (retired src root) | api/tenant_fetch.py (retired src root) | 188956f937019a0e07cab73919ebd289179c5def | a3db77a6507a9d37fd3a9f1cd51d3f8ee3c53e4c | stale | 0 |
 | RC-48 | Legacy: record folder specs/2863-tenant-identifier-slice is a direct child of specs | specs/2863-tenant-identifier-slice | 188956f937019a0e07cab73919ebd289179c5def | a5628cc408a6b66df24637972bd4c9cc60a32fad | stale | 0 |
 | RC-49 | Legacy: quickstart test path tests/unit/test_api_tenant_fetch.py | tests/unit/test_api_tenant_fetch.py | main | absent-in-main-tree | stale | 0 |
 | RC-50 | Legacy: quickstart test path tests/unit/test_issue_2971_status_before_count.py | tests/unit/test_issue_2971_status_before_count.py | main | absent-in-main-tree | stale | 0 |
-| RC-51 | Legacy: read-only caller path src/websocket/service_ping_discovery.py | src/websocket/service_ping_discovery.py | main | absent-in-main-tree | stale | 0 |
+| RC-51 | Legacy: read-only caller path websocket/service_ping_discovery.py (retired src root) | websocket/service_ping_discovery.py (retired src root) | main | absent-in-main-tree | stale | 0 |
 | RC-52 | Legacy: plan requires Python 3.13 or newer | .specify/memory/constitution.md | main | 4584997a264c5a7ade2ca7441246e1f067083aa1 | stale | 278 |
 | RC-53 | Legacy: private name helpers have no caller outside the module | src/mist/access/api/tenant_fetch.py | main | ba7e74141e32b6d0a4d4edfbeeff618290a9641f | present | 40 |
 | RC-54 | Legacy: validate_site_id accepts non-string values | src/foundation/runtime/validation/validation_utils.py | main | 8fed7ee47971d7968e776f253209ce341637e0a6 | present | 38 |
@@ -209,7 +209,7 @@ Columns: ID, claim, path, ref, blob SHA (tree SHA for folders and commits), resu
 | RC-69 | Chassis convert helper refuses a blank site and returns False | src/mist/resources/device/virtual_chassis.py | main | 751a13c68d62086d158cbae68c0d3d8727348ce2 | present | 583 |
 | RC-70 | Chassis preflight site identifier default | src/mist/resources/device/virtual_chassis.py | main | 751a13c68d62086d158cbae68c0d3d8727348ce2 | present | 820 |
 | RC-71 | Gateway reboot site identifier default | src/mist/resources/device/device_reboot_manager.py | main | c4a127cb591ff9e7ca47c94550c37f6343b0a5c7 | present | 367 |
-| RC-72 | Path src/device/virtual_chassis.py from PR #3035 | src/device/virtual_chassis.py | main | absent-in-main-tree | absent | 0 |
+| RC-72 | Path device/virtual_chassis.py (retired src root) from PR #3035 | device/virtual_chassis.py (retired src root) | main | absent-in-main-tree | absent | 0 |
 | RC-73 | Upgrade portal passes an organization default to the planner | src/interfaces/portals/upgrade_portal/app/wiring.py | main | 78a1f4c825fb10f5e4ae7c2ef689ef01c45ecc85 | present | 1309 |
 | RC-74 | Issue comment: wiring.py line 747 is the organization default example | src/interfaces/portals/upgrade_portal/app/wiring.py | main | 78a1f4c825fb10f5e4ae7c2ef689ef01c45ecc85 | stale | 747 |
 | RC-75 | Organization default with an empty string in the dependency kwargs | MistHelper.py | main | 98d7828479ded6bc4c83d15e0c1847171cfbfd49 | present | 3615 |
@@ -239,7 +239,7 @@ Reuse decision: The legacy spec, research decisions, and tenant test names are r
 - Issue #2863: open. Title "chore: audit org and site ID defaults that mask missing inputs". Labels: `chore`, `tests`, `in-progress`, `backend`, `src`, `priority:P2`, `severity:high`, `needs-human-review`. Created 2026-09-17. Updated 2026-11-10. Seven comments, dated 2026-10-01 to 2026-11-10.
 - Issue body: names 102 deferred candidates from the visible inventory. Each repair must fail visibly at the missing identifier.
 - PR #2864, merged 2026-09-17, branch `chore/2753-masking-defaults`. Body gives the triage count of 102 organization or site candidates deferred to #2863.
-- PR #3035, merged 2026-09-19, branch `fix/2863-scope-id-defaults`. Body says "Refs #2863". Changed `src/device/` files that main no longer holds (RC-72).
+- PR #3035, merged 2026-09-19, branch `fix/2863-scope-id-defaults`. Body says "Refs #2863". Changed `device/` files (retired src root) that main no longer holds (RC-72).
 - PR #3098, merged 2026-09-20, branch `fix/2863-scope-id-defaults`. Body says "Part of #2863". Changed `scripts/probe_pk_strategy.py`.
 - PR #3997, merged 2026-10-06 22:54:03 UTC, branch `jmorrison-juniper-fix/2926-walk-blind-handler`. Changed `src/interfaces/portals/upgrade_portal/upgrade/org_cascade/walk.py`.
 - PR #4521, merged 2026-11-05, for issue #2753 only.

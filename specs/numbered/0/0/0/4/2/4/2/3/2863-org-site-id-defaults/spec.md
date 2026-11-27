@@ -15,7 +15,7 @@
 - Q: Does the first batch close issue #2863? -> A: No. The owner states that the audit stays open. The pull request body uses `Part of #2863`. Sources: issue comments of 2026-10-01 and 2026-10-21.
 - Q: What does an empty optional site identifier mean? -> A: It is a refusal, not organization-only scope. Only `None` selects organization-only scope. Sources: comment of 2026-10-21 and `src/mist/access/api/tenant_fetch.py:156`, which treats an empty value as organization-only today.
 - Q: Does a valid identifier need a UUID format check? -> A: No. The owner requires opaque valid identifiers, such as `org-1`, to pass unchanged. The OpenAPI file declares `format: uuid`, but the existing tests use opaque values.
-- Q: Which file owns the tenant boundary now? -> A: `src/mist/access/api/tenant_fetch.py`. The reserved path `src/api/tenant_fetch.py` does not exist on main.
+- Q: Which file owns the tenant boundary now? -> A: `src/mist/access/api/tenant_fetch.py`. The reserved path `api/tenant_fetch.py` (retired src root) does not exist on main.
 - Q: Which menu runs the SSID site-variable writes? -> A: Menu 145, category `interactive`. The comment of 2026-10-06 names menu 159, which the registry lists as "Bounce port".
 - Q: Are gateway reboot and virtual chassis conversion destructive? -> A: Yes. Registry entries 158, 161, and 162 use category `destructive`. The comment of 2026-10-06 says otherwise, and that statement is stale.
 

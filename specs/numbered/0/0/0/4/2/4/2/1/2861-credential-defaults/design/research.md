@@ -16,8 +16,8 @@
 | 4507 | fix(mist-session): reject unusable required tokens | MERGED | 2026-11-05T17:09:32Z | jmorrison-juniper-2861-credential-token-slice | Part of #2861. Changes `mist-ops-platform/src/shared/mist/session.py` and four test files. Merge commit `296b977e28be50cd9ddcca57c46b35bb029afe27`. |
 | 4317 | fix(security): use session token only in websocket, routing and ARP code | MERGED | 2026-10-26T21:59:37Z | jmorrison-juniper-fix-2861-credential-defaults | Part of #2861. Removes three environment fallbacks. |
 | 4015 | docs(security): specify credential default resolution | CLOSED | not merged | jmorrison-juniper-credential-defaults-spec | Spec pull request for #2861. Closed. Its record is absent from main. |
-| 3036 | fix(db): reject missing database credentials | MERGED | 2026-09-19T22:22:11Z | fix/2861-credential-defaults | Refs #2861. Changed `src/db/__init__.py`, which main no longer holds (R-08). |
-| 3096 | Fix credential default handling | MERGED | 2026-09-20T13:23:56Z | fix/2861-credential-defaults | Part of #2861. Changed `src/maps/_flask_viewer.py`, which main no longer holds (R-09). |
+| 3036 | fix(db): reject missing database credentials | MERGED | 2026-09-19T22:22:11Z | fix/2861-credential-defaults | Refs #2861. Changed `db/__init__.py` (retired src root), which main no longer holds (R-08). |
+| 3096 | Fix credential default handling | MERGED | 2026-09-20T13:23:56Z | fix/2861-credential-defaults | Part of #2861. Changed `maps/_flask_viewer.py` (retired src root), which main no longer holds (R-09). |
 | 2864 | chore(validation): fail visibly when a required input is missing | MERGED | 2026-09-17T19:58:56Z | chore/2753-masking-defaults | Issue #2753. Deferred 31 credential candidates to #2861. |
 | 4498 | fix(analytics): reject missing zone summary statistics | MERGED | 2026-10-30T08:51:30Z | jmorrison-juniper-zone-summary-validation | Refs #2753. The body mentions #2861. Not a #2861 slice. |
 | 4521 | fix(device): stop AP discovery after a failed site read | MERGED | 2026-11-05T12:39:26Z | jmorrison-juniper-audit-missing-input-defaults | Part of #2753. The body mentions #2861. Not a #2861 slice. |
@@ -121,8 +121,8 @@ Each row is one check. The table holds 64 candidate rows (C-01 to C-64, from the
 | R-05 | Legacy folder 2861-required-token-resolution exists (tree) | specs/numbered/0/0/0/4/2/4/2/1/2861-required-token-resolution | 8506b1fdfb04f75a71493c401f48df426bea382c | present | 0 |
 | R-06 | Folder 2861-credential-defaults is absent | specs/numbered/0/0/0/4/2/4/2/1/2861-credential-defaults | - | absent | 0 |
 | R-07 | Proposed direct guard path is absent | tests/guardrails/test_credential_default_ratchet.py | - | absent | 0 |
-| R-08 | PR 3036 target path is absent | src/db/__init__.py | - | absent | 0 |
-| R-09 | PR 3096 target path is absent | src/maps/_flask_viewer.py | - | absent | 0 |
+| R-08 | PR 3036 target path is absent | db/__init__.py (retired src root) | - | absent | 0 |
+| R-09 | PR 3096 target path is absent | maps/_flask_viewer.py (retired src root) | - | absent | 0 |
 | R-10 | Token resolution test exists | mist-ops-platform/tests/unit/mist/token_resolution/test_required_resolution.py | c540948e7745e0d5b7ba83f0eff892d19d4b0551 | present | 0 |
 | R-11 | Token resolution test exists | mist-ops-platform/tests/unit/mist/token_resolution/test_session_boundary.py | 55a6b2dc02641652246479d278b42efb151f86ea | present | 0 |
 | R-12 | Token resolution test exists | mist-ops-platform/tests/unit/mist/token_resolution/test_provider_contracts.py | 1972bd1daeb840c4c5af48b6a868e023ea3ceca0 | present | 0 |

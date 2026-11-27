@@ -9,7 +9,7 @@
 ## Owner Inputs
 
 - [ ] PRE-01 Source host. The owner records the host name that holds the historical corpus.
-- [ ] PRE-02 Source root. The owner records the absolute path of the historical corpus on that host. The guard test names one candidate, `C:\Users\jmorrison\Downloads\juniper-library-md` (R26). The owner confirms or replaces it.
+- [ ] PRE-02 Source root. The owner records the absolute path of the historical corpus on that host. The guard test names one candidate (R26, `tests/guardrails/test_juniper_corpus_paths.py` line 12). The owner confirms or replaces it.
 - [ ] PRE-03 Copy root. The owner records an empty folder under `data\` on the owner machine. The folder must not overlap the source root.
 - [ ] PRE-04 Output root. The owner records the folder for the verification report. The folder must not overlap the source root.
 - [ ] PRE-05 Target free bytes. The owner records the free space on the copy-root volume in bytes. The value must exceed the total source size from the inventory.

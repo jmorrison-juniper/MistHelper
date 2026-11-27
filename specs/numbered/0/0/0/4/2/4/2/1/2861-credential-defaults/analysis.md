@@ -16,7 +16,7 @@ The spec, plan, tasks, research, and remote code were compared. Each item states
 | A-08 | The comment-proposed guard path adds a direct child to `tests/guardrails/`, which breaks constitution I. | Medium | Nested guard package (D-8). |
 | A-09 | Mistapi pin text conflicts. The brief says `>=0.64.0,<0.65`. `pyproject.toml:29` says `>=0.64.1,<0.65`. `requirements.txt:129` pins `0.64.1`. `.github/copilot-instructions.md` line 21 says `>=0.64.0,<0.65`. The constitution technology section says 0.59 or later. | Low | Documentation correction in a separate docs change. This record uses the pins in `pyproject.toml` and `requirements.txt`. |
 | A-10 | The brief asks each pull request body to use `Closes #2861`. Owner decision 5 keeps the issue open until every candidate is repaired. | Medium | D-15. Batch pull requests use `Refs #2861`. The final pull request uses `Closes #2861`. |
-| A-11 | PR #3036 changed `src/db/__init__.py`, and PR #3096 changed `src/maps/_flask_viewer.py`. Main holds neither path (R-08, R-09). | Low | This record uses current paths only. |
+| A-11 | PR #3036 changed `db/__init__.py` (retired src root), and PR #3096 changed `maps/_flask_viewer.py` (retired src root). Main holds neither path (R-08, R-09). | Low | This record uses current paths only. |
 | A-12 | PR #4507 merged with no submitted GitHub review (owner comment of 2026-11-09). | High | Owner confirms the review status. This record does not claim that a review occurred (U-4). |
 | A-13 | The owner reported a missing connection-error case in `test_session_boundary.py` on 2026-11-10. | Low | D-13. No change in this record. |
 | A-14 | Open PR #4208 changes `web_portal/app.py` (C-62). | Low | D-14. No batch changes that file. |

@@ -153,7 +153,7 @@ Each row is one check against `main` or against the GitHub object named in the r
 | R40 | Reserved free-corpus document exists | documentation/free-juniper-corpus.md | absent | none | 0 |
 | R41 | Hash inventory file exists at the repository root | corpus_hashes.json | absent | none | 0 |
 | R42 | Source corpus folder is in the tree | data/juniper_corpus | absent | none | 0 |
-| R43 | Old source package path exists | src/juniper_docs | absent | none | 0 |
+| R43 | Old source package path exists | juniper_docs (retired src root) | absent | none | 0 |
 | R44 | Recovery branch exists on the remote | fix/2977-recovered-content-dedup | absent | none | 0 |
 | R45 | Merged pull request branch exists on the remote | jmorrison-juniper-2977-pdf-dedup-prevention | absent | none | 0 |
 | R46 | Recovery tag exists on the remote | recovery/4822/pdf-dedup | absent | none | 0 |
@@ -210,6 +210,6 @@ R56 is stale. Item 2738 is a closed pull request titled `fix(tools): infer edge 
 - U4: Whether `scripts/crawl_jvd.py` still runs outside the repository. Reason: this record checked the repository only.
 - U5: Whether the two local-only commits in L10 hold content that main lacks. Reason: the blob SHAs differ, and no content diff was examined.
 - U6: Test results on main `f03c6c9b`. Reason: the PR check results (R53 and R54) cover the pull request heads. No main check run was fetched. No test ran locally.
-- U7: The source corpus location. Reason: the corpus path guard names `C:\Users\jmorrison\Downloads\juniper-library-md` as the new corpus root (R26). The owner must confirm that path. This record did not open it.
+- U7: The source corpus location. Reason: the corpus path guard names the new corpus root (R26, `tests/guardrails/test_juniper_corpus_paths.py` line 12). The owner must confirm that path. This record did not open it.
 - U8: Licensing status of the corpus documents. Reason: legal text is outside this record (D-9).
 - U9: Whether the process-folder guard accepts the record path. Reason: `tests/guardrails/process_folder_baseline.json` was not read. The record path sits under the fixed route, and the route folder holds two children after this record.
