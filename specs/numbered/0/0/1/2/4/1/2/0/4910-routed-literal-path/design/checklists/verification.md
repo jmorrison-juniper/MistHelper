@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-26
 
-**Feature**: [spec.md](../spec.md)
+**Feature**: [spec.md](../../spec.md)
 
 ## Red and Green Evidence
 

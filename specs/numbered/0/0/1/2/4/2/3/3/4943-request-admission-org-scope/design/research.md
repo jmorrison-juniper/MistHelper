@@ -142,7 +142,7 @@ Each row names one claim. The result column uses the values present, absent, par
 | RC-23 | The endpoint catalog maps listMspOrgs to mistapi msps.orgs | documentation/MIST_API_GET_ENDPOINTS.md | main | 6281c11b46f22b9814a1948a96df9be4945fb8fd | present | 331 |
 | RC-24 | The endpoint catalog maps the VC status read to mistapi sites.devices | documentation/MIST_API_GET_ENDPOINTS.md | main | 6281c11b46f22b9814a1948a96df9be4945fb8fd | present | 1223 |
 | RC-25 | The architecture page lists an api directory under src | documentation/architecture.md | main | b4cab54be36d223b7eba879ca99b838f508938ce | present | 207 |
-| RC-26 | The src/api directory does not exist on main | src/api | main | none | absent | 0 |
+| RC-26 | The api folder under src does not exist on main | src, child api | main | none | absent | 0 |
 | RC-27 | The CI mypy scope names the src directory | .github/workflows/ci.yml | main | d51efbc13c0f0a2076680030ed8be7ef7cf64523 | present | 93 |
 | RC-28 | The CI vulture scope names the src directory | .github/workflows/ci.yml | main | d51efbc13c0f0a2076680030ed8be7ef7cf64523 | present | 101 |
 | RC-29 | The CI interrogate scope names the src directory | .github/workflows/ci.yml | main | d51efbc13c0f0a2076680030ed8be7ef7cf64523 | present | 107 |

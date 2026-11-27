@@ -1,6 +1,6 @@
 # Implementation Plan: Early dependency check without half-removed packages
 
-**Branch**: `fix/4930-early-dependency-updater` | **Date**: 2026-11-26 | **Spec**: [spec.md](../spec.md)
+**Branch**: `fix/4930-early-dependency-updater` | **Date**: 2026-11-26 | **Spec**: [spec.md](spec.md)
 
 **Input**: Numeric specification at `specs/numbered/0/0/1/2/4/2/1/0/4930-early-dependency-updater/spec.md`. The route is the base-5 form of issue 4930, as `design/research.md` R-08 shows.
 

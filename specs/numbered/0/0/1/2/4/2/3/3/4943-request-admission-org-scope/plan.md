@@ -183,7 +183,7 @@ The mute attaches one filter to the `mistapi` logger object for one call. The fi
 - **RA-1**: Split `_discover_msp` and `_expand_virtual_chassis_members` into methods of 25 lines or fewer. Open a separate issue after the merge. The issue names the two methods and their main lengths.
 - **RA-2**: Move `RequestLedger` into its own module, because `request_admission.py` also holds the adapter. Open a separate issue after the merge.
 - **RA-3**: Remove the menu 309 `AdmissionBinding` workaround in `src/operations/exporting/ex_hardware_inventory/scope/session.py:25` and its use in `run/batch.py:199` and `run/batch.py:223`. Open a follow-up issue (decision D-5).
-- **RA-4**: Correct the layout list in `documentation/architecture.md:202-207`. The list names `api/`, and `src/api/` does not exist on main. Open a documentation issue.
+- **RA-4**: Correct the layout list in `documentation/architecture.md:202-207`. The list names `api/`, and the `api/` folder under `src` does not exist on main. Open a documentation issue.
 - **RA-5**: Correct the mistapi lower bound in `pyproject.toml:29` or the repository guide, because the two sources disagree (`.github/copilot-instructions.md`, section Language and environment).
 
 ## Rollback
