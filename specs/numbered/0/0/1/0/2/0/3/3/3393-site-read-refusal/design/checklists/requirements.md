@@ -1,32 +1,34 @@
 # Specification Quality Checklist: Site read refusal
 
-**Purpose**: Verify that the bounded repair has testable requirements.
+**Purpose**: Verify that the spec, the plan, and the tasks of issue 3393 meet the record rules before the record lands.
 
-**Created**: 2026-10-23
+**Created**: 2026-11-26
 
 **Feature**: [Specification](../../spec.md)
 
 ## Content Quality
 
 - [x] Requirements describe operator outcomes.
-- [x] The transport section records the existing dependency, not a new design.
+- [x] The user stories name no code symbol. Code references sit in the Mist Cloud Transport section and in the Key Entities section.
 - [x] All mandatory sections are complete.
 
 ## Requirement Completeness
 
 - [x] No clarification marker remains.
-- [x] Each requirement has a measurable acceptance scenario.
-- [x] Edge cases include replacement saves, timeouts, and secret protection.
-- [x] Scope excludes issue #3394 and firmware execution.
+- [x] Each requirement maps to at least one task and one test (analysis, requirement mapping).
+- [x] Success criteria are measurable.
+- [x] Edge cases include the SDK conversion of a transport fault (A-1) and the unread-site refusal (A-2).
+- [x] Scope excludes issue 3394, the retry caller, and firmware execution.
 - [x] Assumptions and dependencies are explicit.
 
 ## Feature Readiness
 
-- [x] Both user stories have independent tests.
-- [x] Success criteria measure responses, retained values, and saved plans.
-- [x] The specification is ready for planning.
+- [x] User story 1 and user story 2 have independent tests.
+- [x] User story 3 is explained as out of scope for this record in the Notes section.
+- [x] Success criteria are covered by verified or open tasks.
 
 ## Notes
 
-The required transport section names the unchanged SDK methods.
-No implementation choice changes the operator requirements.
+- User story 3 describes the production defect that analysis A-2 records. A later issue owns its fix. T008 supplies the evidence for that issue.
+- FR-009 has no automated test that reads comments. Its evidence is the regression run after a comment-only change and the symbol gate.
+- The legacy checklist of PR 4413 claimed no clarification marker. The current checklist repeats that check.
