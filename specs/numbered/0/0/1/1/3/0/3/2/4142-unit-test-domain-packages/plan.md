@@ -1,224 +1,333 @@
-# Implementation Plan: Unit Test Domain Packages
+# Implementation Plan: Split tests/unit into domain packages
 
-**Branch**: `jmorrison-juniper-test-relocation-reconstruction` | **Date**: 2026-11-13 | **Spec**: [spec.md](spec.md)
+**Branch**: `chore/4142-unit-test-domain-packages` | **Date**: 2026-11-26 | **Spec**: [spec.md](spec.md)
 
-**Input**: Numeric specification at `specs/numbered/0/0/1/1/3/0/3/2/4142-unit-test-domain-packages/spec.md`.
+**Input**: Numeric record at `specs/numbered/0/0/1/1/3/0/3/2/4142-unit-test-domain-packages/`. The route is the eight-digit base-5 encoding of 4142, which `.specify/scripts/powershell/spec-route.ps1` produces.
 
 ## Summary
 
-Move unit tests from the overloaded `tests/unit/` root into a bounded domain tree. Keep test discovery and behavior unchanged. Update every active path reference. Do not move a pull request path before its owner accepts the post-merge handoff or an active session path before its owner clears the claim.
+Move the 45 remaining root entries of `tests/unit/` into the four existing containers. Each container gains source-aligned grouping directories. Split each source package that would exceed five children by test topic. Move a path only when no hold applies. Update each active reference in the same batch as its moved path. The final root holds `__init__.py` and the four containers.
 
-**Fresh-main candidate**: This worktree starts at `31b752f060d4d10cbe87b5880b071b6570d0b3c9`. It moves 360 unclaimed files and adds ten package markers. It leaves 23 paths at source because their target groups would exceed five children. It keeps four `output_defaults` files at source because `test_session.py` uses relative package imports. It keeps eight Juniper RMA JSON replies beside their shared fixture loader. It also leaves 22 claimed paths unchanged. It does not complete the five-child root limit. Issue #4142 stays open.
+## Current State On Main
+
+The state below is read from GitHub `main` at `f03c6c9b36d612a48d7b9652998c2fd87dd777ca` on 2026-11-26. Remote check IDs (RC) refer to [research.md](design/research.md).
+
+| Fact | Value | Check |
+| - | - | - |
+| Direct children of `tests/unit/` | 50 distinct tracked names | RC-01 |
+| Containers present | `config`, `marvis`, `maps`, `prod_readiness` | RC-03 to RC-06 |
+| Files under `tests/unit/` | 1,038 files in 285 directories | research section 2 |
+| Files in the four containers | 391 | research section 2 |
+| Files in the 45 remaining root entries | 646, including 15 root test modules | research section 2 |
+| Oversized directories under `tests/unit/` | 30 directories hold six or more children | research section 2 |
+| Final root required | 5 children | FR-001 |
+| Juniper RMA files still at root | 22 (12 moved to `prod_readiness/operations/exporting/juniper_rma/`) | RC-07 |
+| Issue #4142 | OPEN, reopened 2026-11-13 after partial PR #4358 | ledger V-5 in research section 7 |
+
+The local working tree at the same commit holds 22 untracked directories under `tests/unit/` and one `__pycache__`. These entries are not on `main`. No batch counts or moves them.
 
 ## Technical Context
 
-**Language/Version**: Python 3.15 or newer
+**Language/Version**: Python 3.15 or newer (`pyproject.toml` requires `>=3.15`).
 
-**Primary Dependencies**: pytest, Ruff, Black, mypy
+**Primary Dependencies**: pytest, Ruff, Black, mypy, and the `misthelper-devtools` gates (`ste-linter`, `test-quality-analyzer`, `symbol-diff`).
 
-**Storage**: None
+**Storage**: None.
 
-**Testing**: pytest collection and focused tests, plus the repository quality gates for changed paths
+**Testing**: pytest collection, focused tests per batch, guard tests under `tests/guardrails`, and the test-quality ratchet.
 
-**Target Platform**: Windows 11, macOS, and Linux
+**Target Platform**: Windows 11, macOS, and Linux.
 
-**Project Type**: Python command-line application with a unit test suite
+**Project Type**: Python command-line application with a unit test suite.
 
-**Performance Goals**: Unit test collection includes every test collected before the moves.
+**Performance Goals**: Collection after each batch yields the baseline node IDs. Test runtime does not change by design.
 
-**Constraints**: Keep the final `tests/unit/` root and each new grouping directory at five children or fewer, including any `__init__.py` file. Preserve package helper imports. Keep pull request and active session paths unchanged until their owners release them. Keep paths selected by the PR-owned CI workflow in place until its owner accepts the handoff.
+**Constraints**: Five children or fewer for each directory. No executable production change. No open-pull-request path moves. Package-relative imports keep working.
 
-**Scale/Scope**: Current main is `31b752f060d4d10cbe87b5880b071b6570d0b3c9`. Its `tests/unit/` root has 155 tracked direct entries: 50 directories and 105 files. The baseline collection has 30,638 unit test cases. The inventory excludes unmerged pull request files.
+**Scale/Scope**: 1,038 test files, 45 root entries, 30 root directories, and about 40 oversized directories.
 
 ## Constitution Check
 
-- **Five-Item Rule**: At `31b752f060d4d10cbe87b5880b071b6570d0b3c9`, the current `tests/unit/` root has 155 tracked direct entries. Reuse four existing directories as containers. Do not add a direct child to `tests/unit/`. Keep each new grouping directory at five children or fewer. Split an unowned package by test topic when its destination would exceed five children, including package markers.
-- **Recorded debt**: Issue #4142 tracks the existing root excess. This plan resolves that debt without increasing any other child count.
-- **Incremental remediation**: Move only unowned paths until their open pull requests merge. The root may remain over the limit during these staged changes. Do not merge a partial layout as the final remediation.
-- **Test behavior**: Pytest scans `tests/` recursively and uses `test_*.py` and `*_test.py`. Preserve that collection and update explicit path references.
-- **Ownership**: Refresh open pull request files, issue claims, and session claims before each move. PR #4208 remains open and draft. It owns its workflow selectors, `tests/unit/scripts/`, `tests/unit/upgrade_portal/`, `tests/unit/wan_performance/`, and `tests/unit/websocket_streams/web/test_ws_blueprint_routes.py`. PR #4226 merged, and its owner released `tests/unit/gateway/overrides/test_cisco_config_converter.py` for the move to `tests/unit/marvis/mist/resources/gateway/overrides/test_cisco_config_converter.py`. PR #4287 owns `tests/unit/dataclasses/test_service_measurement.py`. PR #4316 owns `tests/unit/upgrade_portal/test_phase2_service_wiring.py`, `tests/unit/upgrade_portal/test_settle_gate_service.py`, and `tests/unit/upgrade_portal/test_upgrade_driver.py`. PR #4317 owns `tests/unit/device/test_arp_command_manager.py`, `tests/unit/test_routing_utils.py`, and `tests/unit/websocket/test_manager.py`. PR #4323 owns `tests/unit/reports/psk_hygiene/test_operation.py`. PR #4324 owns only `tests/test_upgrade_portal_mist.py`, outside this map. PRs #4308, #4310, #4311, #4312, #4313, #4314, #4315, and #4289 merged. Issues #2746 and #2747 claim `tests/unit/ssh/test_cli_shell_manager.py`. Issue #2746 also claims `tests/test_upgrade_portal_mist.py`. Issue #2752 still reserves API, export, upgrade portal, and related paths. Keep each affected package deferred until every path claim clears.
-- **Upgrade portal ownership**: Issue #2752 reserves `tests/unit/upgrade_portal/` and related files until its upgrade-path work and human review finish. Its confirmed source paths include `src/interfaces/portals/upgrade_portal/capture/service.py`, `src/interfaces/portals/upgrade_portal/upgrade/driver.py`, and `src/interfaces/portals/upgrade_portal/settle/service.py`, plus their tests. Do not enable auto-merge for that portal work.
-- **Workflow ownership**: PR #4208 owns `.github/workflows/ci.yml`. It remains draft and unmerged. Do not rebase, edit, or move its paths. Defer moves of `tests/unit/scripts/`, `tests/unit/upgrade_portal/`, and `tests/unit/wan_performance/` until PR #4208 merges and its owner accepts the handoff. Keep any other path selected by that workflow at its current location until then.
-- **Product scope**: Do not change production code or Mist API behavior.
-
-**Gate result**: Pass with staged work. Final compliance requires all reserved pull request paths to become available and move before the layout is complete.
-
-## Project Structure
-
-### Documentation (this feature)
-
-```text
-specs/numbered/0/0/1/1/3/0/3/2/4142-unit-test-domain-packages/
-├── spec.md
-├── plan.md
-├── tasks.md
-└── design/
-    ├── checklists/
-    │   └── requirements.md
-    ├── quickstart.md
-    ├── research.md
-    └── standalone-test-map.md
-```
-
-### Source Code
-
-```text
-tests/
-└── unit/
-    ├── __init__.py
-    ├── config/
-    │   ├── foundation/
-    │   └── standalone/
-    ├── marvis/
-    │   ├── mist/
-    │   └── standalone/
-    ├── maps/
-    │   ├── interfaces/
-    │   └── standalone/
-    └── prod_readiness/
-        ├── operations/
-        └── standalone/
-```
-
-**Structure Decision**: Keep the existing `config`, `marvis`, `maps`, and `prod_readiness` directories as the four containers. Add one domain directory and one `standalone` directory inside each container. This change adds no direct child to `tests/unit/`. Treat new group directories as namespace packages. Move each container's current test files, subdirectories, and package markers into its mapped domain package. Split a moved package into topic groups when any destination group would exceed five children. For example, move `tests/unit/config/test_config_utils.py` to `tests/unit/config/foundation/runtime/startup/config/test_config_utils.py`. Move the contents of `tests/unit/marvis/` to `tests/unit/marvis/mist/intelligence/marvis/`, the contents of `tests/unit/maps/` to `tests/unit/maps/interfaces/maps/`, and the contents of `tests/unit/prod_readiness/` to `tests/unit/prod_readiness/operations/execution/prod_readiness/`. Move standalone tests into the domain-specific `standalone` directory under the matching container. Add a package marker only when import evidence requires it, and count it as a child.
-
-**Grouping Assumption**: Split `bootstrap` by test topic because its seven direct children exceed the five-child limit. Place dependency checks, package installation, package-index probes, and UV runtime tests under `bootstrap/dependency/`. Place DNS and GitHub-account preflight tests under `bootstrap/preflight/`. Keep the existing `bootstrap/__init__.py`. This gives the parent three children, the dependency group four, and the preflight group two.
-
-**Package Split Assumption**: Split every unowned package by test topic when its destination would have more than five direct children. Preserve each package marker and helper with the tests that import it. Defer a package while any active claim owns a path in that package.
-
-**Container Test Grouping Assumption**: Keep the root container package marker. Place build checks and shared build helpers in `build_support/`. Place session and startup checks in `runtime/`. Keep `output_defaults/` and `session_database/` as separate groups. This gives the container root five direct children, including its package marker.
-
-**Serial Console Grouping Assumption**: Split the 11 `serial_cc` tests into five topic groups to meet the child limit. Use `setup/` for assignment and initialization tests, `security/` for security-event tests, `clients/` for client insight and capture tests, `capture_results/` for site scan and result tests, and `telemetry/` for SLE metrics and switch statistics.
-
-**Additional Topic Grouping Assumption**: Split packet capture, firmware policy, MIB generator, troubleshooting, and Juniper Docs tests into the exact groups in `design/standalone-test-map.md`. The current ownership scan clears these groups. Refresh claims immediately before each move.
-
-## Package Grouping Map
-
-| Existing container / domain | Group | Existing test packages |
+| Rule | Result | Reason |
 | - | - | - |
-| `config/foundation` | `models` | `dataclasses`, `dataproc` |
-| `config/foundation` | `persistence/storage` | `arango_indexes`, `cache`, `db`, `db_discovery` |
-| `config/foundation` | `runtime/startup/bootstrap/dependency` | `test_dependency_check_paths.py`, `test_package_installer_wave9.py`, `test_uv_locked_sync.py`, `test_uv_runtime.py` |
-| `config/foundation` | `runtime/startup/bootstrap/preflight` | `test_dns_preflight.py`, `test_github_account_checker.py` |
-| `config/foundation` | `runtime/startup/config` | `config` |
-| `config/foundation` | `runtime/core` | `input`, `time`, `validation` |
-| `config/foundation` | `support` | `benchmarks`, `helpers`, `refactors`, `serial_cc`, `utils` |
-| `config/foundation` | `support/serial_cc/setup` | `test_global_assignments_builder.py`, `test_import_initialization_service.py` |
-| `config/foundation` | `support/serial_cc/security` | `test_security_events.py`, `test_security_events_wave8.py` |
-| `config/foundation` | `support/serial_cc/clients` | `test_site_client_insight_path.py`, `test_site_client_insights.py`, `test_start_site_client_capture_wireless.py` |
-| `config/foundation` | `support/serial_cc/capture_results` | `test_start_site_scan_capture.py`, `test_test_results_by_site.py` |
-| `config/foundation` | `support/serial_cc/telemetry` | `test_sle_metrics.py`, `test_switch_vc_stats.py` |
-| `marvis/mist` | `access` | `api`, `audit`, `auth` |
-| `marvis/mist` | `intelligence` | `analytics`, `juniper_docs`, `marvis`, `reports`, `troubleshooting` |
-| `marvis/mist` | `realtime` | `websocket`, `websocket_streams` |
-| `marvis/mist` | `resources` | `device`, `gateway`, `inventory`, `org`, `site` |
-| `maps/interfaces` | `handlers` | `scripts` |
-| `maps/interfaces` | `maps` | `maps` |
-| `maps/interfaces` | `monitoring` | `metrics_gateway` |
-| `maps/interfaces` | `portals` | `upgrade_portal`, `web_portal` |
-| `maps/interfaces` | `ui` | `ui` |
-| `prod_readiness/operations` | `execution/capture` | `capture`, `prod_readiness` |
-| `prod_readiness/operations` | `execution/firmware` | `firmware`, `firmware_policy`, `firmware_policy_jobs` |
-| `prod_readiness/operations` | `execution/ssh` | `ssh` |
-| `prod_readiness/operations` | `exporting` | `export`, `juniper_rma` |
-| `prod_readiness/operations` | `exporting/container` | `container/build_support`, `container/runtime`, `container/output_defaults`, `container/session_database` |
-| `prod_readiness/operations` | `hardware` | `mib_generator` |
-| `prod_readiness/operations` | `protection` | `security` |
+| I. Five-Item Rule | Pass with recorded debt | The final tree meets the limit. Until the final batch, the root holds 50 children. Debt C-1 stays open. `tests/unit/marvis/actions/` (11 children) is grandfathered until hold H-7 releases. |
+| I. Five-Item Rule, new specs route | Pass | The route is `specs/numbered/0/0/1/1/3/0/3/2`. The base-5 encoding of 4142 matches the route. |
+| II. Class-based architecture | Pass | No Python class or function changes. The new guard, if added, uses a class. |
+| III. Safety-first | Pass | No input handling changes. |
+| IV. Full deployment pipeline | Pass with staged work | T-LOCAL-GATES, T-PR, T-REMOTE-CI, and T-MERGE run after the last batch. |
+| V. Observability | Pass | No logging changes in product code. |
+| VI. Inline comments | Pass | Moved files keep their comments. A new guard line carries an inline comment. |
+| VII. Action logging | Pass | No action code changes. |
+| Mist Cloud transport | Not applicable | No Mist REST or WebSocket call changes. |
+| File paths | Pass | Any new guard uses `pathlib.Path`. |
+| Data directory and container rules | Not applicable | No product output and no container start. |
+| Branch and commit rules | Pass | Branch `chore/4142-unit-test-domain-packages`. Commit type `refactor(tests)`. |
+| Labels | Pass | Type `refactor`, scope `tests`, status `in-progress`. |
 
-This map assigns all 48 existing directories. It gives exact bounded topic groups for each currently unreserved oversized package. The `standalone` directories hold moved root test modules in source-aligned groups. The exact file map, current ownership holds, and group counts are in [design/standalone-test-map.md](design/standalone-test-map.md). Keep package markers with their logical groups. Do not move a claimed package until its owner clears every claim.
+**Gate result**: Pass for this record. The implementation passes only after the final batch and the release of each hold.
 
-Use the tested source imports to select a standalone test group. For a test with no direct source import, use its test subject. Place cross-domain tests in the `foundation` quality group. Keep `_test_arango_writer_helpers.py` beside `test_arango_writer.py` and update its import. Add a package marker only when import evidence requires it. Record each source and destination in `design/standalone-test-map.md` before moving it.
+## Holds
 
-## Implementation Sequence
+A hold stops a move. A hold has one of four types (D-2).
 
-### Fresh-main ownership holds, 2026-11-13
+| ID | Type | Owner | Paths | Release condition |
+| - | - | - | - | - |
+| H-1 | Open pull request | PR #4208, draft | `tests/unit/refactors/test_wlanradius_timer_manager_paths.py`, `tests/unit/wan_dashboard/wan_performance/**` (8 files), new root path `tests/unit/wan_performance/**` in the PR | PR #4208 merges, its owner accepts the handoff, and the PR rebases its new paths into the final layout |
+| H-2 | Open pull request | PR #4813, draft | `tests/unit/db/sle_window_summary/test_backend_preservation.py`, `tests/unit/export/test_data_exporter.py`, `tests/unit/export/test_endpoint_family_exporter.py` | PR #4813 merges or closes, and its owner releases the three paths |
+| H-3 | Planned edit | Issue #4721, open | `tests/unit/test_device_events_52w_exporter.py`, `tests/unit/test_device_events_52w_exporter_extended.py`, and the new file `tests/unit/export/test_device_events_checkpoint_recovery.py` named in its scope | Issue #4721 closes, or its owner releases both root files |
+| H-4 | Exact claim | Issues #2746 and #2747, open | `tests/unit/ssh/test_cli_shell_manager.py` | The issue owner releases the exact path in a comment |
+| H-5 | Planned edit | Issue #4133, open | `tests/unit/test_menu_entry_metadata.py` (session-only candidate) | The issue owner releases the path |
+| H-6 | Planned edit | Issue #2711, open | `tests/unit/ui/test_parameter_collector.py` | The issue owner releases the path |
+| H-7 | Planned edit | Issue #4008, open | `tests/unit/marvis/actions/**` (11 files) | The issue owner releases the path |
+| H-8 | Conservative hold | Issue #2746 scope | `tests/unit/test_issue_2971_census_repairs.py` | The issue owner confirms that the file is not in its edit scope |
 
-The local candidate changes no production code and no dependency configuration.
-Open PR #4358 still owns `pyproject.toml` through its existing diff.
-Do not publish an overlapping change while that PR remains open.
-Issue #4721 owns `tests/unit/test_device_events_52w_exporter.py`, so this candidate leaves it unchanged.
-The map also preserves the 21 previously identified claimed paths.
-Open PR #4493 is a web-portal change and does not list `pyproject.toml`.
-Schedule any later devtools pin update as one atomic change to `pyproject.toml` and `requirements-dev.txt`.
-Keep that update out of this candidate.
-PR #4322 was the hosted serial slot. This local work started no hosted run.
-PR #4322 merged during this work at `83d404f66ada402ed9e8d334da8c8df255e9dee0`.
-Keep this candidate on its requested base. Rebase it before any later publication.
+Issues #2753 and #4126 name paths only as inventory. They create no hold (D-2). Issue #2752 is closed. PR #4287, PR #4323, and PR #4317 do not appear among the open pull requests that change a `tests/` path, so they create no hold. The seven open pull requests on 2026-11-26 do not change `.github/workflows/ci.yml` or `pyproject.toml`.
 
-### Existing PR configuration delta
+## Decisions
 
-PR #4358 changes only five Ruff per-file `E402` path exceptions in `pyproject.toml`.
-It replaces the root paths for `test_bulk_switch_upgrader.py`, `test_device_utility_commands.py`,
-`test_site_auto_upgrade.py`, `test_template_config.py`, and `test_wan2_variable.py` with their mapped destinations.
-It changes no Python support target, dependency pin, or tool version.
-This candidate changes no line in `pyproject.toml`.
-PR #4493 currently changes only its changelog fragment and one web-portal test.
-When its devtools pin update is ready, update `pyproject.toml` and `requirements-dev.txt` atomically.
-Do not publish that update while PR #4358 owns `pyproject.toml`.
+The full decision records appear in [research.md](design/research.md) section 5.
 
-### Previous ownership holds, 2026-10-26
+| ID | Decision |
+| - | - |
+| D-1 | Keep the four existing containers as root domain groups. |
+| D-2 | Use four hold types. Inventory mentions create no hold. |
+| D-3 | Move `tests/unit/analytics/test_insight_metrics_utils.py` now. Its historical link becomes stale. |
+| D-4 | Move the whole `tests/unit/container/output_defaults/` package. Its relative imports stay valid. |
+| D-5 | Place the root `org` package in `marvis/standalone/mist/resources/org/`, because `marvis/mist/resources/` is full. |
+| D-6 | Create `marvis/mist/realtime/` for WebSocket packages and for `marvis/actions/`. |
+| D-7 | Update CI and `pyproject.toml` selectors in the same batch as the moved paths they name. |
+| D-8 | Leave `src/`, `web_portal/`, `Dockerfile`, and `Containerfile` comments unchanged in this issue. Track them in a follow-up issue. |
+| D-9 | Use topic groups. Each group holds five children or fewer, including package markers. |
+| D-10 | Keep `tests/unit/__init__.py` at the root as the fifth child. |
 
-On 2026-10-26, the coordinator cleared the mapped MIB generator, firmware policy, and container test splits.
-The exact-path scan checked 42 other open pull requests and 316 file records, including previous filenames.
-The 21 new moves and their helper and document changes had no ownership overlap.
-The existing branch now overlaps PR #4415 at rename source `tests/unit/test_wan_hub_group_manager.py`.
-PRs #4471, #4438, and #4436 also own `pyproject.toml`, which the existing branch changes.
-Keep these paths unchanged and request coordination before publication or rebase.
-The local batches do not establish full acceptance or remove the draft hold.
-The coordinator also cleared the existing troubleshooting map and its baseline path-only update.
-That split moves 22 files, updates one existing consumer import, and changes 54 baseline path fields.
-Keep `tests/unit/test_issue_2971_census_repairs.py` deferred because open issue #2746 names it.
-Keep `tests/unit/test_menu_entry_metadata.py` deferred for open issues #4133 and #4126.
-The utility package remains deferred because the reserved workflow selects `tests/unit/utils/test_zscaler_catalogue.py`.
-The coordinator cleared the previous external-edit hold on `tests/unit/test_fast_mode_flag.py`.
-Its content-identical move reduces the tracked unit root from 40 children to 39.
-Keep oversized address-audit groups deferred for issues #2746, #2747, and #2753.
-Keep the rogue-DHCP group deferred for issue #2746 and the Marvis actions group deferred for issue #4008.
-Issue #2752 is now closed, but this does not clear other owners or the PR #4208 workflow hold.
-Current main is `ef0e7e5991950aec9b8f094e32e47fc3f68b4d2f`.
-The published branch head remains `63faa487ad441c27b348911aaf34c04ae1ad3244`.
+## Target Parents And Child Counts
 
-PR #4350 released `tests/unit/refactors/test_sqlite_database_writer.py` and
-`tests/unit/export/test_endpoint_family_exporter.py`. T046 uses only the SQLite writer test.
-Keep the exporter test out of T046 for a later ownership review.
-The PR #4208 owner approved the five Arango tests and only their helper references in
-`tests/unit/db_discovery/test_probe.py` and `tests/contract/test_arango_declared_indexes.py`
-for a later batch. Keep them out of T046.
-Defer all other `db_discovery` paths and the PR #4208 workflow and portal paths.
-Refresh exact file lists before each batch.
-PR #4353 merged. The coordinator authorized the exact-base rebase and a pull request for completed, unowned moves.
-Keep the issue open for incomplete tasks. Do not merge or enable auto-merge.
-Compare both rename endpoints with every open pull request before publication.
-Keep `tests/unit/analytics/test_insight_metrics_utils.py` at its original path.
-The historical specification for issue #3300 links to that path, and FR-004 prohibits changes to historical records.
-After PR #4357 merged, the coordinator approved rebase onto current main `aaab7b4541c2e578fb8c46d69da0446bfbd338a9`.
-Preserve its UI test change and the historical-link deferral.
-The moved MSP test fixture must preserve SDK module identities across test order.
-Use scoped parent bindings instead of removing the SDK import cache.
-After PR #4361 merged, the coordinator approved rebase onto `57d718be98ab2716127578d33b80326c641e64af`.
-Preserve its credential-preflight test and both verified fixes.
-The next coordinated base is `1c089ed07ba865a7e505df4774a79751c72187cf`, after PR #4364.
-Preserve its WAN dashboard changes without expanding this branch's scope.
+Each row shows the directory children after its batch. The count includes files and directories. Each count is five or fewer.
 
-### Juniper RMA grouping correction
+| Parent (under `tests/unit/`) | Children after the batch | Count |
+| - | - | - |
+| `./` | `__init__.py`, `config`, `marvis`, `maps`, `prod_readiness` | 5 |
+| `config/foundation/` | `models`, `persistence`, `runtime`, `support` | 4 |
+| `config/foundation/models/` | `dataclasses`, `dataproc` | 2 |
+| `config/foundation/persistence/storage/` | `arango_indexes`, `cache`, `db`, `db_discovery` | 4 |
+| `config/foundation/persistence/storage/db/` | `__init__.py`, `sle_window_summary`, `test_database_schema_utils.py`, `test_retention_redis_scan.py`, `test_sqlite_database_writer_logging.py` | 5 |
+| `config/foundation/runtime/core/input/` | `test_prompt_client_utils.py`, `test_prompt_network_device_utils.py` | 2 |
+| `config/foundation/runtime/startup/bootstrap/preflight/` | `test_dns_preflight.py`, `test_github_account_checker.py`, `test_credential_preflight.py` | 3 |
+| `config/foundation/support/` | `benchmarks`, `helpers`, `refactors`, `serial_cc`, `utils` | 5 |
+| `config/foundation/support/refactors/` | `__init__.py`, `data`, `network`, `runtime`, `telemetry` | 5 |
+| `config/foundation/support/refactors/data/inventory/` | 2 existing, plus `test_csv_comparator.py` and `test_device_data_fetcher.py` | 4 |
+| `config/foundation/support/refactors/network/clients/` | `test_service_ping_launcher.py`, `test_service_ping_discovery.py`, `test_service_ping_manager.py` | 3 |
+| `config/foundation/support/refactors/network/configuration/` | 2 existing, `test_wan_probe_device_override_manager.py`, and `test_wlanradius_timer_manager_paths.py` after H-1 | 4 |
+| `config/foundation/support/refactors/runtime/console/` | 3 existing, plus `test_tui_launcher.py` | 4 |
+| `config/foundation/support/refactors/runtime/session/` | 2 existing, plus `test_app_context_session_state.py` and `test_initialize_mist_session.py` | 4 |
+| `config/standalone/foundation/runtime/startup/` | 4 existing, plus `test_standalone.py` | 5 |
+| `config/standalone/foundation/support/quality/imports/` | 3 existing, plus `test_module_relocation.py` | 4 |
+| `config/standalone/foundation/support/quality/risk/` | 1 existing, plus `test_issue_1709_narrow_except.py` | 2 |
+| `config/standalone/foundation/support/utilities/network/` | 3 existing, plus `test_routing_utils.py` | 4 |
+| `marvis/mist/` | `__init__.py`, `access`, `intelligence`, `realtime`, `resources` | 5 |
+| `marvis/mist/access/` | `api`, `audit`, `auth` | 3 |
+| `marvis/mist/access/api/` | 4 moved modules, plus `test_unparseable_response_guards.py` | 5 |
+| `marvis/mist/intelligence/` | `analytics`, `ap_warning_report`, `juniper_docs`, `reports`, `troubleshooting` | 5 |
+| `marvis/mist/intelligence/analytics/` | 4 existing, plus `test_insight_metrics_utils.py` | 5 |
+| `marvis/mist/intelligence/ap_warning_report/` | 5 moved modules | 5 |
+| `marvis/mist/intelligence/reports/audits/posture/` | 4 existing, plus `psk_hygiene` | 5 |
+| `marvis/mist/intelligence/reports/device_health/` | 3 existing, plus 2 wired-client generator modules | 5 |
+| `marvis/mist/realtime/` | `actions`, `websocket`, `websocket_streams` | 3 |
+| `marvis/mist/resources/` | `__init__.py`, `device`, `gateway`, `inventory`, `site` | 5 |
+| `marvis/mist/resources/device/` | `__init__.py`, `test_device_handler_narrowing.py`, `client_session_control`, `test_ap_profile_migration_manager.py`, `test_arp_command_manager.py` | 5 |
+| `marvis/mist/resources/gateway/` | `__init__.py`, `exporters`, `overrides`, `ssr_registration`, `wan_overrides` | 5 |
+| `marvis/mist/resources/gateway/exporters/` | 3 existing, plus 2 gateway export-utility modules | 5 |
+| `marvis/mist/resources/gateway/wan_overrides/` | 3 existing, plus 2 WAN probe modules | 5 |
+| `marvis/mist/resources/gateway/ssr_registration/` | 2 existing, plus 2 WAN2 migration modules | 4 |
+| `marvis/mist/resources/inventory/` | `csv_imports`, `device_replace`, `inventory_summary`, `org_device`, `support` | 5 |
+| `marvis/mist/resources/inventory/csv_imports/` | 4 existing, plus `test_csv_comparator_broad_handlers.py` | 5 |
+| `marvis/mist/resources/inventory/org_device/` | 4 moved modules | 4 |
+| `marvis/mist/resources/site/` | `__init__.py`, `address_audit`, `rrm_reset`, 2 existing modules | 5 |
+| `marvis/standalone/mist/intelligence/` | `analytics`, `marvis`, `reports` | 3 |
+| `marvis/standalone/mist/resources/device/` | `test_device_multi_ap_scan_workflow.py`, `utility`, `test_device_reboot_manager.py`, `test_device_utils.py`, `test_virtual_chassis.py` | 5 |
+| `marvis/standalone/mist/resources/device/utility/` | 2 existing modules moved from the device standalone group | 2 |
+| `marvis/standalone/mist/resources/gateway/` | 3 existing, plus `device_template_cloner` | 4 |
+| `marvis/standalone/mist/resources/org/` | 2 existing, plus split groups from the root `org` package | 5 or fewer after split |
+| `maps/interfaces/` | `handlers`, `maps`, `monitoring`, `portals`, `ui` | 5 |
+| `maps/interfaces/handlers/` | `scripts` | 1 |
+| `maps/interfaces/portals/` | `upgrade_portal`, `web_portal`, `wan_dashboard` | 3 |
+| `maps/interfaces/portals/wan_dashboard/` | `test_worker.py`, `wan_performance` after H-1 | 2 |
+| `maps/standalone/interfaces/ui/` | 2 existing, plus `test_menu_entry_metadata.py` and `test_issue_2971_census_repairs.py` after holds | 4 |
+| `prod_readiness/operations/` | `execution`, `exporting`, `hardware`, `protection` | 4 |
+| `prod_readiness/operations/execution/` | `capture`, `firmware`, `prod_readiness`, `ssh` | 4 |
+| `prod_readiness/operations/execution/firmware/` | `__init__.py`, `policy`, `policy_jobs`, `upgraders` | 4 |
+| `prod_readiness/operations/execution/firmware/upgraders/` | `aggregations`, `manager`, `upgrades` | 3 |
+| `prod_readiness/operations/execution/firmware/upgraders/aggregations/` | 4 existing, plus `test_aggregate_upgrade_service.py` | 5 |
+| `prod_readiness/operations/execution/firmware/upgraders/manager/` | 2 existing, plus 3 firmware manager modules | 5 |
+| `prod_readiness/operations/execution/firmware/upgraders/upgrades/` | 2 existing, plus `test_firmware_manager_version.py` and `test_bulk_ap_running_version.py` | 4 |
+| `prod_readiness/operations/exporting/` | `container`, `export`, `juniper_rma` | 3 |
+| `prod_readiness/operations/exporting/container/` | `__init__.py`, `build_support`, `output_defaults`, `runtime`, `session_database` | 5 |
+| `prod_readiness/operations/hardware/` | `ex_hardware_inventory`, `mib_generator` | 2 |
+| `prod_readiness/operations/protection/security/` | `__init__.py`, `test_credential_redaction.py`, `rogue_dhcp` | 3 |
+| `prod_readiness/standalone/operations/execution/firmware/` | 3 existing, plus `test_firmware_upgrade_status_checker.py` and `test_running_version.py` | 5 |
 
-The initial package move retained four groups with more than five children.
-Split API tests into service and transport groups.
-Keep row tests together under `model/rows/`.
-Group menu tests under `workflows/menus/` and lookup tests under `workflows/lookups/`.
-Place saved JSON replies under `fixtures/payloads/` and change the fixture reader root.
-Keep helper imports unchanged. Use namespace groups because existing test filenames are unique.
-The exact map appears in `design/standalone-test-map.md`.
+Split groups inside the large packages must also hold five children or fewer. Each split task records its group table before its move. The split rule appears in section 6 of [tasks.md](tasks.md).
 
-1. Inventory current test files, path references, and open pull request ownership.
-2. Move unowned directories and standalone tests into the package map. Split each moved package into mapped topic groups when a group would exceed five children. Keep all reserved paths and paths selected by `.github/workflows/ci.yml` at their current locations.
-3. Update explicit test imports, selectors, workflow paths, lint rules, and documentation for each moved path.
-4. After an owning pull request merges and its owner accepts the handoff, move its changed files from the merged tree and update all references in the same batch. For issue #2752, wait until the owner completes the claimed work and human review, then verify the exact test and record paths. Keep actively claimed session paths unchanged until their owners clear the claims.
-5. Compare test collection with the baseline and run affected tests and repository path guards.
-6. Complete the root reorganization only after each reserved path and workflow selector is clear. Keep PR #4208 draft, unmerged, and unchanged until its owner approves the handoff.
+## Change Map
+
+The change map names each source path, its destination, its batch, and its hold. A batch can run only when its holds are clear.
+
+| Source | Files | Destination | Mode | Batch | Hold |
+| - | - | - | - | - | - |
+| `tests/unit/analytics/` | 1 | `tests/unit/marvis/mist/intelligence/analytics/` | Move directory contents | A | None |
+| `tests/unit/ap_warning_report/` | 5 | `tests/unit/marvis/mist/intelligence/ap_warning_report/` | Move directory | A | None |
+| `tests/unit/api/` | 4 | `tests/unit/marvis/mist/access/api/` | Move directory | A | None |
+| `tests/unit/test_unparseable_response_guards.py` | 1 | `tests/unit/marvis/mist/access/api/` | Move file | A | None |
+| `tests/unit/container/output_defaults/` | 5 | `tests/unit/prod_readiness/operations/exporting/container/output_defaults/` | Move directory | A | None |
+| `tests/unit/dataclasses/` | 5 | `tests/unit/config/foundation/models/dataclasses/` | Move directory | A | None |
+| `tests/unit/db_discovery/` | 5 | `tests/unit/config/foundation/persistence/storage/db_discovery/` | Move directory | A | None |
+| `tests/unit/db/test_database_schema_utils.py` | 1 | `tests/unit/config/foundation/persistence/storage/db/` | Move file | A | None |
+| `tests/unit/db/sle_window_summary/test_export_identity.py` | 1 | `tests/unit/config/foundation/persistence/storage/db/sle_window_summary/` | Move file | A | None |
+| `tests/unit/db/sle_window_summary/test_backend_preservation.py` | 1 | `tests/unit/config/foundation/persistence/storage/db/sle_window_summary/` | Move file | D | H-2 |
+| `tests/unit/device/test_ap_profile_migration_manager.py` | 1 | `tests/unit/marvis/mist/resources/device/` | Move file | A | None |
+| `tests/unit/device/test_arp_command_manager.py` | 1 | `tests/unit/marvis/mist/resources/device/` | Move file | A | None |
+| `tests/unit/device/test_device_reboot_manager.py` | 1 | `tests/unit/marvis/standalone/mist/resources/device/` | Move file | A | None |
+| `tests/unit/device/test_device_utils.py` | 1 | `tests/unit/marvis/standalone/mist/resources/device/` | Move file | A | None |
+| `tests/unit/device/__init__.py` | 1 | Deleted, because `marvis/mist/resources/device/__init__.py` exists | Delete after import smoke | A | None |
+| `tests/unit/marvis/standalone/mist/resources/device/test_device_utility_commands.py` and `_wave3.py` | 2 | `tests/unit/marvis/standalone/mist/resources/device/utility/` | Regroup existing files | A | None |
+| `tests/unit/test_virtual_chassis.py` | 1 | `tests/unit/marvis/standalone/mist/resources/device/` | Move file | A | None |
+| `tests/unit/device/client_session_control/` | 6 | `tests/unit/marvis/mist/resources/device/client_session_control/` | Split and move | B | None |
+| `tests/unit/gateway/` export utilities | 2 | `tests/unit/marvis/mist/resources/gateway/exporters/` | Move files | A | None |
+| `tests/unit/gateway/` WAN probe modules | 2 | `tests/unit/marvis/mist/resources/gateway/wan_overrides/` | Move files | A | None |
+| `tests/unit/gateway/` WAN2 migration modules | 2 | `tests/unit/marvis/mist/resources/gateway/ssr_registration/` | Move files | A | None |
+| `tests/unit/gateway/` template cloner modules | 2 | `tests/unit/marvis/standalone/mist/resources/gateway/device_template_cloner/` | Move files | A | None |
+| `tests/unit/inventory/test_csv_comparator_broad_handlers.py` | 1 | `tests/unit/marvis/mist/resources/inventory/csv_imports/` | Move file | A | None |
+| `tests/unit/inventory/` org device modules | 4 | `tests/unit/marvis/mist/resources/inventory/org_device/` | Move files | A | None |
+| `tests/unit/reports/psk_hygiene/` | 5 | `tests/unit/marvis/mist/intelligence/reports/audits/posture/psk_hygiene/` | Move directory | A | None |
+| `tests/unit/reports/` wired-client modules | 2 | `tests/unit/marvis/mist/intelligence/reports/device_health/` | Move files | A | None |
+| `tests/unit/refactors/__init__.py` | 1 | `tests/unit/config/foundation/support/refactors/__init__.py` | Move file | A | None |
+| `tests/unit/refactors/` runtime session modules | 2 | `tests/unit/config/foundation/support/refactors/runtime/session/` | Move files | A | None |
+| `tests/unit/refactors/test_device_data_fetcher.py` | 1 | `tests/unit/config/foundation/support/refactors/data/inventory/` | Move file | A | None |
+| `tests/unit/refactors/test_issue_3732_read_retry.py` | 1 | `tests/unit/config/foundation/support/refactors/data/storage/` | Move file | A | None |
+| `tests/unit/refactors/test_tui_launcher.py` | 1 | `tests/unit/config/foundation/support/refactors/runtime/console/` | Move file | A | None |
+| `tests/unit/refactors/test_wan_probe_device_override_manager.py` | 1 | `tests/unit/config/foundation/support/refactors/network/configuration/` | Move file | A | None |
+| `tests/unit/refactors/test_wlanradius_timer_manager_paths.py` | 1 | `tests/unit/config/foundation/support/refactors/network/configuration/` | Move file | D | H-1 |
+| `tests/unit/troubleshooting/test_module_relocation.py` | 1 | `tests/unit/config/standalone/foundation/support/quality/imports/` | Move file | A | None |
+| `tests/unit/test_credential_preflight.py` | 1 | `tests/unit/config/foundation/runtime/startup/bootstrap/preflight/` | Move file | A | None |
+| `tests/unit/test_csv_comparator.py` | 1 | `tests/unit/config/foundation/support/refactors/data/inventory/` | Move file | A | None |
+| `tests/unit/test_issue_1709_narrow_except.py` | 1 | `tests/unit/config/standalone/foundation/support/quality/risk/` | Move file | A | None |
+| `tests/unit/test_prompt_network_device_utils.py` | 1 | `tests/unit/config/foundation/runtime/core/input/` | Move file | A | None |
+| `tests/unit/test_routing_utils.py` | 1 | `tests/unit/config/standalone/foundation/support/utilities/network/` | Move file | A | None |
+| `tests/unit/test_standalone.py` | 1 | `tests/unit/config/standalone/foundation/runtime/startup/` | Move file | A | None |
+| `tests/unit/test_zone_analyzer.py` | 1 | `tests/unit/marvis/standalone/mist/intelligence/analytics/` | Move file | A | None |
+| `tests/unit/wan_dashboard/test_worker.py` | 1 | `tests/unit/maps/interfaces/portals/wan_dashboard/` | Move file | A | None |
+| `tests/unit/wan_dashboard/wan_performance/` | 8 | `tests/unit/maps/interfaces/portals/wan_dashboard/wan_performance/` | Split and move | D | H-1 |
+| `tests/unit/firmware/__init__.py` | 1 | `tests/unit/prod_readiness/operations/execution/firmware/__init__.py` | Move file | A | None |
+| `tests/unit/firmware/test_aggregate_upgrade_service.py` | 1 | `tests/unit/prod_readiness/operations/execution/firmware/upgraders/aggregations/` | Move file | A | None |
+| `tests/unit/firmware/` manager modules | 3 | `tests/unit/prod_readiness/operations/execution/firmware/upgraders/manager/` | Move files | A | None |
+| `tests/unit/firmware/` version and bulk modules | 2 | `tests/unit/prod_readiness/operations/execution/firmware/upgraders/upgrades/` | Move files | A | None |
+| `tests/unit/firmware/` status and running modules | 2 | `tests/unit/prod_readiness/standalone/operations/execution/firmware/` | Move files | A | None |
+| `tests/unit/ex_hardware_inventory/` | 25 | `tests/unit/prod_readiness/operations/hardware/ex_hardware_inventory/` | Split and move | B | None |
+| `tests/unit/juniper_docs/` | 34 | `tests/unit/marvis/mist/intelligence/juniper_docs/` | Split and move | B | None |
+| `tests/unit/juniper_rma/` remainder | 22 | `tests/unit/prod_readiness/operations/exporting/juniper_rma/` | Split and merge | B | None |
+| `tests/unit/scripts/` | 14 | `tests/unit/maps/interfaces/handlers/scripts/` | Split and move | B | None |
+| `tests/unit/security/rogue_dhcp/` | 6 | `tests/unit/prod_readiness/operations/protection/security/rogue_dhcp/` | Split and move | B | None |
+| `tests/unit/site/address_audit/` | 16 | `tests/unit/marvis/mist/resources/site/address_audit/` | Split and move | B | None |
+| `tests/unit/site/__init__.py` | 1 | Deleted, because `marvis/mist/resources/site/__init__.py` exists | Delete after import smoke | B | None |
+| `tests/unit/ssh/` (except `test_cli_shell_manager.py`) | 11 | `tests/unit/prod_readiness/operations/execution/ssh/` | Split and move | B | None |
+| `tests/unit/ssh/test_cli_shell_manager.py` | 1 | `tests/unit/prod_readiness/operations/execution/ssh/` | Move file | D | H-4 |
+| `tests/unit/test_ssh_host_key_tofu.py` | 1 | `tests/unit/prod_readiness/operations/execution/ssh/` | Move file | B | None |
+| `tests/unit/ui/` (except `test_parameter_collector.py`) | 13 | `tests/unit/maps/interfaces/ui/` | Split and move | B | None |
+| `tests/unit/ui/test_parameter_collector.py` | 1 | `tests/unit/maps/interfaces/ui/` | Move file | D | H-6 |
+| `tests/unit/utils/` | 17 | `tests/unit/config/foundation/support/utils/` | Split and move | B | None |
+| `tests/unit/websocket/` service-ping modules | 2 | `tests/unit/config/foundation/support/refactors/network/clients/` | Move files | B | None |
+| `tests/unit/websocket/` remaining modules | 11 | `tests/unit/marvis/mist/realtime/websocket/` | Split and move | B | None |
+| `tests/unit/org/` | 18 | `tests/unit/marvis/standalone/mist/resources/org/` | Split and move | B | None |
+| `tests/unit/marvis/actions/` | 11 | `tests/unit/marvis/mist/realtime/actions/` | Split and move | D | H-7 |
+| `tests/unit/upgrade_portal/` | 176 | `tests/unit/maps/interfaces/portals/upgrade_portal/` | Split and move | C | None |
+| `tests/unit/web_portal/` | 53 | `tests/unit/maps/interfaces/portals/web_portal/` | Split and move | C | None |
+| `tests/unit/websocket_streams/` | 64 | `tests/unit/marvis/mist/realtime/websocket_streams/` | Split and move | C | None |
+| `tests/unit/export/` (except H-2 files) | 58 | `tests/unit/prod_readiness/operations/exporting/export/` | Split and move | C | None |
+| `tests/unit/export/test_data_exporter.py` and `test_endpoint_family_exporter.py` | 2 | `tests/unit/prod_readiness/operations/exporting/export/` | Move files | D | H-2 |
+| `tests/unit/test_org_inventory_exporter_helpers.py` | 1 | `tests/unit/prod_readiness/operations/exporting/export/` | Move file | C | None |
+| `tests/unit/test_device_events_52w_exporter.py` and `_extended.py` | 2 | `tests/unit/prod_readiness/operations/exporting/export/` | Move files | D | H-3 |
+| `tests/unit/test_menu_entry_metadata.py` | 1 | `tests/unit/maps/standalone/interfaces/ui/` | Move file | D | H-5 |
+| `tests/unit/test_issue_2971_census_repairs.py` | 1 | `tests/unit/maps/standalone/interfaces/ui/` | Move file | D | H-8 |
+
+Batch A moves unowned directories and files with fixed destinations. Batch B splits unowned packages by topic. Batch C moves the largest unowned packages. Batch D runs after each hold releases. The root `tests/unit/__init__.py` stays in place.
+
+## Reference Updates
+
+Each row names an active reference that the batch changes. Historical records stay unchanged (FR-004).
+
+| File | Lines on main | Change | Batch |
+| - | - | - | - |
+| `.github/workflows/ci.yml` | 263, 264, 267 | Update `test_paths` and `--ignore` values for `tests/unit/upgrade_portal` | C |
+| `.github/workflows/ci.yml` | 99 and comment 96 | Update the RADON path for `tests/unit/utils/test_zscaler_catalogue.py` | B |
+| `.github/workflows/ci.yml` | 303 | Update `tests/unit/scripts/test_script_imports.py` | B |
+| `pyproject.toml` | 269, 271, 275 | Update root E402 entries for `test_csv_comparator.py`, `test_routing_utils.py`, and `test_zone_analyzer.py` | A |
+| `pyproject.toml` | 516 | Update the `testpaths` entry for `tests/unit/upgrade_portal` | C |
+| `.github/copilot-instructions.md` | 87 | Update the `pytest-chunks --split` path for `upgrade_portal` | C |
+| `.github/copilot-instructions.md` | 255 | Update the output-scan test path | C |
+| `.github/test-quality-baseline.json` | 624 `file_path` values that name `tests/unit/` (RC-26) | Update each moved `file_path` and `related_source` value in the batch that moves the file | Each batch |
+| `tests/e2e/upgrade_portal/conftest.py` | 2881 | Update the comment path | C |
+| `tests/e2e/upgrade_portal/test_alert_prefix_space.py`, `test_capture_identifier_paint.py`, `test_narrow_action_cells.py` | One line each | Update the path in the comment or string | C |
+| `tests/e2e/web_portal/juniper_browser_harness.py` | One line | Update the path | C |
+| `tests/support/rehearsal/clock.py` | 10 | Update the path in the docstring | C |
+| `tests/tools/test_quality_analyzer/test_golden_repo.py` | 15 | Update the path only if the test reads it | B |
+| `tests/guardrails/test_e2e_shard_partition.py` and `test_guard_proof_audit.py` | One line each | Update the path when it names a moved file | Each batch |
+| `documentation/diagrams/infrastructure/deployment-pipeline.md` | One line | Update the path when it names a moved file | Each batch |
+
+Historical records stay unchanged. These records include `CHANGELOG.md`, `.github/copilot-handoff.md`, `documentation/release-notes.md`, `documentation/development-tooling-migration.md`, and `.specify/bugs/`. The production references in `src/` and `web_portal/` and the build-file comments in `Dockerfile` and `Containerfile` stay unchanged (D-8).
+
+## Test Plan
+
+| ID | Test | Requirement | Success criterion |
+| - | - | - | - |
+| TP-1 | Child-count assertions for `tests/unit/` and each grouping directory in an existing guard test | FR-001, FR-002 | SC-001, SC-002 |
+| TP-2 | Collection parity, comparing node IDs before and after normalization | FR-003 | SC-003 |
+| TP-3 | Focused pytest on each moved directory after its batch | FR-005 | SC-004 |
+| TP-4 | Guard suite `tests/guardrails` | FR-004 | SC-006 |
+| TP-5 | Reference scan with `git grep` for each old path | FR-004 | SC-006 |
+| TP-6 | Import smoke for each moved package | FR-005 | SC-004 |
+| TP-7 | Hold check against open pull request files and issue comments | FR-006 | SC-005 |
+| TP-8 | Production diff check that finds no executable change in `src/`, `web_portal/`, `Dockerfile`, or `Containerfile` | FR-007 | SC-005 |
+
+The commands appear in [quickstart.md](design/quickstart.md). The tests use the existing `pytest` and `git` tools.
+
+## Dependencies
+
+1. Batch A has no hold dependency. Batch A runs first.
+2. Batch B runs after Batch A. Batch B holds no path owned by a pull request.
+3. Batch C runs after Batch B. It changes CI and `pyproject.toml` selectors in the same pull request.
+4. Batch D runs after each named release. Each release must produce a record comment.
+5. The final tasks run after Batch D.
+
+## Risks And Mitigations
+
+| Risk | Mitigation |
+| - | - |
+| An open issue edits a moved file | Refresh the holds before each batch. Rebase the batch on the current file. |
+| PR #4208 adds `tests/unit/wan_performance/` as a direct child | Require the owner to rebase the new paths into `maps/interfaces/portals/` before merge. |
+| Two modules share a file name in different packages | Keep every package marker. Check collection parity after each batch. |
+| A moved package uses a relative import | Move each package as one unit. Run import smoke. |
+| A CI selector names a moved path | Update the selector in the same batch. Run the CI workflow. |
+| An untracked local directory shadows a tracked path | Do not move untracked directories. Check `git status` before each batch. |
+| A historical link becomes stale | FR-004 keeps historical text unchanged. Accept the stale link (D-3). |
+| A batch changes a production file by mistake | Run TP-8 before commit. |
+
+## Rollback
+
+Each batch is one squash commit on its branch. To undo a batch, revert that commit on a new branch. Do not rewrite history on a shared branch. A revert restores each moved path. No holds change during a revert.
+
+## Documentation
+
+Update `.github/copilot-instructions.md` in Batch C, because it names two moved paths. Add one changelog fragment, `changelog.d/issue-4142-test-domain-packages.md`, in the final batch. The fragment names issue #4142 in one `Changed` bullet.
+
+## Contracts
+
+No interface contract applies. This change adds no CLI command, no output column, no API request, and no API response. The `design/contracts/` folder is omitted.
 
 ## Complexity Tracking
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
+| Violation | Why needed | Rejected alternative |
 | - | - | - |
-| Staged root excess while pull requests remain open | The plan must not move files that active pull requests own. | An immediate move of every package would conflict with the owners' active paths. |
+| Root holds 50 children until the final batch (debt C-1) | Held paths must stay in place until their owners release them. | Moving held paths early creates conflicts with open work. |
+| `marvis/actions/` holds 11 children until H-7 releases | Issue #4008 plans edits in that package. | Moving it now conflicts with the planned edits. |
+| `tests/unit/marvis/standalone/mist/resources/org/` receives a root package (D-5) | `marvis/mist/resources/` holds five children. | Restructuring `marvis/mist/resources/` moves merged paths again. |
+| `marvis/mist/realtime/` is a new group (D-6) | `marvis/mist/` has one free slot, and `realtime` fits the WebSocket and action modules. | Placing these modules under a full group violates FR-002. |
