@@ -640,9 +640,8 @@ class TestFixtureSafety:  # Prove repository isolation and fresh-process observa
         )  # Remove poisoned locations before every later subprocess.
         repository.files.write("local.txt", "fixture-local content\n")  # Create a local commit witness.
         revision = repository.commit("isolated commit")  # Run genuine Git with the isolated environment.
-        assert repository.git("rev-parse", "--show-toplevel") == str(  # Require the actual root.
-            repository.root.resolve()
-        )  # Require the actual root.
+        toplevel = repository.git("rev-parse", "--show-toplevel")  # Read the root that Git reports.
+        assert Path(toplevel).resolve() == repository.root.resolve()  # Compare paths, not separator spelling.
         assert (  # Verify actual committed bytes.
             repository.git("show", revision + ":local.txt") == "fixture-local content"
         )  # Verify actual committed bytes.
