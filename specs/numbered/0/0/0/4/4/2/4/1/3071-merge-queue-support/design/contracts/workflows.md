@@ -1,39 +1,52 @@
-# Workflow contracts
+# Workflow contracts: Merge queue rollout and acceptance
+
+This contract lists the trigger and concurrency shapes that the guard tests pin. A change to one of these shapes needs a test change and an owner review.
 
 ## Events
 
-Both required workflows accept `merge_group.checks_requested`.
-Pull requests retain no branch filter. Push events remain limited to `main`.
-Other workflow events remain unchanged.
+| Workflow | Event | Shape on `main` | Source |
+| - | - | - | - |
+| `.github/workflows/ci.yml` | `merge_group` | `types: [checks_requested]` | R-01 |
+| `.github/workflows/ci.yml` | `pull_request` | No branch filter and no paths filter | R-05 |
+| `.github/workflows/ci.yml` | `push` | `branches: [main]` | R-04 |
+| `.github/workflows/codeql.yml` | `merge_group` | `types: [checks_requested]` | R-10 |
+| `.github/workflows/codeql.yml` | `push` | `branches: [main]` | R-13 |
+| `.github/workflows/ste-lint.yml` | `merge_group` | Absent by design (D-3) | R-14 |
+
+## Concurrency
+
+| Workflow | Group expression | Cancel expression | Result for each event |
+| - | - | - | - |
+| `ci.yml` | `quality-gates-${{ github.event.pull_request.number || github.ref }}` (R-02) | `${{ github.event_name == 'pull_request' }}` (R-03) | A pull request run cancels an older pull request run. A `merge_group` run has its own group, because its `github.ref` is unique. A `push` run on `main` is never canceled. |
+| `codeql.yml` | `codeql-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}` (R-11) | `${{ github.event_name == 'pull_request' }}` (R-12) | The same result as `ci.yml`. |
 
 ## Required contexts
 
-Preserve each existing required CI job ID and exact display name.
-Preserve the CodeQL caller job, Python language, configuration file, and reusable workflow identity.
-The application-owned `CodeQL` context needs live verification after activation.
+| Source | Names | Rows |
+| - | - | - |
+| `ci.yml` job names | `Ruff (lint)`, `Black (format check)`, `mypy (strict)`, `pytest (coverage gate)`, `Bandit (security)`, `pip-audit (CVE scan)`, `Pylint (score gate)`, `Radon (complexity)`, `Vulture (dead code)`, `pydocstyle (docstring style)`, `Interrogate (docstring coverage)`, `Diagram reference lint`, `E2E smoke tests`, `pytest (ops platform)` | R-09 and R-31 |
+| Application context | `CodeQL` | R-52 (checked live only, U-3) |
 
-## Candidate isolation
+The protection list holds 15 contexts in total (R-52). The 14 CI names and the `CodeQL` context make up the list.
 
-CI retains `quality-gates-${{ github.event.pull_request.number || github.ref }}`.
-CodeQL retains its existing workflow-prefixed equivalent.
-Both workflows cancel only superseded pull request runs.
-Different queue references cannot share a concurrency group.
-Main and queue runs never cancel another run.
+## Checkout
 
-Every CI checkout uses the event commit.
-The quality job may use the pull request head only for a pull request event.
-On a queue event, that expression must fall back to `github.sha`.
-The shared CodeQL checkout uses the caller event commit.
+Each `actions/checkout` step in `ci.yml` uses the default ref, which is the event commit. The explicit quality checkout uses `${{ github.event.pull_request.head.sha || github.sha }}` (R-06). The shared CodeQL checkout uses the default ref (R-21).
+
+## Documentation contract
+
+The procedure heading `## Merge queue preparation and activation` in `documentation/quality-gates.md` is the anchor that `.github/copilot-instructions.md` line 499 links to (R-23, R-29). The heading text does not change.
+
+The workflow table rows for `ci.yml` and `codeql.yml` in `.github/copilot-instructions.md` name merge queue candidates after T004 (R-27, R-28).
 
 ## Contract decisions
 
-Tests accept the live workflow and reject missing events, renamed jobs, changed checkout targets, and unsafe cancellation.
-Mutation tests alter copies, not repository files.
-Missing or malformed source files fail explicitly.
-The guard prints examined workflow and context counts.
+- A missing `merge_group` trigger fails `test_merge_group_contract` (R-30).
+- A renamed required job fails `test_required_check_names` (R-31).
+- A cancel expression that can cancel a queue run fails `test_merge_group_contract` through the `cancel` mutation (R-30).
+- A shared concurrency group fails `test_merge_group_contract` through the `group` mutation (R-30).
+- A workflow table row without merge queue text fails the new method in T003.
 
 ## Activation
 
-No contract test changes protection or queue settings.
-No local result proves the owner-enabled queue accepted a candidate.
-Keep #3071 open until live required contexts and protected merges are recorded.
+No contract changes a repository setting. A passing contract does not prove that the owner-enabled queue accepted a candidate. The owner evidence in `quickstart.md` section 4 proves that.
