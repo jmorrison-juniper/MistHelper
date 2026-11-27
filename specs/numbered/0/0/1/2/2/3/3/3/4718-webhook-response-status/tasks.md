@@ -1,41 +1,41 @@
 # Tasks: Webhook response status
 
-**Input**: [Specification](spec.md), [plan](plan.md), and records under `design/`.
+**Input**: [Specification](spec.md), [plan](plan.md), and the records under `design/`.
 
-## Phase 1: Setup
+Status values: `open`, `verified-present`, `partial`, or `absent`. Evidence IDs such as R01 point to the remote table in `design/research.md`.
 
-- [x] T001 Verify issue ownership, the previous commit, and the managed route in `plan.md`. (delivered: plan.md)
+## Phase 1: Verify the merged status gates (PR #4852)
 
-## Phase 2: Foundational
+- [ ] T001 [P] [FR-001, FR-003, FR-004] Verify the list call gate on `main`. Files: `src/operations/exporting/export/org_webhook_deliveries_exporter.py` lines 71 to 95. Acceptance: the gate at line 76 precedes `mistapi.get_all` at line 83 on `main`. Verification: `.venv\Scripts\python.exe -m pytest tests/unit/export/test_org_webhook_deliveries_exporter.py -q`. Status: verified-present (R01, R02).
+- [ ] T002 [P] [FR-003] Verify the HTTP status reader and the accepted range. Files: `src/operations/exporting/export/org_webhook_deliveries_exporter.py` lines 22, 25, and 28. Acceptance: the reader returns None for a Boolean or a non-integer, and the range is 200 to 299. Verification: `.venv\Scripts\python.exe -m pytest tests/unit/export/test_org_webhook_deliveries_exporter.py -q`. Status: verified-present (R02, R03).
+- [ ] T003 [P] [FR-002, FR-004] Verify the delivery call gate on `main`. Files: `src/operations/exporting/export/org_webhook_deliveries_exporter.py` lines 119 to 150. Acceptance: the gate at line 138 precedes `mistapi.get_all` at line 145. Verification: `.venv\Scripts\python.exe -m pytest tests/unit/export/test_org_webhook_deliveries_exporter.py -q`. Status: verified-present (R04).
+- [ ] T004 [P] [FR-004, FR-005, SC-001, SC-002] Verify the rejection and valid-empty tests. Files: `tests/unit/export/test_org_webhook_deliveries_exporter.py` lines 329, 355, 379, and 393. Acceptance: the four tests exist in class `TestWebhookInitialResponse`. Verification: `.venv\Scripts\python.exe -m pytest tests/unit/export/test_org_webhook_deliveries_exporter.py -q`. Status: verified-present (R09, R10, R11, R12, R13).
+- [ ] T005 [P] [FR-004, SC-001] Verify the native refusal tests. Files: `tests/integration/export/test_org_webhook_native_refusals.py` lines 21, 45, and 69. Acceptance: the tests cover native HTTP 403, 500, and 503 and assert zero pagination calls. Verification: `.venv\Scripts\python.exe -m pytest tests/integration/export/test_org_webhook_native_refusals.py -q`. Status: verified-present (R15, R16).
+- [ ] T006 [P] [FR-006, SC-003] Verify the status-200 doubles and the stable-selection test. Files: `tests/unit/export/test_issue_3188_webhook_id_selection.py` lines 79, 100, 115, 120, and 125. Acceptance: each list double and delivery double returns HTTP status 200, and the assertions match the original file. Verification: `.venv\Scripts\python.exe -m pytest tests/unit/export/test_issue_3188_webhook_id_selection.py -q`. Status: verified-present (R17, R18).
+- [ ] T007 [P] [FR-006] Verify the release-note fragment and the naming rule. Files: `changelog.d/issue-4718-webhook-response-status.md` lines 1 to 3, `changelog.d/README.md` lines 32 and 53, and `tests/guardrails/test_changelog_fragment_policy.py`. Acceptance: the fragment has one heading and one Fixed bullet that names issue 4718. Verification: `.venv\Scripts\python.exe -m pytest tests/guardrails/test_changelog_fragment_policy.py -q`. Status: verified-present (R20, R21, R83, R84).
+- [ ] T008 [P] [FR-006] Verify the browser double and the browser test. Files: `tests/e2e/web_portal/test_issue_3188_webhook_control.py` lines 38 and 104. Acceptance: the double returns HTTP status 200 and the stable identifier test exists. Verification: `.venv\Scripts\python.exe -m pytest tests/e2e/web_portal/test_issue_3188_webhook_control.py -q`. Status: verified-present (R22, R23).
 
-- [x] T002 Preserve offline socket, DNS, and SQLite guards in `tests/unit/export/test_org_webhook_deliveries_exporter.py` and the session runner. (delivered: tests/unit/export/test_org_webhook_deliveries_exporter.py)
+## Phase 2: Repair Principles VI and VII
 
-## Phase 3: User Story 1 - Correct initial response classification
+- [ ] T009 [FR-009, SC-004] Add the operation parameter and one debug line to `_response_status_code`. Pass the call name at each call site. Files: `src/operations/exporting/export/org_webhook_deliveries_exporter.py` lines 25 to 28, line 75 (`listOrgWebhooks`), and line 137 (`_OPERATION`). Acceptance: each SDK call writes one debug line after the call. The debug text is "NAME returned HTTP STATUS" or "NAME returned no valid HTTP status". No other repository caller of `_response_status_code` exists. `_select_webhook_id` keeps 25 lines. Verification: `.venv\Scripts\python.exe -m pytest tests/unit/export/test_org_webhook_deliveries_exporter.py -q`. Status: absent (R06, R07).
+- [ ] T010 [FR-010] Add an inline comment to each executable line of the touched functions. Run after T009. Files: `src/operations/exporting/export/org_webhook_deliveries_exporter.py` lines 25 to 28, 74 to 80, 82, 83, 87, 89, 90, 92, 93, 125, 128, 130 to 132, 134, 135, 137, 138, and 140 to 142. Acceptance: each listed line has an inline comment that gives the reason. The comment explains intent, not the operation. Verification: `.venv\Scripts\python.exe -m pytest tests/unit/export/test_org_webhook_deliveries_exporter.py -q`. Status: absent (R05).
+- [ ] T011 [FR-009, SC-004] Add one parametrized test named `test_sdk_status_debug_line_follows_each_initial_call`. Place it in class `TestWebhookInitialResponse`. Files: `tests/unit/export/test_org_webhook_deliveries_exporter.py` after line 298. Acceptance: the test uses the `initial_endpoint` fixture for both calls. It checks the exact debug text for HTTP status 200 and for a missing status. The class holds five methods or fewer. Verification: `.venv\Scripts\python.exe -m pytest tests/unit/export/test_org_webhook_deliveries_exporter.py -q -k sdk_status`. Status: absent (R09).
+- [ ] T012 [FR-011, SC-005] Run the offline verification set. Files: `tests/unit/export/test_org_webhook_deliveries_exporter.py`, `tests/unit/export/test_issue_3188_webhook_id_selection.py`, and `tests/integration/export/test_org_webhook_native_refusals.py`. Acceptance: every test passes. The offline guards record zero socket, DNS, and SQLite attempts. Verification: `.venv\Scripts\python.exe -m pytest tests/unit/export/test_org_webhook_deliveries_exporter.py tests/unit/export/test_issue_3188_webhook_id_selection.py tests/integration/export/test_org_webhook_native_refusals.py -q`. Status: open.
 
-**Goal**: Reject failed or invalid initial responses without false empty results.
-**Independent test**: Supply native synthetic responses to both endpoint boundaries.
+## Final tasks
 
-- [x] T003 [US1] Add rejection and control tests in `tests/unit/export/test_org_webhook_deliveries_exporter.py`. Prove failures against the previous source. (delivered: tests/unit/export/test_org_webhook_deliveries_exporter.py)
-- [x] T004 [US1] Validate initial list and delivery statuses in `src/operations/exporting/export/org_webhook_deliveries_exporter.py`. (delivered: src/operations/exporting/export/org_webhook_deliveries_exporter.py)
-- [x] T005 [US1] Update successful doubles in `tests/unit/export/test_issue_3188_webhook_id_selection.py` without changing its assertions. (delivered: tests/unit/export/test_issue_3188_webhook_id_selection.py)
-- [x] T006 [US1] Run related tests, independent native-response cases, and applicable local gates for the exporter and both tests. (delivered: tests/unit/export/test_org_webhook_deliveries_exporter.py)
+- [ ] T-LOCAL-GATES [FR-010, FR-011] Run each local gate that applies to the changed files. Files: the exporter and the test module from T009 to T011. Acceptance: each applicable gate in `.github/copilot-instructions.md` lines 50 to 94 returns its expected result. The commands are in `design/quickstart.md`. Verification: `.venv\Scripts\python.exe -m ruff check .`. Status: open.
+- [ ] T-PR [FR-008, FR-010, SC-006] Commit, push, and open the repair pull request. Use the commit message `fix(export): log initial webhook HTTP status and add inline comments`. Add the body line `Closes #4718`, the Co-authored-by trailer for Copilot App, and the statement that no changelog fragment applies (D-8). Push branch `fix/4718-webhook-log-comments`. Acceptance: the diff changes only the exporter and the reserved test module. The title passes the Conventional Commits check. The pull request body contains `Closes #4718`. Verification: `.venv\Scripts\python.exe -m pytest tests/unit/export/test_org_webhook_deliveries_exporter.py -q` before the push. After the push, `rtk proxy gh pr list -R jmorrison-juniper/MistHelper --head fix/4718-webhook-log-comments --json number,body` shows the closing reference. Status: partial (PR #4852 merged, but its body says "Refs #4718").
 
-## Phase 4: Final evidence
+Warning: do not push a commit to branch `fix/4718-webhook-response-failures`. Its pull request is merged, so a new commit becomes orphaned.
 
-- [x] T007 Add `changelog.d/issue-4718-webhook-response-status.md` and record cross-artifact consistency in `analysis.md`. (delivered: changelog.d/issue-4718-webhook-response-status.md, analysis.md)
-- [x] T008 Prepare the local commit and reproducible export procedure in the session `issue4718/export_candidate.py` file. Export final committed bytes and evidence after the commit. (delivered: /Users/jmorrison/.copilot/session-state/02858623-f9db-492d-a9bc-f107f7564a86/files/issue4718/export_candidate.py)
+- [ ] T-REMOTE-CI [FR-011, SC-005] Watch the CI run of the repair pull request. Acceptance: every required check passes on the latest commit. Wait for CodeQL before the `auto-merge` label. Verification: `rtk proxy gh pr checks fix/4718-webhook-log-comments -R jmorrison-juniper/MistHelper --watch`. Status: partial (the merge commit b1307510 shows 38 of 38 successful check runs (R74). The repair CI has not run).
+- [ ] T-MERGE [SC-006] Squash-merge the repair pull request after the orchestrator authorizes the merge. Acceptance: the squash commit on `main` holds the repair. The `Closes #4718` reference closes issue 4718. The branch is removed. Verification: `rtk proxy gh issue view 4718 -R jmorrison-juniper/MistHelper --json state --jq .state`, which must print CLOSED after the merge. Status: partial (PR #4852 merged as commit b1307510 on 2026-11-19. The repair merge is open).
 
 ## Dependencies
 
-T001 precedes T002. T002 precedes T003. T003 precedes T004 and T005.
-T004 and T005 precede T006. T006 precedes T007. T007 precedes T008.
-
-## Parallel execution
-
-Independent code-quality checks can run together after T004 and T005.
-Do not start a competing branch for either reserved test.
-
-## Implementation strategy
-
-Complete the single operator story on the existing integration branch.
-Keep both issue commits intact and unpublished.
+- T001 to T008 are verification tasks. They run in parallel.
+- T009 precedes T010, because both edit the same exporter file.
+- T009 precedes T011, because the test checks the debug text from T009.
+- T010, T011 precede T012.
+- T012 precedes T-LOCAL-GATES, T-PR, T-REMOTE-CI, and T-MERGE, in that order.
